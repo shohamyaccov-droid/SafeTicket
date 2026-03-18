@@ -1,0 +1,761 @@
+/* Home Page - Viagogo-Style Discovery Platform */
+
+.home-container {
+  width: 100%;
+  min-height: 100vh;
+  background: var(--bg-primary);
+  direction: rtl;
+}
+
+/* ============================================
+   HERO SEARCH SECTION
+   ============================================ */
+.hero-search-section {
+  width: 100%;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.4) 100%),
+              url('https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80') center center;
+  background-size: cover !important;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  padding: 6rem 2rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+  height: 450px !important;
+}
+
+.hero-content {
+  max-width: 800px;
+  width: 100%;
+  text-align: center;
+}
+
+.hero-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 2rem;
+  font-family: 'Heebo', 'Assistant', sans-serif;
+  direction: rtl;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.search-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.hero-search-input {
+  width: 100%;
+  padding: 1.25rem 3.5rem 1.25rem 1.5rem;
+  font-size: 1.1rem;
+  font-weight: 400;
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  direction: rtl;
+  font-family: 'Assistant', 'Heebo', sans-serif;
+  outline: none;
+}
+
+.hero-search-input:focus {
+  border-color: var(--primary-blue);
+  box-shadow: 0 6px 20px rgba(0, 69, 175, 0.15);
+  transform: translateY(-2px);
+}
+
+.hero-search-input::placeholder {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.search-icon {
+  position: absolute;
+  right: 1.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+/* ============================================
+   CATEGORY NAVIGATION
+   ============================================ */
+.category-navigation {
+  width: 100%;
+  background: white;
+  border-bottom: 1px solid var(--border-light);
+  padding: 1.5rem 0;
+  direction: rtl;
+}
+
+.category-pills-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+
+.category-pills-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.category-pills-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.category-pills-container::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.category-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--bg-card);
+  border: 2px solid var(--border-color);
+  border-radius: 30px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  font-family: 'Assistant', 'Heebo', sans-serif;
+  direction: rtl;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.category-pill:hover {
+  background: var(--bg-primary);
+  border-color: var(--primary-blue);
+  color: var(--primary-blue);
+  box-shadow: 0 2px 6px rgba(0, 69, 175, 0.1);
+  transform: translateY(-1px);
+}
+
+.category-pill.active {
+  background: var(--primary-blue);
+  border-color: var(--primary-blue);
+  color: white;
+  box-shadow: 0 3px 8px rgba(0, 69, 175, 0.25);
+  font-weight: 700;
+}
+
+.category-pill.active .category-icon {
+  filter: brightness(0) invert(1);
+}
+
+.category-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.category-name {
+  font-weight: inherit;
+}
+
+/* ============================================
+   SOCIAL PROOF BANNER
+   ============================================ */
+.social-proof-section {
+  width: 100%;
+  background: white;
+  padding: 1rem 0;
+  direction: rtl;
+}
+
+.social-proof-banner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0.875rem 2rem;
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  margin: 0 2rem;
+}
+
+.social-proof-icon {
+  flex-shrink: 0;
+  color: #0369a1;
+  opacity: 0.8;
+}
+
+.social-proof-text {
+  color: #0369a1;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: 'Assistant', 'Heebo', sans-serif;
+  direction: rtl;
+}
+
+/* ============================================
+   TRENDING EVENTS SECTION
+   ============================================ */
+.available-tickets-section {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem 2rem 0;
+  direction: rtl;
+}
+
+.available-tickets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.5rem;
+  direction: rtl;
+  max-width: 100%;
+}
+
+.trending-events-section {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 3rem 2rem;
+  direction: rtl;
+}
+
+.trending-events-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+  gap: 1.5rem;
+  direction: rtl;
+  max-width: 100%;
+}
+
+.trending-event-card {
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  direction: rtl;
+  outline: none;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border: 1px solid #e5e7eb;
+}
+
+.trending-event-card:focus {
+  outline: 2px solid var(--primary-blue);
+  outline-offset: 2px;
+}
+
+.trending-event-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+  border-color: var(--primary-blue);
+}
+
+.event-image-wrapper {
+  position: relative;
+  width: 100%;
+  height: 140px;
+  max-height: 180px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  flex-shrink: 0;
+}
+
+.event-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover !important;
+  border-radius: 8px 8px 0 0;
+  object-position: center;
+  transition: transform 0.3s ease;
+}
+
+.trending-event-card:hover .event-image {
+  transform: scale(1.05);
+}
+
+.event-badge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 0.5rem 0.875rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  font-family: 'Assistant', 'Heebo', sans-serif;
+  direction: rtl;
+  white-space: nowrap;
+}
+
+.event-info {
+  padding: 1rem;
+  direction: rtl;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.event-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+  font-family: 'Heebo', 'Assistant', sans-serif;
+  direction: rtl;
+  text-align: right;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.event-artist {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0 0 0.75rem 0;
+  font-family: 'Assistant', 'Heebo', sans-serif;
+  direction: rtl;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.event-detail-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  font-family: 'Assistant', 'Heebo', sans-serif;
+  direction: rtl;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--primary-blue);
+  flex-shrink: 0;
+}
+
+.event-buy-button {
+  width: 100%;
+  padding: 0.625rem 1rem;
+  background: var(--primary-blue);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-family: 'Assistant', 'Heebo', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  direction: rtl;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.event-buy-button:hover {
+  background: var(--primary-blue-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 69, 175, 0.3);
+}
+
+.event-buy-button:active {
+  transform: translateY(0);
+}
+
+/* ============================================
+   TOP ARTISTS SECTION
+   ============================================ */
+.top-artists-section {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 3rem 2rem;
+  direction: rtl;
+}
+
+.section-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2rem;
+  font-family: 'Heebo', 'Assistant', sans-serif;
+  text-align: right;
+  direction: rtl;
+}
+
+.artists-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+  gap: 1.5rem;
+  direction: rtl;
+}
+
+.artist-card {
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  direction: rtl;
+  outline: none;
+  border: 1px solid #e5e7eb;
+}
+
+.artist-card:focus {
+  outline: 2px solid var(--primary-blue);
+  outline-offset: 2px;
+}
+
+.artist-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+  border-color: var(--primary-blue);
+}
+
+.artist-image-wrapper {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  max-height: 180px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+}
+
+.artist-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover !important;
+  transition: transform 0.3s ease;
+}
+
+.artist-card:hover .artist-image {
+  transform: scale(1.05);
+}
+
+.artist-badge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 0.5rem 0.875rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  font-family: 'Assistant', 'Heebo', sans-serif;
+  direction: rtl;
+  white-space: nowrap;
+}
+
+.artist-info {
+  padding: 1rem;
+  direction: rtl;
+}
+
+.artist-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+  font-family: 'Heebo', 'Assistant', sans-serif;
+  direction: rtl;
+  text-align: right;
+}
+
+.artist-tickets-count {
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  margin: 0;
+  font-family: 'Assistant', 'Heebo', sans-serif;
+  direction: rtl;
+  text-align: right;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.artist-tickets-count .ticket-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--primary-blue);
+  flex-shrink: 0;
+}
+
+/* ============================================
+   LOADING & EMPTY STATES
+   ============================================ */
+.loading-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
+  direction: rtl;
+}
+
+.loading-state p {
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+  font-family: 'Assistant', 'Heebo', sans-serif;
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-tertiary);
+  font-size: 1.1rem;
+  font-family: 'Assistant', 'Heebo', sans-serif;
+  direction: rtl;
+}
+
+
+/* ============================================
+   RESPONSIVE DESIGN
+   ============================================ */
+@media (max-width: 968px) {
+  .hero-search-section {
+    padding: 4rem 1.5rem;
+    background-attachment: scroll;
+    height: 450px !important;
+  }
+  
+  .trending-events-section {
+    padding: 2rem 1.5rem;
+  }
+
+  .trending-events-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+    gap: 1.5rem;
+  }
+  
+  .trending-event-card {
+    max-width: 100% !important;
+  }
+
+  .event-image-wrapper {
+    height: 160px;
+    max-height: 160px;
+  }
+
+  .hero-title {
+    font-size: 2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .hero-search-input {
+    padding: 1rem 3rem 1rem 1.25rem;
+    font-size: 1rem;
+  }
+
+  .category-pills-container {
+    padding: 0 1.5rem;
+    gap: 0.75rem;
+  }
+
+  .category-pill {
+    padding: 0.625rem 1.25rem;
+    font-size: 0.95rem;
+  }
+
+  .social-proof-banner {
+    margin: 0 1.5rem;
+    padding: 0.75rem 1.5rem;
+  }
+
+  .social-proof-text {
+    font-size: 0.9rem;
+  }
+
+  .top-artists-section {
+    padding: 2rem 1.5rem;
+  }
+
+  .section-title {
+    font-size: 1.75rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .artists-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+    gap: 1.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .hero-search-section {
+    padding: 3rem 1rem;
+    background-attachment: scroll;
+    height: 400px !important;
+  }
+  
+  .trending-events-section {
+    padding: 1.5rem 1rem;
+  }
+
+  .trending-events-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+    gap: 1.5rem;
+  }
+  
+  .trending-event-card {
+    max-width: 100% !important;
+  }
+
+  .event-image-wrapper {
+    height: 160px;
+    max-height: 160px;
+  }
+
+  .event-info {
+    padding: 1rem;
+  }
+  
+  .event-name {
+    font-size: 1rem;
+  }
+  
+  .event-artist {
+    font-size: 0.85rem;
+  }
+  
+  .event-detail-item {
+    font-size: 0.8rem;
+  }
+  
+  .event-buy-button {
+    padding: 0.625rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .hero-title {
+    font-size: 1.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .hero-search-input {
+    padding: 0.875rem 2.75rem 0.875rem 1rem;
+    font-size: 0.95rem;
+  }
+
+  .category-pills-container {
+    padding: 0 1rem;
+    gap: 0.5rem;
+  }
+
+  .category-pill {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .category-icon {
+    font-size: 1rem;
+  }
+
+  .social-proof-banner {
+    margin: 0 1rem;
+    padding: 0.625rem 1rem;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .social-proof-text {
+    font-size: 0.85rem;
+    text-align: center;
+  }
+
+  .top-artists-section {
+    padding: 1.5rem 1rem;
+  }
+
+  .section-title {
+    font-size: 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .artists-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+    gap: 1.25rem;
+  }
+
+  .artist-info {
+    padding: 1.25rem;
+  }
+
+  .artist-name {
+    font-size: 1.1rem;
+  }
+
+  .artist-tickets-count {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-title {
+    font-size: 1.5rem;
+  }
+  
+  .hero-search-section {
+    height: 350px !important;
+    padding: 2.5rem 1rem;
+  }
+
+  .trending-events-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .event-image-wrapper {
+    height: 160px;
+    max-height: 160px;
+  }
+
+  .artists-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .category-pill {
+    padding: 0.5rem 0.875rem;
+    font-size: 0.85rem;
+  }
+}

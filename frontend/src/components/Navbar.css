@@ -1,0 +1,307 @@
+/* Professional Navbar - Solid White */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.nav-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  direction: rtl;
+}
+
+/* Right side (RTL): Logo + Main Nav */
+.nav-brand-group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+/* Left side (RTL): User Actions */
+.user-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.nav-logo {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary-blue);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.nav-logo:hover {
+  color: var(--primary-blue-hover);
+  text-decoration: none;
+}
+
+.nav-menu {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.nav-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.95rem;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  transition: color 0.2s ease;
+}
+
+.nav-link:hover {
+  color: var(--primary-blue);
+  text-decoration: none;
+}
+
+/* Notification dots on האזור האישי */
+.nav-link-personal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.nav-dot-accepted {
+  background: #10b981;
+  animation: nav-dot-pulse 1.5s ease-in-out infinite;
+}
+
+.nav-dot-action {
+  background: #ef4444;
+  animation: nav-dot-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes nav-dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+.sell-btn {
+  background: var(--primary-blue);
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--radius-sm);
+  color: white !important;
+  font-weight: 600;
+  border: none;
+  transition: background-color 0.2s ease;
+}
+
+.sell-btn:hover {
+  background: var(--primary-blue-hover);
+  color: white !important;
+  text-decoration: none;
+}
+
+.logout-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.logout-btn:hover {
+  border-color: var(--primary-blue);
+  color: var(--primary-blue);
+  background: transparent;
+}
+
+/* Hamburger Menu */
+.hamburger-menu {
+  display: none;
+  flex-direction: column;
+  justify-content: space-around;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  z-index: 1001;
+  position: relative;
+}
+
+.hamburger-line {
+  width: 100%;
+  height: 3px;
+  background-color: var(--text-primary);
+  border-radius: 3px;
+  transition: all 0.3s ease;
+  transform-origin: center;
+}
+
+.hamburger-line.open:nth-child(1) {
+  transform: rotate(45deg) translate(8px, 8px);
+}
+
+.hamburger-line.open:nth-child(2) {
+  opacity: 0;
+}
+
+.hamburger-line.open:nth-child(3) {
+  transform: rotate(-45deg) translate(8px, -8px);
+}
+
+/* Mobile Sell FAB */
+.mobile-sell-fab {
+  display: none;
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 56px;
+  height: 56px;
+  background: var(--primary-blue);
+  color: white;
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(0, 69, 175, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.mobile-sell-fab:hover {
+  background: var(--primary-blue-hover);
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0, 69, 175, 0.5);
+}
+
+.mobile-sell-fab svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Mobile slide-out overlay - hidden on desktop */
+.mobile-nav-overlay {
+  display: none;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .navbar {
+    padding: var(--spacing-sm) var(--spacing-md);
+    position: relative;
+  }
+  
+  .nav-logo {
+    font-size: 1.25rem;
+  }
+  
+  .hamburger-menu {
+    display: flex;
+  }
+  
+  /* Hide desktop nav-menu and user-actions on mobile */
+  .nav-menu,
+  .user-actions {
+    display: none !important;
+  }
+  
+  /* Mobile slide-out overlay */
+  .mobile-nav-overlay {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    right: -100%;
+    width: 280px;
+    height: 100vh;
+    background: var(--bg-secondary);
+    padding: 80px var(--spacing-lg) var(--spacing-lg);
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+    transition: right 0.3s ease;
+    z-index: 1000;
+    gap: 0;
+    overflow-y: auto;
+  }
+  
+  .mobile-nav-overlay.mobile-open {
+    right: 0;
+  }
+  
+  .mobile-nav-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  
+  .mobile-user-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--border-color);
+  }
+  
+  .mobile-nav-overlay .nav-link {
+    font-size: 1rem;
+    padding: var(--spacing-md);
+    width: 100%;
+    border-bottom: 1px solid var(--border-color);
+    display: block;
+  }
+  
+  .mobile-nav-overlay .nav-link:last-child {
+    border-bottom: none;
+  }
+  
+  .mobile-nav-overlay .sell-btn {
+    background: var(--primary-blue);
+    color: white !important;
+    border-radius: var(--radius-sm);
+    margin-top: var(--spacing-md);
+    text-align: center;
+  }
+  
+  .mobile-nav-overlay .logout-btn {
+    padding: var(--spacing-md);
+    width: 100%;
+    text-align: right;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    margin-top: var(--spacing-md);
+  }
+  
+  .mobile-nav-overlay .user-greeting {
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+  
+  .mobile-sell-fab {
+    display: flex;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-sell-fab {
+    display: none !important;
+  }
+}
+

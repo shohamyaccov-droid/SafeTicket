@@ -1,0 +1,1298 @@
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { eventAPI, ticketAPI, offerAPI, artistAPI } from '../services/api';
+import CheckoutModal from '../components/CheckoutModal';
+import Toast from '../components/Toast';
+import VenueMapPin from '../components/VenueMapPin';
+import InteractiveMenoraMap from '../components/InteractiveMenoraMap';
+import { VENUE_MAPS, getVenueConfig, normalizeSection } from '../utils/venueMaps';
+import { getTicketPrice, getUnitPriceWithFee } from '../utils/priceFormat';
+import { getFullImageUrl } from '../utils/formatters';
+import './EventDetailsPage.css';
+
+const EventDetailsPage = () => {
+  const { eventId } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [event, setEvent] = useState(null);
+  const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedTicketGroup, setSelectedTicketGroup] = useState(null);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [quantity, setQuantity] = useState(1);
+  const [showMakeOffer, setShowMakeOffer] = useState(false);
+  const [selectedOfferTicket, setSelectedOfferTicket] = useState(null);
+  const [selectedOfferTicketGroup, setSelectedOfferTicketGroup] = useState(null);
+  const [offerAmount, setOfferAmount] = useState('');
+  const [offerQuantity, setOfferQuantity] = useState(1);
+  const [toast, setToast] = useState(null);
+  const [offerSubmitted, setOfferSubmitted] = useState(false);
+
+  // Filtering and sorting state
+  const [filters, setFilters] = useState({
+    minPrice: '',
+    maxPrice: '',
+    minQuantity: '',
+  });
+  const [sortBy, setSortBy] = useState('price_asc');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [activeTicketId, setActiveTicketId] = useState(null);
+  const [artists, setArtists] = useState([]);
+
+  // Helper function to group tickets by listing
+  const groupTicketsByListing = (ticketsArray) => {
+    const groups = {};
+    
+    console.log('groupTicketsByListing - Input tickets:', ticketsArray.length);
+    console.log('groupTicketsByListing - Sample tickets:', ticketsArray.slice(0, 3).map(t => ({
+      id: t.id,
+      listing_group_id: t.listing_group_id,
+      available_quantity: t.available_quantity,
+      status: t.status
+    })));
+    
+    ticketsArray.forEach(ticket => {
+      // Group by listing_group_id if available, otherwise by seller+price combination
+      // IMPORTANT: Use strict comparison and handle null/undefined/empty string
+      let groupKey;
+      const listingGroupId = ticket.listing_group_id;
+      
+      // Debug: Log each ticket's listing_group_id
+      if (ticketsArray.indexOf(ticket) < 5) {
+        console.log(`Ticket ${ticket.id}: listing_group_id =`, listingGroupId, `(type: ${typeof listingGroupId})`);
+      }
+      
+      // Check if listing_group_id exists and is valid
+      if (listingGroupId !== null && listingGroupId !== undefined && listingGroupId !== '') {
+        // Use listing_group_id as the group key
+        groupKey = String(listingGroupId).trim(); // Ensure it's a string and trim whitespace
+      } else {
+        // Fallback: group by seller+price (individual listings)
+        // Note: serializer returns seller_username, not seller or seller_id
+        const sellerId = ticket.seller_username || ticket.seller || ticket.seller_id || 'unknown';
+        const price = ticket.asking_price || ticket.original_price;
+        groupKey = `${sellerId}_${price}`;
+        
+        // Debug: Log when falling back to seller+price grouping
+        if (ticketsArray.indexOf(ticket) < 5) {
+          console.log(`Ticket ${ticket.id}: No listing_group_id, using fallback key: ${groupKey}`);
+        }
+      }
+      
+      if (!groups[groupKey]) {
+        groups[groupKey] = {
+          id: groupKey,
+          tickets: [],
+          price: ticket.asking_price || ticket.original_price,
+          available_count: 0,
+          seller_id: ticket.seller || ticket.seller_id, // Seller ID for security checks
+          seller_username: ticket.seller_username, // Seller username as fallback
+          seller_is_verified: ticket.seller_is_verified || false,
+          delivery_method: ticket.delivery_method || 'instant',
+          listing_group_id: listingGroupId, // Store original for debugging
+        };
+      }
+      
+      groups[groupKey].tickets.push(ticket);
+      // FIX: Count by number of tickets in group, not by available_quantity
+      // Each ticket has available_quantity=1, so we just count tickets
+      groups[groupKey].available_count += 1; // Count tickets, not quantity
+    });
+    
+    const grouped = Object.values(groups);
+    console.log('groupTicketsByListing - Output groups:', grouped.length);
+    console.log('groupTicketsByListing - Group details:', grouped.map(g => ({
+      id: g.id,
+      listing_group_id: g.listing_group_id,
+      ticket_count: g.tickets.length,
+      available_count: g.available_count
+    })));
+    
+    return grouped;
+  };
+
+  // Helper function to get seat range display
+  // Helper to format section display - translate Lower/Upper to Hebrew
+  const formatSectionDisplay = (sectionName) => {
+    if (!sectionName) return '';
+    const str = String(sectionName).trim();
+    
+    // Replace English Lower/Upper with Hebrew equivalents
+    let formatted = str
+      .replace(/\bLower\b/gi, 'תחתון')
+      .replace(/\bUpper\b/gi, 'עליון')
+      .replace(/\blower\b/gi, 'תחתון')
+      .replace(/\bupper\b/gi, 'עליון');
+    
+    // Handle patterns like "Lower 5" or "5 Lower" -> "5 תחתון"
+    const lowerMatch = formatted.match(/(\d+)\s*תחתון|תחתון\s*(\d+)/i);
+    const upperMatch = formatted.match(/(\d+)\s*עליון|עליון\s*(\d+)/i);
+    
+    if (lowerMatch) {
+      const num = lowerMatch[1] || lowerMatch[2];
+      return `${num} תחתון`;
+    }
+    if (upperMatch) {
+      const num = upperMatch[1] || upperMatch[2];
+      return `${num} עליון`;
+    }
+    
+    return formatted;
+  };
+
+  const getSeatRange = (group) => {
+    const tickets = group.tickets || [];
+    if (tickets.length === 0) return 'מיקום לא צוין';
+    
+    // Try to get section/row info from first ticket
+    const firstTicket = tickets[0];
+    if (firstTicket.section && firstTicket.row) {
+      const formattedSection = formatSectionDisplay(firstTicket.section);
+      return `גוש ${formattedSection}, שורה ${firstTicket.row}`;
+    }
+    if (firstTicket.section) {
+      const formattedSection = formatSectionDisplay(firstTicket.section);
+      return `גוש ${formattedSection}`;
+    }
+    if (firstTicket.row) {
+      return `שורה ${firstTicket.row}`;
+    }
+    if (firstTicket.seat_row) {
+      return firstTicket.seat_row;
+    }
+    
+    return 'מיקום לא צוין';
+  };
+
+  const normalizeSplitType = (rawSplitType) => {
+    if (!rawSplitType) return 'any';
+    const str = String(rawSplitType).trim().toLowerCase();
+    if (str.includes('זוגות') || str.includes('pairs')) return 'pairs';
+    if (str.includes('הכל') || str.includes('all')) return 'all';
+    return 'any';
+  };
+
+  // Helper function to get section name for venue map with flexible matching
+  const getSectionNameForMap = (ticket) => {
+    if (!ticket) return null;
+    
+    // Try to construct section name from ticket data
+    if (ticket.section) {
+      const section = String(ticket.section).trim();
+      
+      // Normalize the section name - this returns "11 Lower" or "11 Upper" format
+      const normalized = normalizeSection(section);
+      
+      // If normalized contains "Lower" or "Upper", return it directly (for map matching)
+      if (normalized && (normalized.includes('Lower') || normalized.includes('Upper'))) {
+        return normalized; // Return "11 Lower" or "11 Upper" format for exact map matching
+      }
+      
+      // For legacy formats without tier info, try to preserve original
+      if (section.includes('גוש') || section.includes('שער')) {
+        return section; // Already has prefix, return as-is
+      }
+      
+      // If normalized is just a number (no tier), return it as-is (will default to Lower in map)
+      if (normalized && /^\d+$/.test(normalized)) {
+        return normalized;
+      }
+      
+      return section;
+    }
+    
+    return null;
+  };
+
+  // Fetch event and tickets data
+  useEffect(() => {
+    const fetchEventData = async () => {
+      try {
+        // Fetch event details
+        const eventResponse = await eventAPI.getEvent(eventId);
+        setEvent(eventResponse.data);
+
+        // Fetch tickets for this event with filters
+        await fetchTickets();
+      } catch (error) {
+        console.error('Error fetching event data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (eventId) {
+      fetchEventData();
+    }
+  }, [eventId]);
+
+  // Polling: refresh tickets every 15 seconds to hide sold tickets (prevent stale UI)
+  useEffect(() => {
+    if (!eventId) return;
+    const pollInterval = setInterval(() => {
+      fetchTickets();
+    }, 15000);
+    return () => clearInterval(pollInterval);
+  }, [eventId]);
+
+  // Fetch tickets with current filters and sorting. Returns tickets array for availability checks.
+  const fetchTickets = async () => {
+    try {
+      const params = {};
+      if (filters.minPrice) params.min_price = filters.minPrice;
+      if (filters.maxPrice) params.max_price = filters.maxPrice;
+      if (filters.minQuantity) params.min_quantity = filters.minQuantity;
+      params.sort = sortBy;
+      const ticketsResponse = await eventAPI.getEventTickets(eventId, params);
+      let ticketsData = [];
+      if (ticketsResponse.data) {
+        if (Array.isArray(ticketsResponse.data)) {
+          ticketsData = ticketsResponse.data;
+        } else if (ticketsResponse.data.results && Array.isArray(ticketsResponse.data.results)) {
+          ticketsData = ticketsResponse.data.results;
+        }
+      }
+      const ticketsArray = Array.isArray(ticketsData) ? ticketsData : [];
+      setTickets(ticketsArray);
+      return ticketsArray;
+    } catch (error) {
+      console.error('Error fetching tickets:', error);
+      return [];
+    }
+  };
+
+  // Refetch tickets when filters or sort change
+  useEffect(() => {
+    if (eventId) {
+      fetchTickets();
+    }
+  }, [filters, sortBy, eventId]);
+
+  // Fetch artists for fallback image matching
+  useEffect(() => {
+    const fetchArtists = async () => {
+      try {
+        const res = await artistAPI.getArtists();
+        const data = res.data;
+        setArtists(Array.isArray(data) ? data : (data?.results || []));
+      } catch (err) {
+        console.error('Error fetching artists:', err);
+      }
+    };
+    fetchArtists();
+  }, []);
+
+  // Calculate filtered and sorted ticket groups
+  const ticketGroups = useMemo(() => {
+    const grouped = groupTicketsByListing(tickets);
+    console.log('Grouped Tickets:', grouped);
+    console.log('Group Counts:', grouped.map(g => ({ id: g.id, count: g.available_count })));
+    
+    // Apply client-side filtering (additional to backend filtering)
+    let filtered = grouped;
+    
+    // Sort groups
+    if (sortBy === 'price_asc') {
+      filtered = filtered.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+    } else if (sortBy === 'price_desc') {
+      filtered = filtered.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
+    } else if (sortBy === 'quantity_desc') {
+      filtered = filtered.sort((a, b) => b.available_count - a.available_count);
+    } else if (sortBy === 'newest') {
+      // Sort by first ticket's created_at if available
+      filtered = filtered.sort((a, b) => {
+        const aDate = a.tickets[0]?.created_at || '';
+        const bDate = b.tickets[0]?.created_at || '';
+        return bDate.localeCompare(aDate);
+      });
+    } else if (sortBy === 'best_seats') {
+      // Best seats = lowest price with highest quantity
+      filtered = filtered.sort((a, b) => {
+        const priceDiff = parseFloat(a.price) - parseFloat(b.price);
+        if (priceDiff !== 0) return priceDiff;
+        return b.available_count - a.available_count;
+      });
+    }
+    
+    return filtered;
+  }, [tickets, sortBy]);
+
+  // Find cheapest ticket group for premium badge
+  const cheapestTicketPrice = useMemo(() => {
+    if (ticketGroups.length === 0) return null;
+    return Math.min(...ticketGroups.map(g => parseFloat(g.price)));
+  }, [ticketGroups]);
+
+  // Calculate price range from tickets
+  const priceRange = useMemo(() => {
+    if (tickets.length === 0) return { min: 0, max: 1000 };
+    const prices = tickets.map(t => parseFloat(t.asking_price || t.original_price || 0)).filter(p => p > 0);
+    if (prices.length === 0) return { min: 0, max: 1000 };
+    return {
+      min: Math.floor(Math.min(...prices)),
+      max: Math.ceil(Math.max(...prices)),
+    };
+  }, [tickets]);
+
+  // Build section prices map for interactive map - Handle Lower/Upper tiers
+  const sectionPrices = useMemo(() => {
+    try {
+      const prices = {};
+      ticketGroups.forEach(group => {
+        const firstTicket = group.tickets?.[0];
+        if (firstTicket) {
+          const section = getSectionNameForMap(firstTicket);
+          if (section) {
+            const price = parseFloat(getTicketPrice(firstTicket));
+            if (!isNaN(price)) {
+              // Extract number and tier from section name
+              const sectionStr = String(section);
+              const numMatch = sectionStr.match(/\d+/);
+              if (numMatch) {
+                const num = numMatch[0];
+                const hasLower = /תחתון|lower|תחת/i.test(sectionStr);
+                const hasUpper = /עליון|upper|עלי/i.test(sectionStr);
+                
+                // CRITICAL: Store ONLY tier-specific keys, NEVER generic number keys
+                // This prevents '5 Lower' from populating price for '5 Upper'
+                if (hasLower) {
+                  prices[`${num} Lower`] = price;
+                  prices[`גוש ${num} תחתון`] = price;
+                } else if (hasUpper) {
+                  prices[`${num} Upper`] = price;
+                  prices[`גוש ${num} עליון`] = price;
+                } else {
+                  // Default to Lower if no tier specified - DO NOT store as Upper
+                  prices[`${num} Lower`] = price;
+                  // DO NOT store generic 'num' key or Upper key - this causes double highlight
+                }
+                
+                // Store original format
+                prices[section] = price;
+                prices[`גוש ${num}`] = price;
+                prices[num] = price;
+              }
+            }
+          }
+        }
+      });
+      return prices;
+    } catch (error) {
+      console.error('Error building section prices:', error);
+      return {};
+    }
+  }, [ticketGroups]);
+
+  // Lowest price per section INCLUDING 10% buyer fee (rounded up)
+  const lowestPricesPerSection = useMemo(() => {
+    const prices = {};
+    try {
+      ticketGroups.forEach(group => {
+        const firstTicket = group.tickets?.[0];
+        if (!firstTicket) return;
+        const sectionId = getSectionNameForMap(firstTicket);
+        if (!sectionId) return;
+        const base = parseFloat(group.price);
+        if (isNaN(base)) return;
+        const priceWithFee = getUnitPriceWithFee(base);
+        if (prices[sectionId] === undefined || priceWithFee < prices[sectionId]) {
+          prices[sectionId] = priceWithFee;
+        }
+      });
+    } catch (error) {
+      console.error('Error building lowestPricesPerSection:', error);
+    }
+    return prices;
+  }, [ticketGroups]);
+
+  // Handle section click from map (two-way binding) - Updated for Lower/Upper
+  const handleSectionClick = useCallback((sectionId) => {
+    try {
+      // Validate section exists in arena topology (24 sections: 1-12 Lower and 1-12 Upper)
+      const validSections = [];
+      for (let i = 1; i <= 12; i++) {
+        validSections.push(`${i} Lower`, `${i} Upper`);
+      }
+      
+      if (!validSections.includes(sectionId)) {
+        console.warn(`Invalid section: ${sectionId} - not in arena topology (valid: 1-12 Lower/Upper)`);
+        return;
+      }
+      
+      // Extract number and tier from sectionId (e.g., "11 Lower" -> num: 11, tier: "Lower")
+      const match = sectionId.match(/(\d+)\s+(Lower|Upper)/);
+      if (!match) return;
+      
+      const sectionNum = match[1];
+      const tier = match[2];
+      
+      // Find ticket group matching this section
+      const matchingGroup = ticketGroups.find(group => {
+        const firstTicket = group.tickets?.[0];
+        if (!firstTicket) return false;
+        const ticketSection = getSectionNameForMap(firstTicket);
+        if (!ticketSection) return false;
+        
+        // Try multiple matching formats
+        const sectionStr = String(ticketSection);
+        const ticketNumMatch = sectionStr.match(/\d+/);
+        if (!ticketNumMatch) return false;
+        
+        const ticketNum = ticketNumMatch[0];
+        const ticketHasLower = /תחתון|lower|תחת/i.test(sectionStr);
+        const ticketHasUpper = /עליון|upper|עלי/i.test(sectionStr);
+        
+        // Match number and tier
+        if (ticketNum !== sectionNum) return false;
+        
+        if (tier === 'Lower' && ticketHasLower) return true;
+        if (tier === 'Upper' && ticketHasUpper) return true;
+        if (!ticketHasLower && !ticketHasUpper && tier === 'Lower') return true; // Default to Lower
+        
+        return false;
+      });
+
+      if (matchingGroup) {
+        const groupId = matchingGroup.listing_group_id || matchingGroup.id;
+        setActiveTicketId(groupId);
+        
+        // Scroll to the ticket row
+        setTimeout(() => {
+          try {
+            const ticketRow = document.querySelector(`[data-ticket-group-id="${groupId}"]`);
+            if (ticketRow) {
+              ticketRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          } catch (scrollError) {
+            console.error('Error scrolling to ticket:', scrollError);
+          }
+        }, 100);
+      } else {
+        console.log(`No tickets found for section ${sectionId}`);
+      }
+    } catch (error) {
+      console.error('Error handling section click:', error);
+    }
+  }, [ticketGroups]);
+
+  const handleBuy = async (ticketGroup) => {
+    // Manual re-fetch before opening modal: ensure ticket is still available (prevent double-sell race)
+    const freshTickets = await fetchTickets();
+    const freshGroups = groupTicketsByListing(freshTickets);
+    const groupId = ticketGroup.listing_group_id || ticketGroup.id;
+    const stillAvailable = freshGroups.some(
+      (g) => (g.listing_group_id || g.id) === groupId && (g.available_count || 0) > 0
+    );
+    if (!stillAvailable) {
+      setToast({
+        message: 'הכרטיס נמכר ברגע זה. ריעננו את הרשימה – נסה כרטיס אחר.',
+        type: 'error',
+      });
+      return;
+    }
+    setSelectedTicketGroup(ticketGroup);
+    setQuantity(1);
+    setShowCheckout(true);
+  };
+
+  const handleMakeOffer = (ticketGroup) => {
+    const first = ticketGroup.tickets[0];
+    const offerSplitRaw = first?.split_type || first?.split_option || ticketGroup.split_type || '';
+    const offerSplitType = normalizeSplitType(offerSplitRaw);
+    const avail = ticketGroup.available_count || 1;
+    let initialQty = 1;
+    if (offerSplitType === 'all') {
+      initialQty = avail;
+    } else if (offerSplitType === 'pairs') {
+      initialQty = avail >= 2 ? 2 : avail;
+    }
+    setSelectedOfferTicket(first);
+    setSelectedOfferTicketGroup(ticketGroup);
+    setOfferAmount('');
+    setOfferQuantity(initialQty);
+    setShowMakeOffer(true);
+  };
+
+  const handleCloseMakeOffer = () => {
+    setShowMakeOffer(false);
+    setSelectedOfferTicket(null);
+    setSelectedOfferTicketGroup(null);
+    setOfferAmount('');
+    setOfferQuantity(1);
+    setOfferSubmitted(false);
+  };
+
+  const handleQuickOffer = (percentage) => {
+    if (!selectedOfferTicket) return;
+    const askingPrice = parseFloat(getTicketPrice(selectedOfferTicket));
+    // Calculate total amount based on price per ticket * quantity
+    const pricePerTicket = (askingPrice * percentage / 100);
+    const totalAmount = (pricePerTicket * offerQuantity).toFixed(2);
+    setOfferAmount(totalAmount);
+  };
+
+  const getOfferHelperText = () => {
+    if (!offerAmount || !selectedOfferTicket) return null;
+    const askingPrice = parseFloat(getTicketPrice(selectedOfferTicket));
+    const offerPrice = parseFloat(offerAmount);
+    if (isNaN(offerPrice) || offerPrice <= 0) return null;
+    
+    const percentage = (offerPrice / askingPrice) * 100;
+    
+    if (percentage < 70) {
+      return { text: 'הצעה נמוכה עשויה להידחות', type: 'warning' };
+    } else if (percentage >= 70) {
+      return { text: 'הצעה תחרותית! סיכוי גבוה להתקבל', type: 'success' };
+    }
+    return null;
+  };
+
+  const handleSubmitOffer = async (e) => {
+    e.preventDefault();
+    if (!user) {
+      setToast({ message: 'אנא התחבר כדי להציע מחיר', type: 'error' });
+      return;
+    }
+
+    if (!selectedOfferTicket) return;
+
+    const amount = parseFloat(offerAmount);
+    if (isNaN(amount) || amount <= 0) {
+      setToast({ message: 'אנא הזן סכום תקין', type: 'error' });
+      return;
+    }
+
+    if (offerQuantity < 1 || offerQuantity > (selectedOfferTicketGroup?.available_count || 1)) {
+      setToast({ message: 'כמות לא תקינה', type: 'error' });
+      return;
+    }
+
+    try {
+      await offerAPI.createOffer({
+        ticket: selectedOfferTicket.id,
+        amount: amount,
+        quantity: offerQuantity,
+      });
+      setOfferSubmitted(true);
+    } catch (error) {
+      const errorMsg = error.response?.data?.error || error.response?.data?.detail || 'שגיאה בשליחת ההצעה';
+      setToast({ message: errorMsg, type: 'error' });
+    }
+  };
+
+  const handleCloseCheckout = () => {
+    setShowCheckout(false);
+    setSelectedTicketGroup(null);
+    // Refresh tickets after purchase
+    fetchTickets();
+  };
+
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const handleSortChange = (e) => {
+    setSortBy(e.target.value);
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'TBA';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'TBA';
+      
+      return new Intl.DateTimeFormat('he-IL', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).format(date);
+    } catch (error) {
+      return 'TBA';
+    }
+  };
+
+
+  if (loading) {
+    return (
+      <div className="event-details-container">
+        <div className="loading-state">
+          <p>טוען פרטי אירוע...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!event) {
+    return (
+      <div className="event-details-container">
+        <div className="empty-state">
+          <p>אירוע לא נמצא</p>
+          <button onClick={() => navigate('/')} className="back-button">
+            חזרה לדף הבית
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="event-details-container">
+      {/* Event Header */}
+      <div className="event-header">
+        <button onClick={() => navigate(-1)} className="back-button">
+          ← חזרה
+        </button>
+        <div className="event-header-content">
+          {event.image_url && (
+            <img 
+              src={getFullImageUrl(event.image_url)} 
+              alt={event.name}
+              className="event-header-image"
+              onError={(e) => {
+                e.target.src = `https://via.placeholder.com/800x400/0045af/ffffff?text=${encodeURIComponent(event.name)}`;
+              }}
+            />
+          )}
+          <div className="event-header-info">
+            <div className="event-title-row">
+              <div className="event-header-title-container">
+                {(() => {
+                  const artistId = typeof event.artist === 'object' ? event.artist?.id : event.artist_id || event.artist;
+                  const matchedArtist = artists.find(a => a.id === artistId);
+                  const rawImg = event.image_url || event.image ||
+                    (typeof event.artist === 'object' ? (event.artist?.image_url || event.artist?.image) : null) ||
+                    matchedArtist?.image_url || matchedArtist?.image;
+                  const headerImgSrc = rawImg ? getFullImageUrl(rawImg) : null;
+                  return headerImgSrc ? (
+                    <img
+                      src={headerImgSrc}
+                      alt={event.name}
+                      className="event-header-title-image"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                  ) : null;
+                })()}
+                <h1 className="event-title">{event.name}</h1>
+              </div>
+            </div>
+            <div className="event-meta">
+              <p className="event-date">📅 {formatDate(event.date)}</p>
+              <p className="event-location">📍 {event.venue}, {event.city}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters and Sort Bar */}
+      <div className="filters-sort-bar">
+        {/* Mobile Filter Toggle Button */}
+        <button 
+          className="mobile-filter-toggle"
+          onClick={() => setFiltersOpen(!filtersOpen)}
+          aria-expanded={filtersOpen}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 6H21M7 12H17M10 18H14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+          <span>סינון ומיון</span>
+          <svg 
+            className={`filter-arrow ${filtersOpen ? 'open' : ''}`}
+            width="16" 
+            height="16" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+        
+        <div className={`filters-section ${filtersOpen ? 'mobile-open' : ''}`}>
+          <h3 className="filters-title">סינון:</h3>
+          
+          {/* Price Range */}
+          <div className="filter-group">
+            <label className="filter-label">טווח מחירים (₪)</label>
+            <div className="price-range-inputs">
+              <input
+                type="number"
+                className="price-input"
+                placeholder="מ-"
+                value={filters.minPrice}
+                onChange={(e) => handleFilterChange('minPrice', e.target.value)}
+                min={priceRange.min}
+                max={priceRange.max}
+              />
+              <span className="price-separator">-</span>
+              <input
+                type="number"
+                className="price-input"
+                placeholder="עד"
+                value={filters.maxPrice}
+                onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
+                min={priceRange.min}
+                max={priceRange.max}
+              />
+            </div>
+          </div>
+
+          {/* Quantity Filter */}
+          <div className="filter-group">
+            <label className="filter-label">כמות מינימלית</label>
+            <select
+              className="filter-select"
+              value={filters.minQuantity}
+              onChange={(e) => handleFilterChange('minQuantity', e.target.value)}
+            >
+              <option value="">כל הכמויות</option>
+              <option value="1">1+ כרטיסים</option>
+              <option value="2">2+ כרטיסים</option>
+              <option value="4">4+ כרטיסים</option>
+              <option value="6">6+ כרטיסים</option>
+            </select>
+          </div>
+
+          {/* Clear Filters Button */}
+          {(filters.minPrice || filters.maxPrice || filters.minQuantity) && (
+            <button
+              className="clear-filters-btn"
+              onClick={() => setFilters({ minPrice: '', maxPrice: '', minQuantity: '' })}
+            >
+              נקה סינון
+            </button>
+          )}
+        </div>
+
+        {/* Sort By */}
+        <div className={`sort-section ${filtersOpen ? 'mobile-open' : ''}`}>
+          <label className="sort-label">מיין לפי:</label>
+          <select
+            className="sort-select"
+            value={sortBy}
+            onChange={handleSortChange}
+          >
+            <option value="price_asc">מחיר: נמוך לגבוה</option>
+            <option value="price_desc">מחיר: גבוה לנמוך</option>
+            <option value="best_seats">מושבים הטובים ביותר</option>
+            <option value="quantity_desc">הכי הרבה כרטיסים</option>
+            <option value="newest">הכי חדש</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Tickets Section - Split Screen Layout */}
+      <div className="tickets-section">
+        <div className="section-title-row">
+          <h2 className="section-title">כרטיסים זמינים ({ticketGroups.length})</h2>
+          <div className="live-refresh-controls">
+            <span className="live-indicator" title="עדכון אוטומטי כל 15 שניות">
+              <span className="live-dot" />
+              עדכון חי
+            </span>
+            <button
+              type="button"
+              className="refresh-btn"
+              onClick={() => fetchTickets()}
+              title="רענן כרטיסים"
+              aria-label="רענן כרטיסים"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 4V9H9M20 20V15H15M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12ZM15 9L21 3M3 21L9 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              רענן
+            </button>
+          </div>
+        </div>
+        <div className="tickets-split-container">
+          {/* Sticky Map Container (Left side in RTL) */}
+          <div className="venue-map-sticky-container">
+            <div className="venue-map-card">
+              <div className="venue-map-card-header">
+                <h3>מפת אולם</h3>
+              </div>
+                <div className="venue-map-card-content">
+                  {(() => {
+                    // Get active ticket's section for map
+                    let activeSectionName = null; // Start with null
+                    
+                    if (activeTicketId) {
+                      const activeGroup = ticketGroups.find(g => (g.listing_group_id || g.id) === activeTicketId);
+                      if (activeGroup && activeGroup.tickets && activeGroup.tickets.length > 0) {
+                        const activeTicket = activeGroup.tickets[0];
+                        const section = getSectionNameForMap(activeTicket);
+                        if (section) {
+                          activeSectionName = section;
+                        }
+                      }
+                    }
+                    
+                    const venueName = event?.venue || 'מנורה מבטחים'; // Default to Menora
+                    
+                    // Use flexible venue matching - ALWAYS returns a config (never null)
+                    const venueMatch = getVenueConfig(venueName);
+                    const finalVenueName = venueMatch ? venueMatch.matchedName : 'מנורה מבטחים';
+                    
+                    // Use InteractiveMenoraMap for Menora venues, otherwise use VenueMapPin
+                    const isMenora = finalVenueName.includes('מנורה') || finalVenueName.includes('מבטחים');
+                    
+                    if (isMenora) {
+                      try {
+                        return (
+                          <InteractiveMenoraMap
+                            activeSection={activeSectionName || null}
+                            onSectionClick={handleSectionClick || (() => {})}
+                            sectionPrices={sectionPrices || {}}
+                            lowestPrices={lowestPricesPerSection || {}}
+                          />
+                        );
+                      } catch (mapError) {
+                        console.error('Error rendering InteractiveMenoraMap, falling back to VenueMapPin:', mapError);
+                        return <VenueMapPin venueName={finalVenueName} sectionName={activeSectionName} />;
+                      }
+                    }
+                    
+                    // ALWAYS render the map - never return null or conditional
+                    return <VenueMapPin venueName={finalVenueName} sectionName={activeSectionName} />;
+                  })()}
+                </div>
+            </div>
+          </div>
+          
+          {/* Scrollable Tickets List (Right side in RTL) */}
+          <div className="tickets-list-container">
+            {ticketGroups.length > 0 ? (
+              <>
+                {/* Premium Trust Banner - SafeTicket 100% Guarantee */}
+                <div className="safeticket-guarantee-banner">
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M12 1L3 5V11C3 16.55 6.84 20.74 12 22C17.16 20.74 21 16.55 21 11V5L12 1Z"
+                      stroke="#16a34a"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      fill="#dcfce7"
+                    />
+                    <path
+                      d="M9 12L11 14L15 10"
+                      stroke="#16a34a"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span>
+                    אחריות 100%: אנחנו מוודאים שתקבלו כרטיסים תקפים בזמן לאירוע, או שתקבלו את כספכם בחזרה.
+                  </span>
+                </div>
+                <div className="tickets-grid">
+            {ticketGroups.map((group) => {
+              const seatRange = getSeatRange(group);
+              const hasPdf = group.tickets.some(t => t.pdf_file_url);
+              const isUrgent = group.available_count < 5;
+              const isVerified = group.seller_is_verified;
+              const isCheapest = cheapestTicketPrice && parseFloat(group.price) === cheapestTicketPrice;
+              const firstTicket = group.tickets[0];
+              const sectionName = getSectionNameForMap(firstTicket);
+              const splitTypeRaw = firstTicket?.split_type || firstTicket?.split_option || group.split_type || '';
+              const splitType = normalizeSplitType(splitTypeRaw);
+              // Persist split type on the group itself for downstream consumers (e.g. checkout)
+              group.split_type = splitTypeRaw;
+              const basePriceStr = getTicketPrice({ original_price: group.price, asking_price: group.price });
+              const basePriceNum = parseFloat(basePriceStr);
+              const displayPrice = !isNaN(basePriceNum) ? getUnitPriceWithFee(basePriceNum) : basePriceStr;
+              const groupId = group.listing_group_id || group.id;
+              const isExpanded = activeTicketId === groupId;
+              
+              
+              // Handle click to toggle expansion and update map
+              const handleTicketClick = (e) => {
+                e.stopPropagation();
+                // Toggle expansion and update map
+                if (isExpanded) {
+                  // Collapse: clear active ticket
+                  setActiveTicketId(null);
+                } else {
+                  // Expand: set as active (this updates the map)
+                  setActiveTicketId(groupId);
+                }
+              };
+              
+              // Handle hover to update map without expanding (only if not already expanded)
+              const handleTicketHover = () => {
+                if (!isExpanded && sectionName && event?.venue && VENUE_MAPS[event.venue]) {
+                  setActiveTicketId(groupId);
+                }
+              };
+              
+              // Handle mouse leave to reset hover state (only if not expanded)
+              const handleTicketLeave = () => {
+                if (!isExpanded && activeTicketId === groupId) {
+                  setActiveTicketId(null);
+                }
+              };
+              
+              const isActive = activeTicketId === groupId;
+              return (
+                <div 
+                  key={group.id}
+                  data-ticket-group-id={groupId}
+                  className={`viagogo-ticket-row ${isExpanded ? 'expanded' : ''} ${isActive ? 'active' : ''}`}
+                  style={isActive ? { backgroundColor: '#e0f2fe', border: '2px solid #0284c7', color: '#1e293b' } : {}}
+                  onClick={handleTicketClick}
+                  onMouseEnter={handleTicketHover}
+                  onMouseLeave={handleTicketLeave}
+                >
+                  {/* Collapsed State - Viagogo Style Row */}
+                  <div className="ticket-row-content">
+                    {/* Right Side: Section & Row Info */}
+                    <div className="ticket-row-section">
+                      <div className="section-row-info">
+                        <span className="section-row-text">{seatRange}</span>
+                      </div>
+                      <div className="ticket-mini-tags">
+                        <span className="mini-tag quantity-tag">
+                          🎟️ {group.available_count} כרטיסים
+                          {splitType === 'pairs' && (
+                            <span className="split-badge badge-pairs">נמכר בזוגות בלבד</span>
+                          )}
+                          {splitType === 'all' && (
+                            <span className="split-badge badge-all">רכישת כל הכמות יחד</span>
+                          )}
+                        </span>
+                        {isCheapest && (
+                          <span className="mini-tag cheapest-tag">💎 מחיר משתלם</span>
+                        )}
+                        {hasPdf && (
+                          <span className="mini-tag delivery-tag">✅ הורדה מיידית</span>
+                        )}
+                        {isVerified && (
+                          <span className="mini-tag verified-tag">✓ מאומת</span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Left Side: Price */}
+                    <div className="ticket-row-price">
+                      <div className="ticket-price-container">
+                        <div className="price-amount">₪{displayPrice}</div>
+                        <div className="fee-included-text">לכרטיס כולל עמלות</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Expanded State - Action Buttons */}
+                  {isExpanded && (
+                    <div className="ticket-row-expanded">
+                      <div className="ticket-actions-row">
+                        <div className="buy-button-wrapper">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleBuy(group);
+                            }}
+                            className="viagogo-buy-button"
+                            disabled={group.available_count <= 0}
+                          >
+                            קנה עכשיו
+                          </button>
+                          <span className="micro-trust-text">🔒 תשלום מאובטח ומוגן</span>
+                        </div>
+                        {/* CRITICAL SECURITY: Hide "Make Offer" button if user is the seller */}
+                        {user && (() => {
+                          const ticket = group.tickets[0];
+                          const isSeller = ticket?.seller === user.id || 
+                                          ticket?.seller_id === user.id || 
+                                          ticket?.seller_username === user.username ||
+                                          group.seller_id === user.id ||
+                                          group.seller_username === user.username;
+                          return !isSeller;
+                        })() && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMakeOffer(group);
+                            }}
+                            className="viagogo-offer-button"
+                            disabled={group.available_count <= 0}
+                          >
+                            הצע מחיר
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+                </div>
+              </>
+            ) : (
+              <div className="empty-state">
+                <p>אין כרטיסים זמינים לאירוע זה כרגע</p>
+                {(filters.minPrice || filters.maxPrice || filters.minQuantity) && (
+                  <button
+                    className="clear-filters-btn"
+                    onClick={() => setFilters({ minPrice: '', maxPrice: '', minQuantity: '' })}
+                  >
+                    נקה סינון כדי לראות כל הכרטיסים
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Checkout Modal */}
+      {showCheckout && selectedTicketGroup && (
+        <CheckoutModal
+          ticket={selectedTicketGroup.tickets[0]}
+          ticketGroup={selectedTicketGroup}
+          user={user}
+          quantity={quantity}
+          onClose={handleCloseCheckout}
+          onErrorToParent={(payload) => {
+            setToast(payload);
+            if (payload?.type === 'error' && /sold|נמכר/.test(payload?.message || '')) {
+              handleCloseCheckout();
+            }
+          }}
+          splitType={normalizeSplitType(
+            (selectedTicketGroup.tickets &&
+              selectedTicketGroup.tickets[0]?.split_type) ||
+            selectedTicketGroup.split_type
+          )}
+          acceptedOffer={(() => {
+            // Check if there's an accepted offer for this ticket
+            try {
+              const storedOffer = sessionStorage.getItem('acceptedOffer');
+              if (storedOffer) {
+                const offer = JSON.parse(storedOffer);
+                // Verify it's for this ticket
+                if (offer.ticket === selectedTicketGroup.tickets[0].id || 
+                    offer.ticket_details?.id === selectedTicketGroup.tickets[0].id) {
+                  // Clear from storage after use
+                  sessionStorage.removeItem('acceptedOffer');
+                  return offer;
+                }
+              }
+            } catch (e) {
+              console.error('Error parsing accepted offer:', e);
+            }
+            return null;
+          })()}
+        />
+      )}
+
+      {/* Make Offer Modal - StockX Style */}
+      {showMakeOffer && selectedOfferTicket && (
+        <div className="modal-overlay" onClick={handleCloseMakeOffer}>
+          <div className="modal-content make-offer-modal premium-modal" onClick={(e) => e.stopPropagation()}>
+            {!offerSubmitted ? (
+              <>
+                <button className="close-button" onClick={handleCloseMakeOffer}>×</button>
+                <div className="modal-header">
+                  <h2>הצע מחיר</h2>
+                  <div className="offer-ticket-info">
+                    <h3>{selectedOfferTicket.event_name || 'אירוע'}</h3>
+                    <p className="current-price">מחיר נוכחי: ₪{getTicketPrice(selectedOfferTicket)}</p>
+                    <p className="offer-fee-clarification" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>מחיר ההצעה הוא ללא עמלות – עמלת שירות (10%) תתווסף בעת התשלום</p>
+                  </div>
+                </div>
+
+                {/* Quantity Selector */}
+                <div className="form-group">
+                  <label htmlFor="offerQuantity">כמות כרטיסים</label>
+                  {(() => {
+                    const offerSplitRaw = selectedOfferTicket?.split_type || selectedOfferTicket?.split_option || selectedOfferTicketGroup?.tickets?.[0]?.split_type || '';
+                    const offerSplitType = normalizeSplitType(offerSplitRaw);
+                    const avail = selectedOfferTicketGroup?.available_count || 1;
+                    let offerQtyOptions = [];
+                    if (offerSplitType === 'all') {
+                      offerQtyOptions = [avail];
+                    } else if (offerSplitType === 'pairs') {
+                      for (let i = 2; i <= avail; i += 2) offerQtyOptions.push(i);
+                      if (offerQtyOptions.length === 0) offerQtyOptions = [avail];
+                    } else {
+                      offerQtyOptions = Array.from({ length: avail }, (_, i) => i + 1);
+                    }
+                    if (offerSplitType === 'all') {
+                      return (
+                        <div className="locked-quantity-display">
+                          <span>{avail} כרטיסים (חובה לקנות הכל יחד)</span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <select
+                        id="offerQuantity"
+                        value={offerQuantity}
+                        onChange={(e) => {
+                          const newQty = parseInt(e.target.value, 10);
+                          setOfferQuantity(newQty);
+                          if (offerAmount) {
+                            const pricePerTicket = parseFloat(offerAmount) / (offerQuantity || 1);
+                            setOfferAmount((pricePerTicket * newQty).toFixed(2));
+                          }
+                        }}
+                        dir="rtl"
+                        className="quantity-select"
+                      >
+                        {offerQtyOptions.map((num) => (
+                          <option key={num} value={num}>
+                            {num} {num === 1 ? 'כרטיס' : 'כרטיסים'}
+                          </option>
+                        ))}
+                      </select>
+                    );
+                  })()}
+                </div>
+
+                {/* Quick Offer Buttons */}
+                <div className="quick-offer-buttons">
+                  <button
+                    type="button"
+                    className="quick-offer-btn good-bid"
+                    onClick={() => handleQuickOffer(85)}
+                  >
+                    <span className="quick-offer-label">הצעה טובה</span>
+                    <span className="quick-offer-price">₪{(parseFloat(getTicketPrice(selectedOfferTicket)) * 0.85 * offerQuantity).toFixed(2)}</span>
+                    <span className="quick-offer-percent">85%</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="quick-offer-btn competitive-bid"
+                    onClick={() => handleQuickOffer(95)}
+                  >
+                    <span className="quick-offer-label">הצעה תחרותית</span>
+                    <span className="quick-offer-price">₪{(parseFloat(getTicketPrice(selectedOfferTicket)) * 0.95 * offerQuantity).toFixed(2)}</span>
+                    <span className="quick-offer-percent">95%</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="quick-offer-btn buy-now"
+                    onClick={() => {
+                      handleQuickOffer(100);
+                      // Trigger buy now - open checkout instead
+                      setShowMakeOffer(false);
+                      setSelectedTicketGroup({ tickets: [selectedOfferTicket], available_count: selectedOfferTicketGroup?.available_count || 1 });
+                      setQuantity(offerQuantity);
+                      setShowCheckout(true);
+                    }}
+                  >
+                    <span className="quick-offer-label">קנה עכשיו</span>
+                    <span className="quick-offer-price">₪{(parseFloat(getTicketPrice(selectedOfferTicket)) * offerQuantity).toFixed(2)}</span>
+                    <span className="quick-offer-percent">100%</span>
+                  </button>
+                </div>
+
+                <form onSubmit={handleSubmitOffer}>
+                  <div className="form-group">
+                    <label htmlFor="offerAmount">או הצע מחיר משלך (₪) – סכום להצעה (ללא עמלות)</label>
+                    <input
+                      type="number"
+                      id="offerAmount"
+                      value={offerAmount}
+                      onChange={(e) => setOfferAmount(e.target.value)}
+                      min="0"
+                      step="0.01"
+                      required
+                      placeholder="הכנס סכום"
+                      dir="ltr"
+                      className="custom-offer-input"
+                    />
+                    <div className="offer-fee-disclaimer">* הסכום המוצע הוא לכרטיס בודד (לפני עמלת מערכת של 10%)</div>
+                    {offerAmount && offerQuantity > 1 && (
+                      <small style={{ display: 'block', marginTop: '0.5rem', color: '#64748b' }}>
+                        מחיר ליחידה: ₪{(parseFloat(offerAmount) / offerQuantity).toFixed(2)}
+                      </small>
+                    )}
+                  </div>
+
+                  {/* Dynamic Helper Text */}
+                  {getOfferHelperText() && (
+                    <div className={`offer-helper-text helper-${getOfferHelperText().type}`}>
+                      {getOfferHelperText().type === 'warning' && (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M12 8V12M12 16H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                        </svg>
+                      )}
+                      {getOfferHelperText().type === 'info' && (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M12 16V12M12 8H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                        </svg>
+                      )}
+                      {getOfferHelperText().type === 'success' && (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M9 12L11 14L15 10M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                      <span>{getOfferHelperText().text}</span>
+                    </div>
+                  )}
+
+                  <div className="offer-note">
+                    <p>ההצעה תפוג בעוד 48 שעות אם לא תתקבל</p>
+                  </div>
+                  <div className="button-group">
+                    <button type="button" onClick={handleCloseMakeOffer} className="secondary-button">
+                      ביטול
+                    </button>
+                    <button type="submit" className="primary-button">
+                      שלח הצעה
+                    </button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              /* Success Screen */
+              <div className="offer-success-screen">
+                <div className="success-icon">
+                  <svg width="80" height="80" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="10" fill="#10b981" stroke="#10b981" strokeWidth="2"/>
+                    <path d="M8 12L11 15L16 9" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                <h2 className="success-title">ההצעה נשלחה בהצלחה!</h2>
+                <p className="success-message">
+                  ההצעה שלך בסך ₪{offerAmount} נשלחה למוכר. תקבל עדכון ברגע שהמוכר יגיב.
+                </p>
+                <button onClick={handleCloseMakeOffer} className="primary-button success-close-btn">
+                  סגור
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+          duration={toast.type === 'success' ? 3000 : 4000}
+        />
+      )}
+    </div>
+  );
+};
+
+export default EventDetailsPage;

@@ -1,0 +1,163 @@
+import axios from 'axios';
+
+const API_URL = 'http://localhost:8000/api';
+
+/** Read csrftoken from document.cookie (Double-Submit Cookie pattern for CSRF). */
+function getCsrfToken() {
+  const match = document.cookie.match(/csrftoken=([^;]+)/);
+  return match ? match[1] : null;
+}
+
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  withCredentials: true, // Send HttpOnly cookies with every request
+});
+
+// Attach X-CSRFToken header for state-changing requests (CSRF protection)
+api.interceptors.request.use(
+  (config) => {
+    const method = (config.method || 'get').toLowerCase();
+    if (method !== 'get' && method !== 'head' && method !== 'options') {
+      const token = getCsrfToken();
+      if (token) {
+        config.headers['X-CSRFToken'] = token;
+      }
+    }
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Handle 401: auto-refresh via HttpOnly cookie, then retry; else redirect to login
+// IMPORTANT: Do NOT redirect when the failed request is getProfile - that's the initial
+// auth check. Let it reject so AuthContext can set user=null (avoids infinite redirect loop).
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    const is401 = error.response?.status === 401;
+    const noRetryYet = !originalRequest._retry;
+    const isAuthEndpoint = originalRequest.url?.includes('/login/') ||
+      originalRequest.url?.includes('/register/') ||
+      originalRequest.url?.includes('/token/refresh/') ||
+      originalRequest.url?.includes('/logout/');
+    const isGetProfile = originalRequest.url?.includes('/profile/');
+
+    if (is401 && noRetryYet && !isAuthEndpoint) {
+      originalRequest._retry = true;
+      try {
+        // Refresh uses HttpOnly cookie (withCredentials) - no localStorage
+        await api.post('/users/token/refresh/');
+        // Retry original request - browser now has new access_token cookie
+        return api(originalRequest);
+      } catch (refreshError) {
+        // getProfile 401 = not logged in; let AuthContext handle it (set user null)
+        if (isGetProfile) {
+          return Promise.reject(error);
+        }
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export const authAPI = {
+  register: (data) => api.post('/users/register/', data),
+  login: (data) => api.post('/users/login/', data),
+  logout: () => api.post('/users/logout/'),
+  getProfile: () => api.get('/users/profile/'),
+  getDashboard: () => api.get('/users/dashboard/'),
+  getCsrf: () => api.get('/users/csrf/'),
+};
+
+export const paymentAPI = {
+  simulatePayment: (data) => api.post('/users/payments/simulate/', data),
+};
+
+export const orderAPI = {
+  createOrder: (data) => api.post('/users/orders/', data),
+  guestCheckout: (data) => api.post('/users/orders/guest/', data),
+  getReceipt: (orderId) => api.get(`/users/orders/${orderId}/receipt/`),
+};
+
+export const ticketAPI = {
+  getTickets: () => api.get('/users/tickets/'),
+  getTicket: (id) => api.get(`/users/tickets/${id}/`),
+  getTicketDetails: (id) => api.get(`/users/tickets/${id}/details/`),
+  createTicket: (data) => api.post('/users/tickets/', data),
+  updateTicket: (id, data) => api.put(`/users/tickets/${id}/`, data),
+  updateTicketPrice: (id, price) => api.patch(`/users/tickets/${id}/update-price/`, { original_price: price }),
+  deleteTicket: (id) => api.delete(`/users/tickets/${id}/`),
+  downloadPDF: (id, email = null) => {
+    const config = {
+      responseType: 'blob',
+    };
+    if (email) {
+      config.params = { email };
+    }
+    return api.get(`/users/tickets/${id}/download_pdf/`, config);
+  },
+  reserveTicket: (id, email = null) => {
+    const data = email ? { email } : {};
+    return api.post(`/users/tickets/${id}/reserve/`, data);
+  },
+  releaseReservation: (id, email = null) => {
+    const data = email ? { email } : {};
+    return api.post(`/users/tickets/${id}/release_reservation/`, data);
+  },
+};
+
+export const eventAPI = {
+  getEvents: (params = {}) => api.get('/users/events/', { params }),
+  getEvent: (id) => api.get(`/users/events/${id}/`),
+  getEventTickets: (id, params = {}) => api.get(`/users/events/${id}/tickets/`, { params }),
+  createEvent: (data) => api.post('/users/events/', data),
+  updateEvent: (id, data) => api.put(`/users/events/${id}/`, data),
+  deleteEvent: (id) => api.delete(`/users/events/${id}/`),
+};
+
+export const artistAPI = {
+  getArtists: (params = {}) => api.get('/users/artists/', { params }),
+  getArtist: (id) => api.get(`/users/artists/${id}/`),
+  getArtistEvents: (id) => api.get(`/users/artists/${id}/events/`),
+  createArtist: (data) => api.post('/users/artists/', data),
+  updateArtist: (id, data) => api.put(`/users/artists/${id}/`, data),
+  deleteArtist: (id) => api.delete(`/users/artists/${id}/`),
+};
+
+export const alertAPI = {
+  createAlert: (data) => api.post('/users/alerts/', data),
+};
+
+export const offerAPI = {
+  createOffer: (data) => api.post('/users/offers/', data),
+  getOffers: () => api.get('/users/offers/'),
+  getReceivedOffers: () => api.get('/users/offers/received/'),
+  getSentOffers: () => api.get('/users/offers/sent/'),
+  acceptOffer: (offerId) => api.post(`/users/offers/${offerId}/accept/`),
+  rejectOffer: (offerId) => api.post(`/users/offers/${offerId}/reject/`),
+  counterOffer: (offerId, data) => api.post(`/users/offers/${offerId}/counter/`, data),
+  getOffer: (offerId) => api.get(`/users/offers/${offerId}/`),
+};
+
+export const adminAPI = {
+  getPendingTickets: () => api.get('/users/admin/pending-tickets/'),
+  approveTicket: (ticketId) => api.post(`/users/admin/tickets/${ticketId}/approve/`),
+  rejectTicket: (ticketId) => api.post(`/users/admin/tickets/${ticketId}/reject/`),
+};
+
+export const contactAPI = {
+  createContactMessage: (data) => api.post('/users/contact-messages/', data),
+};
+
+export default api;
+

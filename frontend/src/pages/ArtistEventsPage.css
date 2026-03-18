@@ -1,0 +1,201 @@
+.artist-events-container {
+  min-height: 100vh;
+  background: var(--bg-primary, #f8f9fa);
+  padding: 2rem 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  direction: rtl;
+}
+
+.back-button {
+  background: none;
+  border: none;
+  color: var(--primary-color, #0045af);
+  font-size: 1rem;
+  cursor: pointer;
+  margin-bottom: 1rem;
+  padding: 0.5rem 0;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.back-button:hover {
+  text-decoration: underline;
+}
+
+.loading-state,
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--text-secondary, #6b7280);
+}
+
+/* Compact Artist Header */
+.compact-artist-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1rem 2rem;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 1.5rem;
+}
+
+.compact-artist-image {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e5e7eb;
+}
+
+.compact-artist-name {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+/* Events List Section */
+.events-list-section {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+  margin-bottom: 0;
+}
+
+.section-title-artist-image {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #e5e7eb;
+}
+
+.events-table {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.event-row {
+  display: grid;
+  grid-template-columns: 2fr 2fr 1fr auto;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 1.5rem;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.event-row:hover {
+  border-color: var(--primary-color, #0045af);
+  box-shadow: 0 2px 8px rgba(0, 69, 175, 0.1);
+}
+
+.event-date {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-primary, #111827);
+}
+
+.event-venue {
+  font-size: 1rem;
+  color: var(--text-primary, #111827);
+}
+
+.event-city {
+  font-size: 0.9rem;
+  color: var(--text-secondary, #6b7280);
+}
+
+.see-tickets-button {
+  background: var(--primary-color, #0045af);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.see-tickets-button:hover {
+  background: var(--primary-hover, #003a94);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 69, 175, 0.2);
+}
+
+.see-tickets-button:active {
+  transform: translateY(0);
+}
+
+.get-notified-button {
+  background: var(--primary-color, #0045af);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.get-notified-button:hover {
+  background: var(--primary-hover, #003a94);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 69, 175, 0.2);
+}
+
+.get-notified-button:active {
+  transform: translateY(0);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .compact-artist-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .compact-artist-image {
+    width: 64px;
+    height: 64px;
+  }
+
+  .compact-artist-name {
+    font-size: 1.5rem;
+  }
+
+  .event-row {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .event-action {
+    width: 100%;
+  }
+
+  .see-tickets-button {
+    width: 100%;
+  }
+}
+
+

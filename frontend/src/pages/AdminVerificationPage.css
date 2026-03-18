@@ -1,0 +1,246 @@
+.admin-verification-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+  direction: rtl;
+  font-family: 'Heebo', 'Assistant', sans-serif;
+}
+
+.admin-verification-header {
+  margin-bottom: 2rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.admin-verification-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 0.5rem 0;
+}
+
+.admin-verification-header .subtitle {
+  color: #666;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.back-button {
+  background: none;
+  border: 1px solid #ddd;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #333;
+  transition: all 0.2s;
+}
+
+.back-button:hover {
+  background: #f5f5f5;
+  border-color: #bbb;
+}
+
+.error-message {
+  background: #fee;
+  border: 1px solid #fcc;
+  color: #c33;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.loading-state,
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.empty-state-illustration {
+  margin-bottom: 1.5rem;
+  opacity: 0.5;
+}
+
+.empty-state h3 {
+  font-size: 1.5rem;
+  color: #333;
+  margin: 0 0 0.5rem 0;
+}
+
+.empty-state p {
+  color: #666;
+  margin: 0;
+}
+
+.pending-tickets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 1.5rem;
+}
+
+.pending-ticket-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s;
+}
+
+.pending-ticket-card:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ticket-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #eee;
+}
+
+.ticket-card-header h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+  flex: 1;
+}
+
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-badge.pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.ticket-details {
+  margin-bottom: 1.5rem;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  font-weight: 500;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.detail-value {
+  color: #1a1a1a;
+  font-size: 0.95rem;
+  text-align: left;
+}
+
+.detail-value.price-value {
+  font-weight: 600;
+  color: #0045af;
+}
+
+.ticket-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.preview-button {
+  width: 100%;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
+}
+
+.preview-button:hover:not(:disabled) {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.preview-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.approve-button,
+.reject-button {
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.approve-button {
+  background: #28a745;
+  color: white;
+}
+
+.approve-button:hover:not(:disabled) {
+  background: #218838;
+}
+
+.reject-button {
+  background: #dc3545;
+  color: white;
+}
+
+.reject-button:hover:not(:disabled) {
+  background: #c82333;
+}
+
+.approve-button:disabled,
+.reject-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .admin-verification-container {
+    padding: 1rem;
+  }
+
+  .pending-tickets-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-verification-header {
+    flex-direction: column;
+  }
+}
+
+
+

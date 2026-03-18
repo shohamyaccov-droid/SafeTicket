@@ -1,0 +1,276 @@
+/* NegotiationModal - Chat-thread style (Vinted/eBay/Grailed) */
+.negotiation-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.negotiation-modal {
+  background: var(--bg-primary);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  max-width: 480px;
+  width: 100%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.negotiation-modal-close {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 50%;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text-secondary);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.negotiation-modal-close:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--text-primary);
+}
+
+/* Header */
+.negotiation-modal-header {
+  padding: 1rem 1rem 1rem 3rem;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.negotiation-header-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.negotiation-header-img {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.negotiation-header-placeholder {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
+}
+
+.negotiation-header-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.negotiation-header-date {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.negotiation-header-sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: var(--primary-blue);
+}
+
+/* Body - Chat Bubbles */
+.negotiation-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 200px;
+}
+
+.negotiation-bubble {
+  max-width: 80%;
+  padding: 0.6rem 1rem;
+  border-radius: 12px;
+  font-size: 0.95rem;
+}
+
+.bubble-mine {
+  align-self: flex-start;
+  background: var(--primary-blue);
+  color: white;
+}
+
+.bubble-theirs {
+  align-self: flex-end;
+  background: #e5e7eb;
+  color: var(--text-primary);
+}
+
+.bubble-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.bubble-amount {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.bubble-qty {
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.bubble-badge {
+  font-size: 0.7rem;
+  opacity: 0.9;
+  margin-top: 0.2rem;
+}
+
+.bubble-status {
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-top: 0.2rem;
+}
+
+.bubble-status.status-accepted {
+  color: #10b981;
+}
+
+.bubble-status.status-rejected {
+  color: #ef4444;
+}
+
+.bubble-status.status-countered {
+  color: #f59e0b;
+}
+
+/* Footer */
+.negotiation-modal-footer {
+  padding: 1rem;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.negotiation-footer-timer {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.negotiation-attempt-counter {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  width: 100%;
+  margin-bottom: 0.25rem;
+}
+
+.negotiation-footer-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.negotiation-footer-actions .accept-button {
+  padding: 0.5rem 1.25rem;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.negotiation-footer-actions .accept-button:hover:not(:disabled) {
+  background: #059669;
+}
+
+.negotiation-footer-actions .accept-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.negotiation-footer-actions .reject-button {
+  padding: 0.5rem 1.25rem;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.negotiation-footer-actions .reject-button:hover {
+  background: #dc2626;
+}
+
+.negotiation-footer-counter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  align-items: stretch;
+  justify-content: center;
+  padding: 10px;
+  background: #fff;
+}
+
+.negotiation-footer-counter input {
+  flex: 1;
+  min-width: 120px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.negotiation-footer-counter .primary-button {
+  flex: 1;
+  min-width: 120px;
+}
+
+.counter-total-preview {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  flex: 1;
+  min-width: 120px;
+}
+
+.negotiation-footer-accepted {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.countdown-text {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.expired-text {
+  font-size: 0.9rem;
+  color: #ef4444;
+}

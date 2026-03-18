@@ -1,0 +1,1675 @@
+.event-details-container {
+  min-height: calc(100vh - 140px);
+  padding: 1rem var(--spacing-lg);
+  max-width: 1200px;
+  margin: 0 auto;
+  direction: rtl;
+}
+
+.event-header {
+  margin-bottom: 0.75rem;
+}
+
+.back-button {
+  background: none;
+  border: none;
+  color: var(--primary-blue);
+  font-size: 1rem;
+  cursor: pointer;
+  margin-bottom: var(--spacing-md);
+  padding: 0.5rem 0;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.back-button:hover {
+  text-decoration: underline;
+}
+
+.event-header-content {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.event-header-image {
+  width: 100%;
+  height: 400px;
+  object-fit: cover;
+}
+
+.event-header-info {
+  padding: 0.75rem 1rem;
+}
+
+.event-title-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.event-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.event-header-title-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.event-header-title-container img.event-header-title-image {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  flex-shrink: 0;
+}
+
+.popularity-signal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(0, 69, 175, 0.08);
+  border: 1px solid rgba(0, 69, 175, 0.2);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: var(--primary-blue);
+  font-weight: 500;
+}
+
+.popularity-signal svg {
+  color: #fbbf24;
+  flex-shrink: 0;
+}
+
+.event-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.event-date,
+.event-location {
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Safety Banner */
+.safety-banner {
+  margin-bottom: var(--spacing-lg);
+}
+
+.safety-banner-content {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: rgba(0, 69, 175, 0.08);
+  border: 1px solid rgba(0, 69, 175, 0.2);
+  border-radius: var(--radius-md);
+  color: var(--primary-blue);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.safety-banner-content svg {
+  color: #0045af;
+  flex-shrink: 0;
+}
+
+/* Filters and Sort Bar */
+.filters-sort-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px;
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Mobile Filter Toggle */
+.mobile-filter-toggle {
+  display: none;
+  width: 100%;
+  padding: var(--spacing-md);
+  background: var(--primary-blue);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  transition: background-color 0.2s ease;
+  min-height: 48px; /* Touch target */
+}
+
+.mobile-filter-toggle:hover {
+  background: var(--primary-blue-hover);
+}
+
+.mobile-filter-toggle svg:first-child {
+  flex-shrink: 0;
+}
+
+.filter-arrow {
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+}
+
+.filter-arrow.open {
+  transform: rotate(180deg);
+}
+
+.filters-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.filters-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.25rem 0;
+  width: 100%;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 150px;
+  flex: 1;
+}
+
+.filter-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.price-range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.price-input {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  direction: ltr;
+  text-align: left;
+  min-width: 0;
+  width: 100%;
+}
+
+.price-input:focus {
+  outline: none;
+  border-color: var(--primary-blue);
+  box-shadow: 0 0 0 2px rgba(0, 69, 175, 0.1);
+}
+
+.price-separator {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.filter-select {
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  background: white;
+  cursor: pointer;
+  direction: rtl;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: var(--primary-blue);
+  box-shadow: 0 0 0 2px rgba(0, 69, 175, 0.1);
+}
+
+.clear-filters-btn {
+  padding: 0.5rem 1rem;
+  background: #f3f4f6;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-self: flex-end;
+}
+
+.clear-filters-btn:hover {
+  background: #e5e7eb;
+  color: var(--text-primary);
+}
+
+.sort-section {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-color);
+}
+
+.sort-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.sort-select {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  background: white;
+  cursor: pointer;
+  direction: rtl;
+  min-width: 200px;
+}
+
+.sort-select:focus {
+  outline: none;
+  border-color: var(--primary-blue);
+  box-shadow: 0 0 0 2px rgba(0, 69, 175, 0.1);
+}
+
+.tickets-section {
+  margin-top: var(--spacing-xl);
+}
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: var(--spacing-lg);
+}
+
+.section-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.live-refresh-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  animation: live-pulse 2s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.refresh-btn:hover {
+  background: rgba(0, 69, 175, 0.06);
+  color: var(--primary-blue);
+  border-color: var(--primary-blue);
+}
+
+/* Viagogo-Style Split Screen Container - CSS Grid 50/50 */
+.tickets-split-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  align-items: start;
+  direction: rtl;
+}
+
+/* Sticky Map Container (Left side in RTL) - Mobile: full width */
+.venue-map-sticky-container {
+  order: 2; /* Mobile: order 2 = appears second (below tickets) */
+  width: 100%;
+  margin-bottom: var(--spacing-lg);
+  grid-column: 1 / -1; /* Mobile: span full width */
+}
+
+/* Venue Map Card - Clean Professional Look */
+.venue-map-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+.venue-map-card-header {
+  padding: 1rem 1.25rem;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.venue-map-card-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+  direction: rtl;
+  text-align: right;
+}
+
+.venue-map-card-content {
+  padding: 0;
+  flex: 1;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  position: relative;
+}
+
+.venue-map-card-content .venue-map-container {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
+/* Tickets List Container (Right side in RTL) - Mobile: full width */
+.tickets-list-container {
+  order: 1; /* Mobile: order 1 = appears first (above map) */
+  width: 100%;
+  background: white;
+  grid-column: 1 / -1; /* Mobile: span full width */
+}
+
+.tickets-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Desktop Split Screen Layout - Unbreakable 50/50 Flexbox */
+@media (min-width: 992px) {
+  .tickets-split-container {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    justify-content: space-between !important;
+    gap: 2% !important;
+    width: 100% !important;
+  }
+  .tickets-list-container {
+    flex: 0 0 49% !important;
+    max-width: 49% !important;
+    order: 1 !important; /* Force visual Right in RTL */
+  }
+  .venue-map-sticky-container {
+    flex: 0 0 49% !important;
+    max-width: 49% !important;
+    order: 2 !important; /* Force visual Left in RTL */
+    position: sticky !important;
+    top: 100px !important;
+  }
+
+  .tickets-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+}
+
+/* Premium Trust Banner - SafeTicket 100% Guarantee */
+.safeticket-guarantee-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 24px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  direction: rtl;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.safeticket-guarantee-banner svg {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.safeticket-guarantee-banner span {
+  font-weight: 600;
+  font-size: 1rem;
+  color: #1f2937;
+  line-height: 1.6;
+}
+
+.ticket-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s ease;
+  min-height: 180px;
+  height: 100%;
+  align-items: stretch;
+}
+
+.ticket-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.ticket-info {
+  margin-bottom: 0.5rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.seat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, rgba(0, 69, 175, 0.1) 0%, rgba(0, 58, 148, 0.15) 100%);
+  border: 1px solid rgba(0, 69, 175, 0.3);
+  border-radius: 6px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--primary-blue);
+  margin-bottom: 0.5rem;
+  text-align: center;
+  direction: rtl;
+}
+
+.verified-pdf-icon {
+  display: inline-flex;
+  align-items: center;
+  color: #10b981;
+  margin-right: 0.25rem;
+  flex-shrink: 0;
+}
+
+.verified-pdf-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Viagogo-Style Accordion Ticket Rows - Premium Styling */
+.viagogo-ticket-row {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px 16px;
+  margin-bottom: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  position: relative;
+  direction: rtl;
+}
+
+.split-badge {
+  font-size: 0.72rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.badge-pairs {
+  background: #f5f5f5;
+  color: #374151;
+  border-color: #e5e7eb;
+}
+
+.badge-all {
+  background: #f8fafc;
+  color: #1f2937;
+  border-color: #e2e8f0;
+}
+
+.viagogo-ticket-row:hover {
+  background-color: #f9fafb;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.viagogo-ticket-row.active {
+  border: 2px solid #0284c7 !important;
+  background: #e0f2fe !important;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.15) !important;
+  transform: translateY(-2px);
+  color: var(--text-primary);
+}
+
+.viagogo-ticket-row.expanded {
+  background-color: #fafafa;
+}
+
+.viagogo-ticket-row.expanded.active {
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
+/* Collapsed Row Content */
+.ticket-row-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  gap: 1rem;
+  min-height: 64px;
+}
+
+/* Right Side: Section & Row Info */
+.ticket-row-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.section-row-info {
+  display: flex;
+  align-items: center;
+}
+
+.section-row-text {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.4;
+}
+
+/* Mini Tags */
+.ticket-mini-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.mini-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.quantity-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.cheapest-tag {
+  background: #d1fae5;
+  color: #059669;
+  font-weight: 600;
+}
+
+.delivery-tag {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.verified-tag {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.split-badge {
+  font-size: 0.75rem;
+  background: #fef08a;
+  color: #854d0e;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Left Side: Price */
+.ticket-row-price {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.ticket-price-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.ticket-price-container .price-amount,
+.price-amount {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1f2937;
+  direction: ltr;
+  text-align: right;
+  white-space: nowrap;
+  letter-spacing: -0.02em;
+}
+
+.fee-included-text {
+  font-size: 0.7rem;
+  color: #6b7280;
+  margin-top: 2px;
+  font-weight: 400;
+}
+
+/* Expanded State */
+.ticket-row-expanded {
+  padding: 0 1.5rem 1.5rem 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  background: #fafafa;
+  animation: slideDown 0.25s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 200px;
+  }
+}
+
+.ticket-actions-row {
+  display: flex;
+  gap: 0.75rem;
+  padding-top: 1rem;
+}
+
+.buy-button-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.viagogo-buy-button,
+.viagogo-offer-button {
+  flex: 1;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.micro-trust-text {
+  font-size: 0.75rem;
+  color: #16a34a;
+  margin-top: 8px;
+  text-align: center;
+  display: block;
+  direction: rtl;
+}
+
+.viagogo-buy-button {
+  background: #2563eb;
+  color: white;
+}
+
+.viagogo-buy-button:hover:not(:disabled) {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.viagogo-buy-button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.viagogo-offer-button {
+  background: white;
+  color: #2563eb;
+  border: 2px solid #2563eb;
+}
+
+.viagogo-offer-button:hover:not(:disabled) {
+  background: #eff6ff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+}
+
+.viagogo-offer-button:disabled {
+  border-color: #9ca3af;
+  color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Premium Badge */
+.premium-badge {
+  position: absolute;
+  top: -10px;
+  left: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  z-index: 10;
+  direction: rtl;
+}
+
+/* Urgency Badge */
+.urgency-badge {
+  position: absolute;
+  top: -10px;
+  right: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  background: #dc2626;
+  color: white;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+  z-index: 10;
+}
+
+.urgency-badge svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.ticket-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border-color);
+  gap: 0.4rem;
+}
+
+.ticket-badges-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.4rem;
+  background: rgba(0, 69, 175, 0.1);
+  border: 1px solid rgba(0, 69, 175, 0.3);
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #0045af;
+}
+
+.verified-badge svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: #0045af;
+}
+
+.verified-seller-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.4rem;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #059669;
+}
+
+.verified-seller-badge svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: #059669;
+}
+
+.ticket-group-header .ticket-price {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.price-per-ticket {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.ticket-quantity-group {
+  margin: 0.4rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--primary-blue);
+}
+
+.seat-range-info {
+  margin: 0.3rem 0;
+  padding: 0.4rem;
+  background: rgba(0, 69, 175, 0.05);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  direction: ltr;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.show-map-toggle {
+  background: none;
+  border: none;
+  color: var(--primary-blue);
+  font-size: 0.7rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+  white-space: nowrap;
+  direction: rtl;
+  flex-shrink: 0;
+}
+
+.show-map-toggle:hover {
+  background: rgba(0, 69, 175, 0.1);
+}
+
+.show-map-toggle:active {
+  background: rgba(0, 69, 175, 0.15);
+}
+
+.delivery-method-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.3rem 0;
+  padding: 0.3rem 0.5rem;
+  background: rgba(107, 114, 128, 0.08);
+  border-radius: 4px;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.delivery-method-info svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: #6b7280;
+}
+
+.ticket-price {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.3rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border-color);
+  direction: rtl;
+}
+
+.price-label {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.price-value {
+  color: var(--primary-blue);
+  font-size: 1.1rem;
+  font-weight: 700;
+  direction: ltr;
+  text-align: left;
+  flex-shrink: 0;
+  min-width: 60px;
+}
+
+.ticket-quantity {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: var(--spacing-sm);
+}
+
+.ticket-badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: 500;
+  margin-top: 0.3rem;
+}
+
+.ticket-badge.together {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success-green);
+}
+
+.buy-button {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  height: 36px;
+  background: var(--primary-blue);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  margin-top: auto;
+  flex-shrink: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.buy-button:hover:not(:disabled) {
+  background: var(--primary-blue-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 69, 175, 0.2);
+}
+
+.reserved-notice {
+  margin-bottom: var(--spacing-sm);
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.buy-button:hover:not(:disabled) {
+  background: var(--primary-blue-hover);
+}
+
+.buy-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ticket-actions {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  margin-top: auto;
+}
+
+.ticket-actions .buy-button {
+  flex: 1;
+  margin-top: 0;
+}
+
+.make-offer-button {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  height: 36px;
+  background: white;
+  color: var(--primary-blue);
+  border: 2px solid var(--primary-blue);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.make-offer-button:hover:not(:disabled) {
+  background: var(--primary-blue);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 69, 175, 0.2);
+}
+
+.make-offer-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.make-offer-modal {
+  max-width: 600px;
+  width: 90%;
+}
+
+.make-offer-modal.premium-modal {
+  padding: 2rem;
+}
+
+.modal-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.modal-header h2 {
+  margin-bottom: 1rem;
+  font-size: 1.75rem;
+  color: var(--text-primary);
+}
+
+.offer-ticket-info {
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-radius: var(--radius-md);
+  border: 1px solid #e2e8f0;
+}
+
+.offer-ticket-info h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.current-price {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.locked-quantity-display {
+  padding: 0.875rem 1rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-weight: 600;
+  color: #475569;
+  direction: rtl;
+  text-align: right;
+}
+
+.offer-fee-disclaimer {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.5rem;
+  line-height: 1.4;
+}
+
+/* Quick Offer Buttons */
+.quick-offer-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.quick-offer-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem 1rem;
+  border: 2px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  gap: 0.5rem;
+}
+
+.quick-offer-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-blue);
+}
+
+.quick-offer-btn.good-bid:hover {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.quick-offer-btn.competitive-bid:hover {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.quick-offer-btn.buy-now:hover {
+  border-color: var(--primary-blue);
+  background: #eff6ff;
+}
+
+.quick-offer-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.quick-offer-price {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.quick-offer-percent {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: #f1f5f9;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.quick-offer-btn.buy-now .quick-offer-percent {
+  background: var(--primary-blue);
+  color: white;
+}
+
+/* Custom Input */
+.custom-offer-input {
+  width: 100%;
+  padding: 0.875rem 1rem;
+  font-size: 1.1rem;
+  border: 2px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
+.custom-offer-input:focus {
+  outline: none;
+  border-color: var(--primary-blue);
+  box-shadow: 0 0 0 3px rgba(0, 69, 175, 0.1);
+}
+
+/* Dynamic Helper Text */
+.offer-helper-text {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.offer-helper-text.helper-warning {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.offer-helper-text.helper-info {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+.offer-helper-text.helper-success {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+}
+
+.offer-helper-text svg {
+  flex-shrink: 0;
+}
+
+/* Success Screen */
+.offer-success-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+}
+
+.success-icon {
+  margin-bottom: 1.5rem;
+  animation: scaleIn 0.4s ease-out;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.success-title {
+  font-size: 1.75rem;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  font-weight: 700;
+}
+
+.success-message {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-bottom: 2rem;
+  line-height: 1.6;
+  max-width: 400px;
+}
+
+.success-close-btn {
+  min-width: 150px;
+  padding: 0.875rem 2rem;
+}
+
+@media (max-width: 768px) {
+  .quick-offer-buttons {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .quick-offer-btn {
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 1rem;
+  }
+
+  .quick-offer-label,
+  .quick-offer-price,
+  .quick-offer-percent {
+    margin: 0;
+  }
+
+  .make-offer-modal.premium-modal {
+    padding: 1.5rem;
+  }
+
+  /* Mobile: Viagogo Rows */
+  .ticket-row-content {
+    padding: 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .ticket-row-price {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .price-amount {
+    font-size: 1.25rem;
+  }
+
+  .section-row-text {
+    font-size: 0.9rem;
+  }
+
+  .ticket-row-expanded {
+    padding: 0 1rem 1rem 1rem;
+  }
+
+  .ticket-actions-row {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .viagogo-buy-button,
+  .viagogo-offer-button {
+    width: 100%;
+  }
+}
+
+.offer-ticket-info h3 {
+  margin: 0 0 0.5rem 0;
+  color: var(--text-primary);
+}
+
+.offer-ticket-info p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.offer-note {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  background: #e0f2fe;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  color: #0369a1;
+  text-align: center;
+}
+
+.button-group {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.secondary-button {
+  flex: 1;
+  padding: var(--spacing-md);
+  background: white;
+  color: var(--text-primary);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.secondary-button:hover {
+  border-color: var(--primary-blue);
+  color: var(--primary-blue);
+}
+
+.primary-button {
+  flex: 1;
+  padding: var(--spacing-md);
+  background: var(--primary-blue);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.primary-button:hover {
+  background: var(--primary-blue-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 69, 175, 0.2);
+}
+
+.loading-state,
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-xl);
+  color: var(--text-secondary);
+}
+
+@media (max-width: 991px) {
+  /* Mobile: Single column grid layout */
+  .tickets-split-container {
+    grid-template-columns: 1fr;
+  }
+  
+  .venue-map-sticky-container {
+    grid-column: 1;
+  }
+  
+  .tickets-list-container {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .event-details-container {
+    padding: var(--spacing-md) var(--spacing-sm);
+    max-width: 100%;
+  }
+  
+  .event-header-image {
+    height: 200px;
+  }
+  
+  .event-header-info {
+    padding: var(--spacing-md);
+  }
+  
+  .event-title {
+    font-size: 1.5rem;
+    line-height: 1.3;
+  }
+  
+  .event-meta {
+    gap: var(--spacing-xs);
+  }
+  
+  .event-date,
+  .event-location {
+    font-size: 1rem;
+  }
+  
+  .tickets-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+
+  .filters-sort-bar {
+    padding: var(--spacing-md) var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+    gap: 0;
+  }
+  
+  .mobile-filter-toggle {
+    display: flex;
+    margin-bottom: var(--spacing-md);
+  }
+  
+  .filters-section {
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-sm);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--border-color);
+  }
+  
+  .filters-section.mobile-open {
+    display: flex;
+  }
+  
+  .filters-title {
+    font-size: 1rem;
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .filter-group {
+    min-width: 100%;
+    width: 100%;
+  }
+  
+  .price-range-inputs {
+    gap: var(--spacing-xs);
+  }
+  
+  .price-input {
+    font-size: 16px; /* Prevent iOS auto-zoom */
+    padding: 0.75rem;
+    min-height: 44px; /* Touch target size */
+  }
+  
+  .filter-select {
+    font-size: 16px; /* Prevent iOS auto-zoom */
+    padding: 0.75rem;
+    min-height: 44px; /* Touch target size */
+  }
+
+  .sort-section {
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-sm);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--border-color);
+  }
+  
+  .sort-section.mobile-open {
+    display: flex;
+  }
+
+  .sort-select {
+    min-width: 100%;
+    font-size: 16px; /* Prevent iOS auto-zoom */
+    padding: 0.75rem;
+    min-height: 44px; /* Touch target size */
+  }
+
+  .popularity-signal {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.75rem;
+  }
+  
+  .section-title {
+    font-size: 1.5rem;
+    margin-bottom: var(--spacing-md);
+    padding: 0 var(--spacing-xs);
+  }
+  
+  .ticket-card {
+    padding: var(--spacing-md);
+    min-height: auto;
+  }
+  
+  .ticket-group-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+    padding-bottom: var(--spacing-sm);
+  }
+  
+  .ticket-price {
+    width: 100%;
+    justify-content: space-between;
+    padding-bottom: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+  }
+  
+  .price-value {
+    font-size: 1.75rem;
+    min-width: auto;
+  }
+  
+  .price-per-ticket {
+    font-size: 0.9rem;
+  }
+  
+  .ticket-badges-row {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .ticket-actions {
+    flex-direction: column;
+  }
+
+  .buy-button,
+  .make-offer-button {
+    font-size: 1.1rem;
+    padding: 1rem var(--spacing-md);
+    min-height: 48px; /* Large touch target */
+    margin-top: 0;
+  }
+  
+  .ticket-quantity-group {
+    font-size: 1.1rem;
+    margin: var(--spacing-sm) 0;
+  }
+  
+  .seat-range-info {
+    font-size: 0.95rem;
+    padding: var(--spacing-sm);
+  }
+  
+  .delivery-method-info {
+    font-size: 0.9rem;
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+  
+  .urgency-badge {
+    top: -10px;
+    right: var(--spacing-sm);
+    font-size: 0.75rem;
+    padding: 0.35rem 0.6rem;
+  }
+}
+

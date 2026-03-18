@@ -1,0 +1,123 @@
+/* Auth Pages - Clean Professional Design */
+.auth-container {
+  min-height: calc(100vh - 200px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: var(--spacing-xl) var(--spacing-lg);
+  direction: rtl;
+}
+
+.auth-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-xl);
+  width: 100%;
+  max-width: 400px;
+  box-shadow: var(--shadow-sm);
+}
+
+.auth-card h2 {
+  margin-bottom: var(--spacing-lg);
+  text-align: center;
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 2rem;
+}
+
+.form-group {
+  margin-bottom: var(--spacing-md);
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+  font-weight: 500;
+  text-align: right;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 1rem;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+  text-align: right;
+  direction: rtl;
+}
+
+.form-group input::placeholder {
+  color: var(--text-tertiary);
+  text-align: right;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--primary-blue);
+}
+
+.form-group select {
+  cursor: pointer;
+}
+
+.auth-button {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: var(--primary-blue);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: var(--spacing-md);
+  transition: background-color 0.2s ease;
+}
+
+.auth-button:hover:not(:disabled) {
+  background-color: var(--primary-blue-hover);
+}
+
+.auth-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error-message,
+.error-box {
+  background-color: var(--error-red);
+  color: white;
+  padding: 0.75rem;
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--spacing-md);
+  text-align: center;
+  min-height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  direction: rtl;
+}
+
+.auth-footer {
+  text-align: center;
+  margin-top: var(--spacing-lg);
+  color: var(--text-secondary);
+  direction: rtl;
+}
+
+.auth-footer a {
+  color: var(--primary-blue);
+  text-decoration: none;
+}
+
+.auth-footer a:hover {
+  text-decoration: underline;
+}

@@ -1,0 +1,214 @@
+import { useState, useEffect, useRef } from 'react';
+import { formatPrice } from '../utils/priceFormat';
+import './NegotiationModal.css';
+
+/**
+ * NegotiationModal - Chat-thread style UI (Vinted/eBay/Grailed)
+ * Header: Event name, date, ticket info
+ * Body: Scrollable chat bubbles (user's offers left/blue, other party right/gray)
+ * Footer: Counter input + Accept/Reject buttons
+ */
+const NegotiationModal = ({
+  group,
+  isSeller,
+  user,
+  onClose,
+  onAccept,
+  onReject,
+  onCounter,
+  acceptingOfferId,
+  offerExpirationTimers,
+  countdownTimers,
+  onCompletePurchase,
+  getOfferRoundBadge,
+  formatTimeRemaining,
+  formatOfferExpiration,
+  getResponsesLeft,
+}) => {
+  const [counterAmount, setCounterAmount] = useState('');
+  const bodyRef = useRef(null);
+
+  const ticketDetails = group?.ticketDetails || {};
+  const offers = group?.offers || [];
+  const latestPending = offers.find((o) => o.status === 'pending');
+  const roundCount = latestPending?.offer_round_count ?? 0;
+  const isRecipient = (roundCount % 2 === 0 && isSeller) || (roundCount === 1 && !isSeller);
+  const canCounter = isRecipient && latestPending?.status === 'pending' && roundCount < 2;
+  const showActions = isRecipient && latestPending?.status === 'pending';
+  const responsesLeft = getResponsesLeft ? getResponsesLeft(roundCount) : Math.max(0, 2 - roundCount);
+
+  // Sort offers by created_at for chat order (oldest first)
+  const sortedOffers = [...offers].sort(
+    (a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0)
+  );
+
+  useEffect(() => {
+    if (bodyRef.current) {
+      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+    }
+  }, [offers]);
+
+  const handleCounter = () => {
+    if (latestPending && counterAmount) {
+      onCounter(latestPending.id, counterAmount);
+      setCounterAmount('');
+    }
+  };
+
+  const isMyOffer = (offer) => {
+    const round = offer.offer_round_count ?? 0;
+    if (isSeller) return round === 1;
+    return round === 0 || round === 2;
+  };
+
+  return (
+    <div className="negotiation-modal-overlay" onClick={onClose}>
+      <div className="negotiation-modal" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="negotiation-modal-close" onClick={onClose}>×</button>
+
+        {/* Header */}
+        <div className="negotiation-modal-header">
+          <div className="negotiation-header-content">
+            {ticketDetails?.event_image_url ? (
+              <img src={ticketDetails.event_image_url} alt="" className="negotiation-header-img" />
+            ) : (
+              <div className="negotiation-header-placeholder" />
+            )}
+            <div>
+              <h2 className="negotiation-header-title">{ticketDetails?.event_name || 'אירוע'}</h2>
+              {ticketDetails?.event_date && (
+                <p className="negotiation-header-date">
+                  {new Date(ticketDetails.event_date).toLocaleDateString('he-IL', {
+                    weekday: 'short',
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </p>
+              )}
+              <p className="negotiation-header-sub">
+                {isSeller ? `הצעות מ-${offers[0]?.buyer_username || 'קונה'}` : 'המשא ומתן שלך'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Body - Chat Bubbles */}
+        <div className="negotiation-modal-body" ref={bodyRef}>
+          {sortedOffers.map((offer) => {
+            const mine = isMyOffer(offer);
+            const badge = getOfferRoundBadge(offer);
+            return (
+              <div
+                key={offer.id}
+                className={`negotiation-bubble ${mine ? 'bubble-mine' : 'bubble-theirs'}`}
+              >
+                <div className="bubble-content">
+                  <span className="bubble-amount">₪{formatPrice(Math.round(parseFloat(offer.amount) || 0))}</span>
+                  {offer.quantity > 1 && (
+                    <span className="bubble-qty">× {offer.quantity} כרטיסים</span>
+                  )}
+                  <span className="bubble-badge">{badge}</span>
+                  {offer.status !== 'pending' && (
+                    <span className={`bubble-status status-${offer.status}`}>
+                      {offer.status === 'accepted' ? 'אושר' : offer.status === 'rejected' ? 'נדחה' : offer.status === 'countered' ? 'הוצע נגד' : offer.status}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="negotiation-modal-footer">
+          {latestPending?.status === 'accepted' && (
+            <div className="negotiation-footer-accepted">
+              {(countdownTimers?.[latestPending.id] ?? latestPending?.checkout_time_remaining) > 0 ? (
+                <>
+                  <span className="countdown-text">
+                    נותרו {formatTimeRemaining(countdownTimers?.[latestPending.id] ?? latestPending?.checkout_time_remaining)}
+                  </span>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => onCompletePurchase(latestPending)}
+                    disabled={(countdownTimers?.[latestPending.id] ?? latestPending?.checkout_time_remaining) <= 0}
+                  >
+                    השלם רכישה
+                  </button>
+                </>
+              ) : (
+                <span className="expired-text">זמן התשלום פג</span>
+              )}
+            </div>
+          )}
+          {showActions && (
+            <>
+              {latestPending && formatOfferExpiration && (
+                <div className="negotiation-footer-timer">
+                  {formatOfferExpiration(latestPending)}
+                </div>
+              )}
+              <div className="negotiation-footer-actions">
+                <button
+                  type="button"
+                  className="accept-button"
+                  onClick={() => onAccept(latestPending.id)}
+                  disabled={acceptingOfferId === latestPending.id}
+                >
+                  אישור
+                </button>
+                <button
+                  type="button"
+                  className="reject-button"
+                  onClick={() => onReject(latestPending.id)}
+                >
+                  דחייה
+                </button>
+              </div>
+              {(canCounter || (roundCount >= 2 && responsesLeft === 0)) && (
+                <div className="negotiation-footer-counter">
+                  <div className="negotiation-attempt-counter">
+                    {responsesLeft > 0
+                      ? `נותרו ${responsesLeft} מתוך 2 תגובות`
+                      : 'הגעת למגבלת התגובות'}
+                  </div>
+                  {canCounter && (
+                    <>
+                      <input
+                        type="number"
+                        value={counterAmount}
+                        onChange={(e) => setCounterAmount(e.target.value)}
+                        placeholder="הכנס סכום"
+                        min="0"
+                        step="0.01"
+                        dir="ltr"
+                      />
+                      {/* PRIVACY: Only show fee preview to BUYER (isSeller=false) */}
+                      {!isSeller && parseFloat(counterAmount) > 0 && (
+                        <span className="counter-total-preview">
+                          סה"כ לתשלום כולל עמלה (10%): ₪{Math.round(parseFloat(counterAmount) * 1.1)}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={handleCounter}
+                        disabled={!counterAmount || acceptingOfferId === latestPending.id || responsesLeft <= 0}
+                      >
+                        שלח הצעת נגד
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default NegotiationModal;

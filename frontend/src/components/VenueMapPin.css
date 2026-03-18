@@ -1,0 +1,111 @@
+.venue-map-container {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.venue-map-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding-bottom: 75%; /* 4:3 aspect ratio */
+  background: #f8fafc;
+  overflow: hidden;
+  min-height: 300px;
+  flex: 1;
+}
+
+/* SVG Stadium */
+.stadium-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Section Highlight Circle (Viagogo-style) */
+.section-highlight-circle {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(37, 99, 235, 0.2);
+  border: 3px solid rgba(37, 99, 235, 0.6);
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  pointer-events: none;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
+.venue-map-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.venue-pin {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  z-index: 10;
+  cursor: pointer;
+  pointer-events: none;
+}
+
+.pin-icon {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.venue-map-label {
+  padding: 0.75rem 1rem;
+  background: white;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  text-align: right;
+  direction: rtl;
+}
+
+.venue-name {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 0.95rem;
+}
+
+.section-name {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .venue-map-container {
+    margin: 0.75rem 0;
+  }
+  
+  .pin-icon {
+    width: 28px;
+    height: 35px;
+  }
+}

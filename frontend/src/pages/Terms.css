@@ -1,0 +1,22 @@
+.terms-container {
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 0 20px;
+  direction: rtl;
+  color: #1f2937;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+.terms-card {
+  background: white;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  line-height: 1.6;
+}
+.terms-card h1 { font-size: 2rem; margin-bottom: 2rem; color: #111827; text-align: center; }
+.terms-card h2 { font-size: 1.25rem; margin-top: 2rem; margin-bottom: 1rem; color: #2563eb; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.5rem; }
+.terms-card p { margin-bottom: 1rem; color: #4b5563; }
+.terms-card ul { margin-bottom: 1rem; padding-right: 1.5rem; }
+.terms-card li { margin-bottom: 0.5rem; color: #4b5563; }
+.terms-card strong { color: #111827; }
+

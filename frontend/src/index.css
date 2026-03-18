@@ -1,0 +1,173 @@
+/* Classic Professional Theme - SafeTicket IL */
+:root {
+  /* Color Palette - Professional Light Theme */
+  --bg-primary: #f8f9fa;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  
+  /* Primary Colors */
+  --primary-blue: #0045af;
+  --primary-blue-hover: #003894;
+  --success-green: #228b22;
+  --error-red: #dc3545;
+  
+  /* Text Colors */
+  --text-primary: #000000;
+  --text-secondary: #333333;
+  --text-tertiary: #666666;
+  --text-light: #999999;
+  
+  /* Borders */
+  --border-color: #dddddd;
+  --border-light: #eeeeee;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.15);
+  
+  /* Spacing */
+  --spacing-xs: 0.5rem;
+  --spacing-sm: 1rem;
+  --spacing-md: 1.5rem;
+  --spacing-lg: 2rem;
+  --spacing-xl: 3rem;
+  
+  /* Border Radius - Square corners or very slight rounding */
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  
+  /* Typography - Hebrew-friendly fonts */
+  font-family: 'Assistant', 'Heebo', Arial, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  
+  color-scheme: light;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  direction: rtl;
+  text-align: right;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  font-weight: 500;
+  color: var(--primary-blue);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+a:hover {
+  color: var(--primary-blue-hover);
+  text-decoration: underline;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: var(--bg-primary);
+  direction: rtl;
+  text-align: right;
+  padding: 0;
+}
+
+/* Mobile edge padding - prevent content from touching screen edges */
+@media (max-width: 768px) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+h1 {
+  font-size: 2.5em;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+h2 {
+  font-size: 2em;
+  line-height: 1.3;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+h3 {
+  font-size: 1.5em;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+button {
+  border-radius: var(--radius-md);
+  border: none;
+  padding: 0.75em 1.5em;
+  font-size: 1em;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+button:focus,
+button:focus-visible {
+  outline: 2px solid var(--primary-blue);
+  outline-offset: 2px;
+}
+
+/* Ensure all inputs have 16px+ font size to prevent iOS auto-zoom */
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="number"],
+input[type="password"],
+input[type="search"],
+textarea,
+select {
+  font-size: 16px !important; /* Prevent iOS auto-zoom */
+}
+
+@media (min-width: 769px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="number"],
+  input[type="password"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 1rem; /* Allow normal sizing on desktop */
+  }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cccccc;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #aaaaaa;
+}
+

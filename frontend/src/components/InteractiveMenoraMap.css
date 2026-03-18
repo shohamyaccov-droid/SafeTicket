@@ -1,0 +1,137 @@
+.interactive-map-container {
+  position: relative;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4/3;
+  max-height: 450px !important;
+  min-height: 300px;
+  background: #f3f4f6;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.svg-map-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  transition: transform 0.3s ease;
+}
+
+.interactive-stadium-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.section-path {
+  transition: all 0.2s ease;
+}
+
+.section-path:hover {
+  fill: #60a5fa !important;
+  stroke: #3b82f6 !important;
+  stroke-width: 3 !important;
+  filter: drop-shadow(0 2px 4px rgba(37, 99, 235, 0.3));
+}
+
+.section-label {
+  pointer-events: none;
+  user-select: none;
+}
+
+.court-area {
+  pointer-events: none;
+}
+
+.stands-background {
+  pointer-events: none;
+}
+
+/* Zoom Controls - Top Right, Sleek Standard Size (Google Maps/Viagogo Style) */
+.map-zoom-controls {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  border: none;
+}
+
+.zoom-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e5e7eb;
+  background: white;
+  color: #1f2937;
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  user-select: none;
+  line-height: 1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.zoom-btn:first-child {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: none;
+}
+
+.zoom-btn:last-child {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.zoom-btn:hover {
+  background: #f9fafb;
+  color: #2563eb;
+}
+
+.zoom-btn:active {
+  background: #f3f4f6;
+  transform: scale(0.95);
+}
+
+.zoom-in {
+  font-size: 20px;
+}
+
+.zoom-out {
+  font-size: 20px;
+}
+
+/* Permanent price badges (inside SVG sections) */
+.price-tag-bg {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+}
+
+.price-tag-text {
+  font-weight: 700;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .map-zoom-controls {
+    top: 0.5rem;
+    right: 0.5rem;
+    padding: 0.2rem;
+  }
+
+  .zoom-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 18px;
+  }
+}

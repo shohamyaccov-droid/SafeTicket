@@ -1,0 +1,28 @@
+.protected-route-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+  gap: 1rem;
+}
+
+.protected-route-loading p {
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.protected-route-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--primary-blue);
+  border-radius: 50%;
+  animation: protected-route-spin 0.8s linear infinite;
+}
+
+@keyframes protected-route-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
