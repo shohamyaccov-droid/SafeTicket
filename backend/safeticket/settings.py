@@ -195,22 +195,20 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# CORS settings - Allow React frontend (set CORS_ALLOWED_ORIGINS in production, comma-separated)
+# CORS / CSRF origins — production uses a single exact SPA origin (no trailing slash).
 CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOW_CREDENTIALS = True  # Required for cookies / CSRF with cross-origin requests
-CORS_ALLOWED_ORIGINS = _env_origin_list(
-    'CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000'
-)
-CSRF_TRUSTED_ORIGINS = _env_origin_list(
-    'CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000'
-)
-# Render production frontend (no trailing slash); merged so deploy works even if env is missing
-_RENDER_FRONTEND = 'https://safeticket-web.onrender.com'
-if not DEBUG:
-    if _RENDER_FRONTEND not in CORS_ALLOWED_ORIGINS:
-        CORS_ALLOWED_ORIGINS = [*CORS_ALLOWED_ORIGINS, _RENDER_FRONTEND]
-    if _RENDER_FRONTEND not in CSRF_TRUSTED_ORIGINS:
-        CSRF_TRUSTED_ORIGINS = [*CSRF_TRUSTED_ORIGINS, _RENDER_FRONTEND]
+CORS_ALLOW_CREDENTIALS = True
+_RENDER_WEB_ORIGIN = 'https://safeticket-web.onrender.com'
+if DEBUG:
+    CORS_ALLOWED_ORIGINS = _env_origin_list(
+        'CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000'
+    )
+    CSRF_TRUSTED_ORIGINS = _env_origin_list(
+        'CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000'
+    )
+else:
+    CORS_ALLOWED_ORIGINS = [_RENDER_WEB_ORIGIN]
+    CSRF_TRUSTED_ORIGINS = [_RENDER_WEB_ORIGIN]
 
 # JWT HttpOnly cookie names
 JWT_ACCESS_COOKIE_NAME = 'access_token'
@@ -245,8 +243,8 @@ USE_X_FORWARDED_HOST = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
-# Cross-origin credentialed SPA: API host sets cookies; browser sends them on subsequent XHR to the API.
-# SameSite must be the string 'None' (not Python None). 'None' requires Secure=True or browsers drop Set-Cookie.
+# Production (DEBUG=False): CSRF_COOKIE_SAMESITE / SESSION_COOKIE_SAMESITE = string 'None' (capital N); Secure=True.
+# Local (DEBUG=True): Lax + insecure cookies for http://localhost dev.
 if DEBUG:
     CSRF_COOKIE_SECURE = False
     SESSION_COOKIE_SECURE = False

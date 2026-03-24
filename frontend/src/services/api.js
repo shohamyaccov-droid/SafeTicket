@@ -50,7 +50,7 @@ api.interceptors.request.use(
     if (method !== 'get' && method !== 'head' && method !== 'options') {
       const token = getCsrfTokenForRequest();
       if (token) {
-        config.headers.set('X-CSRFToken', token);
+        config.headers['X-CSRFToken'] = token;
       }
     }
     if (config.data instanceof FormData) {
