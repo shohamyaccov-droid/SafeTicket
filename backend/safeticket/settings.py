@@ -38,7 +38,10 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dummy-key-for-dev')
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = [
-    h.strip() for h in os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+    h.strip() for h in os.environ.get(
+        'ALLOWED_HOSTS',
+        'safeticket-api.onrender.com,localhost,127.0.0.1',
+    ).split(',')
     if h.strip()
 ]
 
@@ -230,6 +233,7 @@ CACHES = {
 
 # Production security headers (proxy + cross-origin cookies on Render)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = False  # Temporary: avoid redirect loops while debugging (Render terminates TLS)
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 CSRF_COOKIE_SECURE = True
