@@ -43,9 +43,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # First: CORS headers on all responses (before Whitenoise/Common)
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
-    'corsheaders.middleware.CorsMiddleware',  # Must be before CommonMiddleware and SessionMiddleware
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -170,11 +170,15 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# CORS settings - Allow React frontend (use CORS_ALLOWED_ORIGINS env in production)
+# CORS settings - Allow React frontend (set CORS_ALLOWED_ORIGINS in production, comma-separated)
 CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOW_CREDENTIALS = True
-_cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000')
-CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(',') if o.strip()]
+CORS_ALLOW_CREDENTIALS = True  # Required for cookies / CSRF with cross-origin requests
+CORS_ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get(
+        'CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000'
+    ).split(',')
+    if o.strip()
+]
 CSRF_TRUSTED_ORIGINS = [
     h.strip() for h in os.environ.get('CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
     if h.strip()
