@@ -37,6 +37,8 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dummy-key-for-dev')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
+# Host header must match for Django to serve the request; mismatch -> fast 400 (DisallowedHost), not a hang.
+# Not involved in TLS redirects (that would be SECURE_SSL_REDIRECT + proxy headers).
 ALLOWED_HOSTS = [
     h.strip() for h in os.environ.get(
         'ALLOWED_HOSTS',
@@ -95,9 +97,12 @@ TEMPLATES = [
 WSGI_APPLICATION = 'safeticket.wsgi.application'
 
 
-# Database - use Postgres on Render (DATABASE_URL), SQLite locally
+# Database - Postgres via DATABASE_URL on Render; SQLite locally.
+# CONN_MAX_AGE=0: no persistent connections (avoids workers blocking on stale DB conns after idle/sleep).
 import dj_database_url
-_db_config = dj_database_url.config(conn_max_age=600, conn_health_checks=True)
+_db_config = dj_database_url.config(conn_max_age=0, conn_health_checks=True)
+if _db_config:
+    _db_config['CONN_MAX_AGE'] = 0
 DATABASES = {
     'default': _db_config if _db_config else {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -233,7 +238,8 @@ CACHES = {
 
 # Production security headers (proxy + cross-origin cookies on Render)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SECURE_SSL_REDIRECT = False  # Temporary: avoid redirect loops while debugging (Render terminates TLS)
+# False: Render terminates TLS; Django must not 301 to https:// (would loop or confuse the edge proxy).
+SECURE_SSL_REDIRECT = False
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 CSRF_COOKIE_SECURE = True
