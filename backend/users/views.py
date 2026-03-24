@@ -266,10 +266,12 @@ class CookieTokenRefreshView(TokenRefreshView):
 @permission_classes([AllowAny])
 def csrf_token_view(request):
     """
-    Double-submit cookie: sets csrftoken cookie for client to send as X-CSRFToken header.
+    Double-submit cookie: sets csrftoken on the API host + returns token in JSON.
+    Cross-origin SPAs cannot read document.cookie for the API domain; the body value
+    is used for X-CSRFToken while the browser still sends the cookie with credentials.
     """
-    get_token(request)  # Ensure token is generated
-    return Response({'success': True})
+    token = get_token(request)
+    return Response({'success': True, 'csrfToken': token})
 
 
 @csrf_required

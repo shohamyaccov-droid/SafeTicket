@@ -196,6 +196,13 @@ CORS_ALLOWED_ORIGINS = _env_origin_list(
 CSRF_TRUSTED_ORIGINS = _env_origin_list(
     'CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000'
 )
+# Render production frontend (no trailing slash); merged so deploy works even if env is missing
+_RENDER_FRONTEND = 'https://safeticket-web.onrender.com'
+if not DEBUG:
+    if _RENDER_FRONTEND not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS = [*CORS_ALLOWED_ORIGINS, _RENDER_FRONTEND]
+    if _RENDER_FRONTEND not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS = [*CSRF_TRUSTED_ORIGINS, _RENDER_FRONTEND]
 
 # JWT HttpOnly cookie names
 JWT_ACCESS_COOKIE_NAME = 'access_token'
@@ -229,4 +236,6 @@ CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SAMESITE = 'None'
 SESSION_COOKIE_SAMESITE = 'None'
+# Must be False: SPA reads token for X-CSRFToken (cookie is on API host; body token is primary cross-origin)
+CSRF_COOKIE_HTTPONLY = False
 

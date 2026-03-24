@@ -1,5 +1,12 @@
 import axios from 'axios';
 
+axios.defaults.withCredentials = true;
+axios.defaults.xsrfCookieName = 'csrftoken';
+axios.defaults.xsrfHeaderName = 'X-CSRFToken';
+
+/** In-memory CSRF for cross-origin: csrftoken cookie is not visible on document.cookie for the API host. */
+let csrfTokenFromApi = null;
+
 /** Ensure base URL ends with /api (Render often sets host only, which would 404 and look like CORS). */
 function normalizeApiBase(url) {
   if (url == null || String(url).trim() === '') {
@@ -14,10 +21,18 @@ function normalizeApiBase(url) {
 
 const API_URL = normalizeApiBase(import.meta.env.VITE_API_URL);
 
-/** Read csrftoken from document.cookie (Double-Submit Cookie pattern for CSRF). */
+/** CSRF value for X-CSRFToken: API JSON body (cross-origin) or cookie (same-origin dev). */
 function getCsrfToken() {
-  const match = document.cookie.match(/csrftoken=([^;]+)/);
-  return match ? match[1] : null;
+  if (csrfTokenFromApi) {
+    return csrfTokenFromApi;
+  }
+  const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]*)/);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1].trim());
+  } catch {
+    return match[1].trim();
+  }
 }
 
 const api = axios.create({
@@ -25,10 +40,10 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true, // Send HttpOnly cookies with every request
+  withCredentials: true,
 });
 
-// Attach X-CSRFToken header for state-changing requests (CSRF protection)
+// Attach X-CSRFToken for unsafe methods (POST, PUT, PATCH, DELETE)
 api.interceptors.request.use(
   (config) => {
     const method = (config.method || 'get').toLowerCase();
@@ -88,7 +103,14 @@ export const authAPI = {
   logout: () => api.post('/users/logout/'),
   getProfile: () => api.get('/users/profile/'),
   getDashboard: () => api.get('/users/dashboard/'),
-  getCsrf: () => api.get('/users/csrf/'),
+  getCsrf: async () => {
+    const response = await api.get('/users/csrf/');
+    const t = response.data?.csrfToken;
+    if (t) {
+      csrfTokenFromApi = t;
+    }
+    return response;
+  },
 };
 
 export const paymentAPI = {
