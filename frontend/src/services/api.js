@@ -21,9 +21,9 @@ function normalizeApiBase(url) {
 
 const API_URL = normalizeApiBase(import.meta.env.VITE_API_URL);
 
-/** CSRF value for X-CSRFToken: API JSON body (cross-origin) or cookie (same-origin dev). */
-function getCsrfToken() {
-  if (csrfTokenFromApi) {
+/** CSRF for X-CSRFToken: prefer JSON warmup cache (cross-origin); else cookie (same-site dev). */
+function getCsrfTokenForRequest() {
+  if (csrfTokenFromApi != null && csrfTokenFromApi !== '') {
     return csrfTokenFromApi;
   }
   const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]*)/);
@@ -48,9 +48,9 @@ api.interceptors.request.use(
   (config) => {
     const method = (config.method || 'get').toLowerCase();
     if (method !== 'get' && method !== 'head' && method !== 'options') {
-      const token = getCsrfToken();
+      const token = getCsrfTokenForRequest();
       if (token) {
-        config.headers['X-CSRFToken'] = token;
+        config.headers.set('X-CSRFToken', token);
       }
     }
     if (config.data instanceof FormData) {
@@ -97,17 +97,19 @@ api.interceptors.response.use(
   }
 );
 
+const creds = { withCredentials: true };
+
 export const authAPI = {
-  register: (data) => api.post('/users/register/', data),
-  login: (data) => api.post('/users/login/', data),
-  logout: () => api.post('/users/logout/'),
-  getProfile: () => api.get('/users/profile/'),
-  getDashboard: () => api.get('/users/dashboard/'),
+  register: (data) => api.post('/users/register/', data, creds),
+  login: (data) => api.post('/users/login/', data, creds),
+  logout: () => api.post('/users/logout/', {}, creds),
+  getProfile: () => api.get('/users/profile/', creds),
+  getDashboard: () => api.get('/users/dashboard/', creds),
   getCsrf: async () => {
-    const response = await api.get('/users/csrf/');
+    const response = await api.get('/users/csrf/', creds);
     const t = response.data?.csrfToken;
-    if (t) {
-      csrfTokenFromApi = t;
+    if (t != null && t !== '') {
+      csrfTokenFromApi = String(t);
     }
     return response;
   },

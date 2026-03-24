@@ -270,11 +270,8 @@ def csrf_token_view(request):
     Cross-origin SPAs cannot read document.cookie for the API domain; the body value
     is used for X-CSRFToken while the browser still sends the cookie with credentials.
     """
-    print('[csrf_token_view] start', flush=True)
     token = get_token(request)
-    response = Response({'success': True, 'csrfToken': token})
-    print('[csrf_token_view] end', flush=True)
-    return response
+    return Response({'success': True, 'csrfToken': token})
 
 
 @csrf_required

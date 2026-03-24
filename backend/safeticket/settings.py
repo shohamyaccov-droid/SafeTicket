@@ -240,12 +240,25 @@ CACHES = {
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # False: Render terminates TLS; Django must not 301 to https:// (would loop or confuse the edge proxy).
 SECURE_SSL_REDIRECT = False
+# So request.get_host() matches the public hostname (helps CSRF Origin / cookie scoping behind the proxy).
+USE_X_FORWARDED_HOST = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
-CSRF_COOKIE_SECURE = True
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SAMESITE = 'None'
-SESSION_COOKIE_SAMESITE = 'None'
-# Must be False: SPA reads token for X-CSRFToken (cookie is on API host; body token is primary cross-origin)
-CSRF_COOKIE_HTTPONLY = False
 
+# Cross-origin credentialed SPA: API host sets cookies; browser sends them on subsequent XHR to the API.
+# SameSite must be the string 'None' (not Python None). 'None' requires Secure=True or browsers drop Set-Cookie.
+if DEBUG:
+    CSRF_COOKIE_SECURE = False
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SAMESITE = 'Lax'
+else:
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SAMESITE = 'None'
+    SESSION_COOKIE_SAMESITE = 'None'
+
+CSRF_COOKIE_PATH = '/'
+SESSION_COOKIE_PATH = '/'
+# False: token is mirrored in JSON for X-CSRFToken; cookie must still be stored/sent for Django's CSRF check.
+CSRF_COOKIE_HTTPONLY = False
