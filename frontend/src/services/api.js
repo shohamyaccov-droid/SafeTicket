@@ -1,6 +1,18 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+/** Ensure base URL ends with /api (Render often sets host only, which would 404 and look like CORS). */
+function normalizeApiBase(url) {
+  if (url == null || String(url).trim() === '') {
+    return 'http://localhost:8000/api';
+  }
+  let base = String(url).trim().replace(/\/+$/, '');
+  if (!base.endsWith('/api')) {
+    base = `${base}/api`;
+  }
+  return base;
+}
+
+const API_URL = normalizeApiBase(import.meta.env.VITE_API_URL);
 
 /** Read csrftoken from document.cookie (Double-Submit Cookie pattern for CSRF). */
 function getCsrfToken() {

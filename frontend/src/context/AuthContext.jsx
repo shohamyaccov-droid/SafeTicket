@@ -39,6 +39,8 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
+      // Cross-origin: establish csrftoken on API host before POST (CSRF + CORS credentials)
+      await authAPI.getCsrf();
       const response = await authAPI.login({ username, password });
       // Tokens are in HttpOnly cookies; response has user only
       let user = response.data?.user;
@@ -90,6 +92,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (userData) => {
     try {
+      await authAPI.getCsrf();
       const response = await authAPI.register(userData);
       const newUser = response.data?.user;
       if (newUser && typeof newUser.is_superuser === 'undefined') {
@@ -110,6 +113,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      await authAPI.getCsrf();
       await authAPI.logout();
     } catch {
       // Ignore - cookies may already be cleared
