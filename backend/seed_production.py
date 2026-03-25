@@ -2,6 +2,9 @@
 """
 Master seed for production: artists (remote images), events, venues/cities, categories, admin user.
 
+Also resets ADMIN_EMAIL password to ADMIN_TEMP_PASSWORD (see constant below) — change it after login;
+the value is not printed to logs.
+
 Uses get_or_create / update_or_create — safe to re-run (idempotent).
 
 Images: Artist.image / cover_image are ImageFields; remote URLs are downloaded once via HTTP
@@ -46,6 +49,8 @@ from users.models import Artist, Event
 User = get_user_model()
 
 ADMIN_EMAIL = 'shohamyaccov@gmail.com'
+# Temporary login for /admin after seed — rotate after first sign-in.
+ADMIN_TEMP_PASSWORD = 'Shoham2026!'
 
 # Unsplash CDN (license: https://unsplash.com/license) — distinct music/live photos per artist.
 SEED_ARTISTS: list[dict] = [
@@ -205,11 +210,15 @@ def seed_admin() -> None:
         print(f'[seed] WARNING: no user {ADMIN_EMAIL!r} — register first, then re-run seed.', flush=True)
         return
     u = qs.first()
+    u.set_password(ADMIN_TEMP_PASSWORD)
     u.is_superuser = True
     u.is_staff = True
     u.role = 'seller'
-    u.save(update_fields=['is_superuser', 'is_staff', 'role'])
-    print(f'[seed] admin OK: {u.username} (staff, superuser, seller)', flush=True)
+    u.save()
+    print(
+        f'[seed] admin OK: {u.username} (password reset, staff, superuser, seller)',
+        flush=True,
+    )
 
 
 def seed_artists() -> None:
