@@ -29,6 +29,9 @@ services:
         value: "safeticket-api.onrender.com,localhost,127.0.0.1"
       - key: CORS_ALLOWED_ORIGINS
         sync: false
+      # Set to true only while testing uploads; uses looser PDF MIME + PyPDF + fallbacks (see settings.RELAX_PDF_UPLOAD_VALIDATION).
+      - key: RELAX_PDF_UPLOAD_VALIDATION
+        value: "false"
 
   # React Frontend (Static Site)
   - type: web

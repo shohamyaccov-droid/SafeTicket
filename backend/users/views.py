@@ -47,11 +47,45 @@ from .serializers import (
 from .models import Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage
 from django.utils import timezone
 from datetime import timedelta
+from django.conf import settings
 
 User = get_user_model()
 
 # Cart abandonment timeout (minutes)
 RESERVATION_TIMEOUT_MINUTES = 10
+
+
+def _pdf_magic_bytes_ok(uploaded_file) -> bool:
+    """True if file starts with %PDF (PDF signature)."""
+    uploaded_file.seek(0)
+    head = uploaded_file.read(8)
+    uploaded_file.seek(0)
+    return bool(head.startswith(b'%PDF'))
+
+
+def _upload_mime_allowed(uploaded_file, relax: bool) -> bool:
+    """
+    Strict: application/pdf only (+ magic bytes).
+    Relaxed (testing): also allow common browser fallbacks for real PDFs (octet-stream, empty).
+    """
+    ct = (getattr(uploaded_file, 'content_type', '') or '').strip().lower()
+    if ct == 'application/pdf':
+        return _pdf_magic_bytes_ok(uploaded_file)
+    if relax and ct in ('application/octet-stream', 'binary/octet-stream', 'application/x-download', ''):
+        return _pdf_magic_bytes_ok(uploaded_file)
+    return False
+
+
+def _pdf_reader_for_upload(uploaded_file, relax: bool) -> PdfReader:
+    """Page count / split; relaxed mode uses non-strict parser and empty-password decrypt if encrypted."""
+    uploaded_file.seek(0)
+    reader = PdfReader(uploaded_file, strict=not relax)
+    if relax and getattr(reader, 'is_encrypted', False):
+        try:
+            reader.decrypt('')
+        except Exception:
+            pass
+    return reader
 
 
 def _is_event_past(ticket):
@@ -1334,24 +1368,34 @@ class TicketViewSet(viewsets.ModelViewSet):
             pdf_files_count = 1
         
         available_quantity = int(request.data.get('available_quantity', 1))
+        relax_pdf = getattr(settings, 'RELAX_PDF_UPLOAD_VALIDATION', False)
 
         # AUTO-SPLIT MODE: 1 multi-page PDF for N tickets
         is_auto_split_mode = len(pdf_files) == 1 and available_quantity > 1
         if is_auto_split_mode:
             single_pdf = pdf_files[0]
             try:
-                reader = PdfReader(single_pdf)
+                reader = _pdf_reader_for_upload(single_pdf, relax_pdf)
                 page_count = len(reader.pages)
             except Exception as e:
-                return Response(
-                    {'error': f'לא ניתן לקרוא את קובץ ה-PDF. ייתכן שהקובץ פגום או מוגן בסיסמה. ({str(e)})'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            if page_count != available_quantity:
-                return Response(
-                    {'error': 'מספר העמודים בקובץ לא תואם למספר הכרטיסים שהצהרת עליהם. אנא העלה קובץ שבו כל עמוד מכיל כרטיס אחד בלבד.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                if relax_pdf:
+                    # Testing: cannot split — store whole file as a single-ticket listing
+                    is_auto_split_mode = False
+                    available_quantity = 1
+                else:
+                    return Response(
+                        {'error': f'לא ניתן לקרוא את קובץ ה-PDF. ייתכן שהקובץ פגום או מוגן בסיסמה. ({str(e)})'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            if is_auto_split_mode and page_count != available_quantity:
+                if relax_pdf:
+                    is_auto_split_mode = False
+                    available_quantity = 1
+                else:
+                    return Response(
+                        {'error': 'מספר העמודים בקובץ לא תואם למספר הכרטיסים שהצהרת עליהם. אנא העלה קובץ שבו כל עמוד מכיל כרטיס אחד בלבד.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
         elif len(pdf_files) != available_quantity:
             return Response(
                 {'error': f'Number of PDF files ({len(pdf_files)}) must match quantity ({available_quantity}). Each ticket requires its own unique PDF file.'},
@@ -1377,9 +1421,8 @@ class TicketViewSet(viewsets.ModelViewSet):
             except Event.DoesNotExist:
                 pass  # Serializer will validate event exists
         
-        # SECURITY: File validation - size, MIME type, and extension
+        # SECURITY: File validation - size, MIME type, magic bytes, and extension
         MAX_PDF_SIZE = 5 * 1024 * 1024  # 5MB
-        ALLOWED_MIME = 'application/pdf'
         for pdf_file in pdf_files:
             # Size limit
             pdf_file.seek(0, 2)
@@ -1390,11 +1433,15 @@ class TicketViewSet(viewsets.ModelViewSet):
                     {'error': f'קובץ גדול מדי. הגודל המקסימלי הוא 5MB. הקובץ שלך: {file_size // (1024*1024)}MB.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            # MIME type
+            # MIME + %PDF header (no keyword/text scanning — structure only)
             content_type = getattr(pdf_file, 'content_type', '') or ''
-            if content_type.lower() != ALLOWED_MIME:
+            if not _upload_mime_allowed(pdf_file, relax_pdf):
                 return Response(
-                    {'error': f'סוג קובץ לא חוקי. נדרש PDF בלבד. התקבל: {content_type or "לא ידוע"}'},
+                    {
+                        'error': (
+                            f'סוג קובץ לא חוקי או חתימת PDF חסרה (נדרש קובץ PDF אמיתי). התקבל: {content_type or "לא ידוע"}'
+                        )
+                    },
                     status=status.HTTP_400_BAD_REQUEST
                 )
             # Extension
@@ -1476,7 +1523,7 @@ class TicketViewSet(viewsets.ModelViewSet):
             # AUTO-SPLIT: Split multi-page PDF into one Ticket per page
             single_pdf = pdf_files[0]
             single_pdf.seek(0)  # Reset after validation read
-            reader = PdfReader(single_pdf)
+            reader = _pdf_reader_for_upload(single_pdf, relax_pdf)
             base_name = (single_pdf.name or 'ticket').rsplit('.', 1)[0]
 
             for i in range(available_quantity):

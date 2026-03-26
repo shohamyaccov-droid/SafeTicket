@@ -37,6 +37,14 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dummy-key-for-dev')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
+# When True: looser PDF MIME checks (%PDF magic bytes), non-strict PyPDF, optional fallbacks for testing.
+# Set RELAX_PDF_UPLOAD_VALIDATION=true on Render only while testing uploads; turn off for production.
+RELAX_PDF_UPLOAD_VALIDATION = os.environ.get('RELAX_PDF_UPLOAD_VALIDATION', 'False').lower() in (
+    'true',
+    '1',
+    'yes',
+)
+
 # Host header must match for Django to serve the request; mismatch -> fast 400 (DisallowedHost), not a hang.
 # Not involved in TLS redirects (that would be SECURE_SSL_REDIRECT + proxy headers).
 ALLOWED_HOSTS = [
