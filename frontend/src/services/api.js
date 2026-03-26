@@ -7,12 +7,19 @@ axios.defaults.xsrfHeaderName = 'X-CSRFToken';
 /** In-memory CSRF for cross-origin: csrftoken cookie is not visible on document.cookie for the API host. */
 let csrfTokenFromApi = null;
 
+/** Production API when VITE_API_URL is missing at build time (never fall back to localhost in prod). */
+const PRODUCTION_API_BASE_URL = 'https://safeticket-api.onrender.com/api';
+
 /** Ensure base URL ends with /api (Render often sets host only, which would 404 and look like CORS). */
 function normalizeApiBase(url) {
-  if (url == null || String(url).trim() === '') {
+  const raw = url == null ? '' : String(url).trim();
+  if (raw === '' || raw === 'undefined' || raw === 'null') {
+    if (import.meta.env.PROD) {
+      return PRODUCTION_API_BASE_URL;
+    }
     return 'http://localhost:8000/api';
   }
-  let base = String(url).trim().replace(/\/+$/, '');
+  let base = raw.replace(/\/+$/, '');
   if (!base.endsWith('/api')) {
     base = `${base}/api`;
   }
@@ -37,6 +44,7 @@ function getCsrfTokenForRequest() {
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
   },

@@ -44,8 +44,9 @@ services:
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     envVars:
+      # Public API origin; vite build bakes this in. Override in dashboard if you use a custom domain.
       - key: VITE_API_URL
-        sync: false
+        value: https://safeticket-api.onrender.com
     routes:
       - type: rewrite
         source: /*
