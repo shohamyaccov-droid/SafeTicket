@@ -13,11 +13,21 @@ REFRESH_TOKEN_COOKIE = getattr(settings, 'JWT_REFRESH_COOKIE_NAME', 'refresh_tok
 
 
 def _jwt_cookie_kwargs():
-    """Cookie options for cross-origin. SameSite=None requires Secure=True (Chrome)."""
+    """
+    Production: SameSite=None + Secure for cross-origin SPA + HTTPS.
+    DEBUG: Lax + non-Secure so HttpOnly JWT cookies are sent on http://127.0.0.1 (RFC 6265 blocks Secure cookies on HTTP).
+    """
+    if getattr(settings, 'DEBUG', False):
+        return {
+            'httponly': True,
+            'samesite': 'Lax',
+            'secure': False,
+            'path': '/',
+        }
     return {
         'httponly': True,
         'samesite': 'None',
-        'secure': True,  # Mandatory for SameSite=None
+        'secure': True,
         'path': '/',
     }
 
@@ -45,8 +55,9 @@ def set_jwt_cookies(response, access_token, refresh_token):
 def clear_jwt_cookies(response):
     """Clear JWT cookies (for logout)."""
     kwargs = _jwt_cookie_kwargs()
-    response.delete_cookie(ACCESS_TOKEN_COOKIE, path='/', samesite=kwargs.get('samesite', 'Lax'))
-    response.delete_cookie(REFRESH_TOKEN_COOKIE, path='/', samesite=kwargs.get('samesite', 'Lax'))
+    ss = kwargs.get('samesite', 'Lax')
+    response.delete_cookie(ACCESS_TOKEN_COOKIE, path='/', samesite=ss)
+    response.delete_cookie(REFRESH_TOKEN_COOKIE, path='/', samesite=ss)
 
 
 class JWTCookieAuthentication(JWTAuthentication):

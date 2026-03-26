@@ -820,7 +820,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             <p>מיקום: {ticket.venue}</p>
             
             {/* PDF Verified Badge */}
-            {ticket.pdf_file_url && (
+            {(ticket.has_pdf_file || ticket.pdf_file_url) && (
               <div className="pdf-verified-badge">
                 <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M10 1L3 4V9C3 13.55 6.16 17.74 10 19C13.84 17.74 17 13.55 17 9V4L10 1Z" fill="currentColor"/>

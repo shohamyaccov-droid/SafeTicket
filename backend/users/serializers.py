@@ -5,6 +5,24 @@ from django.db.models import Sum
 from .models import User, Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage
 
 
+def user_can_access_ticket_pdf(user, ticket) -> bool:
+    """Same rules as TicketViewSet.download_pdf: seller, staff, or buyer with paid order."""
+    if not user or not user.is_authenticated:
+        return False
+    if getattr(user, 'is_staff', False) and user.is_staff:
+        return True
+    if ticket.seller_id == user.id:
+        return True
+    qs = Order.objects.filter(user=user, status__in=['paid', 'completed']).only('ticket_id', 'ticket_ids')
+    for o in qs.iterator():
+        if o.ticket_id == ticket.id:
+            return True
+        tids = o.ticket_ids or []
+        if ticket.id in tids:
+            return True
+    return False
+
+
 def absolute_file_url(request, fieldfile):
     """Absolute URL for a FileField/ImageField (local MEDIA or Cloudinary/S3 full URL)."""
     if not fieldfile:
@@ -273,6 +291,7 @@ class TicketSerializer(serializers.ModelSerializer):
     split_type = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='כל כמות')
     is_obstructed_view = serializers.BooleanField(required=False, default=False)
     verification_status = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='ממתין לאישור', read_only=True)
+    has_pdf_file = serializers.SerializerMethodField()
     
     class Meta:
         model = Ticket
@@ -281,12 +300,15 @@ class TicketSerializer(serializers.ModelSerializer):
             'event_name', 'event_date', 'venue', 'seat_row', 'section', 'row', 'seat_numbers',
             'row_number', 'seat_number', 'listing_group_id',
             'original_price', 'asking_price', 'delivery_method',
-            'is_together', 'available_quantity', 'pdf_file', 'pdf_file_url', 'status',
+            'is_together', 'available_quantity', 'pdf_file', 'pdf_file_url', 'has_pdf_file', 'status',
             'ticket_type', 'split_type', 'is_obstructed_view', 'verification_status',
             'reserved_at', 'reserved_by', 'reservation_email', 'created_at', 'updated_at'
         )
         read_only_fields = ('id', 'seller', 'status', 'created_at', 'updated_at', 'asking_price', 
                            'reserved_at', 'reserved_by', 'reservation_email', 'event_name', 'event_date', 'venue')
+        extra_kwargs = {
+            'pdf_file': {'write_only': True},
+        }
     
     def get_event_name(self, obj):
         return obj.event.name if obj.event else (obj.event_name or '')
@@ -297,10 +319,23 @@ class TicketSerializer(serializers.ModelSerializer):
     def get_venue(self, obj):
         return obj.event.venue if obj.event else (obj.venue or '')
     
+    def get_has_pdf_file(self, obj):
+        return bool(obj.pdf_file)
+    
     def get_pdf_file_url(self, obj):
-        if obj.pdf_file:
-            return absolute_file_url(self.context.get('request'), obj.pdf_file)
-        return None
+        """
+        Never expose raw Cloudinary/S3 URLs on the public API. Authorized users get the
+        authenticated download endpoint (same authorization as download_pdf).
+        """
+        if not obj.pdf_file:
+            return None
+        request = self.context.get('request')
+        user = request.user if request and request.user.is_authenticated else None
+        if not user_can_access_ticket_pdf(user, obj):
+            return None
+        if request:
+            return request.build_absolute_uri(f'/api/users/tickets/{obj.id}/download_pdf/')
+        return f'/api/users/tickets/{obj.id}/download_pdf/'
     
     def validate(self, attrs):
         # Israeli Consumer Protection Law (Section 19A): asking_price must equal original_price
@@ -376,6 +411,7 @@ class TicketListSerializer(serializers.ModelSerializer):
     asking_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     delivery_method = serializers.ChoiceField(choices=Ticket.DELIVERY_CHOICES, read_only=True)
     split_type = serializers.CharField(required=False, allow_blank=True, allow_null=True, read_only=True)
+    has_pdf_file = serializers.SerializerMethodField()
     # Event data
     event_name = serializers.SerializerMethodField()
     event_date = serializers.SerializerMethodField()
@@ -388,7 +424,7 @@ class TicketListSerializer(serializers.ModelSerializer):
             'venue', 'seat_row', 'section', 'row', 'seat_numbers',
             'row_number', 'seat_number', 'listing_group_id',
             'original_price', 'asking_price', 'delivery_method',
-            'is_together', 'available_quantity', 'split_type', 'status', 
+            'is_together', 'available_quantity', 'split_type', 'status', 'has_pdf_file',
             'reserved_at', 'reserved_by', 'reservation_email', 'created_at'
         )
         read_only_fields = fields
@@ -401,6 +437,9 @@ class TicketListSerializer(serializers.ModelSerializer):
     
     def get_venue(self, obj):
         return obj.event.venue if obj.event else (obj.venue or '')
+    
+    def get_has_pdf_file(self, obj):
+        return bool(obj.pdf_file)
 
 
 class ProfileOrderSerializer(serializers.ModelSerializer):

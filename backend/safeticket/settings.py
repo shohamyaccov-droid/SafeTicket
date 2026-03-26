@@ -9,6 +9,8 @@ import logging
 import os
 from urllib.parse import unquote, urlparse
 
+from django.core.exceptions import ImproperlyConfigured
+
 _logger = logging.getLogger('safeticket.cloudinary')
 
 
@@ -221,19 +223,50 @@ if USE_CLOUDINARY:
             _cn or '(empty)',
         )
 
+    if not _cn or not _key or not _secret:
+        raise ImproperlyConfigured(
+            'Cloudinary is enabled but credentials are incomplete. Set CLOUDINARY_URL '
+            '(cloudinary://API_KEY:API_SECRET@CLOUD_NAME) or CLOUDINARY_CLOUD_NAME, '
+            'CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.'
+        )
+
+    _sig_alg_raw = (os.environ.get('CLOUDINARY_SIGNATURE_ALGORITHM') or 'sha1').strip().lower()
+    if _sig_alg_raw not in ('sha1', 'sha256'):
+        raise ImproperlyConfigured(
+            'CLOUDINARY_SIGNATURE_ALGORITHM must be sha1 or sha256 (default sha1).'
+        )
+
+    # pycloudinary.Config() reads env on first import. If CLOUDINARY_CLOUD_NAME is set, it loads
+    # every CLOUDINARY_* var and ignores CLOUDINARY_URL — stale split vars + correct URL → Invalid Signature.
+    _saved_cld_split_env = {}
+    if _cld_url:
+        for _ek in ('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'):
+            if _ek in os.environ:
+                _saved_cld_split_env[_ek] = os.environ.pop(_ek)
+
+    import cloudinary
+    from cloudinary import utils as _cloudinary_utils
+
+    for _ek, _ev in _saved_cld_split_env.items():
+        os.environ[_ek] = _ev
+
+    _sig_alg = (
+        _cloudinary_utils.SIGNATURE_SHA256 if _sig_alg_raw == 'sha256' else _cloudinary_utils.SIGNATURE_SHA1
+    )
+
     CLOUDINARY_STORAGE = {
         'SECURE': True,
         'CLOUD_NAME': _cn,
         'API_KEY': _key,
         'API_SECRET': _secret,
     }
-    import cloudinary
 
     cloudinary.config(
         cloud_name=_cn,
         api_key=_key,
         api_secret=_secret,
         secure=True,
+        signature_algorithm=_sig_alg,
     )
 
 # Default primary key field type

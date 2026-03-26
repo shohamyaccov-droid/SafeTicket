@@ -903,7 +903,7 @@ const EventDetailsPage = () => {
                 <div className="tickets-grid">
             {ticketGroups.map((group) => {
               const seatRange = getSeatRange(group);
-              const hasPdf = group.tickets.some(t => t.pdf_file_url);
+              const hasPdf = group.tickets.some((t) => t.has_pdf_file || t.pdf_file_url);
               const isUrgent = group.available_count < 5;
               const isVerified = group.seller_is_verified;
               const isCheapest = cheapestTicketPrice && parseFloat(group.price) === cheapestTicketPrice;

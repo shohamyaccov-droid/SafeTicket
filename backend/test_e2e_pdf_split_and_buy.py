@@ -30,6 +30,7 @@ django.setup()
 
 from pypdf import PdfReader, PdfWriter
 from django.contrib.auth import get_user_model
+from django.conf import settings as django_settings
 from users.models import Ticket, Event, Order
 import requests
 
@@ -81,10 +82,29 @@ def get_or_create_users():
     return seller, buyer
 
 
-def login(username, password):
-    r = requests.post(f'{API_BASE_URL}/login/', json={'username': username, 'password': password})
-    data = r.json() if r.status_code == 200 else {}
-    return data.get('access')
+def _csrf_headers(session):
+    """Login uses HttpOnly JWT cookies; CSRF double-submit still required on POST."""
+    csrf = session.cookies.get('csrftoken')
+    h = {'Referer': f'{API_BASE_URL}/'}
+    if csrf:
+        h['X-CSRFToken'] = csrf
+    return h
+
+
+def login_session(username, password):
+    """GET /csrf/ then POST /login/ with X-CSRFToken; session carries JWT + csrftoken cookies."""
+    s = requests.Session()
+    r0 = s.get(f'{API_BASE_URL}/csrf/')
+    if r0.status_code != 200:
+        return None
+    r = s.post(
+        f'{API_BASE_URL}/login/',
+        json={'username': username, 'password': password},
+        headers=_csrf_headers(s),
+    )
+    if r.status_code != 200:
+        return None
+    return s
 
 
 def main():
@@ -126,10 +146,10 @@ def main():
     seller, buyer = get_or_create_users()
     print(f"   Seller: {seller.username}, Buyer: {buyer.username}")
 
-    # Step 4: Seller login
+    # Step 4: Seller login (JWT in HttpOnly cookies; CSRF for state-changing POSTs)
     print("\n[Step 4] Seller login...")
-    seller_token = login(seller.username, 'testpass123')
-    if not seller_token:
+    seller_session = login_session(seller.username, 'testpass123')
+    if not seller_session:
         print("   [ERROR] Seller login failed")
         return False
     print("   [OK] Seller authenticated")
@@ -148,11 +168,11 @@ def main():
         form_data[f'row_number_{i}'] = ROW_NUMBER
         form_data[f'seat_number_{i}'] = str(10 + i)
     files = [('pdf_file_0', ('multi_ticket.pdf', pdf_buffer, 'application/pdf'))]
-    r = requests.post(
+    r = seller_session.post(
         f'{API_BASE_URL}/tickets/',
         data=form_data,
         files=files,
-        headers={'Authorization': f'Bearer {seller_token}'}
+        headers=_csrf_headers(seller_session),
     )
     if r.status_code != 201:
         print(f"   [ERROR] Upload failed: {r.status_code}")
@@ -161,6 +181,15 @@ def main():
     resp_data = r.json()
     first_ticket_id = resp_data.get('id')
     print(f"   [OK] Upload successful. First ticket ID: {first_ticket_id}")
+
+    if getattr(django_settings, 'USE_CLOUDINARY', False):
+        t0 = Ticket.objects.get(id=first_ticket_id)
+        pdf_url = t0.pdf_file.url
+        print(f"   [Cloudinary] PDF storage URL: {pdf_url[:100]}...")
+        if 'cloudinary.com' not in pdf_url:
+            print("   [FAIL] USE_CLOUDINARY is True but pdf_file.url is not a Cloudinary URL")
+            return False
+        print("   [OK] PDF is stored on Cloudinary (URL contains cloudinary.com)")
 
     # Step 6: Assert 3 distinct tickets created
     print("\n[Step 6] Verifying 3 distinct tickets in database...")
@@ -184,8 +213,8 @@ def main():
 
     # Step 8: Buyer login
     print("\n[Step 8] Buyer login...")
-    buyer_token = login(buyer.username, 'testpass123')
-    if not buyer_token:
+    buyer_session = login_session(buyer.username, 'testpass123')
+    if not buyer_session:
         print("   [ERROR] Buyer login failed")
         return False
     print("   [OK] Buyer authenticated")
@@ -193,10 +222,10 @@ def main():
     # Step 9: Reserve (optional but simulates real flow)
     print("\n[Step 9] Reserving ticket (simulating real user flow)...")
     ref_ticket = tickets[0]
-    reserve_r = requests.post(
+    reserve_r = buyer_session.post(
         f'{API_BASE_URL}/tickets/{ref_ticket.id}/reserve/',
         json={},
-        headers={'Authorization': f'Bearer {buyer_token}'}
+        headers=_csrf_headers(buyer_session),
     )
     if reserve_r.status_code == 200:
         print("   [OK] Reservation successful")
@@ -216,10 +245,10 @@ def main():
         'timestamp': 1234567890000,
         'listing_group_id': listing_group_id,
     }
-    payment_r = requests.post(
+    payment_r = buyer_session.post(
         f'{API_BASE_URL}/payments/simulate/',
         json=payment_data,
-        headers={'Authorization': f'Bearer {buyer_token}'}
+        headers=_csrf_headers(buyer_session),
     )
     if payment_r.status_code != 200:
         print(f"   [ERROR] Payment simulation failed: {payment_r.status_code}")
@@ -237,10 +266,10 @@ def main():
         'event_name': ref_ticket.event_name or 'Test Event',
         'listing_group_id': listing_group_id,
     }
-    order_r = requests.post(
+    order_r = buyer_session.post(
         f'{API_BASE_URL}/orders/',
         json=order_data,
-        headers={'Authorization': f'Bearer {buyer_token}'}
+        headers=_csrf_headers(buyer_session),
     )
     if order_r.status_code != 201:
         print(f"   [ERROR] Order creation failed: {order_r.status_code}")
@@ -273,7 +302,7 @@ def main():
         if url.startswith('/'):
             url = f'{base_url}{url}'
         print(f"   URL {i+1}: {url[:80]}...")
-        dl_r = requests.get(url, headers={'Authorization': f'Bearer {buyer_token}'})
+        dl_r = buyer_session.get(url)
         if dl_r.status_code != 200:
             print(f"   [FAIL] Download {i+1} returned {dl_r.status_code}: {dl_r.text[:200]}")
             return False

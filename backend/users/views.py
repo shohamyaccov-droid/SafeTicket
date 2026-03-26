@@ -1343,7 +1343,11 @@ class TicketViewSet(viewsets.ModelViewSet):
             Q(event__isnull=True, event_date__gte=now) |
             Q(event__isnull=True, event_date__isnull=True)
         )
-        queryset = Ticket.objects.filter(status='active').filter(upcoming_filter)
+        queryset = (
+            Ticket.objects.filter(status='active')
+            .filter(upcoming_filter)
+            .select_related('event', 'seller')
+        )
         
         # Log the count for verification
         count = queryset.count()
@@ -1352,7 +1356,11 @@ class TicketViewSet(viewsets.ModelViewSet):
         
         # For authenticated users, also show their own tickets (for sellers to manage) - same upcoming filter
         if self.request.user.is_authenticated:
-            user_tickets = Ticket.objects.filter(seller=self.request.user).filter(upcoming_filter)
+            user_tickets = (
+                Ticket.objects.filter(seller=self.request.user)
+                .filter(upcoming_filter)
+                .select_related('event', 'seller')
+            )
             queryset = queryset | user_tickets
         
         return queryset.distinct().order_by('-created_at')
@@ -1958,7 +1966,7 @@ class EventViewSet(viewsets.ModelViewSet):
         # Lazy cart abandonment cleanup
         release_abandoned_carts()
         # Get all active tickets for this event
-        tickets = Ticket.objects.filter(event=event, status='active')
+        tickets = Ticket.objects.filter(event=event, status='active').select_related('event', 'seller')
         
         # Filtering
         min_price = request.query_params.get('min_price')
