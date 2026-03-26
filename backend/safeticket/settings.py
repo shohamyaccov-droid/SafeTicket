@@ -198,11 +198,30 @@ if USE_CLOUDINARY:
     # django-cloudinary-storage/app_settings.py expects CLOUDINARY_STORAGE to include CLOUD_NAME, API_KEY,
     # API_SECRET (or it only sets `secure` and leaves SDK half-configured). Combined with pycloudinary
     # loading CLOUDINARY_CLOUD_NAME before CLOUDINARY_URL, that caused "Invalid Signature" on upload.
-    # Parse CLOUDINARY_URL once; pass the same triple into CLOUDINARY_STORAGE + cloudinary.config().
+    #
+    # Credential priority (Render often has both CLOUDINARY_URL and split vars; they can drift):
+    # 1) If CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET are all non-empty → use them
+    #    (fixes stale CLOUDINARY_URL while split keys were updated in the dashboard).
+    # 2) Else parse CLOUDINARY_URL (and temporarily drop split env vars during first import only).
+    # 3) Else ImproperlyConfigured.
+    _split_cn = (os.environ.get('CLOUDINARY_CLOUD_NAME') or '').strip()
+    _split_key = (os.environ.get('CLOUDINARY_API_KEY') or '').strip()
+    _split_secret = (os.environ.get('CLOUDINARY_API_SECRET') or '').strip()
+    _has_split = bool(_split_cn and _split_key and _split_secret)
+
     _cld_url = (os.environ.get('CLOUDINARY_URL') or '').strip().strip('"').strip("'")
     if _cld_url.startswith('\ufeff'):
         _cld_url = _cld_url.lstrip('\ufeff')
-    if _cld_url:
+
+    _cred_from_url = False
+    if _has_split:
+        _cn, _key, _secret = _split_cn, _split_key, _split_secret
+        _logger.info(
+            'Cloudinary: using split CLOUDINARY_* (all set; overrides CLOUDINARY_URL for signing; cloud_name=%s)',
+            _cn,
+        )
+    elif _cld_url:
+        _cred_from_url = True
         _parsed = urlparse(_cld_url)
         if (_parsed.scheme or '').lower() != 'cloudinary':
             raise ValueError(
@@ -217,11 +236,11 @@ if USE_CLOUDINARY:
             (_key[:6] + '…') if len(_key) > 6 else '(set)',
         )
     else:
-        _cn = (os.environ.get('CLOUDINARY_CLOUD_NAME') or '').strip()
-        _key = (os.environ.get('CLOUDINARY_API_KEY') or '').strip()
-        _secret = (os.environ.get('CLOUDINARY_API_SECRET') or '').strip()
+        _cn = _split_cn
+        _key = _split_key
+        _secret = _split_secret
         _logger.info(
-            'Cloudinary: using CLOUDINARY_CLOUD_NAME / API_KEY / API_SECRET (cloud_name=%s)',
+            'Cloudinary: partial split env (cloud_name=%s)',
             _cn or '(empty)',
         )
 
@@ -236,13 +255,14 @@ if USE_CLOUDINARY:
     _sig_alg_raw = (os.environ.get('CLOUDINARY_SIGNATURE_ALGORITHM') or 'sha256').strip().lower()
     if _sig_alg_raw not in ('sha1', 'sha256'):
         raise ImproperlyConfigured(
-            'CLOUDINARY_SIGNATURE_ALGORITHM must be sha1 or sha256 (default sha1).'
+            'CLOUDINARY_SIGNATURE_ALGORITHM must be sha1 or sha256 (default sha256).'
         )
 
     # pycloudinary.Config() reads env on first import. If CLOUDINARY_CLOUD_NAME is set, it loads
     # every CLOUDINARY_* var and ignores CLOUDINARY_URL — stale split vars + correct URL → Invalid Signature.
+    # Only strip split env during URL-only credential resolution so URL parse is the single source of truth.
     _saved_cld_split_env = {}
-    if _cld_url:
+    if _cred_from_url:
         for _ek in ('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'):
             if _ek in os.environ:
                 _saved_cld_split_env[_ek] = os.environ.pop(_ek)
