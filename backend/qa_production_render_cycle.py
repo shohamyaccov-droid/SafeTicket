@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 
 import requests
+from pypdf import PdfWriter
 
 # Defaults for public endpoints / seed user username
 DEFAULT_API = "https://safeticket-api.onrender.com/api"
@@ -27,18 +28,14 @@ DEFAULT_SERVICE = "srv-d6u14msr85hc73acc900"
 # Must match backend CSRF_TRUSTED_ORIGINS for API POSTs (browser sends these; we mimic for server-side QA).
 TRUSTED_WEB_ORIGIN = "https://safeticket-web.onrender.com"
 
-MINIMAL_PDF = b"""%PDF-1.4
-1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
-2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
-3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>endobj
-xref
-0 4
-0000000000 65535 f
-0000000009 00000 n
-0000000058 00000 n
-0000000115 00000 n
-trailer<</Size 4/Root 1 0 R>>startxref 178
-%%EOF"""
+
+def _one_page_pdf_bytes() -> bytes:
+    """Valid single-page PDF (matches upload validation / PyPDF reads on server)."""
+    w = PdfWriter()
+    w.add_blank_page(width=612, height=792)
+    buf = BytesIO()
+    w.write(buf)
+    return buf.getvalue()
 
 
 def _fetch_csrf_token(session: requests.Session, api_base: str) -> str | None:
@@ -198,6 +195,7 @@ def main() -> int:
     ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     f1 = f"qa_a_{ts}.pdf"
     f2 = f"qa_b_{ts}.pdf"
+    pdf_bytes = _one_page_pdf_bytes()
     form = {
         "event_id": str(event_id),
         "original_price": "100.00",
@@ -210,8 +208,8 @@ def main() -> int:
         "seat_number_1": f"S2{ts[-4:]}",
     }
     files = [
-        ("pdf_file_0", (f1, BytesIO(MINIMAL_PDF), "application/pdf")),
-        ("pdf_file_1", (f2, BytesIO(MINIMAL_PDF), "application/pdf")),
+        ("pdf_file_0", (f1, BytesIO(pdf_bytes), "application/pdf")),
+        ("pdf_file_1", (f2, BytesIO(pdf_bytes), "application/pdf")),
     ]
     r_up = seller.post(
         f"{api_base}/users/tickets/",
