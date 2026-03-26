@@ -63,6 +63,7 @@ ALLOWED_HOSTS = [
 
 
 # Application definition
+# cloudinary apps must load before django.contrib.staticfiles (django-cloudinary-storage + WhiteNoise coexistence).
 
 _INSTALLED_CORE = [
     'django.contrib.admin',
@@ -70,10 +71,10 @@ _INSTALLED_CORE = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'django.contrib.staticfiles',
 ]
 if USE_CLOUDINARY:
     _INSTALLED_CORE += ['cloudinary_storage', 'cloudinary']
+_INSTALLED_CORE += ['django.contrib.staticfiles']
 INSTALLED_APPS = _INSTALLED_CORE + [
     'rest_framework',
     'rest_framework.authtoken',
@@ -169,10 +170,11 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-# Static: WhiteNoise. Media: local disk (dev) or Cloudinary (production) — PDFs, images, artist assets.
+# Static: WhiteNoise. Media: local disk (dev) or Cloudinary (production).
+# PDFs must use resource_type=raw; MediaCloudinaryStorage defaults to image and rejects PDF uploads → 500.
 if USE_CLOUDINARY:
     STORAGES = {
-        'default': {'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage'},
+        'default': {'BACKEND': 'cloudinary_storage.storage.RawMediaCloudinaryStorage'},
         'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
     }
 else:
@@ -186,7 +188,10 @@ MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 if USE_CLOUDINARY:
-    # django-cloudinary-storage uses Cloudinary URLs; CLOUDINARY_* from env (or CLOUDINARY_URL).
+    # django-cloudinary-storage reads CLOUDINARY_STORAGE / CLOUDINARY_URL on app load.
+    CLOUDINARY_STORAGE = {
+        'SECURE': True,
+    }
     import cloudinary
 
     if os.environ.get('CLOUDINARY_URL'):
