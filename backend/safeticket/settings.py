@@ -200,6 +200,8 @@ if USE_CLOUDINARY:
     # loading CLOUDINARY_CLOUD_NAME before CLOUDINARY_URL, that caused "Invalid Signature" on upload.
     # Parse CLOUDINARY_URL once; pass the same triple into CLOUDINARY_STORAGE + cloudinary.config().
     _cld_url = (os.environ.get('CLOUDINARY_URL') or '').strip().strip('"').strip("'")
+    if _cld_url.startswith('\ufeff'):
+        _cld_url = _cld_url.lstrip('\ufeff')
     if _cld_url:
         _parsed = urlparse(_cld_url)
         if (_parsed.scheme or '').lower() != 'cloudinary':
@@ -230,7 +232,8 @@ if USE_CLOUDINARY:
             'CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.'
         )
 
-    _sig_alg_raw = (os.environ.get('CLOUDINARY_SIGNATURE_ALGORITHM') or 'sha1').strip().lower()
+    # Default sha256: many Cloudinary accounts / API versions expect SHA-256 signatures; sha1 still available via env.
+    _sig_alg_raw = (os.environ.get('CLOUDINARY_SIGNATURE_ALGORITHM') or 'sha256').strip().lower()
     if _sig_alg_raw not in ('sha1', 'sha256'):
         raise ImproperlyConfigured(
             'CLOUDINARY_SIGNATURE_ALGORITHM must be sha1 or sha256 (default sha1).'
