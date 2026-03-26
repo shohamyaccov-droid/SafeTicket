@@ -1568,10 +1568,11 @@ class TicketViewSet(viewsets.ModelViewSet):
                     ticket = serializer.save(seller=request.user)
                 except Exception as e:
                     _log_cloudinary_or_storage_error(e, 'ticket_create_auto_split')
+                    detail = (str(e) or repr(e))[:500]
                     return Response(
                         {
-                            'error': 'Failed to store ticket PDF (Cloudinary/storage). See server logs for details.',
-                            **({'detail': str(e)} if settings.DEBUG else {}),
+                            'error': 'Failed to store ticket PDF (Cloudinary/storage). See server logs for full traceback.',
+                            'detail': detail,
                         },
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     )
@@ -1600,10 +1601,11 @@ class TicketViewSet(viewsets.ModelViewSet):
                     ticket = serializer.save(seller=request.user)
                 except Exception as e:
                     _log_cloudinary_or_storage_error(e, 'ticket_create_multi_pdf')
+                    detail = (str(e) or repr(e))[:500]
                     return Response(
                         {
-                            'error': 'Failed to store ticket PDF (Cloudinary/storage). See server logs for details.',
-                            **({'detail': str(e)} if settings.DEBUG else {}),
+                            'error': 'Failed to store ticket PDF (Cloudinary/storage). See server logs for full traceback.',
+                            'detail': detail,
                         },
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     )
