@@ -63,7 +63,8 @@ ALLOWED_HOSTS = [
 
 
 # Application definition
-# cloudinary apps must load before django.contrib.staticfiles (django-cloudinary-storage + WhiteNoise coexistence).
+# cloudinary_storage after django.contrib.staticfiles so collectstatic uses WhiteNoise without
+# Cloudinary intercepting static; STATICFILES_STORAGE below satisfies django-cloudinary-storage fallbacks.
 
 _INSTALLED_CORE = [
     'django.contrib.admin',
@@ -71,10 +72,10 @@ _INSTALLED_CORE = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'django.contrib.staticfiles',
 ]
 if USE_CLOUDINARY:
     _INSTALLED_CORE += ['cloudinary_storage', 'cloudinary']
-_INSTALLED_CORE += ['django.contrib.staticfiles']
 INSTALLED_APPS = _INSTALLED_CORE + [
     'rest_framework',
     'rest_framework.authtoken',
@@ -303,3 +304,7 @@ CSRF_COOKIE_PATH = '/'
 SESSION_COOKIE_PATH = '/'
 # False: token is mirrored in JSON for X-CSRFToken; cookie must still be stored/sent for Django's CSRF check.
 CSRF_COOKIE_HTTPONLY = False
+
+# Legacy fallback: Django 4.2+ uses STORAGES['staticfiles']; django-cloudinary-storage collectstatic
+# still accesses settings.STATICFILES_STORAGE — must exist on django.conf.settings (Django 6 has no default).
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
