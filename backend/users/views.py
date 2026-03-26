@@ -24,8 +24,23 @@ from django.db.models import F, Q, Count
 from django.db import transaction
 from django.core.files.base import ContentFile
 import io
+import logging
 import uuid
 from pypdf import PdfReader, PdfWriter
+
+logger = logging.getLogger(__name__)
+
+
+def _log_cloudinary_or_storage_error(exc: BaseException, context: str) -> str:
+    """Log full exception for ops; return a short message for API (no secrets)."""
+    msg = str(exc).strip() or repr(exc)
+    logger.exception('Ticket/media upload failed [%s]: %s', context, msg)
+    # Common Cloudinary HTTP body is in exc.args or attached message
+    for attr in ('http_body', 'message', 'args'):
+        raw = getattr(exc, attr, None)
+        if raw and isinstance(raw, str) and len(raw) < 2000:
+            logger.error('Cloudinary detail [%s] %s=%r', context, attr, raw)
+    return msg
 from .serializers import (
     UserRegistrationSerializer, 
     UserSerializer,
@@ -1549,7 +1564,17 @@ class TicketViewSet(viewsets.ModelViewSet):
 
                 serializer = self.get_serializer(data=ticket_data)
                 serializer.is_valid(raise_exception=True)
-                ticket = serializer.save(seller=request.user)
+                try:
+                    ticket = serializer.save(seller=request.user)
+                except Exception as e:
+                    _log_cloudinary_or_storage_error(e, 'ticket_create_auto_split')
+                    return Response(
+                        {
+                            'error': 'Failed to store ticket PDF (Cloudinary/storage). See server logs for details.',
+                            **({'detail': str(e)} if settings.DEBUG else {}),
+                        },
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
 
                 if not ticket.listing_group_id:
                     ticket.listing_group_id = listing_group_id
@@ -1571,7 +1596,17 @@ class TicketViewSet(viewsets.ModelViewSet):
 
                 serializer = self.get_serializer(data=ticket_data)
                 serializer.is_valid(raise_exception=True)
-                ticket = serializer.save(seller=request.user)
+                try:
+                    ticket = serializer.save(seller=request.user)
+                except Exception as e:
+                    _log_cloudinary_or_storage_error(e, 'ticket_create_multi_pdf')
+                    return Response(
+                        {
+                            'error': 'Failed to store ticket PDF (Cloudinary/storage). See server logs for details.',
+                            **({'detail': str(e)} if settings.DEBUG else {}),
+                        },
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
 
                 if not ticket.listing_group_id:
                     ticket.listing_group_id = listing_group_id
