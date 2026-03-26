@@ -193,19 +193,11 @@ MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 if USE_CLOUDINARY:
-    # django-cloudinary-storage uses the global cloudinary SDK config (cloudinary.uploader).
-    # The pycloudinary Config loads env on first import: if CLOUDINARY_CLOUD_NAME is set, it may
-    # IGNORE CLOUDINARY_URL and use separate CLOUDINARY_* keys — mismatched secrets cause "Invalid Signature".
-    # Always apply CLOUDINARY_URL explicitly when present so credentials are one consistent source.
-    CLOUDINARY_STORAGE = {
-        'SECURE': True,
-    }
-    import cloudinary
-
-    # Clear SDK defaults loaded from env before first import (may prefer CLOUDINARY_CLOUD_NAME over URL).
-    cloudinary.reset_config()
-
-    _cld_url = (os.environ.get('CLOUDINARY_URL') or '').strip()
+    # django-cloudinary-storage/app_settings.py expects CLOUDINARY_STORAGE to include CLOUD_NAME, API_KEY,
+    # API_SECRET (or it only sets `secure` and leaves SDK half-configured). Combined with pycloudinary
+    # loading CLOUDINARY_CLOUD_NAME before CLOUDINARY_URL, that caused "Invalid Signature" on upload.
+    # Parse CLOUDINARY_URL once; pass the same triple into CLOUDINARY_STORAGE + cloudinary.config().
+    _cld_url = (os.environ.get('CLOUDINARY_URL') or '').strip().strip('"').strip("'")
     if _cld_url:
         _parsed = urlparse(_cld_url)
         if (_parsed.scheme or '').lower() != 'cloudinary':
@@ -213,16 +205,10 @@ if USE_CLOUDINARY:
                 'CLOUDINARY_URL must use the cloudinary:// scheme (e.g. cloudinary://api_key:api_secret@cloud_name)'
             )
         _cn = (_parsed.hostname or '').strip()
-        _key = unquote(_parsed.username or '')
-        _secret = unquote(_parsed.password or '')
-        cloudinary.config(
-            cloud_name=_cn,
-            api_key=_key,
-            api_secret=_secret,
-            secure=True,
-        )
+        _key = unquote(_parsed.username or '').strip()
+        _secret = unquote(_parsed.password or '').strip()
         _logger.info(
-            'Cloudinary SDK configured from CLOUDINARY_URL (cloud_name=%s, api_key=%s…)',
+            'Cloudinary: using CLOUDINARY_URL (cloud_name=%s, api_key=%s…)',
             _cn,
             (_key[:6] + '…') if len(_key) > 6 else '(set)',
         )
@@ -230,16 +216,25 @@ if USE_CLOUDINARY:
         _cn = (os.environ.get('CLOUDINARY_CLOUD_NAME') or '').strip()
         _key = (os.environ.get('CLOUDINARY_API_KEY') or '').strip()
         _secret = (os.environ.get('CLOUDINARY_API_SECRET') or '').strip()
-        cloudinary.config(
-            cloud_name=_cn,
-            api_key=_key,
-            api_secret=_secret,
-            secure=True,
-        )
         _logger.info(
-            'Cloudinary SDK configured from CLOUDINARY_CLOUD_NAME / API_KEY / API_SECRET (cloud_name=%s)',
+            'Cloudinary: using CLOUDINARY_CLOUD_NAME / API_KEY / API_SECRET (cloud_name=%s)',
             _cn or '(empty)',
         )
+
+    CLOUDINARY_STORAGE = {
+        'SECURE': True,
+        'CLOUD_NAME': _cn,
+        'API_KEY': _key,
+        'API_SECRET': _secret,
+    }
+    import cloudinary
+
+    cloudinary.config(
+        cloud_name=_cn,
+        api_key=_key,
+        api_secret=_secret,
+        secure=True,
+    )
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

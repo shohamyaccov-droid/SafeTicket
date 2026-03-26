@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 """
-Master seed for production: artists (remote images), events, venues/cities, categories, admin user.
+Master seed for production: artists (remote images), events, venues/cities, admin user, QA superuser.
 
 Also resets ADMIN_EMAIL password to ADMIN_TEMP_PASSWORD (see constant below) — change it after login;
 the value is not printed to logs.
+
+Dedicated QA user (QA_USER_EMAIL / QA_USER_PASSWORD): staff + superuser for /admin and E2E; password is not printed.
 
 Uses get_or_create / update_or_create — safe to re-run (idempotent).
 
@@ -51,6 +53,11 @@ User = get_user_model()
 ADMIN_EMAIL = 'shohamyaccov@gmail.com'
 # Temporary login for /admin after seed — rotate after first sign-in.
 ADMIN_TEMP_PASSWORD = 'Shoham2026!'
+
+# Dedicated QA account for automated E2E (Django admin + API); idempotent — password reset each run.
+QA_USER_EMAIL = 'qa_bot@safeticket.com'
+QA_USER_USERNAME = 'qa_bot'
+QA_USER_PASSWORD = 'SafeTicketQA2026!'
 
 # Unsplash CDN (license: https://unsplash.com/license) — distinct music/live photos per artist.
 SEED_ARTISTS: list[dict] = [
@@ -202,6 +209,13 @@ def _download_to_imagefield(instance, field_name: str, url: str) -> None:
         field.save(fname, ContentFile(r.content), save=True)
     except Exception as ex:
         print(f'  [seed] skip {field_name} for {instance}: {ex}', flush=True)
+        err = str(ex).lower()
+        if 'signature' in err or 'invalid' in err or 'cloudinary' in err:
+            print(
+                '  [seed] Cloudinary/media hint: verify CLOUDINARY_URL (or CLOUDINARY_* env) matches '
+                'the dashboard; see safeticket.settings CLOUDINARY_STORAGE.',
+                flush=True,
+            )
 
 
 def seed_admin() -> None:
@@ -217,6 +231,30 @@ def seed_admin() -> None:
     u.save()
     print(
         f'[seed] admin OK: {u.username} (password reset, staff, superuser, seller)',
+        flush=True,
+    )
+
+
+def seed_qa_user() -> None:
+    """
+    Ensure QA bot user exists with staff/superuser; password set to QA_USER_PASSWORD (not logged).
+    Role seller so ticket upload E2E works without role changes.
+    """
+    u, created = User.objects.update_or_create(
+        username=QA_USER_USERNAME,
+        defaults={
+            'email': QA_USER_EMAIL,
+            'is_staff': True,
+            'is_superuser': True,
+            'role': 'seller',
+            'is_email_verified': True,
+        },
+    )
+    u.set_password(QA_USER_PASSWORD)
+    u.save()
+    action = 'created' if created else 'updated'
+    print(
+        f'[seed] QA user {action}: {QA_USER_USERNAME} <{QA_USER_EMAIL}> (staff, superuser, seller; password not printed)',
         flush=True,
     )
 
@@ -270,6 +308,7 @@ def seed_events() -> None:
 def main() -> int:
     print('[seed] starting seed_production.py', flush=True)
     seed_admin()
+    seed_qa_user()
     seed_artists()
     seed_events()
     print(
