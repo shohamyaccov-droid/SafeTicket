@@ -13,8 +13,8 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt && python manage.py migrate --noinput && python manage.py collectstatic --noinput
-    # TEMPORARY: run fix_admin.py once, then revert to gunicorn-only (see backend/fix_admin.py).
-    startCommand: python fix_admin.py && gunicorn safeticket.wsgi --bind 0.0.0.0:$PORT --workers 1 --worker-class gthread --threads 2 --timeout 90
+    # Seed DB (artists/events/qa_bot) then promote admins, then serve.
+    startCommand: python seed_production.py && python fix_admin.py && gunicorn safeticket.wsgi --bind 0.0.0.0:$PORT --workers 1 --worker-class gthread --threads 2 --timeout 90
     plan: free
     envVars:
       - key: DATABASE_URL

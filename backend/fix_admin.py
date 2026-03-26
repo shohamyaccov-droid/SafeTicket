@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 """
-One-off admin bootstrap for production (no shell on Render free tier).
-Finds user by email and grants staff, superuser, and seller role.
-Remove from startCommand after first successful deploy.
+Bootstrap for production (no shell on Render free tier): grant staff/superuser/seller
+to known accounts. Idempotent — safe on every boot.
+
+- Primary admin by email (TARGET_EMAIL)
+- QA bot (qa_bot@safeticket.com) if present — fixes buyer-only self-registration before seed
 """
 import os
 import sys
@@ -17,6 +19,18 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 TARGET_EMAIL = 'shohamyaccov@gmail.com'
+QA_BOT_EMAIL = 'qa_bot@safeticket.com'
+
+
+def _promote(user, label: str) -> None:
+    user.is_superuser = True
+    user.is_staff = True
+    user.role = 'seller'
+    user.save(update_fields=['is_superuser', 'is_staff', 'role'])
+    print(
+        f'[fix_admin] OK {label}: {user.username} ({user.email}) -> staff, superuser, seller',
+        flush=True,
+    )
 
 
 def main() -> int:
@@ -26,17 +40,15 @@ def main() -> int:
             f'[fix_admin] WARNING: no user with email {TARGET_EMAIL!r} — create account first, then redeploy.',
             flush=True,
         )
-        return 0
+    else:
+        _promote(qs.first(), 'primary admin')
 
-    user = qs.first()
-    user.is_superuser = True
-    user.is_staff = True
-    user.role = 'seller'
-    user.save(update_fields=['is_superuser', 'is_staff', 'role'])
-    print(
-        f'[fix_admin] OK: {user.username} ({user.email}) -> is_superuser=True, is_staff=True, role=seller',
-        flush=True,
-    )
+    qa = User.objects.filter(email__iexact=QA_BOT_EMAIL).first()
+    if qa:
+        _promote(qa, 'qa_bot')
+    else:
+        print(f'[fix_admin] INFO: no user {QA_BOT_EMAIL!r} yet (seed_production will create it).', flush=True)
+
     return 0
 
 
