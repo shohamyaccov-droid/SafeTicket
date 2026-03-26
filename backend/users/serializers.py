@@ -5,6 +5,21 @@ from django.db.models import Sum
 from .models import User, Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage
 
 
+def absolute_file_url(request, fieldfile):
+    """Absolute URL for a FileField/ImageField (local MEDIA or Cloudinary/S3 full URL)."""
+    if not fieldfile:
+        return None
+    try:
+        url = fieldfile.url
+    except (ValueError, AttributeError):
+        return None
+    if url.startswith('http://') or url.startswith('https://'):
+        return url
+    if request:
+        return request.build_absolute_uri(url)
+    return url
+
+
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
@@ -129,10 +144,7 @@ class ArtistSerializer(serializers.ModelSerializer):
     
     def get_image_url(self, obj):
         if obj.image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.image.url)
-            return obj.image.url
+            return absolute_file_url(self.context.get('request'), obj.image)
         return None
     
     def get_total_tickets_count(self, obj):
@@ -158,10 +170,7 @@ class ArtistListSerializer(serializers.ModelSerializer):
     
     def get_image_url(self, obj):
         if obj.image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.image.url)
-            return obj.image.url
+            return absolute_file_url(self.context.get('request'), obj.image)
         return None
     
     def get_total_tickets_count(self, obj):
@@ -191,10 +200,7 @@ class EventSerializer(serializers.ModelSerializer):
     
     def get_image_url(self, obj):
         if obj.image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.image.url)
-            return obj.image.url
+            return absolute_file_url(self.context.get('request'), obj.image)
         return None
     
     def get_tickets_count(self, obj):
@@ -219,11 +225,7 @@ class EventListSerializer(serializers.ModelSerializer):
     
     def get_image_url(self, obj):
         if obj.image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.image.url)
-            return obj.image.url
-        # Return placeholder if no image
+            return absolute_file_url(self.context.get('request'), obj.image)
         return None
     
     def get_tickets_count(self, obj):
@@ -297,10 +299,7 @@ class TicketSerializer(serializers.ModelSerializer):
     
     def get_pdf_file_url(self, obj):
         if obj.pdf_file:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.pdf_file.url)
-            return obj.pdf_file.url
+            return absolute_file_url(self.context.get('request'), obj.pdf_file)
         return None
     
     def validate(self, attrs):
@@ -479,10 +478,7 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
     def get_event_image_url(self, obj):
         """Get event image URL from ticket's event"""
         if obj.ticket and obj.ticket.event and obj.ticket.event.image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.ticket.event.image.url)
-            return obj.ticket.event.image.url
+            return absolute_file_url(self.context.get('request'), obj.ticket.event.image)
         return None
     
     def get_status_timeline(self, obj):
@@ -539,10 +535,7 @@ class ProfileListingSerializer(serializers.ModelSerializer):
     
     def get_event_image_url(self, obj):
         if obj.event and obj.event.image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.event.image.url)
-            return obj.event.image.url
+            return absolute_file_url(self.context.get('request'), obj.event.image)
         return None
     
     def get_event_name_display(self, obj):

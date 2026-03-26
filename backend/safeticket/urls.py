@@ -25,8 +25,9 @@ urlpatterns = [
     path('api/users/', include('users.urls')),
 ]
 
-# Serve media files in development
+# Dev: serve static from STATIC_ROOT. Media only from local disk (not Cloudinary).
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    if not getattr(settings, 'USE_CLOUDINARY', False):
+        urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 

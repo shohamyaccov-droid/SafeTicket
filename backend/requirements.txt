@@ -10,3 +10,5 @@ gunicorn>=21.0
 whitenoise>=6.6
 dj-database-url>=2.1
 psycopg2-binary>=2.9
+django-cloudinary-storage>=0.3.0
+cloudinary>=1.41.0

@@ -45,6 +45,12 @@ RELAX_PDF_UPLOAD_VALIDATION = os.environ.get('RELAX_PDF_UPLOAD_VALIDATION', 'Fal
     'yes',
 )
 
+# External media (Cloudinary) — avoids lost uploads on Render's ephemeral disk.
+# Set CLOUDINARY_URL (recommended) or CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET.
+USE_CLOUDINARY = bool(
+    (os.environ.get('CLOUDINARY_URL') or os.environ.get('CLOUDINARY_CLOUD_NAME') or '').strip()
+)
+
 # Host header must match for Django to serve the request; mismatch -> fast 400 (DisallowedHost), not a hang.
 # Not involved in TLS redirects (that would be SECURE_SSL_REDIRECT + proxy headers).
 ALLOWED_HOSTS = [
@@ -58,13 +64,17 @@ ALLOWED_HOSTS = [
 
 # Application definition
 
-INSTALLED_APPS = [
+_INSTALLED_CORE = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+]
+if USE_CLOUDINARY:
+    _INSTALLED_CORE += ['cloudinary_storage', 'cloudinary']
+INSTALLED_APPS = _INSTALLED_CORE + [
     'rest_framework',
     'rest_framework.authtoken',
     'rest_framework_simplejwt',
@@ -159,14 +169,34 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STORAGES = {
-    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
-    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
-}
+# Static: WhiteNoise. Media: local disk (dev) or Cloudinary (production) — PDFs, images, artist assets.
+if USE_CLOUDINARY:
+    STORAGES = {
+        'default': {'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage'},
+        'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+    }
+else:
+    STORAGES = {
+        'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+        'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+    }
 
 # Media files (user uploaded files like PDFs)
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+if USE_CLOUDINARY:
+    # django-cloudinary-storage uses Cloudinary URLs; CLOUDINARY_* from env (or CLOUDINARY_URL).
+    import cloudinary
+
+    if os.environ.get('CLOUDINARY_URL'):
+        pass  # SDK picks up CLOUDINARY_URL automatically
+    else:
+        cloudinary.config(
+            cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME', ''),
+            api_key=os.environ.get('CLOUDINARY_API_KEY', ''),
+            api_secret=os.environ.get('CLOUDINARY_API_SECRET', ''),
+        )
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

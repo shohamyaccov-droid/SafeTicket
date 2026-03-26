@@ -32,6 +32,9 @@ services:
       # Set to true only while testing uploads; uses looser PDF MIME + PyPDF + fallbacks (see settings.RELAX_PDF_UPLOAD_VALIDATION).
       - key: RELAX_PDF_UPLOAD_VALIDATION
         value: "false"
+      # Media (PDFs, images): paste from Cloudinary dashboard — enables persistent storage vs ephemeral disk.
+      - key: CLOUDINARY_URL
+        sync: false
 
   # React Frontend (Static Site)
   - type: web
