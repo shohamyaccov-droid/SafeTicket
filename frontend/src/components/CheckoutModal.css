@@ -808,6 +808,20 @@
   color: var(--primary-blue);
 }
 
+.success-primary-dashboard {
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  color: #fff;
+  border: none;
+  font-weight: 700;
+}
+
+.success-primary-dashboard:hover {
+  filter: brightness(1.06);
+  color: #fff;
+  border: none;
+}
+
 /* Legacy success styles for backward compatibility */
 .success-content {
   text-align: center;

@@ -38,6 +38,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const reservationRef = useRef(false); // Track if reservation was made
   const transactionCompleteRef = useRef(false); // Prevents timer/cleanup from reverting UI after successful order
   const paymentSubmittingRef = useRef(false); // Pause reservation timer while payment API runs
+  /** Synchronous snapshot so success UI never waits on PDF download or lost React state */
+  const successSnapshotRef = useRef(null);
   const navigate = useNavigate();
 
   // Get locked quantity from accepted offer if it exists
@@ -268,11 +270,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       }
       
       // CRITICAL: Store the actual paid amounts for the success screen (Phase 2: integers for negotiated)
-      setPaidAmounts({
+      const paidSnapshot = {
         baseAmount: Number.isInteger(baseAmount) ? String(baseAmount) : baseAmount.toFixed(2),
         serviceFee: Number.isInteger(serviceFee) ? String(serviceFee) : serviceFee.toFixed(2),
-        totalAmount: Number.isInteger(totalAmount) ? String(totalAmount) : totalAmount.toFixed(2)
-      });
+        totalAmount: Number.isInteger(totalAmount) ? String(totalAmount) : totalAmount.toFixed(2),
+      };
+      setPaidAmounts(paidSnapshot);
       
       // CRITICAL DEBUG: Trace all values before payment
       console.log('=== PAYMENT FLOW DEBUG ===');
@@ -441,35 +444,43 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
       console.log('Order response:', orderResponse);
 
-      if (!orderResponse.data || !orderResponse.data.id) {
+      const raw = orderResponse.data;
+      if (!raw) {
         throw new Error('יצירת ההזמנה נכשלה');
       }
-
-      // CRITICAL: Set order data BEFORE transitioning to success to prevent empty success screen / layout jump
-      setOrderId(orderResponse.data.id);
-      setOrderData(orderResponse.data);
-
-      // Clear reservation flag since purchase is complete
-      reservationRef.current = false;
-
-      // Step 3: Get PDF download URL (optional - download buttons work via API)
-      try {
-        const email = user ? null : guestForm.email.trim();
-        const pdfResponse = await ticketAPI.downloadPDF(ticket.id, email);
-
-        // Create blob URL for download
-        const blob = new Blob([pdfResponse.data], { type: 'application/pdf' });
-        const url = window.URL.createObjectURL(blob);
-        setPdfUrl(url);
-      } catch (pdfError) {
-        console.error('Error fetching PDF:', pdfError);
-        // PDF download will be available via the download button
+      const resolvedId = raw.id ?? raw.order_id ?? raw.order?.id ?? raw.pk;
+      if (resolvedId == null) {
+        throw new Error('יצירת ההזמנה נכשלה — לא התקבל מזהה הזמנה');
       }
+      const orderPayload = { ...raw, id: resolvedId };
 
-      // Transition to success ONLY after orderData is set (React batches these; success screen will have data)
+      // Snapshot FIRST (sync) — success UI must not depend on PDF or batched state
+      successSnapshotRef.current = {
+        orderId: resolvedId,
+        orderData: orderPayload,
+        paidAmounts: paidSnapshot,
+      };
+
+      setOrderId(resolvedId);
+      setOrderData(orderPayload);
+
+      reservationRef.current = false;
       transactionCompleteRef.current = true;
       setCheckoutSucceeded(true);
       setStep('success');
+
+      // PDF after success — never block transition (was causing payment form to reappear if PDF hung)
+      const emailForPdf = user ? null : guestForm.email.trim();
+      void (async () => {
+        try {
+          const pdfResponse = await ticketAPI.downloadPDF(ticket.id, emailForPdf);
+          const blob = new Blob([pdfResponse.data], { type: 'application/pdf' });
+          const url = window.URL.createObjectURL(blob);
+          setPdfUrl(url);
+        } catch (pdfError) {
+          console.error('Error fetching PDF:', pdfError);
+        }
+      })();
     } catch (err) {
       console.error('Payment error:', err);
       const message = err.response?.data?.detail ||
@@ -689,17 +700,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     onClose();
   };
 
-  // Success screen - Full-screen celebration (guard: prevent empty screen / layout jump)
-  if (step === 'success') {
-    if (!orderId && !orderData) {
-      return (
-        <div className="modal-overlay" onClick={handleClose}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ minHeight: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <p>טוען...</p>
-          </div>
-        </div>
-      );
-    }
+  // Success screen — must win over payment step if checkoutSucceeded (PDF no longer blocks transition)
+  if (checkoutSucceeded || step === 'success') {
+    const snap = successSnapshotRef.current;
+    const resolvedOrderId = orderId ?? snap?.orderId;
+    const resolvedOrderData = orderData ?? snap?.orderData;
+    const resolvedPaid = paidAmounts ?? snap?.paidAmounts;
     return (
       <div className="success-overlay" onClick={handleClose}>
         <div className="success-celebration" onClick={(e) => e.stopPropagation()}>
@@ -712,33 +718,33 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             </div>
             <h1 className="success-title-large">Order Confirmed</h1>
             <h2 className="success-subtitle">הזמנה אושרה בהצלחה!</h2>
-            <p className="success-order-number">מספר הזמנה: #{orderId}</p>
+            <p className="success-order-number">מספר הזמנה: #{resolvedOrderId}</p>
             
             <div className="success-ticket-summary">
               <h3>{ticket?.event_name || 'אירוע'}</h3>
               <div className="success-ticket-details">
                 <p><strong>מיקום:</strong> {ticket?.venue || 'לא צוין'}</p>
                 {isNegotiatedPrice && (
-                  <p><strong>מחיר מוסכם:</strong> <span style={{color: '#10b981', fontSize: '0.9em'}}>₪{paidAmounts?.baseAmount || effectivePrice}</span></p>
+                  <p><strong>מחיר מוסכם:</strong> <span style={{color: '#10b981', fontSize: '0.9em'}}>₪{resolvedPaid?.baseAmount || effectivePrice}</span></p>
                 )}
                 {quantity > 1 && (
                   <p><strong>כמות:</strong> {quantity}</p>
                 )}
-                {orderData?.total_paid_by_buyer != null || orderData?.final_negotiated_price != null ? (
+                {resolvedOrderData?.total_paid_by_buyer != null || resolvedOrderData?.final_negotiated_price != null ? (
                   <>
-                    {orderData?.final_negotiated_price != null && (
-                      <p><strong>מחיר מוסכם (למוכר):</strong> ₪{String(orderData.final_negotiated_price)}</p>
+                    {resolvedOrderData?.final_negotiated_price != null && (
+                      <p><strong>מחיר מוסכם (למוכר):</strong> ₪{String(resolvedOrderData.final_negotiated_price)}</p>
                     )}
-                    {orderData?.buyer_service_fee != null && Number(orderData.buyer_service_fee) > 0 && (
-                      <p><strong>עמלת שירות:</strong> ₪{String(orderData.buyer_service_fee)}</p>
+                    {resolvedOrderData?.buyer_service_fee != null && Number(resolvedOrderData.buyer_service_fee) > 0 && (
+                      <p><strong>עמלת שירות:</strong> ₪{String(resolvedOrderData.buyer_service_fee)}</p>
                     )}
-                    <p><strong>סה״כ שולם (לקונה):</strong> ₪{String(orderData.total_paid_by_buyer ?? orderData.total_amount)}</p>
+                    <p><strong>סה״כ שולם (לקונה):</strong> ₪{String(resolvedOrderData.total_paid_by_buyer ?? resolvedOrderData.total_amount)}</p>
                   </>
-                ) : paidAmounts ? (
+                ) : resolvedPaid ? (
                   <>
-                    <p><strong>מחיר כרטיסים:</strong> ₪{paidAmounts.baseAmount}</p>
-                    <p><strong>עמלת שירות (10%):</strong> ₪{paidAmounts.serviceFee}</p>
-                    <p><strong>סה"כ שולם:</strong> ₪{paidAmounts.totalAmount}</p>
+                    <p><strong>מחיר כרטיסים:</strong> ₪{resolvedPaid.baseAmount}</p>
+                    <p><strong>עמלת שירות (10%):</strong> ₪{resolvedPaid.serviceFee}</p>
+                    <p><strong>סה"כ שולם:</strong> ₪{resolvedPaid.totalAmount}</p>
                   </>
                 ) : (
                   <>
@@ -753,9 +759,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             <div className="success-actions">
               <div className="success-download-buttons">
                 {(() => {
-                  const ticketIds = orderData?.tickets?.length > 0
-                    ? orderData.tickets.map((t) => t.id)
-                    : (orderData?.ticket_ids?.length > 0 ? orderData.ticket_ids : (ticket?.id ? [ticket.id] : []));
+                  const ticketIds = resolvedOrderData?.tickets?.length > 0
+                    ? resolvedOrderData.tickets.map((t) => t.id)
+                    : (resolvedOrderData?.ticket_ids?.length > 0 ? resolvedOrderData.ticket_ids : (ticket?.id ? [ticket.id] : []));
                   const CheckIcon = () => (
                     <span className="download-check-icon" aria-hidden="true">✓</span>
                   );
@@ -808,12 +814,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   navigate('/dashboard');
                   onClose();
                 }}
-                className="success-close-button"
-                style={{ marginBottom: '8px', background: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)' }}
+                className="success-close-button success-primary-dashboard"
               >
-                לרכישות שלי בדשבורד
+                מעבר לדשבורד
               </button>
-              <button onClick={handleClose} className="success-close-button">
+              <button onClick={handleClose} className="success-close-button" type="button">
                 סגור
               </button>
             </div>
@@ -823,8 +828,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     );
   }
 
-  // Payment screen
-  if (step === 'payment') {
+  // Payment screen — never after a completed checkout (even if step lags)
+  if (step === 'payment' && !checkoutSucceeded) {
     return (
       <div className="modal-overlay" onClick={handleClose}>
         <div className="modal-content" onClick={(e) => e.stopPropagation()}>

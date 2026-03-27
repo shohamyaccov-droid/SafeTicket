@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ticketAPI, eventAPI, artistAPI } from '../services/api';
 import { getVenueSectionOptions } from '../utils/venueMaps';
+import { createListFetchAbort } from '../utils/listFetch';
+import SellFormSkeleton from '../components/skeletons/SellFormSkeleton';
 import './Sell.css';
 
 const Sell = () => {
@@ -37,6 +39,8 @@ const Sell = () => {
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [artistsLoading, setArtistsLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState(null);
+  const [catalogRetryKey, setCatalogRetryKey] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -45,14 +49,16 @@ const Sell = () => {
   // ALL useEffect HOOKS MUST ALSO BE CALLED BEFORE EARLY RETURNS
   // Parallel fetch: faster Sell page load; backend uses select_related / aggregates for events & artists
   useEffect(() => {
+    const { signal, clear, abort } = createListFetchAbort();
     let cancelled = false;
     const load = async () => {
       setArtistsLoading(true);
       setEventsLoading(true);
+      setCatalogError(null);
       try {
         const [artRes, evRes] = await Promise.all([
-          artistAPI.getArtists(),
-          eventAPI.getEvents(),
+          artistAPI.getArtists({ signal }),
+          eventAPI.getEvents({ signal }),
         ]);
         let artistsData = [];
         if (artRes.data) {
@@ -76,13 +82,18 @@ const Sell = () => {
           setArtists(artistsData);
           setEvents(upcomingEvents);
         }
-      } catch (error) {
-        console.error('Error fetching artists/events:', error);
+      } catch (err) {
+        console.error('Error fetching artists/events:', err);
         if (!cancelled) {
+          const code = err?.code;
+          const aborted =
+            code === 'ERR_CANCELED' || err?.name === 'CanceledError' || String(err?.message || '').toLowerCase().includes('canceled');
+          setCatalogError(aborted ? 'timeout' : 'error');
           setArtists([]);
           setEvents([]);
         }
       } finally {
+        clear();
         if (!cancelled) {
           setArtistsLoading(false);
           setEventsLoading(false);
@@ -92,8 +103,10 @@ const Sell = () => {
     load();
     return () => {
       cancelled = true;
+      abort();
+      clear();
     };
-  }, []);
+  }, [catalogRetryKey]);
 
   // Helper function to get event display name (handles sports events)
   const getEventDisplayName = (event) => {
@@ -564,6 +577,18 @@ const Sell = () => {
         {error && <div className="error-message">{error}</div>}
         
         <form onSubmit={handleSubmit}>
+          {catalogError && (
+            <div className="catalog-error-banner" role="alert">
+              <p>
+                {catalogError === 'timeout'
+                  ? 'הטעינה ארכה יותר מדי. לחצו לנסות שוב (השרת אולי מתעורר ממצב שינה).'
+                  : 'לא ניתן לטעון את רשימת האירועים. בדקו חיבור ונסו שוב.'}
+              </p>
+              <button type="button" className="catalog-retry-btn" onClick={() => setCatalogRetryKey((k) => k + 1)}>
+                נסה שוב
+              </button>
+            </div>
+          )}
           {/* Step 1: Category Selection */}
           <div className="form-group">
             <label htmlFor="category_select">סוג אירוע *</label>
@@ -583,72 +608,81 @@ const Sell = () => {
             </select>
           </div>
 
-          {/* Step 2: Artist Selection (ONLY for concerts) */}
-          {selectedCategory === 'concert' && (
+          {selectedCategory === 'concert' && artistsLoading && eventsLoading ? (
             <div className="form-group">
-              <label htmlFor="artist_select">בחר אמן *</label>
-              {artistsLoading ? (
-                <div className="loading-events">טוען אמנים...</div>
-              ) : (
-                <select
-                  id="artist_select"
-                  name="artist_select"
-                  value={selectedArtistId}
-                  onChange={handleArtistChange}
-                  className="premium-select"
-                  required
-                >
-                  <option value="">-- בחר אמן --</option>
-                  {artists.map((artist) => (
-                    <option key={artist.id} value={String(artist.id)}>
-                      {artist.name}
-                    </option>
-                  ))}
-                </select>
-              )}
+              <label>טוען אמנים ואירועים…</label>
+              <SellFormSkeleton />
             </div>
-          )}
+          ) : (
+            <>
+              {/* Step 2: Artist Selection (ONLY for concerts) */}
+              {selectedCategory === 'concert' && (
+                <div className="form-group">
+                  <label htmlFor="artist_select">בחר אמן *</label>
+                  {artistsLoading ? (
+                    <SellFormSkeleton />
+                  ) : (
+                    <select
+                      id="artist_select"
+                      name="artist_select"
+                      value={selectedArtistId}
+                      onChange={handleArtistChange}
+                      className="premium-select"
+                      required
+                    >
+                      <option value="">-- בחר אמן --</option>
+                      {artists.map((artist) => (
+                        <option key={artist.id} value={String(artist.id)}>
+                          {artist.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
 
-          {/* Step 3: Event Selection */}
-          <div className="form-group">
-            <label htmlFor="event_select">בחר אירוע *</label>
-            {eventsLoading ? (
-              <div className="loading-events">טוען אירועים...</div>
-            ) : (
-              <select
-                id="event_select"
-                name="event_select"
-                value={formData.event_id ? String(formData.event_id) : ''}
-                onChange={handleEventChange}
-                className="premium-select"
-                required
-                disabled={
-                  selectedCategory === 'concert' && !selectedArtistId
-                }
-              >
-                <option value="">-- בחר אירוע --</option>
-                {filteredEvents.map((event) => {
-                  const displayName = getEventDisplayName(event);
-                  const eventDate = event.date ? new Date(event.date).toLocaleDateString('he-IL', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  }) : '';
-                  const venueInfo = event.venue && event.city ? ` - ${event.venue}, ${event.city}` : '';
-                  return (
-                    <option key={event.id} value={String(event.id)}>
-                      {displayName}{venueInfo} {eventDate ? `• ${eventDate}` : ''}
-                    </option>
-                  );
-                })}
-              </select>
-            )}
-            {selectedCategory === 'concert' && !selectedArtistId && (
-              <small className="field-hint">אנא בחר אמן תחילה</small>
-            )}
-          </div>
+              {/* Step 3: Event Selection */}
+              <div className="form-group">
+                <label htmlFor="event_select">בחר אירוע *</label>
+                {eventsLoading ? (
+                  <SellFormSkeleton />
+                ) : (
+                  <select
+                    id="event_select"
+                    name="event_select"
+                    value={formData.event_id ? String(formData.event_id) : ''}
+                    onChange={handleEventChange}
+                    className="premium-select"
+                    required
+                    disabled={
+                      selectedCategory === 'concert' && !selectedArtistId
+                    }
+                  >
+                    <option value="">-- בחר אירוע --</option>
+                    {filteredEvents.map((event) => {
+                      const displayName = getEventDisplayName(event);
+                      const eventDate = event.date ? new Date(event.date).toLocaleDateString('he-IL', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      }) : '';
+                      const venueInfo = event.venue && event.city ? ` - ${event.venue}, ${event.city}` : '';
+                      return (
+                        <option key={event.id} value={String(event.id)}>
+                          {displayName}{venueInfo} {eventDate ? `• ${eventDate}` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
+                {selectedCategory === 'concert' && !selectedArtistId && (
+                  <small className="field-hint">אנא בחר אמן תחילה</small>
+                )}
+              </div>
+            </>
+          )}
 
           <div className="form-group">
             <label htmlFor="available_quantity">כמה כרטיסים ברצונך למכור? *</label>

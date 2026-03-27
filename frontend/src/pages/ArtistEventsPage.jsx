@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { artistAPI } from '../services/api';
 import EmailAlertModal from '../components/EmailAlertModal';
 import { getFullImageUrl } from '../utils/formatters';
+import { createListFetchAbort } from '../utils/listFetch';
+import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import './ArtistEventsPage.css';
 
 const ArtistEventsPage = () => {
@@ -11,20 +13,47 @@ const ArtistEventsPage = () => {
   const [artist, setArtist] = useState(null);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showAlertModal, setShowAlertModal] = useState(false);
 
   useEffect(() => {
-    const fetchArtistAndEvents = async () => {
-      try {
-        // Fetch artist details
-        const artistResponse = await artistAPI.getArtist(artistId);
-        setArtist(artistResponse.data);
+    if (!artistId) {
+      setLoading(false);
+      setArtist(null);
+      return;
+    }
 
-        // Fetch events for this artist
-        const eventsResponse = await artistAPI.getArtistEvents(artistId);
+    const { signal, clear, abort } = createListFetchAbort();
+    let cancelled = false;
+
+    const fetchArtistAndEvents = async () => {
+      setLoadError(null);
+      setLoading(true);
+      try {
+        const artistResponse = await artistAPI.getArtist(artistId, { signal });
+        if (cancelled) return;
+        setArtist(artistResponse.data);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Error fetching artist:', error);
+        const code = error?.code;
+        const aborted =
+          code === 'ERR_CANCELED' || error?.name === 'CanceledError' || String(error?.message || '').toLowerCase().includes('canceled');
+        setLoadError(aborted ? 'timeout' : 'error');
+        setArtist(null);
+        setEvents([]);
+        clear();
+        if (!cancelled) setLoading(false);
+        return;
+      }
+
+      try {
+        const eventsResponse = await artistAPI.getArtistEvents(artistId, { signal });
+        if (cancelled) return;
         let eventsData = [];
-        
+
         if (eventsResponse.data) {
           if (Array.isArray(eventsResponse.data)) {
             eventsData = eventsResponse.data;
@@ -32,21 +61,29 @@ const ArtistEventsPage = () => {
             eventsData = eventsResponse.data.results;
           }
         }
-        
-        // Events are already sorted by date (ascending) from the backend
+
         setEvents(Array.isArray(eventsData) ? eventsData : []);
       } catch (error) {
-        console.error('Error fetching artist and events:', error);
+        if (cancelled) return;
+        console.error('Error fetching artist events:', error);
+        const code = error?.code;
+        const aborted =
+          code === 'ERR_CANCELED' || error?.name === 'CanceledError' || String(error?.message || '').toLowerCase().includes('canceled');
+        setLoadError(aborted ? 'timeout' : 'error');
         setEvents([]);
       } finally {
-        setLoading(false);
+        clear();
+        if (!cancelled) setLoading(false);
       }
     };
-    
-    if (artistId) {
-      fetchArtistAndEvents();
-    }
-  }, [artistId]);
+
+    fetchArtistAndEvents();
+    return () => {
+      cancelled = true;
+      abort();
+      clear();
+    };
+  }, [artistId, retryKey]);
 
   const handleSeeTickets = (eventId) => {
     navigate(`/event/${eventId}`);
@@ -85,10 +122,8 @@ const ArtistEventsPage = () => {
 
   if (loading) {
     return (
-      <div className="artist-events-container">
-        <div className="loading-state">
-          <p>טוען אירועים...</p>
-        </div>
+      <div className="artist-events-container artist-events-container--loading">
+        <EventsPageSkeleton variant="compact" />
       </div>
     );
   }
@@ -97,7 +132,10 @@ const ArtistEventsPage = () => {
     return (
       <div className="artist-events-container">
         <div className="empty-state">
-          <p>אמן לא נמצא</p>
+          <p>{loadError === 'timeout' ? 'הטעינה ארכה יותר מדי. נסו שוב.' : 'אמן לא נמצא או שגיאת טעינה'}</p>
+          <button type="button" className="artist-events-retry" onClick={() => setRetryKey((k) => k + 1)}>
+            נסה שוב
+          </button>
         </div>
       </div>
     );

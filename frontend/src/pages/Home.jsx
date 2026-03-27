@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { artistAPI, eventAPI } from '../services/api';
 import { getFullImageUrl } from '../utils/formatters';
+import { createListFetchAbort } from '../utils/listFetch';
+import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import './Home.css';
 
 const Home = () => {
@@ -11,17 +13,25 @@ const Home = () => {
   const [artists, setArtists] = useState([]);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState('הכל');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch events and artists on mount
   useEffect(() => {
+    const { signal, clear, abort } = createListFetchAbort();
+    let cancelled = false;
+
     const fetchData = async () => {
+      setLoadError(null);
+      setLoading(true);
       try {
-        setLoading(true);
-        
-        // Fetch events (for trending section)
-        const eventsResponse = await eventAPI.getEvents();
+        const [eventsResponse, artistsResponse] = await Promise.all([
+          eventAPI.getEvents({ signal }),
+          artistAPI.getArtists({ signal }),
+        ]);
+        if (cancelled) return;
+
         let eventsData = [];
         if (eventsResponse.data) {
           if (Array.isArray(eventsResponse.data)) {
@@ -31,9 +41,7 @@ const Home = () => {
           }
         }
         setEvents(eventsData);
-        
-        // Fetch artists
-        const artistsResponse = await artistAPI.getArtists();
+
         let artistsData = [];
         if (artistsResponse.data) {
           if (Array.isArray(artistsResponse.data)) {
@@ -44,15 +52,30 @@ const Home = () => {
         }
         setArtists(artistsData);
       } catch (error) {
+        if (cancelled) return;
         console.error('Error fetching data:', error);
+        const msg = error?.message || '';
+        const code = error?.code;
+        const aborted =
+          code === 'ERR_CANCELED' ||
+          error?.name === 'CanceledError' ||
+          msg.toLowerCase().includes('canceled');
+        setLoadError(aborted ? 'timeout' : 'error');
         setEvents([]);
         setArtists([]);
       } finally {
-        setLoading(false);
+        clear();
+        if (!cancelled) setLoading(false);
       }
     };
+
     fetchData();
-  }, []);
+    return () => {
+      cancelled = true;
+      abort();
+      clear();
+    };
+  }, [retryKey]);
 
   const handleArtistClick = (artistId) => {
     navigate(`/artist/${artistId}`);
@@ -302,16 +325,26 @@ const Home = () => {
   // NOW ALL EARLY RETURNS CAN HAPPEN AFTER ALL HOOKS
   if (loading) {
     return (
-      <div className="home-container">
-        <div className="loading-state">
-          <p>טוען אירועים...</p>
-        </div>
+      <div className="home-container home-container--loading">
+        <EventsPageSkeleton variant="home" />
       </div>
     );
   }
 
   return (
     <div className="home-container">
+      {loadError && (
+        <div className="home-fetch-banner" role="alert">
+          <p>
+            {loadError === 'timeout'
+              ? 'הטעינה ארכה יותר מדי (ייתכן שהשרת מתעורר). נסו שוב.'
+              : 'לא הצלחנו לטעון את האירועים. בדקו את החיבור ונסו שוב.'}
+          </p>
+          <button type="button" className="home-retry-button" onClick={() => setRetryKey((k) => k + 1)}>
+            נסה שוב
+          </button>
+        </div>
+      )}
       {/* Hero Search Section */}
       <section className="hero-search-section">
         <div className="hero-content">

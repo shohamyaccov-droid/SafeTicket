@@ -7,6 +7,35 @@
   direction: rtl;
 }
 
+.event-group-container--loading {
+  padding: 1.5rem 1rem;
+}
+
+.event-group-fetch-banner {
+  max-width: 1400px;
+  margin: 0 auto 1rem;
+  padding: 1rem 1.25rem;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  color: #9a3412;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.event-group-retry {
+  padding: 0.5rem 1.25rem;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* ============================================
    TOP HEADER SECTION
    ============================================ */

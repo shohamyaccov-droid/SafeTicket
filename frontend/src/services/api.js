@@ -134,7 +134,7 @@ export const orderAPI = {
 };
 
 export const ticketAPI = {
-  getTickets: () => api.get('/users/tickets/'),
+  getTickets: (config = {}) => api.get('/users/tickets/', config),
   getTicket: (id) => api.get(`/users/tickets/${id}/`),
   getTicketDetails: (id) => api.get(`/users/tickets/${id}/details/`),
   createTicket: (data) => api.post('/users/tickets/', data),
@@ -161,7 +161,8 @@ export const ticketAPI = {
 };
 
 export const eventAPI = {
-  getEvents: (params = {}) => api.get('/users/events/', { params }),
+  /** Pass axios config (params, signal, timeout, etc.) */
+  getEvents: (config = {}) => api.get('/users/events/', config),
   getEvent: (id) => api.get(`/users/events/${id}/`),
   getEventTickets: (id, params = {}) => api.get(`/users/events/${id}/tickets/`, { params }),
   createEvent: (data) => api.post('/users/events/', data),
@@ -170,9 +171,9 @@ export const eventAPI = {
 };
 
 export const artistAPI = {
-  getArtists: (params = {}) => api.get('/users/artists/', { params }),
-  getArtist: (id) => api.get(`/users/artists/${id}/`),
-  getArtistEvents: (id) => api.get(`/users/artists/${id}/events/`),
+  getArtists: (config = {}) => api.get('/users/artists/', config),
+  getArtist: (id, config = {}) => api.get(`/users/artists/${id}/`, config),
+  getArtistEvents: (id, config = {}) => api.get(`/users/artists/${id}/events/`, config),
   createArtist: (data) => api.post('/users/artists/', data),
   updateArtist: (id, data) => api.put(`/users/artists/${id}/`, data),
   deleteArtist: (id) => api.delete(`/users/artists/${id}/`),

@@ -4,6 +4,8 @@ import { ticketAPI } from '../services/api';
 import { getTicketPrice } from '../utils/priceFormat';
 import BuyerListingPrice from '../components/BuyerListingPrice';
 import { translateSectionDisplay } from '../utils/venueMaps';
+import { createListFetchAbort } from '../utils/listFetch';
+import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import './EventGroupPage.css';
 
 const EventGroupPage = () => {
@@ -11,14 +13,22 @@ const EventGroupPage = () => {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
   const [expandedDateIndex, setExpandedDateIndex] = useState(null);
 
   useEffect(() => {
+    const { signal, clear, abort } = createListFetchAbort();
+    let cancelled = false;
+
     const fetchTickets = async () => {
+      setLoadError(null);
+      setLoading(true);
       try {
-        const response = await ticketAPI.getTickets();
+        const response = await ticketAPI.getTickets({ signal });
+        if (cancelled) return;
         let ticketsData = [];
-        
+
         if (response.data) {
           if (Array.isArray(response.data)) {
             ticketsData = response.data;
@@ -28,50 +38,57 @@ const EventGroupPage = () => {
             ticketsData = response.data.tickets;
           }
         }
-        
-        // Filter tickets by event name (decode the URL parameter)
+
         const decodedEventName = decodeURIComponent(eventName);
-        const filteredTickets = ticketsData.filter(ticket => 
-          ticket.event_name === decodedEventName
-        );
-        
-        // Group by date and sort
+        const filteredTickets = ticketsData.filter((ticket) => ticket.event_name === decodedEventName);
+
         const groupedByDate = {};
-        filteredTickets.forEach(ticket => {
+        filteredTickets.forEach((ticket) => {
           const dateKey = ticket.event_date ? new Date(ticket.event_date).toDateString() : 'TBA';
           if (!groupedByDate[dateKey]) {
             groupedByDate[dateKey] = [];
           }
           groupedByDate[dateKey].push(ticket);
         });
-        
-        // Convert to array and sort by date
+
         const sortedEvents = Object.entries(groupedByDate)
-          .map(([dateKey, tickets]) => ({
+          .map(([dateKey, tks]) => ({
             dateKey,
-            date: tickets[0].event_date,
-            tickets: tickets.sort((a, b) => {
+            date: tks[0].event_date,
+            tickets: tks.sort((a, b) => {
               const dateA = a.event_date ? new Date(a.event_date) : new Date(0);
               const dateB = b.event_date ? new Date(b.event_date) : new Date(0);
               return dateA - dateB;
-            })
+            }),
           }))
           .sort((a, b) => {
             const dateA = a.date ? new Date(a.date) : new Date(0);
             const dateB = b.date ? new Date(b.date) : new Date(0);
             return dateA - dateB;
           });
-        
+
         setTickets(sortedEvents);
       } catch (error) {
+        if (cancelled) return;
         console.error('Error fetching tickets:', error);
+        const code = error?.code;
+        const aborted =
+          code === 'ERR_CANCELED' || error?.name === 'CanceledError' || String(error?.message || '').toLowerCase().includes('canceled');
+        setLoadError(aborted ? 'timeout' : 'error');
         setTickets([]);
       } finally {
-        setLoading(false);
+        clear();
+        if (!cancelled) setLoading(false);
       }
     };
+
     fetchTickets();
-  }, [eventName]);
+    return () => {
+      cancelled = true;
+      abort();
+      clear();
+    };
+  }, [eventName, retryKey]);
 
   const handleBuy = (ticket) => {
     // Navigate to ticket selection page instead of opening checkout directly
@@ -156,16 +173,26 @@ const EventGroupPage = () => {
 
   if (loading) {
     return (
-      <div className="event-group-container">
-        <div className="loading-state">
-          <p>טוען אירועים...</p>
-        </div>
+      <div className="event-group-container event-group-container--loading">
+        <EventsPageSkeleton variant="compact" />
       </div>
     );
   }
 
   return (
     <div className="event-group-container">
+      {loadError && (
+        <div className="event-group-fetch-banner" role="alert">
+          <p>
+            {loadError === 'timeout'
+              ? 'הטעינה ארכה יותר מדי. נסו שוב (השרת אולי מתעורר).'
+              : 'לא ניתן לטעון כרטיסים. בדקו את החיבור.'}
+          </p>
+          <button type="button" className="event-group-retry" onClick={() => setRetryKey((k) => k + 1)}>
+            נסה שוב
+          </button>
+        </div>
+      )}
       {/* Top Header */}
       <section className="event-group-header">
         <h1 className="event-group-title">{decodedEventName}</h1>
