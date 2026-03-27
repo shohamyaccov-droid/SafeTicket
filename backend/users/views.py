@@ -1679,16 +1679,9 @@ class TicketViewSet(viewsets.ModelViewSet):
                 status__in=['paid', 'completed']
             )
             for order in orders:
-                if order.ticket_id == ticket.pk:
+                if order.covers_ticket(ticket.pk):
                     has_access = True
                     break
-                if ticket.pk in (order.ticket_ids or []):
-                    has_access = True
-                    break
-            if not has_access:
-                order = orders.filter(ticket=ticket).first()
-                if order:
-                    has_access = True
         
         # 3. Guest buyer: must provide email matching paid Order containing this ticket
         guest_email = request.query_params.get('email')
@@ -1698,7 +1691,7 @@ class TicketViewSet(viewsets.ModelViewSet):
                 status__in=['paid', 'completed']
             )
             for order in orders:
-                if order.ticket_id == ticket.pk or ticket.pk in (order.ticket_ids or []):
+                if order.covers_ticket(ticket.pk):
                     has_access = True
                     break
         
@@ -1716,16 +1709,46 @@ class TicketViewSet(viewsets.ModelViewSet):
         
         try:
             import os
-            content = ticket.pdf_file.read()
+            import requests
+
+            content = None
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                # Public raw PDFs may still require signed delivery URLs; unsigned FileField.read() can 403.
+                import cloudinary.utils
+
+                public_id = (ticket.pdf_file.name or '').replace('\\', '/')
+                url, _ = cloudinary.utils.cloudinary_url(
+                    public_id,
+                    resource_type='raw',
+                    type='upload',
+                    sign_url=True,
+                    secure=True,
+                )
+                r = requests.get(url, timeout=90)
+                r.raise_for_status()
+                content = r.content
+            else:
+                ticket.pdf_file.open('rb')
+                try:
+                    content = ticket.pdf_file.read()
+                finally:
+                    ticket.pdf_file.close()
+
             filename = os.path.basename(ticket.pdf_file.name)
+
             safe_filename = f"ticket_{ticket.id}_{filename}" if filename else f"ticket_{ticket.id}.pdf"
+            # ASCII-only filename for Content-Disposition (avoid Latin-1 encoding errors)
+            safe_ascii = ''.join(c if ord(c) < 128 and c not in '"\\' else '_' for c in safe_filename) or f'ticket_{ticket.id}.pdf'
+
             from django.http import HttpResponse
             response = HttpResponse(content, content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename="{safe_filename}"'
+            response['Content-Disposition'] = f'attachment; filename="{safe_ascii}"'
             return response
         except Exception as e:
+            logger.exception('download_pdf failed for ticket %s', ticket.pk)
+            err_msg = str(e) if settings.DEBUG else 'Could not retrieve PDF file.'
             return Response(
-                {'error': f'Error opening file: {str(e)}'},
+                {'error': err_msg},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -1920,7 +1943,11 @@ class EventViewSet(viewsets.ModelViewSet):
         release_abandoned_carts()
         # Only show upcoming events (past events are hidden from marketplace feed)
         now = timezone.now()
-        queryset = Event.objects.filter(date__gte=now).order_by('date', 'name')
+        queryset = (
+            Event.objects.filter(date__gte=now)
+            .select_related('artist')
+            .order_by('date', 'name')
+        )
         
         # Optional: Filter by artist if provided
         artist_id = self.request.query_params.get('artist', None)

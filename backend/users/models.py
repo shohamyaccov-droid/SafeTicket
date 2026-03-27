@@ -360,6 +360,26 @@ class Order(models.Model):
     # Multi-ticket support: list of ticket IDs for download (when quantity > 1)
     ticket_ids = models.JSONField(default=list, blank=True, help_text='List of ticket IDs in this order')
     
+    def covers_ticket(self, ticket_id):
+        """True if this order includes the given ticket (FK or JSON list; int/str safe)."""
+        if ticket_id is None:
+            return False
+        if self.ticket_id is not None:
+            try:
+                if int(self.ticket_id) == int(ticket_id):
+                    return True
+            except (TypeError, ValueError):
+                if str(self.ticket_id) == str(ticket_id):
+                    return True
+        for x in (self.ticket_ids or []):
+            try:
+                if int(x) == int(ticket_id):
+                    return True
+            except (TypeError, ValueError):
+                if str(x) == str(ticket_id):
+                    return True
+        return False
+    
     def __str__(self):
         if self.user:
             return f"Order {self.id} - {self.user.username}"

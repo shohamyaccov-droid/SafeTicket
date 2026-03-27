@@ -15,10 +15,7 @@ def user_can_access_ticket_pdf(user, ticket) -> bool:
         return True
     qs = Order.objects.filter(user=user, status__in=['paid', 'completed']).only('ticket_id', 'ticket_ids')
     for o in qs.iterator():
-        if o.ticket_id == ticket.id:
-            return True
-        tids = o.ticket_ids or []
-        if ticket.id in tids:
+        if o.covers_ticket(ticket.id):
             return True
     return False
 
