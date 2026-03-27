@@ -311,6 +311,23 @@
   direction: rtl;
 }
 
+.price-row--unit {
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.price-value--block {
+  flex-shrink: 0;
+}
+
+.price-summary-note {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.45;
+  padding-top: 0.25rem;
+}
+
 .price-label {
   font-size: 1rem;
   color: var(--text-secondary);

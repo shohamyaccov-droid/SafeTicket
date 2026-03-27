@@ -261,7 +261,7 @@ const InteractiveMenoraMap = ({ activeSection, onSectionClick, sectionPrices = {
             // STRICT MATCHING: Must match EXACT string ID ('5 Lower' !== '5 Upper')
             const isActive = activeSectionId !== null && activeSectionId === section.id;
 
-            // Lowest price (including buyer fee) for this section, keyed by exact section.id ("5 Lower"/"5 Upper")
+            // Lowest seller asking price (base, before buyer fee) for this section
             const rawPrice = lowestPrices[section.id];
             const price = rawPrice !== undefined && rawPrice !== null ? Number(rawPrice) : null;
             const hasPrice = price !== null && !Number.isNaN(price);

@@ -7,7 +7,8 @@ import Toast from '../components/Toast';
 import VenueMapPin from '../components/VenueMapPin';
 import InteractiveMenoraMap from '../components/InteractiveMenoraMap';
 import { VENUE_MAPS, getVenueConfig, normalizeSection } from '../utils/venueMaps';
-import { getTicketPrice, getUnitPriceWithFee } from '../utils/priceFormat';
+import { getTicketPrice } from '../utils/priceFormat';
+import BuyerListingPrice from '../components/BuyerListingPrice';
 import { getFullImageUrl } from '../utils/formatters';
 import './EventDetailsPage.css';
 
@@ -409,7 +410,7 @@ const EventDetailsPage = () => {
     }
   }, [ticketGroups]);
 
-  // Lowest price per section INCLUDING 10% buyer fee (rounded up)
+  // Lowest seller asking price (base) per section — matches ticket cards and negotiation
   const lowestPricesPerSection = useMemo(() => {
     const prices = {};
     try {
@@ -420,9 +421,8 @@ const EventDetailsPage = () => {
         if (!sectionId) return;
         const base = parseFloat(group.price);
         if (isNaN(base)) return;
-        const priceWithFee = getUnitPriceWithFee(base);
-        if (prices[sectionId] === undefined || priceWithFee < prices[sectionId]) {
-          prices[sectionId] = priceWithFee;
+        if (prices[sectionId] === undefined || base < prices[sectionId]) {
+          prices[sectionId] = base;
         }
       });
     } catch (error) {
@@ -938,9 +938,6 @@ const EventDetailsPage = () => {
               const splitType = normalizeSplitType(splitTypeRaw);
               // Persist split type on the group itself for downstream consumers (e.g. checkout)
               group.split_type = splitTypeRaw;
-              const basePriceStr = getTicketPrice({ original_price: group.price, asking_price: group.price });
-              const basePriceNum = parseFloat(basePriceStr);
-              const displayPrice = !isNaN(basePriceNum) ? getUnitPriceWithFee(basePriceNum) : basePriceStr;
               const groupId = group.listing_group_id || group.id;
               const isExpanded = activeTicketId === groupId;
               
@@ -1015,8 +1012,7 @@ const EventDetailsPage = () => {
                     {/* Left Side: Price */}
                     <div className="ticket-row-price">
                       <div className="ticket-price-container">
-                        <div className="price-amount">₪{displayPrice}</div>
-                        <div className="fee-included-text">לכרטיס כולל עמלות</div>
+                        <BuyerListingPrice ticket={firstTicket} />
                       </div>
                     </div>
                   </div>

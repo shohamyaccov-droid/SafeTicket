@@ -333,6 +333,21 @@
   direction: rtl;
 }
 
+.ticket-detail-row--price {
+  align-items: flex-start;
+}
+
+.ticket-price-buyer {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.ticket-price-buyer .buyer-listing-price {
+  align-items: flex-end;
+}
+
 .ticket-detail-row .quantity-value {
   display: flex;
   align-items: center;

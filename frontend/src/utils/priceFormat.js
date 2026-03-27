@@ -32,6 +32,17 @@ export const getUnitPriceWithFee = (basePrice) => {
 };
 
 /**
+ * Buyer service fee in whole shekels for one unit (matches checkout: ceil(base×1.10) − rounded base).
+ */
+export const getBuyerServiceFeeShekels = (basePrice) => {
+  const base = parseFloat(String(basePrice ?? 0));
+  if (isNaN(base) || base <= 0) return 0;
+  const unitBase = Math.round(base);
+  if (unitBase <= 0) return 0;
+  return getUnitPriceWithFee(unitBase) - unitBase;
+};
+
+/**
  * Calculate total price for quantity: unitPriceWithFee * quantity.
  * Ensures unitPrice * quantity === totalPrice (no rounding drift).
  */

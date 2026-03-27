@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ticketAPI } from '../services/api';
 import CheckoutModal from '../components/CheckoutModal';
-import { getTicketPrice } from '../utils/priceFormat';
+import { getTicketPrice, getTotalWithFee, formatPrice } from '../utils/priceFormat';
+import BuyerListingPrice from '../components/BuyerListingPrice';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import './TicketSelectionPage.css';
 
@@ -123,12 +124,11 @@ const TicketSelectionPage = () => {
   };
 
   // Calculate total price (updates dynamically)
-  const calculateTotal = () => {
+  const calculateEstimatedTotalWithFee = () => {
     if (!ticket) return '0';
-    const price = parseFloat(getTicketPrice(ticket));
-    const total = price * quantity;
-    // Preserve decimal precision
-    return total.toFixed(2);
+    const base = parseFloat(getTicketPrice(ticket));
+    if (Number.isNaN(base) || base <= 0) return '0';
+    return String(getTotalWithFee(base, quantity));
   };
 
   // Calculate percentage of tickets left (for social proof)
@@ -293,18 +293,23 @@ const TicketSelectionPage = () => {
 
           {/* Price Summary */}
           <div className="price-summary">
-            <div className="price-row">
-              <span className="price-label">מחיר ליחידה:</span>
-              <span className="price-value">₪{getTicketPrice(ticket)}</span>
+            <div className="price-row price-row--unit">
+              <span className="price-label">מחיר ליחידה (בסיס למוכר):</span>
+              <div className="price-value price-value--block">
+                <BuyerListingPrice ticket={ticket} />
+              </div>
             </div>
             <div className="price-row">
               <span className="price-label">כמות:</span>
               <span className="price-value">{quantity}</span>
             </div>
             <div className="price-row total-row">
-              <span className="price-label">סה"כ:</span>
-              <span className="price-value total-price">₪{calculateTotal()}</span>
+              <span className="price-label">סה״כ משוער לתשלום:</span>
+              <span className="price-value total-price">
+                ₪{formatPrice(calculateEstimatedTotalWithFee())}
+              </span>
             </div>
+            <p className="price-summary-note">הסכום כולל עמלת שירות (10%) — יופיע בפירוט מלא בקופה לפני התשלום.</p>
           </div>
 
           {/* Validation Message */}

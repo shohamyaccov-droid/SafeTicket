@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ticketAPI } from '../services/api';
 import { getTicketPrice } from '../utils/priceFormat';
+import BuyerListingPrice from '../components/BuyerListingPrice';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import './EventGroupPage.css';
 
@@ -255,9 +256,11 @@ const EventGroupPage = () => {
                       {eventGroup.tickets.map((ticket, ticketIndex) => (
                         <div key={ticket.id || ticketIndex} className="ticket-item">
                           <div className="ticket-details">
-                            <div className="ticket-detail-row">
-                              <span className="ticket-label">מחיר:</span>
-                              <span className="ticket-value price-value">₪{getTicketPrice(ticket)}</span>
+                            <div className="ticket-detail-row ticket-detail-row--price">
+                              <span className="ticket-label">מחיר מוכר (לפני עמלה):</span>
+                              <div className="ticket-value ticket-price-buyer">
+                                <BuyerListingPrice ticket={ticket} compact />
+                              </div>
                             </div>
                             {/* Display seating information - prefer section/row format */}
                             {(ticket?.section || ticket?.row) ? (
