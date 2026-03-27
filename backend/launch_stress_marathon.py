@@ -85,11 +85,11 @@ def run_pdf_subprocess() -> dict:
     if not out:
         return {"ok": False, "exit_code": proc.returncode, "stderr": err[:2000], "parse_error": "empty_stdout"}
     try:
-        # Last JSON object in output (script prints one JSON)
-        start = out.rfind("{")
+        # Single root object (rfind('{') breaks on nested objects — use raw_decode from first '{')
+        start = out.find("{")
         if start == -1:
             return {"ok": False, "stderr": err[:500], "parse_error": "no_json", "stdout_tail": out[-800:]}
-        data = json.loads(out[start:])
+        data, _ = json.JSONDecoder().raw_decode(out, start)
         data["_subprocess_exit"] = proc.returncode
         return data
     except json.JSONDecodeError as e:

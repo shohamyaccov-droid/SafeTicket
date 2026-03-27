@@ -75,17 +75,56 @@ def _download_ticket_pdf_bytes(ticket):
     Load PDF bytes from Cloudinary-backed FileField. Tries public URL, then signed URL, then storage open().
     """
     import requests
+    import cloudinary.api
     import cloudinary.utils
 
     public_id = (ticket.pdf_file.name or '').replace('\\', '/')
+
+    def _public_id_variants(pid: str):
+        """django-cloudinary-storage PREFIX (MEDIA_URL) may or may not match Cloudinary public_id."""
+        pid = pid.strip().strip('/')
+        if not pid:
+            return []
+        out = [pid]
+        media_prefix = (getattr(settings, 'MEDIA_URL', 'media/') or '').strip().strip('/')
+        if media_prefix and pid.startswith(media_prefix + '/'):
+            out.append(pid[len(media_prefix) + 1 :])
+        elif media_prefix and not pid.startswith(media_prefix):
+            out.append(f'{media_prefix}/{pid}')
+        seen = set()
+        uniq = []
+        for x in out:
+            if x not in seen:
+                seen.add(x)
+                uniq.append(x)
+        return uniq
+
     errors = []
 
     def _try_http(label, url):
         if not url or not str(url).startswith('http'):
             return None
-        r = requests.get(url, timeout=90)
+        r = requests.get(
+            url,
+            timeout=90,
+            headers={'User-Agent': 'SafeTicket-PDF/1.0'},
+        )
         r.raise_for_status()
         return r.content
+
+    # 0) Admin API — canonical secure_url (avoids delivery/signature mismatches vs utils.cloudinary_url)
+    if public_id:
+        last_err = None
+        for pid in _public_id_variants(public_id):
+            try:
+                info = cloudinary.api.resource(pid, resource_type='raw')
+                url = (info or {}).get('secure_url') or (info or {}).get('url')
+                if url:
+                    return _try_http('api_resource', url)
+            except Exception as e:
+                last_err = e
+        if last_err is not None:
+            errors.append(('api_resource', str(last_err)[:400]))
 
     # 1) Public delivery URL (CloudinaryResource / FileField.url)
     try:
