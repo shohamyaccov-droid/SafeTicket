@@ -1171,7 +1171,7 @@ const Dashboard = () => {
                             <span className="payout-label">סה"כ צפוי לתשלום:</span>
                             <span className="payout-value">₪{formatPrice(summary.total_expected_payout || 0)}</span>
                           </div>
-                          <p className="payout-note">תשלום יועבר לאחר סיום האירוע (24 שעות)</p>
+                          <p className="payout-note">הכספים נשמרים בנאמנות (Escrow) ואינם משוחררים למוכר מיד עם המכירה. שחרור תמלוגים — בדרך כלל 24 שעות לאחר מועד תחילת האירוע, בכפוף לסטטוס העסקה.</p>
                         </div>
                       </div>
                     )}
@@ -1207,6 +1207,16 @@ const Dashboard = () => {
                                   <span role="img" aria-label="calendar">📅</span>{' '}
                                   {formatDate(listing.event_date_display || listing.event_date)}
                                 </div>
+                                {['sold', 'pending_payout', 'paid_out'].includes(listing.status) && listing.escrow_payout_status && (
+                                  <div className="escrow-seller-note" style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.35rem', lineHeight: 1.45 }}>
+                                    {listing.escrow_payout_status === 'paid' && 'התשלום שוחרר למוכר.'}
+                                    {listing.escrow_payout_status === 'eligible' && 'הכסף בנאמנות — זכאי לשחרור תשלום (לאחר האירוע).'}
+                                    {listing.escrow_payout_status === 'locked' && listing.escrow_payout_eligible_date &&
+                                      `הכסף בנאמנות. ישוחרר ב-${formatDate(listing.escrow_payout_eligible_date)} (24 שעות לאחר האירוע)`}
+                                    {listing.escrow_payout_status === 'locked' && !listing.escrow_payout_eligible_date &&
+                                      'הכסף בנאמנות עד לאחר האירוע ולפי תנאי הפלטפורמה.'}
+                                  </div>
+                                )}
                               </div>
                               <span className="row-quantity">{listing.available_quantity || 1} כרטיסים</span>
                               <span className="row-price">

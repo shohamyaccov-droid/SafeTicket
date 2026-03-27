@@ -35,6 +35,9 @@ const Footer = () => {
               <li>
                 <Link to="/terms">תקנון ותנאי שימוש</Link>
               </li>
+              <li>
+                <Link to="/refunds">אחריות והחזרים</Link>
+              </li>
             </ul>
           </div>
         </div>

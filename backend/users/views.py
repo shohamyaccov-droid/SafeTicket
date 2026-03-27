@@ -45,6 +45,11 @@ def _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity)
     order.total_paid_by_buyer = breakdown['total_paid_by_buyer']
     order.net_seller_revenue = breakdown['net_seller_revenue']
     order.related_offer = negotiated_offer if negotiated_offer else None
+    ped = compute_payout_eligible_date(ticket)
+    order.payout_eligible_date = ped
+    order.payout_status = 'locked'
+    if ped is not None and timezone.now() >= ped:
+        order.payout_status = 'eligible'
     order.save(
         update_fields=[
             'final_negotiated_price',
@@ -52,6 +57,8 @@ def _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity)
             'total_paid_by_buyer',
             'net_seller_revenue',
             'related_offer',
+            'payout_eligible_date',
+            'payout_status',
             'updated_at',
         ]
     )
@@ -86,7 +93,7 @@ from .serializers import (
     ContactMessageSerializer
 )
 from .models import Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage
-from .pricing import compute_order_price_breakdown
+from .pricing import compute_order_price_breakdown, compute_payout_eligible_date
 from django.utils import timezone
 from datetime import timedelta
 from django.conf import settings
@@ -650,6 +657,13 @@ def user_activity(request):
     """
     try:
         user = request.user
+
+        # Escrow: promote locked → eligible when payout window opens
+        Order.objects.filter(
+            payout_status='locked',
+            payout_eligible_date__isnull=False,
+            payout_eligible_date__lte=timezone.now(),
+        ).update(payout_status='eligible')
         
         # Get purchases (orders)
         purchases = Order.objects.filter(

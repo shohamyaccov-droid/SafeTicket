@@ -5,8 +5,11 @@ Aligned with frontend: negotiated total = ceil(base * 1.10), fee = ceil(base * 0
 from __future__ import annotations
 
 import math
+from datetime import timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Optional
+
+from django.utils import timezone
 
 if TYPE_CHECKING:
     from .models import Offer, Ticket
@@ -47,3 +50,23 @@ def compute_order_price_breakdown(
         'total_paid_by_buyer': total_paid_dec,
         'net_seller_revenue': net,
     }
+
+
+def compute_payout_eligible_date(ticket: 'Ticket'):
+    """
+    Escrow: seller funds unlock 24 hours after event start (event date/time in DB).
+    Returns timezone-aware datetime or None if event time unknown.
+    """
+    event_dt = None
+    try:
+        if ticket.event_id and ticket.event:
+            event_dt = ticket.event.date
+    except Exception:
+        event_dt = None
+    if event_dt is None:
+        event_dt = ticket.event_date
+    if event_dt is None:
+        return None
+    if timezone.is_naive(event_dt):
+        event_dt = timezone.make_aware(event_dt, timezone.get_current_timezone())
+    return event_dt + timedelta(hours=24)

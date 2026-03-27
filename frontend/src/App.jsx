@@ -17,8 +17,9 @@ import Dashboard from './pages/Dashboard';
 import AdminVerificationPage from './pages/AdminVerificationPage';
 import FAQ from './pages/FAQ';
 import Contact from './pages/Contact';
-import Terms from './pages/Terms';
-import WhatsAppButton from './components/WhatsAppButton';
+import TermsPage from './pages/TermsPage';
+import RefundsPage from './pages/RefundsPage';
+import FloatingWhatsApp from './components/FloatingWhatsApp';
 import Footer from './components/Footer';
 import ScrollToTop from './components/ScrollToTop';
 import './App.css';
@@ -49,11 +50,12 @@ function App() {
               <Route path="/admin/verification" element={<AdminVerificationPage />} />
               <Route path="/faq" element={<FAQ />} />
               <Route path="/contact" element={<Contact />} />
-              <Route path="/terms" element={<Terms />} />
+              <Route path="/terms" element={<TermsPage />} />
+              <Route path="/refunds" element={<RefundsPage />} />
             </Routes>
           </main>
           <Footer />
-          <WhatsAppButton />
+          <FloatingWhatsApp />
         </div>
       </Router>
     </AuthProvider>

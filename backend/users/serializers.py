@@ -118,10 +118,12 @@ class OrderSerializer(serializers.ModelSerializer):
             'id', 'user', 'ticket', 'ticket_info', 'tickets', 'ticket_ids', 'guest_email', 'guest_phone', 'status',
             'total_amount', 'quantity', 'event_name', 'created_at',
             'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'total_paid_by_buyer', 'net_seller_revenue',
+            'payout_status', 'payout_eligible_date',
         )
         read_only_fields = (
             'id', 'created_at', 'status', 'ticket_info', 'tickets', 'ticket_ids',
             'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'total_paid_by_buyer', 'net_seller_revenue',
+            'payout_status', 'payout_eligible_date',
         )
     
     def get_tickets(self, obj):
@@ -493,9 +495,10 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
             'event_name', 'created_at', 'pdf_download_url', 'receipt_url',
             'event_image_url', 'status_timeline',
             'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'total_paid_by_buyer', 'net_seller_revenue',
+            'payout_status', 'payout_eligible_date',
         )
         read_only_fields = fields
-    
+
     def get_tickets(self, obj):
         """Return array of tickets with id and pdf_file_url for multi-ticket downloads"""
         ids = getattr(obj, 'ticket_ids', None) or []
@@ -600,6 +603,8 @@ class ProfileListingSerializer(serializers.ModelSerializer):
     venue_display = serializers.SerializerMethodField()
     expected_payout = serializers.SerializerMethodField()
     order_count = serializers.SerializerMethodField()
+    escrow_payout_status = serializers.SerializerMethodField()
+    escrow_payout_eligible_date = serializers.SerializerMethodField()
     
     class Meta:
         model = Ticket
@@ -608,9 +613,26 @@ class ProfileListingSerializer(serializers.ModelSerializer):
             'section', 'row', 'seat_numbers',
             'original_price', 'asking_price', 'is_together', 'available_quantity', 'status', 'created_at',
             'event_image_url', 'event_name_display', 'event_date_display', 'venue_display',
-            'expected_payout', 'order_count'
+            'expected_payout', 'order_count',
+            'escrow_payout_status', 'escrow_payout_eligible_date',
         )
         read_only_fields = fields
+
+    def _primary_order_for_sold_ticket(self, obj):
+        if obj.status not in ['sold', 'pending_payout', 'paid_out']:
+            return None
+        order = (
+            Order.objects.filter(status__in=['paid', 'completed'])
+            .filter(Q(ticket_id=obj.id) | Q(ticket_ids__contains=[obj.id]))
+            .order_by('-created_at')
+            .first()
+        )
+        if order is None:
+            for o in Order.objects.filter(status__in=['paid', 'completed']).order_by('-created_at')[:200]:
+                if o.covers_ticket(obj.id):
+                    order = o
+                    break
+        return order
     
     def get_event_image_url(self, obj):
         if obj.event and obj.event.image:
@@ -630,20 +652,22 @@ class ProfileListingSerializer(serializers.ModelSerializer):
         """Sold listing: seller net from order row when present, else listing asking_price."""
         if obj.status not in ['sold', 'pending_payout', 'paid_out']:
             return None
-        order = (
-            Order.objects.filter(status__in=['paid', 'completed'])
-            .filter(Q(ticket_id=obj.id) | Q(ticket_ids__contains=[obj.id]))
-            .order_by('-created_at')
-            .first()
-        )
-        if order is None:
-            for o in Order.objects.filter(status__in=['paid', 'completed']).order_by('-created_at')[:200]:
-                if o.covers_ticket(obj.id):
-                    order = o
-                    break
+        order = self._primary_order_for_sold_ticket(obj)
         if order and order.net_seller_revenue is not None:
             return float(order.net_seller_revenue)
         return float(obj.asking_price)
+
+    def get_escrow_payout_status(self, obj):
+        order = self._primary_order_for_sold_ticket(obj)
+        if not order:
+            return None
+        return order.payout_status
+
+    def get_escrow_payout_eligible_date(self, obj):
+        order = self._primary_order_for_sold_ticket(obj)
+        if not order or not order.payout_eligible_date:
+            return None
+        return order.payout_eligible_date.isoformat()
     
     def get_order_count(self, obj):
         """Get number of orders for this ticket"""

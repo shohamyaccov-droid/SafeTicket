@@ -395,7 +395,25 @@ class Order(models.Model):
         blank=True,
         help_text='Amount seller receives for this sale (negotiated base; no extra commission here)',
     )
-    
+
+    # Escrow / seller payout (funds held until after event + 24h)
+    PAYOUT_STATUS_CHOICES = [
+        ('locked', 'Locked'),
+        ('eligible', 'Eligible'),
+        ('paid', 'Paid'),
+    ]
+    payout_status = models.CharField(
+        max_length=20,
+        choices=PAYOUT_STATUS_CHOICES,
+        default='locked',
+        help_text='Escrow lifecycle: locked → eligible (after event+24h) → paid',
+    )
+    payout_eligible_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When seller payout becomes eligible (24 hours after event start)',
+    )
+
     def covers_ticket(self, ticket_id):
         """True if this order includes the given ticket (FK or JSON list; int/str safe)."""
         if ticket_id is None:
