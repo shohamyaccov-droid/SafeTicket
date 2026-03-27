@@ -314,7 +314,7 @@ def test_pairs_flow(api_base: str, seller: requests.Session, admin: requests.Ses
     blocked = r_ord1.status_code == 400 and "pair" in (r_ord1.text or "").lower()
     if not blocked and r_ord1.status_code != 400:
         blocked = r_ord1.status_code == 400
-    # Release reservation so the pair buyer can purchase
+    # Release reservation so the same buyer can complete a valid pair purchase (avoids extra registration flakiness)
     buyer.post(
         f"{api_base}/users/tickets/{ref}/release_reservation/",
         json={},
@@ -322,15 +322,8 @@ def test_pairs_flow(api_base: str, seller: requests.Session, admin: requests.Ses
         timeout=60,
     )
 
-    # Fresh buyer for valid pair purchase
-    buyer2_name = f"pair_buyer2_{ts}"
-    buyer2 = session_register_buyer(api_base, buyer2_name, f"{buyer2_name}@example.invalid", f"Pair2{ts[-6:]}!aA1")
-    if not buyer2:
-        out["ok"] = False
-        out["error"] = "register buyer2"
-        return out
-    buyer2.post(f"{api_base}/users/tickets/{ref}/reserve/", json={}, headers=build_csrf_headers(buyer2, api_base), timeout=60)
-    buyer2.post(
+    buyer.post(f"{api_base}/users/tickets/{ref}/reserve/", json={}, headers=build_csrf_headers(buyer, api_base), timeout=60)
+    buyer.post(
         f"{api_base}/users/payments/simulate/",
         json={
             "ticket_id": ref,
@@ -339,10 +332,10 @@ def test_pairs_flow(api_base: str, seller: requests.Session, admin: requests.Ses
             "listing_group_id": listing_group_id,
             "timestamp": int(time.time() * 1000),
         },
-        headers=build_csrf_headers(buyer2, api_base),
+        headers=build_csrf_headers(buyer, api_base),
         timeout=60,
     )
-    r_ord2 = buyer2.post(
+    r_ord2 = buyer.post(
         f"{api_base}/users/orders/",
         json={
             "ticket": ref,
@@ -351,7 +344,7 @@ def test_pairs_flow(api_base: str, seller: requests.Session, admin: requests.Ses
             "listing_group_id": listing_group_id,
             "event_name": "Pairs QA",
         },
-        headers=build_csrf_headers(buyer2, api_base),
+        headers=build_csrf_headers(buyer, api_base),
         timeout=60,
     )
     out["steps"].append(

@@ -1935,7 +1935,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         except PdfFetchError as e:
             logger.exception('download_pdf Cloudinary fetch failed for ticket %s', ticket.pk)
             body = {'error': 'Could not retrieve PDF file.'}
-            if e.errors:
+            if settings.DEBUG and e.errors:
                 body['details'] = e.errors[-25:]
             return Response(body, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
