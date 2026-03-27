@@ -101,7 +101,7 @@ def _download_ticket_pdf_bytes(ticket):
 
     errors = []
 
-    def _try_http(label, url):
+    def _http_get_bytes(label, url):
         if not url or not str(url).startswith('http'):
             return None
         r = requests.get(
@@ -112,24 +112,51 @@ def _download_ticket_pdf_bytes(ticket):
         r.raise_for_status()
         return r.content
 
-    # 0) Admin API — canonical secure_url (avoids delivery/signature mismatches vs utils.cloudinary_url)
+    def _try_pdf_bytes(label, url):
+        """Fetch URL; require PDF magic so HTML/JSON error pages do not count as success."""
+        body = _http_get_bytes(label, url)
+        if body is None:
+            return None
+        if not body.startswith(b'%PDF'):
+            raise ValueError(f'{label}: response_not_pdf')
+        return body
+
+    # 0) Admin API metadata + versioned delivery URLs (raw uploads often need version in the URL)
     if public_id:
-        last_err = None
         for pid in _public_id_variants(public_id):
             try:
                 info = cloudinary.api.resource(pid, resource_type='raw')
+            except Exception as e:
+                errors.append(('api_resource', str(e)[:400]))
+                continue
+            cid = (info or {}).get('public_id') or pid
+            ver = (info or {}).get('version')
+            for sign in (True, False):
+                try:
+                    opts = {
+                        'resource_type': 'raw',
+                        'type': 'upload',
+                        'sign_url': sign,
+                        'secure': True,
+                    }
+                    if ver is not None:
+                        opts['version'] = ver
+                    url, _ = cloudinary.utils.cloudinary_url(cid, **opts)
+                    return _try_pdf_bytes(f"cloudinary_url_ver_{'sig' if sign else 'uns'}", url)
+                except Exception as e:
+                    errors.append((f'cloudinary_url_v_{sign}', str(e)[:400]))
+            try:
                 url = (info or {}).get('secure_url') or (info or {}).get('url')
                 if url:
-                    return _try_http('api_resource', url)
+                    return _try_pdf_bytes('api_secure_url', url)
             except Exception as e:
-                last_err = e
-        if last_err is not None:
-            errors.append(('api_resource', str(last_err)[:400]))
+                errors.append(('api_secure_url', str(e)[:400]))
+            break  # resource() succeeded for this pid; other variants are redundant
 
     # 1) Public delivery URL (CloudinaryResource / FileField.url)
     try:
         url = ticket.pdf_file.url
-        return _try_http('public', url)
+        return _try_pdf_bytes('public', url)
     except Exception as e:
         errors.append(('public_url', str(e)[:400]))
 
@@ -142,7 +169,7 @@ def _download_ticket_pdf_bytes(ticket):
             sign_url=False,
             secure=True,
         )
-        return _try_http('unsigned', url)
+        return _try_pdf_bytes('unsigned', url)
     except Exception as e:
         errors.append(('unsigned', str(e)[:400]))
 
@@ -155,7 +182,7 @@ def _download_ticket_pdf_bytes(ticket):
             sign_url=True,
             secure=True,
         )
-        return _try_http('signed', url)
+        return _try_pdf_bytes('signed', url)
     except Exception as e:
         errors.append(('signed', str(e)[:400]))
 
@@ -163,7 +190,10 @@ def _download_ticket_pdf_bytes(ticket):
     try:
         ticket.pdf_file.open('rb')
         try:
-            return ticket.pdf_file.read()
+            raw = ticket.pdf_file.read()
+            if raw and not raw.startswith(b'%PDF'):
+                raise ValueError('storage_open: not_pdf')
+            return raw
         finally:
             ticket.pdf_file.close()
     except Exception as e:
