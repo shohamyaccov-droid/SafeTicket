@@ -183,7 +183,9 @@ class ArtistSerializer(serializers.ModelSerializer):
         return None
     
     def get_total_tickets_count(self, obj):
-        # Sum available_quantity from all active tickets across all events for this artist
+        ann = getattr(obj, '_artist_tickets_total', None)
+        if ann is not None:
+            return int(ann) if ann else 0
         total = Ticket.objects.filter(
             event__artist=obj,
             status='active'
@@ -209,7 +211,9 @@ class ArtistListSerializer(serializers.ModelSerializer):
         return None
     
     def get_total_tickets_count(self, obj):
-        # Sum available_quantity from all active tickets across all events for this artist
+        ann = getattr(obj, '_artist_tickets_total', None)
+        if ann is not None:
+            return int(ann) if ann else 0
         total = Ticket.objects.filter(
             event__artist=obj,
             status='active'
@@ -239,7 +243,9 @@ class EventSerializer(serializers.ModelSerializer):
         return None
     
     def get_tickets_count(self, obj):
-        # Sum available_quantity from all active tickets for this event
+        ann = getattr(obj, '_active_tickets_total', None)
+        if ann is not None:
+            return int(ann) if ann else 0
         total = obj.tickets.filter(status='active').aggregate(total=Sum('available_quantity'))['total']
         return total or 0
 
@@ -264,7 +270,9 @@ class EventListSerializer(serializers.ModelSerializer):
         return None
     
     def get_tickets_count(self, obj):
-        # Sum available_quantity from all active tickets for this event
+        ann = getattr(obj, '_active_tickets_total', None)
+        if ann is not None:
+            return int(ann) if ann else 0
         total = obj.tickets.filter(status='active').aggregate(total=Sum('available_quantity'))['total']
         return total or 0
 
@@ -660,6 +668,8 @@ class OfferSerializer(serializers.ModelSerializer):
     is_checkout_expired = serializers.SerializerMethodField()
     time_remaining = serializers.SerializerMethodField()
     checkout_time_remaining = serializers.SerializerMethodField()
+    purchase_completed = serializers.SerializerMethodField()
+    ticket_listing_status = serializers.CharField(source='ticket.status', read_only=True)
     
     class Meta:
         model = Offer
@@ -669,9 +679,19 @@ class OfferSerializer(serializers.ModelSerializer):
             'offer_round_count', 'parent_offer', 'counter_offer',
             'is_expired', 'is_checkout_expired',
             'time_remaining', 'checkout_time_remaining',
+            'purchase_completed', 'ticket_listing_status',
             'created_at', 'updated_at'
         )
         read_only_fields = ('id', 'buyer', 'expires_at', 'accepted_at', 'checkout_expires_at', 'created_at', 'updated_at')
+    
+    def get_purchase_completed(self, obj):
+        v = getattr(obj, '_purchase_done', None)
+        if v is not None:
+            return bool(v)
+        return Order.objects.filter(
+            related_offer_id=obj.id,
+            status__in=['paid', 'completed'],
+        ).exists()
     
     def get_is_expired(self, obj):
         from django.utils import timezone

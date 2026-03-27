@@ -43,69 +43,56 @@ const Sell = () => {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   // ALL useEffect HOOKS MUST ALSO BE CALLED BEFORE EARLY RETURNS
-  // Fetch all artists on component mount
+  // Parallel fetch: faster Sell page load; backend uses select_related / aggregates for events & artists
   useEffect(() => {
-    const fetchArtists = async () => {
+    let cancelled = false;
+    const load = async () => {
+      setArtistsLoading(true);
+      setEventsLoading(true);
       try {
-        setArtistsLoading(true);
-        const response = await artistAPI.getArtists();
+        const [artRes, evRes] = await Promise.all([
+          artistAPI.getArtists(),
+          eventAPI.getEvents(),
+        ]);
         let artistsData = [];
-        
-        if (response.data) {
-          if (Array.isArray(response.data)) {
-            artistsData = response.data;
-          } else if (response.data.results && Array.isArray(response.data.results)) {
-            artistsData = response.data.results;
-          }
+        if (artRes.data) {
+          if (Array.isArray(artRes.data)) artistsData = artRes.data;
+          else if (artRes.data.results && Array.isArray(artRes.data.results)) artistsData = artRes.data.results;
         }
-        
-        setArtists(artistsData.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
-      } catch (error) {
-        console.error('Error fetching artists:', error);
-        setArtists([]);
-      } finally {
-        setArtistsLoading(false);
-      }
-    };
-    
-    fetchArtists();
-  }, []);
-
-  // Fetch all upcoming events on component mount
-  useEffect(() => {
-    const fetchAllEvents = async () => {
-      try {
-        setEventsLoading(true);
-        const response = await eventAPI.getEvents();
+        artistsData = artistsData.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         let eventsData = [];
-        
-        if (response.data) {
-          if (Array.isArray(response.data)) {
-            eventsData = response.data;
-          } else if (response.data.results && Array.isArray(response.data.results)) {
-            eventsData = response.data.results;
-          }
+        if (evRes.data) {
+          if (Array.isArray(evRes.data)) eventsData = evRes.data;
+          else if (evRes.data.results && Array.isArray(evRes.data.results)) eventsData = evRes.data.results;
         }
-        
-        // Filter to only future events and sort by date
         const now = new Date();
         const upcomingEvents = eventsData
-          .filter(event => {
+          .filter((event) => {
             if (!event.date) return false;
             return new Date(event.date) >= now;
           })
           .sort((a, b) => new Date(a.date) - new Date(b.date));
-        
-        setEvents(upcomingEvents);
+        if (!cancelled) {
+          setArtists(artistsData);
+          setEvents(upcomingEvents);
+        }
       } catch (error) {
-        console.error('Error fetching events:', error);
-        setEvents([]);
+        console.error('Error fetching artists/events:', error);
+        if (!cancelled) {
+          setArtists([]);
+          setEvents([]);
+        }
       } finally {
-        setEventsLoading(false);
+        if (!cancelled) {
+          setArtistsLoading(false);
+          setEventsLoading(false);
+        }
       }
     };
-    
-    fetchAllEvents();
+    load();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Helper function to get event display name (handles sports events)

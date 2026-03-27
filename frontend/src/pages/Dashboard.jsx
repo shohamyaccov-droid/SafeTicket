@@ -192,6 +192,12 @@ const Dashboard = () => {
     fetchOffers();
   }, [user]);
 
+  // Refresh offers when opening the tab (fixes stale list after mutations elsewhere)
+  useEffect(() => {
+    if (!user || activeTab !== 'offers') return;
+    fetchOffers();
+  }, [user, activeTab]);
+
   // Polling: refresh dashboard every 30 seconds for live data
   useEffect(() => {
     if (!user) return;
@@ -263,30 +269,8 @@ const Dashboard = () => {
       // State assignments MUST match API response order
       const receivedData = receivedRes.data?.results || receivedRes.data || [];
       const sentData = sentRes.data?.results || sentRes.data || [];
-      
-      // CRITICAL DEBUG: Log raw API responses
-      console.log("🔥 RECEIVED OFFERS FROM API:", receivedRes.data);
-      console.log("🔥 SENT OFFERS FROM API:", sentRes.data);
-      
-      // Debug logging to verify data shape
-      console.log('Offers Received Response Shape:', {
-        hasResults: !!receivedRes.data?.results,
-        isArray: Array.isArray(receivedRes.data),
-        dataType: typeof receivedRes.data,
-        count: receivedRes.data?.count,
-        actualCount: Array.isArray(receivedData) ? receivedData.length : 0,
-        sample: Array.isArray(receivedData) ? receivedData.slice(0, 2) : receivedData
-      });
-      console.log('Offers Sent Response Shape:', {
-        hasResults: !!sentRes.data?.results,
-        isArray: Array.isArray(sentRes.data),
-        dataType: typeof sentRes.data,
-        count: sentRes.data?.count,
-        actualCount: Array.isArray(sentData) ? sentData.length : 0,
-        sample: Array.isArray(sentData) ? sentData.slice(0, 2) : sentData
-      });
-      
-      // ULTIMATE FIX: Combine all offers and filter client-side to guarantee correct routing
+
+      // Combine all offers and filter client-side to guarantee correct routing
       // Do NOT rely on backend endpoints - force it client-side
       const allOffers = [...(Array.isArray(receivedData) ? receivedData : []), ...(Array.isArray(sentData) ? sentData : [])];
       
@@ -321,13 +305,18 @@ const Dashboard = () => {
   const handleAcceptOffer = async (offerId) => {
     setAcceptingOfferId(offerId);
     try {
-      await offerAPI.acceptOffer(offerId);
+      const res = await offerAPI.acceptOffer(offerId);
+      const updated = res.data;
+      if (updated?.id) {
+        setOffersReceived((prev) => prev.map((o) => (o.id === offerId ? { ...o, ...updated } : o)));
+        setOffersSent((prev) => prev.map((o) => (o.id === offerId ? { ...o, ...updated } : o)));
+      }
       setToast({
         message: 'ההצעה אושרה בהצלחה! הודעה נשלחה לקונה, ויש לו 4 שעות להשלים את הרכישה.',
         type: 'success'
       });
-      fetchOffers();
-      fetchDashboardData();
+      await fetchOffers();
+      await fetchDashboardData();
     } catch (err) {
       const errorMsg = err.response?.data?.error || 'שגיאה באישור ההצעה';
       setToast({
@@ -341,9 +330,13 @@ const Dashboard = () => {
 
   const handleRejectOffer = async (offerId) => {
     try {
-      await offerAPI.rejectOffer(offerId);
+      const res = await offerAPI.rejectOffer(offerId);
+      if (res.data?.id) {
+        setOffersReceived((prev) => prev.map((o) => (o.id === offerId ? { ...o, ...res.data } : o)));
+        setOffersSent((prev) => prev.map((o) => (o.id === offerId ? { ...o, ...res.data } : o)));
+      }
       setToast({ message: 'ההצעה נדחתה', type: 'info' });
-      fetchOffers();
+      await fetchOffers();
     } catch (err) {
       const errorMsg = err.response?.data?.error || 'שגיאה בדחיית ההצעה';
       setToast({ message: errorMsg, type: 'error' });
@@ -358,11 +351,11 @@ const Dashboard = () => {
     }
     setAcceptingOfferId(offerId);
     try {
-      await offerAPI.counterOffer(offerId, { amount: numAmount });
+      const res = await offerAPI.counterOffer(offerId, { amount: numAmount });
       setToast({ message: 'הצעת הנגד נשלחה בהצלחה', type: 'success' });
       setCounteringOfferId(null);
       setCounterAmount('');
-      fetchOffers();
+      await fetchOffers();
     } catch (err) {
       const errorMsg = err.response?.data?.error || err.response?.data?.amount?.[0] || 'שגיאה בשליחת הצעת הנגד';
       setToast({ message: errorMsg, type: 'error' });
@@ -576,6 +569,18 @@ const Dashboard = () => {
 
   const { purchases = [], listings = { active: [], sold: [] }, summary = {} } = dashboardData;
 
+  /** Accepted-offer checkout: hide button after successful order or sold listing */
+  const isOfferPurchaseComplete = (offer) => {
+    if (!offer || offer.status !== 'accepted') return false;
+    if (offer.purchase_completed) return true;
+    if (offer.ticket_listing_status === 'sold') return true;
+    const oid = offer.id;
+    return purchases.some((p) => {
+      const ro = p.related_offer;
+      return ro === oid || ro?.id === oid;
+    });
+  };
+
   // Action Required: offers where user is recipient and status is pending
   const isOfferActionRequired = (offer, isSeller) => {
     if (offer.status !== 'pending') return false;
@@ -602,6 +607,11 @@ const Dashboard = () => {
       groups[tid].offers.push(offer);
     });
     const arr = Object.values(groups);
+    arr.forEach((g) => {
+      g.offers.sort(
+        (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+      );
+    });
     // Sort by latest offer's created_at or updated_at (most recent first)
     arr.sort((a, b) => {
       const aLatest = a.offers[0];
@@ -632,7 +642,10 @@ const Dashboard = () => {
             <button
               type="button"
               className="refresh-btn"
-              onClick={() => fetchDashboardData()}
+              onClick={() => {
+                fetchDashboardData();
+                fetchOffers();
+              }}
               title="רענן נתונים"
               aria-label="רענן נתונים"
             >
@@ -969,7 +982,7 @@ const Dashboard = () => {
 
         {activeTab === 'offers' && (
           <div className="offers-tab" style={{ width: '100%', maxWidth: '100%', display: 'block' }}>
-            <h2 className="section-title">הצעות מחיר</h2>
+            <h2 className="section-title">הצעות מחיר — היסטוריית משא ומתן</h2>
             {offersSent.some((o) => o.status === 'accepted') && (
               <div className="accepted-offer-banner" role="alert">
                 <span className="accepted-offer-emoji">🎉</span>
@@ -995,7 +1008,7 @@ const Dashboard = () => {
                 <p className="loading-text">טוען הצעות...</p>
               ) : (
                 <>
-                  <h3 className="offers-section-heading">הצעות שקיבלתי</h3>
+                  <h3 className="offers-section-heading">קיבלתי</h3>
                   <div className="dashboard-list-container" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '1.5rem' }}>
                       {offersReceived.length === 0 ? (
                         <p className="empty-text">אין הצעות שהתקבלו</p>
@@ -1046,7 +1059,7 @@ const Dashboard = () => {
                         })
                       )}
                     </div>
-                  <h3 className="offers-section-heading">הצעות ששלחתי</h3>
+                  <h3 className="offers-section-heading">שלחתי</h3>
                   <div className="dashboard-list-container" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {offersSent.length === 0 ? (
                         <p className="empty-text">אין הצעות שנשלחו</p>
@@ -1092,7 +1105,12 @@ const Dashboard = () => {
                                     )}
                                   </div>
                                 </div>
-                                {acceptedOffer && (
+                                {acceptedOffer && isOfferPurchaseComplete(acceptedOffer) && (
+                                  <span className="purchase-success-badge" style={{ whiteSpace: 'nowrap', padding: '6px 12px', borderRadius: '8px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}>
+                                    נרכש בהצלחה
+                                  </span>
+                                )}
+                                {acceptedOffer && !isOfferPurchaseComplete(acceptedOffer) && (
                                   <button
                                     type="button"
                                     className="primary-button checkout-btn"
@@ -1418,10 +1436,23 @@ const Dashboard = () => {
           group={negotiationModalGroup}
           isSeller={negotiationModalGroup.isSeller}
           user={user}
+          isOfferPurchaseComplete={isOfferPurchaseComplete}
           onClose={() => setNegotiationModalGroup(null)}
-          onAccept={async (id) => { await handleAcceptOffer(id); setNegotiationModalGroup(null); fetchOffers(); }}
-          onReject={async (id) => { await handleRejectOffer(id); setNegotiationModalGroup(null); fetchOffers(); }}
-          onCounter={async (id, amount) => { await handleCounterOffer(id, amount); setNegotiationModalGroup(null); fetchOffers(); }}
+          onAccept={async (id) => {
+            await handleAcceptOffer(id);
+            await fetchOffers();
+            setNegotiationModalGroup(null);
+          }}
+          onReject={async (id) => {
+            await handleRejectOffer(id);
+            await fetchOffers();
+            setNegotiationModalGroup(null);
+          }}
+          onCounter={async (id, amount) => {
+            await handleCounterOffer(id, amount);
+            await fetchOffers();
+            setNegotiationModalGroup(null);
+          }}
           acceptingOfferId={acceptingOfferId}
           offerExpirationTimers={offerExpirationTimers}
           countdownTimers={countdownTimers}

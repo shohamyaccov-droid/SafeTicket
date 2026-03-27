@@ -20,7 +20,8 @@ from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.http import FileResponse
-from django.db.models import F, Q, Count
+from django.db.models import F, Q, Count, Sum, Exists, OuterRef, Value
+from django.db.models.functions import Coalesce
 from django.db import transaction
 from django.core.files.base import ContentFile
 import io
@@ -2173,6 +2174,12 @@ class EventViewSet(viewsets.ModelViewSet):
         queryset = (
             Event.objects.filter(date__gte=now)
             .select_related('artist')
+            .annotate(
+                _active_tickets_total=Coalesce(
+                    Sum('tickets__available_quantity', filter=Q(tickets__status='active')),
+                    Value(0),
+                )
+            )
             .order_by('date', 'name')
         )
         
@@ -2376,14 +2383,18 @@ class ArtistViewSet(viewsets.ModelViewSet):
         return ArtistSerializer
     
     def get_queryset(self):
-        # Show all artists, ordered by name
         queryset = Artist.objects.all().order_by('name')
-        
-        # Optional: Search by name if provided
+        # List view: one aggregate per artist (avoid N+1 in total_tickets_count)
+        if self.action == 'list':
+            queryset = queryset.annotate(
+                _artist_tickets_total=Coalesce(
+                    Sum('events__tickets__available_quantity', filter=Q(events__tickets__status='active')),
+                    Value(0),
+                )
+            )
         search = self.request.query_params.get('search', None)
         if search:
             queryset = queryset.filter(name__icontains=search)
-        
         return queryset
     
     def get_serializer_context(self):
@@ -2398,8 +2409,17 @@ class ArtistViewSet(viewsets.ModelViewSet):
         """
         artist = get_object_or_404(Artist, pk=pk)
         
-        # Get events for this artist, sorted by date (ascending)
-        events = Event.objects.filter(artist=artist).order_by('date', 'name')
+        events = (
+            Event.objects.filter(artist=artist)
+            .select_related('artist')
+            .annotate(
+                _active_tickets_total=Coalesce(
+                    Sum('tickets__available_quantity', filter=Q(tickets__status='active')),
+                    Value(0),
+                )
+            )
+            .order_by('date', 'name')
+        )
         serializer = EventListSerializer(events, many=True, context={'request': request})
         return Response(serializer.data)
 
@@ -2563,6 +2583,18 @@ class OfferViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'offers'
+    pagination_class = None  # Full negotiation history for dashboard (no 20-item page cut-off)
+
+    def _annotate_offer_flags(self, queryset):
+        """One Exists subquery — avoids N+1 when serializing purchase_completed."""
+        return queryset.annotate(
+            _purchase_done=Exists(
+                Order.objects.filter(
+                    related_offer_id=OuterRef('pk'),
+                    status__in=['paid', 'completed'],
+                )
+            )
+        )
     
     def get_queryset(self):
         from django.utils import timezone
@@ -2583,13 +2615,10 @@ class OfferViewSet(viewsets.ModelViewSet):
         else:
             queryset = queryset.filter(Q(buyer=user) | Q(ticket__seller=user))
         
-        # Auto-expire old offers
-        expired_offers = queryset.filter(
-            status='pending',
-            expires_at__lt=timezone.now()
-        )
-        expired_offers.update(status='expired')
+        # Auto-expire old pending offers (still return expired rows for history)
+        queryset.filter(status='pending', expires_at__lt=timezone.now()).update(status='expired')
         
+        queryset = self._annotate_offer_flags(queryset)
         return queryset.order_by('-created_at')
     
     def perform_create(self, serializer):
@@ -2822,47 +2851,15 @@ class OfferViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], url_path='received')
     def received(self, request):
-        """Get offers received by the seller (offers on tickets they own)"""
-        from django.utils import timezone
-        
-        # Explicitly filter by ticket__seller (the seller receives offers on their tickets)
-        queryset = Offer.objects.select_related('buyer', 'ticket', 'ticket__seller', 'ticket__event').filter(
-            ticket__seller=request.user
-        ).exclude(status='expired').order_by('-created_at')
-        
-        # Auto-expire old offers
-        expired_offers = queryset.filter(expires_at__lt=timezone.now(), status='pending')
-        expired_offers.update(status='expired')
-        queryset = queryset.exclude(status='expired')
-        
-        # Disable pagination for this action - return all results
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        
+        """Full history: accepted, rejected, countered, expired — seller view."""
+        queryset = self.filter_queryset(self.get_queryset())
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='sent')
     def sent(self, request):
-        """Get offers sent by the buyer (offers where current user is the buyer)"""
-        from django.utils import timezone
-
-        queryset = Offer.objects.select_related('buyer', 'ticket', 'ticket__seller', 'ticket__event').filter(
-            buyer=request.user
-        ).exclude(status='expired').order_by('-created_at')
-
-        # Auto-expire old offers
-        expired_offers = queryset.filter(expires_at__lt=timezone.now(), status='pending')
-        expired_offers.update(status='expired')
-        queryset = queryset.exclude(status='expired')
-
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-
+        """Full history — buyer view."""
+        queryset = self.filter_queryset(self.get_queryset())
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 

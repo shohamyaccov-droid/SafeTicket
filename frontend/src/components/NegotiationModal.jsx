@@ -24,6 +24,7 @@ const NegotiationModal = ({
   formatTimeRemaining,
   formatOfferExpiration,
   getResponsesLeft,
+  isOfferPurchaseComplete,
 }) => {
   const [counterAmount, setCounterAmount] = useState('');
   const bodyRef = useRef(null);
@@ -31,6 +32,18 @@ const NegotiationModal = ({
   const ticketDetails = group?.ticketDetails || {};
   const offers = group?.offers || [];
   const latestPending = offers.find((o) => o.status === 'pending');
+  const acceptedOfferRow = offers
+    .filter((o) => o.status === 'accepted')
+    .sort(
+      (a, b) =>
+        new Date(b.accepted_at || b.updated_at || b.created_at || 0) -
+        new Date(a.accepted_at || a.updated_at || a.created_at || 0)
+    )[0];
+  const purchaseLocked =
+    acceptedOfferRow &&
+    (typeof isOfferPurchaseComplete === 'function'
+      ? isOfferPurchaseComplete(acceptedOfferRow)
+      : false);
   const roundCount = latestPending?.offer_round_count ?? 0;
   const isRecipient = (roundCount % 2 === 0 && isSeller) || (roundCount === 1 && !isSeller);
   const canCounter = isRecipient && latestPending?.status === 'pending' && roundCount < 2;
@@ -122,24 +135,52 @@ const NegotiationModal = ({
 
         {/* Footer */}
         <div className="negotiation-modal-footer">
-          {latestPending?.status === 'accepted' && (
+          {acceptedOfferRow && (
             <div className="negotiation-footer-accepted">
-              {(countdownTimers?.[latestPending.id] ?? latestPending?.checkout_time_remaining) > 0 ? (
+              {purchaseLocked ? (
+                <span
+                  className="purchase-success-badge"
+                  style={{
+                    display: 'inline-block',
+                    padding: '10px 16px',
+                    borderRadius: '10px',
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    color: '#fff',
+                    fontWeight: 600,
+                  }}
+                >
+                  נרכש בהצלחה
+                </span>
+              ) : !isSeller &&
+                (countdownTimers?.[acceptedOfferRow.id] ?? acceptedOfferRow?.checkout_time_remaining) > 0 ? (
                 <>
                   <span className="countdown-text">
-                    נותרו {formatTimeRemaining(countdownTimers?.[latestPending.id] ?? latestPending?.checkout_time_remaining)}
+                    נותרו{' '}
+                    {formatTimeRemaining(
+                      countdownTimers?.[acceptedOfferRow.id] ?? acceptedOfferRow?.checkout_time_remaining
+                    )}
                   </span>
                   <button
                     type="button"
                     className="primary-button"
-                    onClick={() => onCompletePurchase(latestPending)}
-                    disabled={(countdownTimers?.[latestPending.id] ?? latestPending?.checkout_time_remaining) <= 0}
+                    onClick={() => onCompletePurchase(acceptedOfferRow)}
+                    disabled={
+                      (countdownTimers?.[acceptedOfferRow.id] ?? acceptedOfferRow?.checkout_time_remaining) <= 0
+                    }
                   >
                     השלם רכישה
                   </button>
                 </>
-              ) : (
+              ) : !isSeller ? (
                 <span className="expired-text">זמן התשלום פג</span>
+              ) : (
+                <span className="countdown-text" style={{ opacity: 0.9 }}>
+                  {(countdownTimers?.[acceptedOfferRow.id] ?? acceptedOfferRow?.checkout_time_remaining) > 0
+                    ? `הקונה יכול להשלים תשלום בזמן: ${formatTimeRemaining(
+                        countdownTimers?.[acceptedOfferRow.id] ?? acceptedOfferRow?.checkout_time_remaining
+                      )}`
+                    : 'חלון התשלום נסגר — לא הושלמה רכישה'}
+                </span>
               )}
             </div>
           )}

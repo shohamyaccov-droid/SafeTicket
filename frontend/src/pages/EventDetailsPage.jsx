@@ -1140,7 +1140,9 @@ const EventDetailsPage = () => {
                   <div className="offer-ticket-info">
                     <h3>{selectedOfferTicket.event_name || 'אירוע'}</h3>
                     <p className="current-price">מחיר נוכחי: ₪{getTicketPrice(selectedOfferTicket)}</p>
-                    <p className="offer-fee-clarification" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>מחיר ההצעה הוא ללא עמלות – עמלת שירות (10%) תתווסף בעת התשלום</p>
+                    <p className="offer-fee-clarification" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem', lineHeight: 1.5 }}>
+                      <strong>המחיר המוצע הוא לפני עמלת שירות.</strong> עמלת שירות (10%) תתווסף בקופה — הסכום הסופי שישולם יהיה המחיר המוצע + עמלה.
+                    </p>
                   </div>
                 </div>
 

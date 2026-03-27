@@ -6,7 +6,7 @@ Run with: python manage.py test test_premium_offer_e2e
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken
-from users.models import Ticket, Event, Artist, Offer
+from users.models import Ticket, Event, Artist, Offer, Order
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from datetime import timedelta
@@ -168,3 +168,64 @@ class PremiumOfferE2ETest(TestCase):
         print("  - Buyer sees offer in 'Sent': OK")
         print("  - Buyer does NOT see offer in 'Received': OK")
         print("  - Quick button calculations correct: OK")
+
+    def test_purchase_completed_true_after_paid_order(self):
+        """Completed purchase (paid order + related_offer) → API exposes purchase_completed for UI lock."""
+        response = self.buyer_client.post(
+            '/api/users/offers/',
+            data=json.dumps({'ticket': self.ticket.id, 'amount': '170.00'}),
+            content_type='application/json',
+            **self.buyer_headers,
+        )
+        self.assertEqual(response.status_code, 201, response.content.decode())
+        offer_id = response.json()['id']
+
+        response = self.seller_client.post(
+            f'/api/users/offers/{offer_id}/accept/',
+            data='{}',
+            content_type='application/json',
+            **self.seller_headers,
+        )
+        self.assertEqual(response.status_code, 200, response.content.decode())
+
+        offer = Offer.objects.get(id=offer_id)
+        Order.objects.create(
+            user=self.buyer,
+            ticket=self.ticket,
+            status='paid',
+            total_amount=187.00,
+            quantity=1,
+            related_offer=offer,
+            event_name=self.event.name,
+        )
+
+        response = self.buyer_client.get('/api/users/offers/sent/', **self.buyer_headers)
+        self.assertEqual(response.status_code, 200)
+        sent = response.json()
+        row = next((o for o in sent if o['id'] == offer_id), None)
+        self.assertIsNotNone(row)
+        self.assertTrue(
+            row.get('purchase_completed'),
+            'purchase_completed must be true so the dashboard can hide "השלם רכישה"',
+        )
+
+    def test_new_offer_immediately_visible_in_sent_list(self):
+        """POST offer then GET /sent/ — new row is returned without relying on a full page refresh."""
+        response = self.buyer_client.post(
+            '/api/users/offers/',
+            data=json.dumps({'ticket': self.ticket.id, 'amount': '180.00'}),
+            content_type='application/json',
+            **self.buyer_headers,
+        )
+        self.assertEqual(response.status_code, 201, response.content.decode())
+        offer_id = response.json()['id']
+
+        response = self.buyer_client.get('/api/users/offers/sent/', **self.buyer_headers)
+        self.assertEqual(response.status_code, 200)
+        sent = response.json()
+        ids = [o['id'] for o in sent]
+        self.assertIn(
+            offer_id,
+            ids,
+            'New offer must appear in GET /offers/sent/ immediately after creation',
+        )
