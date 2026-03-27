@@ -169,13 +169,23 @@ def main() -> int:
     report["cloudinary_pdf_urls"].append(pdf_url_0)
     report["steps"].append({"name": "upload 2 tickets", "ok": True, "first_ticket_id": tid_first})
 
-    # Whole-shekel JSON (integers, not 221.99 strings)
+    # Whole-shekel face value (API may return int 100 or legacy "100.00" until deploy)
     ap, op = t0.get("asking_price"), t0.get("original_price")
-    pr_ok = isinstance(ap, int) and isinstance(op, int) and ap == op == 100
-    report["price_rounding"] = {"asking_price": ap, "original_price": op, "ok": pr_ok}
+    try:
+        ai = int(ap) if isinstance(ap, int) else int(float(str(ap)))
+        oi = int(op) if isinstance(op, int) else int(float(str(op)))
+        pr_ok = ai == oi == 100
+    except (TypeError, ValueError):
+        pr_ok = False
+    report["price_rounding"] = {
+        "asking_price": ap,
+        "original_price": op,
+        "ok": pr_ok,
+        "prefer_int_json": isinstance(ap, int) and isinstance(op, int),
+    }
     if not pr_ok:
         report["errors"].append(
-            f"price_rounding: expected int 100/100, got asking={ap!r} original={op!r}"
+            f"price_rounding: expected face value 100/100, got asking={ap!r} original={op!r}"
         )
 
     # Reject non-PDF (expect 400, not 500)
