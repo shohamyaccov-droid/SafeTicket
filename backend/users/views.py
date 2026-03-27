@@ -70,6 +70,13 @@ User = get_user_model()
 RESERVATION_TIMEOUT_MINUTES = 10
 
 
+class PdfFetchError(Exception):
+    """All strategies to load PDF bytes from Cloudinary failed; carries per-strategy errors for diagnostics."""
+
+    def __init__(self, errors):
+        self.errors = errors
+
+
 def _download_ticket_pdf_bytes(ticket):
     """
     Load PDF bytes from Cloudinary-backed FileField. Tries public URL, then signed URL, then storage open().
@@ -117,11 +124,12 @@ def _download_ticket_pdf_bytes(ticket):
         body = _http_get_bytes(label, url)
         if body is None:
             return None
+        body = body.lstrip(b'\xef\xbb\xbf \t\r\n')
         if not body.startswith(b'%PDF'):
             raise ValueError(f'{label}: response_not_pdf')
         return body
 
-    # 0) Admin API metadata + versioned delivery URLs (raw uploads often need version in the URL)
+    # 0) Admin API + delivery URL matrix (version + signature algorithm vary by account)
     if public_id:
         for pid in _public_id_variants(public_id):
             try:
@@ -131,8 +139,16 @@ def _download_ticket_pdf_bytes(ticket):
                 continue
             cid = (info or {}).get('public_id') or pid
             ver = (info or {}).get('version')
+
+            url_jobs = []
+            seen_u = set()
+            for u in filter(None, [(info or {}).get('secure_url'), (info or {}).get('url')]):
+                if u not in seen_u:
+                    seen_u.add(u)
+                    url_jobs.append(('api_delivery', u))
+
             for sign in (True, False):
-                try:
+                for sig_alg in (None, 'sha1', 'sha256'):
                     opts = {
                         'resource_type': 'raw',
                         'type': 'upload',
@@ -141,17 +157,55 @@ def _download_ticket_pdf_bytes(ticket):
                     }
                     if ver is not None:
                         opts['version'] = ver
-                    url, _ = cloudinary.utils.cloudinary_url(cid, **opts)
-                    return _try_pdf_bytes(f"cloudinary_url_ver_{'sig' if sign else 'uns'}", url)
+                    if sig_alg:
+                        opts['signature_algorithm'] = sig_alg
+                    try:
+                        url, _ = cloudinary.utils.cloudinary_url(cid, **opts)
+                        if url not in seen_u:
+                            seen_u.add(url)
+                            url_jobs.append((f"cf_{'sig' if sign else 'uns'}_{sig_alg or 'cfg'}", url))
+                    except Exception as e:
+                        errors.append((f'cf_build', str(e)[:200]))
+
+            for sign in (True, False):
+                try:
+                    url, _ = cloudinary.utils.cloudinary_url(
+                        cid,
+                        resource_type='raw',
+                        type='upload',
+                        sign_url=sign,
+                        secure=True,
+                        force_version=False,
+                    )
+                    if url not in seen_u:
+                        seen_u.add(url)
+                        url_jobs.append((f'cf_nover_{sign}', url))
                 except Exception as e:
-                    errors.append((f'cloudinary_url_v_{sign}', str(e)[:400]))
-            try:
-                url = (info or {}).get('secure_url') or (info or {}).get('url')
-                if url:
-                    return _try_pdf_bytes('api_secure_url', url)
-            except Exception as e:
-                errors.append(('api_secure_url', str(e)[:400]))
-            break  # resource() succeeded for this pid; other variants are redundant
+                    errors.append((f'cf_nover_{sign}', str(e)[:200]))
+
+            if ver is not None:
+                try:
+                    url, _ = cloudinary.utils.cloudinary_url(
+                        cid,
+                        resource_type='raw',
+                        type='upload',
+                        sign_url=True,
+                        secure=True,
+                        version=ver,
+                        long_url_signature=True,
+                    )
+                    if url not in seen_u:
+                        seen_u.add(url)
+                        url_jobs.append(('cf_long_sig', url))
+                except Exception as e:
+                    errors.append(('cf_long_sig', str(e)[:200]))
+
+            for label, url in url_jobs:
+                try:
+                    return _try_pdf_bytes(label, url)
+                except Exception as e:
+                    errors.append((label, str(e)[:400]))
+            break
 
     # 1) Public delivery URL (CloudinaryResource / FileField.url)
     try:
@@ -204,7 +258,7 @@ def _download_ticket_pdf_bytes(ticket):
         ticket.pk,
         [e[0] for e in errors],
     )
-    raise RuntimeError('all_pdf_fetch_strategies_failed')
+    raise PdfFetchError(errors)
 
 
 def _pdf_magic_bytes_ok(uploaded_file) -> bool:
@@ -1866,6 +1920,12 @@ class TicketViewSet(viewsets.ModelViewSet):
             response = HttpResponse(content, content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="{safe_ascii}"'
             return response
+        except PdfFetchError as e:
+            logger.exception('download_pdf Cloudinary fetch failed for ticket %s', ticket.pk)
+            body = {'error': 'Could not retrieve PDF file.'}
+            if e.errors:
+                body['details'] = e.errors[-25:]
+            return Response(body, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             logger.exception('download_pdf failed for ticket %s', ticket.pk)
             err_msg = str(e) if settings.DEBUG else 'Could not retrieve PDF file.'
