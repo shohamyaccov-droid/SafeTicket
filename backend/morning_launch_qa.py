@@ -330,7 +330,7 @@ def main() -> int:
         if ok_dl and h2 != pdf_hash:
             report["errors"].append(f"PDF byte mismatch ticket {tid}")
         if not ok_dl:
-            detail = (r_pdf.text or "")[:500]
+            detail = (r_pdf.text or "")[:4000]
             report.setdefault("download_failures", []).append(
                 {"ticket_id": tid, "status": r_pdf.status_code, "body_preview": detail}
             )
