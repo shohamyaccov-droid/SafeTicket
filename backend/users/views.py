@@ -97,6 +97,34 @@ User = get_user_model()
 RESERVATION_TIMEOUT_MINUTES = 10
 
 
+def _reject_pending_offers_for_ticket_ids(ticket_ids):
+    """When inventory is sold, invalidate competing pending offers on those rows."""
+    if not ticket_ids:
+        return 0
+    return Offer.objects.filter(
+        ticket_id__in=list(ticket_ids),
+        status='pending',
+    ).update(status='rejected')
+
+
+def _sync_expired_cart_reservation(ticket):
+    """
+    If reservation TTL passed, release the row so checkout can proceed fairly.
+    Mutates and saves ticket when expired.
+    """
+    if ticket.status != 'reserved' or not ticket.reserved_at:
+        return
+    cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
+    if ticket.reserved_at < cutoff:
+        ticket.status = 'active'
+        ticket.reserved_at = None
+        ticket.reserved_by = None
+        ticket.reservation_email = None
+        ticket.save(
+            update_fields=['status', 'reserved_at', 'reserved_by', 'reservation_email']
+        )
+
+
 class PdfFetchError(Exception):
     """All strategies to load PDF bytes from Cloudinary failed; carries per-strategy errors for diagnostics."""
 
@@ -882,6 +910,7 @@ def create_order(request):
         
         # CRITICAL: Use transaction.atomic + select_for_update to prevent double-selling (race conditions)
         with transaction.atomic():
+            release_abandoned_carts()
             # If listing_group_id is provided, IGNORE the specific ticket_id and find any active tickets in the group
             if listing_group_id:
                 print(f"Checking availability for Group: {listing_group_id}")
@@ -1058,6 +1087,17 @@ def create_order(request):
                         status=status.HTTP_404_NOT_FOUND
                     )
 
+                _sync_expired_cart_reservation(ticket)
+                ticket.refresh_from_db()
+                if ticket.status == 'reserved':
+                    if ticket.reserved_by_id and ticket.reserved_by_id != request.user.id:
+                        return Response(
+                            {
+                                'error': 'This ticket is reserved by another buyer. Please refresh.',
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
                 # Prevent sellers from buying their own tickets
                 if ticket.seller == request.user:
                     return Response(
@@ -1115,6 +1155,8 @@ def create_order(request):
                     ticket.status = 'active'
                 ticket.save()
                 ticket_ids = [ticket.id]
+
+            _reject_pending_offers_for_ticket_ids(ticket_ids)
 
             # Create order with 'paid' status (payment already processed)
             order = serializer.save(status='paid', quantity=order_quantity)
@@ -1350,6 +1392,7 @@ def guest_checkout(request):
 
         # CRITICAL: Use transaction.atomic + select_for_update to prevent double-selling (race conditions)
         with transaction.atomic():
+            release_abandoned_carts()
             # If listing_group_id is provided, IGNORE the specific ticket_id and find any active tickets in the group
             if listing_group_id:
                 # CRITICAL: When listing_group_id is provided, IGNORE the specific ticket_id status
@@ -1466,6 +1509,16 @@ def guest_checkout(request):
                         status=status.HTTP_404_NOT_FOUND
                     )
 
+                _sync_expired_cart_reservation(ticket)
+                ticket.refresh_from_db()
+                if ticket.status == 'reserved':
+                    ge = (order_data.get('guest_email') or '').strip()
+                    if ticket.reservation_email and ticket.reservation_email != ge:
+                        return Response(
+                            {'error': 'This ticket is reserved for another checkout session.'},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
                 if _is_event_past(ticket):
                     return Response(
                         {'error': 'This event has already passed.'},
@@ -1522,6 +1575,8 @@ def guest_checkout(request):
                     ticket.status = 'active'
                 ticket.save()
                 ticket_ids = [ticket.id]
+
+            _reject_pending_offers_for_ticket_ids(ticket_ids)
 
             # Use ticket's asking price and event name
             total_amount = order_data.get('total_amount', ticket.asking_price)
@@ -2556,16 +2611,27 @@ def admin_reject_ticket(request, ticket_id):
     try:
         ticket = Ticket.objects.get(id=ticket_id)
         
-        if ticket.status != 'pending_verification':
+        allowed = ('pending_verification', 'active', 'reserved')
+        if ticket.status not in allowed:
             return Response(
-                {'error': f'Ticket is not pending verification. Current status: {ticket.status}'},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    'error': f'Cannot reject ticket in state {ticket.status}. Allowed: {allowed}',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
-        # Reject the ticket: change status to 'rejected'
+
+        # Invalidate negotiation / checkout on this listing
+        Offer.objects.filter(
+            ticket_id=ticket.id,
+            status__in=('pending', 'accepted'),
+        ).update(status='rejected')
+
         ticket.status = 'rejected'
+        ticket.reserved_at = None
+        ticket.reserved_by = None
+        ticket.reservation_email = None
         ticket.save()
-        
+
         serializer = TicketSerializer(ticket, context={'request': request})
         return Response({
             'message': 'Ticket rejected successfully',
@@ -2708,43 +2774,75 @@ class OfferViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def accept(self, request, pk=None):
         """Accept an offer - only the RECIPIENT (not creator) can accept."""
-        from django.utils import timezone
         from datetime import timedelta
-        
-        offer = self.get_object()
-        
-        # Only the recipient can accept (prevents self-acceptance)
-        recipient = self._get_offer_recipient(offer)
-        if recipient != request.user:
-            raise PermissionDenied("Only the recipient of this offer can accept it.")
-        
-        # Check if offer is still valid
-        if offer.status != 'pending':
-            return Response(
-                {'error': 'This offer is no longer pending.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if timezone.now() > offer.expires_at:
-            offer.status = 'expired'
+
+        with transaction.atomic():
+            offer = Offer.objects.select_for_update().select_related('ticket', 'ticket__seller').filter(
+                pk=pk
+            ).first()
+            if not offer:
+                return Response({'error': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+            recipient = self._get_offer_recipient(offer)
+            if recipient != request.user:
+                raise PermissionDenied("Only the recipient of this offer can accept it.")
+
+            if offer.status != 'pending':
+                return Response(
+                    {'error': 'This offer is no longer pending.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if timezone.now() > offer.expires_at:
+                offer.status = 'expired'
+                offer.save(update_fields=['status'])
+                return Response(
+                    {'error': 'This offer has expired.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            ticket = Ticket.objects.select_for_update().get(pk=offer.ticket_id)
+            _sync_expired_cart_reservation(ticket)
+            ticket.refresh_from_db()
+
+            if ticket.status in ('sold', 'rejected', 'pending_payout', 'paid_out'):
+                return Response(
+                    {'error': 'This listing is no longer available for acceptance.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if ticket.status == 'pending_verification':
+                return Response(
+                    {'error': 'This listing is not yet verified.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if ticket.status == 'reserved' and ticket.reserved_at:
+                cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
+                if ticket.reserved_at >= cutoff:
+                    return Response(
+                        {
+                            'error': 'This listing is currently in another buyer\'s checkout. Try again shortly.',
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            needed_qty = int(offer.quantity or 1)
+            if ticket.available_quantity < needed_qty:
+                return Response(
+                    {'error': 'Not enough tickets available to accept this offer.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            offer.status = 'accepted'
+            offer.accepted_at = timezone.now()
+            offer.checkout_expires_at = timezone.now() + timedelta(hours=4)
             offer.save()
-            return Response(
-                {'error': 'This offer has expired.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Accept the offer
-        offer.status = 'accepted'
-        offer.accepted_at = timezone.now()
-        offer.checkout_expires_at = timezone.now() + timedelta(hours=4)
-        offer.save()
-        
-        # Reject all other pending offers on the same ticket
-        Offer.objects.filter(
-            ticket=offer.ticket,
-            status='pending'
-        ).exclude(id=offer.id).update(status='rejected')
-        
+
+            Offer.objects.filter(
+                ticket_id=ticket.id,
+                status='pending',
+            ).exclude(id=offer.id).update(status='rejected')
+
+        offer.refresh_from_db()
         serializer = self.get_serializer(offer)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
