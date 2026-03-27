@@ -70,6 +70,74 @@ User = get_user_model()
 RESERVATION_TIMEOUT_MINUTES = 10
 
 
+def _download_ticket_pdf_bytes(ticket):
+    """
+    Load PDF bytes from Cloudinary-backed FileField. Tries public URL, then signed URL, then storage open().
+    """
+    import requests
+    import cloudinary.utils
+
+    public_id = (ticket.pdf_file.name or '').replace('\\', '/')
+    errors = []
+
+    def _try_http(label, url):
+        if not url or not str(url).startswith('http'):
+            return None
+        r = requests.get(url, timeout=90)
+        r.raise_for_status()
+        return r.content
+
+    # 1) Public delivery URL (CloudinaryResource / FileField.url)
+    try:
+        url = ticket.pdf_file.url
+        return _try_http('public', url)
+    except Exception as e:
+        errors.append(('public_url', str(e)[:400]))
+
+    # 2) Explicit unsigned cloudinary_url (raw)
+    try:
+        url, _ = cloudinary.utils.cloudinary_url(
+            public_id,
+            resource_type='raw',
+            type='upload',
+            sign_url=False,
+            secure=True,
+        )
+        return _try_http('unsigned', url)
+    except Exception as e:
+        errors.append(('unsigned', str(e)[:400]))
+
+    # 3) Signed delivery URL
+    try:
+        url, _ = cloudinary.utils.cloudinary_url(
+            public_id,
+            resource_type='raw',
+            type='upload',
+            sign_url=True,
+            secure=True,
+        )
+        return _try_http('signed', url)
+    except Exception as e:
+        errors.append(('signed', str(e)[:400]))
+
+    # 4) django-cloudinary-storage FileField (uses requests inside _open)
+    try:
+        ticket.pdf_file.open('rb')
+        try:
+            return ticket.pdf_file.read()
+        finally:
+            ticket.pdf_file.close()
+    except Exception as e:
+        errors.append(('storage_open', str(e)[:400]))
+
+    logger.error(
+        'download_pdf: all fetch strategies failed for ticket %s (strategy names: %s)',
+        ticket.pk,
+        [e[0] for e in errors],
+    )
+    raise RuntimeError('all_pdf_fetch_strategies_failed')
+
+
 def _pdf_magic_bytes_ok(uploaded_file) -> bool:
     """True if file starts with %PDF (PDF signature)."""
     uploaded_file.seek(0)
@@ -1709,24 +1777,9 @@ class TicketViewSet(viewsets.ModelViewSet):
         
         try:
             import os
-            import requests
 
-            content = None
             if getattr(settings, 'USE_CLOUDINARY', False):
-                # Public raw PDFs may still require signed delivery URLs; unsigned FileField.read() can 403.
-                import cloudinary.utils
-
-                public_id = (ticket.pdf_file.name or '').replace('\\', '/')
-                url, _ = cloudinary.utils.cloudinary_url(
-                    public_id,
-                    resource_type='raw',
-                    type='upload',
-                    sign_url=True,
-                    secure=True,
-                )
-                r = requests.get(url, timeout=90)
-                r.raise_for_status()
-                content = r.content
+                content = _download_ticket_pdf_bytes(ticket)
             else:
                 ticket.pdf_file.open('rb')
                 try:
