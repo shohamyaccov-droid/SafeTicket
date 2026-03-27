@@ -2226,8 +2226,12 @@ class EventViewSet(viewsets.ModelViewSet):
         event = get_object_or_404(Event, pk=pk)
         # Lazy cart abandonment cleanup
         release_abandoned_carts()
-        # Get all active tickets for this event
-        tickets = Ticket.objects.filter(event=event, status='active').select_related('event', 'seller')
+        # Public marketplace: only listable inventory (active + qty > 0)
+        tickets = Ticket.objects.filter(
+            event=event,
+            status='active',
+            available_quantity__gt=0,
+        ).select_related('event', 'seller')
         
         # Filtering
         min_price = request.query_params.get('min_price')
@@ -2366,7 +2370,9 @@ class EventViewSet(viewsets.ModelViewSet):
         
         tickets = tickets.distinct()
         serializer = TicketListSerializer(tickets, many=True, context={'request': request})
-        return Response(serializer.data)
+        response = Response(serializer.data)
+        response['Cache-Control'] = 'no-store, max-age=0'
+        return response
 
 
 @method_decorator(csrf_required, name='dispatch')

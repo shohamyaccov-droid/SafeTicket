@@ -11,6 +11,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from datetime import timedelta
 import json
+import math
 
 User = get_user_model()
 
@@ -228,4 +229,39 @@ class PremiumOfferE2ETest(TestCase):
             offer_id,
             ids,
             'New offer must appear in GET /offers/sent/ immediately after creation',
+        )
+
+    def test_purchased_ticket_removed_from_public_event_pool(self):
+        """After successful checkout, sold ticket must not appear in GET /events/{id}/tickets/."""
+        expected_total = math.ceil(float(self.ticket.asking_price) * 1.10)
+        pay_r = self.buyer_client.post(
+            '/api/users/payments/simulate/',
+            {'ticket_id': self.ticket.id, 'amount': expected_total, 'quantity': 1},
+            format='json',
+        )
+        self.assertEqual(pay_r.status_code, 200, pay_r.content.decode())
+
+        order_r = self.buyer_client.post(
+            '/api/users/orders/',
+            {
+                'ticket': self.ticket.id,
+                'total_amount': expected_total,
+                'quantity': 1,
+                'event_name': self.event.name,
+            },
+            format='json',
+            **self.buyer_headers,
+        )
+        self.assertEqual(order_r.status_code, 201, order_r.content.decode())
+
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.status, 'sold')
+
+        r = self.buyer_client.get(f'/api/users/events/{self.event.id}/tickets/')
+        self.assertEqual(r.status_code, 200)
+        ids = [t['id'] for t in r.json()]
+        self.assertNotIn(
+            self.ticket.id,
+            ids,
+            'Sold ticket must be excluded from public event ticket list',
         )

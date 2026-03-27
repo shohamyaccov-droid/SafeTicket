@@ -116,7 +116,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const effectivePrice = String(negotiatedBaseTotal != null ? negotiatedBaseTotal : ticketBaseNum);
   const effectiveUnitPrice = negotiatedUnitBase != null ? negotiatedUnitBase : ticketBaseNum;
   const unitPriceForDisplay = unitDisplayPrice;
-  
+  const unitBaseRounded = Math.round(ticketBaseNum);
+  const standardReceiptBaseTotal =
+    !isNegotiatedPrice && ticketBaseNum > 0 ? unitBaseRounded * quantity : 0;
+  const standardReceiptTotalPay = !isNegotiatedPrice ? unitDisplayPrice * quantity : 0;
+  const standardReceiptFeeTotal = !isNegotiatedPrice
+    ? standardReceiptTotalPay - standardReceiptBaseTotal
+    : 0;
+
   // Update quantity when initialQuantity prop changes
   useEffect(() => {
     // If there's a locked quantity from accepted offer, use that
@@ -954,23 +961,23 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   )}
                   <div className="price-row">
-                    <span>מחיר כרטיסים:</span>
+                    <span>מחיר כרטיס</span>
                     <span>₪{offerBaseAmountStr != null ? parseFloat(offerBaseAmountStr).toFixed(2) : parseFloat(effectivePrice).toFixed(2)}</span>
                   </div>
                   <div className="price-row">
-                    <span>עמלת שירות (10%):</span>
+                    <span>עמלת שירות (10%)</span>
                     <span>₪{calculateServiceFee(offerBaseAmountStr ?? effectivePrice, 10)}</span>
                   </div>
                   <div className="price-row total-row">
-                    <span>סה"כ לתשלום:</span>
+                    <span>סך הכל לתשלום:</span>
                     <span>₪{(parseFloat(offerBaseAmountStr ?? effectivePrice) + parseFloat(calculateServiceFee(offerBaseAmountStr ?? effectivePrice, 10))).toFixed(2)}</span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="price-row">
-                    <span>מחיר ליחידה (כולל עמלה):</span>
-                    <span>₪{unitDisplayPrice}</span>
+                    <span>מחיר כרטיס</span>
+                    <span>₪{standardReceiptBaseTotal}</span>
                   </div>
                   <div className="price-row">
                     <span>כמות:</span>
@@ -982,9 +989,13 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                       <span>{allocatedSeatsText}</span>
                     </div>
                   )}
+                  <div className="price-row">
+                    <span>עמלת שירות (10%)</span>
+                    <span>₪{standardReceiptFeeTotal}</span>
+                  </div>
                   <div className="price-row total-row">
-                    <span>סה"כ לתשלום:</span>
-                    <span>₪{unitDisplayPrice * quantity}</span>
+                    <span>סך הכל לתשלום:</span>
+                    <span>₪{standardReceiptTotalPay}</span>
                   </div>
                 </>
               )}
@@ -1199,23 +1210,23 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   )}
                   <div className="price-row">
-                    <span>מחיר כרטיסים:</span>
+                    <span>מחיר כרטיס</span>
                     <span>₪{offerBaseAmountStr != null ? parseFloat(offerBaseAmountStr).toFixed(2) : parseFloat(effectivePrice).toFixed(2)}</span>
                   </div>
                   <div className="price-row">
-                    <span>עמלת שירות (10%):</span>
+                    <span>עמלת שירות (10%)</span>
                     <span>₪{calculateServiceFee(effectivePrice, 10)}</span>
                   </div>
                   <div className="price-row total-row">
-                    <span>סה"כ לתשלום:</span>
+                    <span>סך הכל לתשלום:</span>
                     <span>₪{(parseFloat(effectivePrice) + parseFloat(calculateServiceFee(effectivePrice, 10))).toFixed(2)}</span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="price-row">
-                    <span>מחיר ליחידה:</span>
-                    <span>₪{unitDisplayPrice}</span>
+                    <span>מחיר כרטיס</span>
+                    <span>₪{standardReceiptBaseTotal}</span>
                   </div>
                   <div className="price-row">
                     <span>כמות:</span>
@@ -1228,12 +1239,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   )}
                   <div className="price-row">
-                    <span>מחיר כרטיסים:</span>
-                    <span>₪{(unitDisplayPrice * quantity)}</span>
+                    <span>עמלת שירות (10%)</span>
+                    <span>₪{standardReceiptFeeTotal}</span>
                   </div>
                   <div className="price-row total-row">
-                    <span>סה"כ לתשלום:</span>
-                    <span>₪{unitDisplayPrice * quantity}</span>
+                    <span>סך הכל לתשלום:</span>
+                    <span>₪{standardReceiptTotalPay}</span>
                   </div>
                 </>
               )}

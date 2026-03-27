@@ -765,9 +765,14 @@
 }
 
 .success-download-button:hover {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
   box-shadow: 0 6px 25px rgba(16, 185, 129, 0.5);
   transform: translateY(-2px);
+}
+
+.success-download-button:hover .download-check-icon {
+  color: #ffffff;
 }
 
 .success-download-button svg {

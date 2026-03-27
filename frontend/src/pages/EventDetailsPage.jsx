@@ -279,7 +279,15 @@ const EventDetailsPage = () => {
           ticketsData = ticketsResponse.data.results;
         }
       }
-      const ticketsArray = Array.isArray(ticketsData) ? ticketsData : [];
+      const raw = Array.isArray(ticketsData) ? ticketsData : [];
+      // Defense in depth: never show sold or zero-qty rows if API/cache is stale
+      const ticketsArray = raw.filter(
+        (t) =>
+          t &&
+          t.status !== 'sold' &&
+          t.status !== 'pending_payout' &&
+          Number(t.available_quantity) > 0
+      );
       setTickets(ticketsArray);
       return ticketsArray;
     } catch (error) {
@@ -606,11 +614,10 @@ const EventDetailsPage = () => {
     }
   };
 
-  const handleCloseCheckout = () => {
+  const handleCloseCheckout = async () => {
     setShowCheckout(false);
     setSelectedTicketGroup(null);
-    // Refresh tickets after purchase
-    fetchTickets();
+    await fetchTickets();
   };
 
   const handleFilterChange = (key, value) => {
@@ -1137,7 +1144,7 @@ const EventDetailsPage = () => {
                     <h3>{selectedOfferTicket.event_name || 'אירוע'}</h3>
                     <p className="current-price">מחיר נוכחי: ₪{getTicketPrice(selectedOfferTicket)}</p>
                     <p className="offer-fee-clarification" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem', lineHeight: 1.5 }}>
-                      <strong>המחיר המוצע הוא לפני עמלת שירות.</strong> עמלת שירות (10%) תתווסף בקופה — הסכום הסופי שישולם יהיה המחיר המוצע + עמלה.
+                      ההצעה היא לפני עמלת שירות (10% יתווספו בקופה).
                     </p>
                   </div>
                 </div>
@@ -1243,7 +1250,6 @@ const EventDetailsPage = () => {
                       dir="ltr"
                       className="custom-offer-input"
                     />
-                    <div className="offer-fee-disclaimer">* הסכום המוצע הוא לכרטיס בודד (לפני עמלת מערכת של 10%)</div>
                     {offerAmount && offerQuantity > 1 && (
                       <small style={{ display: 'block', marginTop: '0.5rem', color: '#64748b' }}>
                         מחיר ליחידה: ₪{(parseFloat(offerAmount) / offerQuantity).toFixed(2)}

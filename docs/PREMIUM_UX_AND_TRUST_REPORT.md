@@ -12,8 +12,10 @@
 | Double charging | `purchase_completed` + `ticket_listing_status` on offers; UI hides **השלם רכישה** and shows **נרכש בהצלחה** when appropriate. |
 | Offers history | Backend returns full offer history (no pagination cut-off); dashboard splits **קיבלתי** / **שלחתי**; mutations trigger refetch + tab refresh. |
 | Fee clarity | Offer modal copy states price is **before service fee** (עמלת שירות). |
+| Post-purchase marketplace | `sold` / zero-qty tickets excluded from event `GET …/tickets/`; `Cache-Control: no-store`; `await fetchTickets()` on checkout close; client-side filter. |
+| Checkout receipt | Checkout modal shows **מחיר כרטיס**, **עמלת שירות (10%)**, **סך הכל לתשלום** before card entry. |
 | Performance | Events/artists list queries use `select_related` / aggregates to reduce N+1; Sell page loads artists + events in parallel. |
-| Tests | E2E-style API tests for `purchase_completed` after paid order and immediate visibility after new offer. |
+| Tests | E2E-style API tests for `purchase_completed`, new offer visibility, and **sold ticket removed from public event pool**. |
 
 ---
 
@@ -111,6 +113,18 @@ For accepted-offer checkout windows, pair the countdown with **plain text**: “
 3. Unified design tokens (spacing, radius, shadow) across modals.
 4. Lightweight animation library only if bundle budget allows (or CSS-only success states).
 5. Optional: trust badge strip on homepage and checkout footer.
+
+---
+
+---
+
+## 9. Next premium-impact ideas (post–Shoham QA)
+
+1. **Soft urgency without noise** — On listing cards, show a calm line such as “נצפה לאחרונה על ידי מספר קונים” or a rolling “X צפיות בשעה האחרונה” (capped, never fake). Pairs with inventory truth to nudge decisions without countdown spam.
+
+2. **Trust strip on checkout** — A single horizontal row: מאובטח (HTTPS), תשלום דרך הפלטפורמה בלבד, זכות ערעור — with short tooltips. Reduces anxiety right above the card form.
+
+3. **Seller credibility micro-badges** — For verified sellers: “מוכר מאומת”, response-time tier, completed sales count. Shown once on the event row and repeated subtly in the offer thread header so negotiation feels peer-to-peer but safe.
 
 ---
 
