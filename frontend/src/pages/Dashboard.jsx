@@ -1145,6 +1145,19 @@ const Dashboard = () => {
 
         {activeTab === 'sales' && (
           <div className="selling-tab" style={{ width: '100%', maxWidth: '100%', display: 'block' }}>
+            <div className="seller-escrow-onboarding-banner" role="region" aria-label="מידע למוכרים">
+              <span className="seller-escrow-onboarding-icon" aria-hidden="true">🔒</span>
+              <div className="seller-escrow-onboarding-text">
+                <strong>נאמנות (Escrow) — בקצרה:</strong> כספי הקונה נשמרים בנאמנות עד לאחר האירוע; רק אז (בכפוף לתנאים) מתבצע שחרור לתשלום. כך קונים ומוכרים מקבלים הגנה הדדית.
+              </div>
+              <button
+                type="button"
+                className="seller-escrow-onboarding-cta"
+                onClick={() => navigate('/sell')}
+              >
+                התחלת מכירה
+              </button>
+            </div>
             <h2 className="section-title">המכירות שלי</h2>
             {(!listings.active || listings.active.length === 0) &&
                 (!listings.sold || listings.sold.length === 0) ? (

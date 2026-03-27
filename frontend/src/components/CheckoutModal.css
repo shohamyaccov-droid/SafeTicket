@@ -727,6 +727,54 @@
   font-weight: 600;
 }
 
+.guest-post-purchase-panel {
+  margin: 1rem 0 0;
+  padding: 1rem 1.1rem;
+  text-align: right;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.08) 0%, rgba(16, 185, 129, 0.06) 100%);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  animation: fadeInUp 0.45s ease 0.75s both;
+}
+
+.guest-post-purchase-lead {
+  margin: 0 0 0.65rem 0;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+.guest-post-purchase-list {
+  margin: 0;
+  padding: 0 1.1rem 0 0;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+.guest-post-purchase-list li {
+  margin-bottom: 0.35rem;
+}
+
+.success-register-cta {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+  padding: 0.65rem 1rem;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--primary-blue);
+  border: 2px dashed rgba(14, 165, 233, 0.45);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.success-register-cta:hover {
+  background: rgba(14, 165, 233, 0.08);
+  border-color: var(--primary-blue);
+}
+
 .success-actions {
   display: flex;
   flex-direction: column;

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { orderAPI, paymentAPI, ticketAPI } from '../services/api';
 import { getTicketPrice, formatPrice, getUnitPriceWithFee, calculateServiceFee } from '../utils/priceFormat';
@@ -762,6 +762,19 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 )}
               </div>
             </div>
+
+            {!user && (
+              <div className="guest-post-purchase-panel" role="region" aria-label="הוראות לאורח">
+                <p className="guest-post-purchase-lead">
+                  <strong>הרכישה הושלמה ללא הרשמה.</strong> הורידו את קובץ ה-PDF כעת והשמרו אותו בטלפון או במחשב לפני האירוע.
+                </p>
+                <ul className="guest-post-purchase-list">
+                  <li>לחצו על &quot;הורדת כרטיס PDF&quot; — זה הכרטיס התקף לכניסה.</li>
+                  <li>אם הזנתם אימייל בקופה, נשלח אליכם עותק (בדקו גם בתיקיית ספאם).</li>
+                  <li>אין חובה להירשם; אפשר לפתוח חשבון מאוחר יותר כדי לראות הזמנות עתידיות בדשבורד.</li>
+                </ul>
+              </div>
+            )}
             
             <div className="success-actions">
               <div className="success-download-buttons">
@@ -815,16 +828,38 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   );
                 })()}
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  navigate('/dashboard');
-                  onClose();
-                }}
-                className="success-close-button success-primary-dashboard"
-              >
-                מעבר לדשבורד
-              </button>
+              {user ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigate('/dashboard');
+                    onClose();
+                  }}
+                  className="success-close-button success-primary-dashboard"
+                >
+                  מעבר לדשבורד
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate('/');
+                      onClose();
+                    }}
+                    className="success-close-button success-primary-dashboard"
+                  >
+                    חזרה לעמוד הבית
+                  </button>
+                  <Link
+                    to="/register"
+                    className="success-register-cta"
+                    onClick={onClose}
+                  >
+                    פתיחת חשבון (אופציונלי) — ניהול הזמנות
+                  </Link>
+                </>
+              )}
               <button onClick={handleClose} className="success-close-button" type="button">
                 סגור
               </button>

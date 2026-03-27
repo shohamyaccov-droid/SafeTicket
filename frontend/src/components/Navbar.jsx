@@ -54,8 +54,13 @@ const Navbar = () => {
           return (roundCount % 2 === 0 && isSeller) || (roundCount === 1 && !isSeller);
         };
         const actionRequired = receivedOffers.filter(o => isOfferActionRequired(o, true)).length + sentOffers.filter(o => isOfferActionRequired(o, false)).length;
-        const acceptedOffers = sentOffers.filter(o => o.status === 'accepted').length;
-        setOfferCounts({ actionRequired, acceptedOffers });
+        const acceptedPendingCheckout = sentOffers.filter(
+          (o) =>
+            o.status === 'accepted' &&
+            !o.purchase_completed &&
+            o.ticket_listing_status !== 'sold'
+        ).length;
+        setOfferCounts({ actionRequired, acceptedOffers: acceptedPendingCheckout });
       } catch {
         setOfferCounts({ actionRequired: 0, acceptedOffers: 0 });
       }
