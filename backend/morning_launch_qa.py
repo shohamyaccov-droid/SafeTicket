@@ -274,9 +274,12 @@ def main() -> int:
     offer_probe = {"ok": False, "buyer_id": buyer_uid, "ticket_id": tid_a}
     if r_ev_tix.status_code == 200:
         body_tix = r_ev_tix.json() or {}
-        arr = body_tix.get("results")
-        if arr is None:
-            arr = body_tix if isinstance(body_tix, list) else []
+        if isinstance(body_tix, list):
+            arr = body_tix
+        else:
+            arr = body_tix.get("results")
+            if arr is None:
+                arr = []
         mine = next((x for x in arr if x.get("id") == tid_a), None)
         if mine:
             sid = mine.get("seller")
