@@ -445,7 +445,10 @@ const Dashboard = () => {
             <p><strong>מספר הזמנה:</strong> ${response.data.order_id}</p>
             <p><strong>תאריך:</strong> ${new Date(response.data.order_date).toLocaleDateString('he-IL')}</p>
             <p><strong>סטטוס:</strong> ${response.data.status}</p>
-            <p><strong>סכום:</strong> ₪${response.data.total_amount}</p>
+            <p><strong>סה״כ שולם (לקונה):</strong> ₪${response.data.total_paid_by_buyer ?? response.data.total_amount}</p>
+            <p><strong>מחיר מוסכם (בסיס):</strong> ${response.data.final_negotiated_price != null ? '₪' + response.data.final_negotiated_price : '—'}</p>
+            <p><strong>עמלת שירות:</strong> ${response.data.buyer_service_fee != null ? '₪' + response.data.buyer_service_fee : '—'}</p>
+            <p><strong>נטו למוכר:</strong> ${response.data.net_seller_revenue != null ? '₪' + response.data.net_seller_revenue : '—'}</p>
             <p><strong>כמות:</strong> ${response.data.quantity}</p>
             <p><strong>אירוע:</strong> ${response.data.event_name}</p>
             <button onclick="window.print()">הדפס</button>
@@ -761,7 +764,7 @@ const Dashboard = () => {
                           </div>
                         </div>
                         <span className="row-quantity">{purchase.quantity || 1} כרטיסים</span>
-                        <span className="row-price">₪{formatPrice(purchase.total_amount)}</span>
+                        <span className="row-price">₪{formatPrice(purchase.total_paid_by_buyer ?? purchase.total_amount)}</span>
                         <span className={`status-badge status-${purchase.status}`}>
                           {purchase.status === 'paid'
                             ? 'שולם'
@@ -822,9 +825,25 @@ const Dashboard = () => {
                               <span className="detail-value">{getSeatDisplay(ticket)}</span>
                             </div>
                             <div className="detail-row">
-                              <span className="detail-label">💰 סכום:</span>
-                              <span className="detail-value price-value">₪{formatPrice(purchase.total_amount)}</span>
+                              <span className="detail-label">💰 סה״כ שולמת (כולל עמלה):</span>
+                              <span className="detail-value price-value">₪{formatPrice(purchase.total_paid_by_buyer ?? purchase.total_amount)}</span>
                             </div>
+                            {(purchase.final_negotiated_price != null || purchase.buyer_service_fee != null) && (
+                              <>
+                                {purchase.final_negotiated_price != null && (
+                                  <div className="detail-row">
+                                    <span className="detail-label">מחיר מוסכם (בסיס למוכר):</span>
+                                    <span className="detail-value">₪{formatPrice(purchase.final_negotiated_price)}</span>
+                                  </div>
+                                )}
+                                {purchase.buyer_service_fee != null && Number(purchase.buyer_service_fee) > 0 && (
+                                  <div className="detail-row">
+                                    <span className="detail-label">עמלת שירות:</span>
+                                    <span className="detail-value">₪{formatPrice(purchase.buyer_service_fee)}</span>
+                                  </div>
+                                )}
+                              </>
+                            )}
                             <div className="detail-row">
                               <span className="detail-label">🎫 כמות:</span>
                               <span className="detail-value">{purchase.quantity || 1}</span>
@@ -1162,7 +1181,13 @@ const Dashboard = () => {
                                 </div>
                               </div>
                               <span className="row-quantity">{listing.available_quantity || 1} כרטיסים</span>
-                              <span className="row-price">₪{formatPrice(listing.asking_price || listing.original_price)}</span>
+                              <span className="row-price">
+                                ₪{formatPrice(
+                                  ['sold', 'pending_payout', 'paid_out'].includes(listing.status) && listing.expected_payout != null
+                                    ? listing.expected_payout
+                                    : (listing.asking_price || listing.original_price)
+                                )}
+                              </span>
                               <span className={`status-badge status-${listing.status}`}>
                                 {listing.status === 'pending_verification'
                                   ? 'בבדיקה'
@@ -1274,6 +1299,15 @@ const Dashboard = () => {
                                         >
                                           ביטול
                                         </button>
+                                      </div>
+                                    ) : ['sold', 'pending_payout', 'paid_out'].includes(listing.status) ? (
+                                      <div className="detail-value" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <span className="price-value">
+                                          נטו למוכר: ₪{formatPrice(listing.expected_payout ?? listing.asking_price)}
+                                        </span>
+                                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                          מחיר מודעה מקורי: ₪{formatPrice(listing.asking_price || listing.original_price)}
+                                        </span>
                                       </div>
                                     ) : (
                                       <span className="detail-value price-value">

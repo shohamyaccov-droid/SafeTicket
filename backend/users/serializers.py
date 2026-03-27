@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from .models import User, Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage
 
 
@@ -116,9 +116,13 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = (
             'id', 'user', 'ticket', 'ticket_info', 'tickets', 'ticket_ids', 'guest_email', 'guest_phone', 'status',
-            'total_amount', 'quantity', 'event_name', 'created_at'
+            'total_amount', 'quantity', 'event_name', 'created_at',
+            'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'total_paid_by_buyer', 'net_seller_revenue',
         )
-        read_only_fields = ('id', 'created_at', 'status', 'ticket_info', 'tickets', 'ticket_ids')
+        read_only_fields = (
+            'id', 'created_at', 'status', 'ticket_info', 'tickets', 'ticket_ids',
+            'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'total_paid_by_buyer', 'net_seller_revenue',
+        )
     
     def get_tickets(self, obj):
         """Return array of tickets with id and pdf_file_url for multi-ticket downloads"""
@@ -479,7 +483,8 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'ticket', 'ticket_details', 'tickets', 'status', 'total_amount', 'quantity',
             'event_name', 'created_at', 'pdf_download_url', 'receipt_url',
-            'event_image_url', 'status_timeline'
+            'event_image_url', 'status_timeline',
+            'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'total_paid_by_buyer', 'net_seller_revenue',
         )
         read_only_fields = fields
     
@@ -506,7 +511,7 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
     
     def get_ticket_details(self, obj):
         if obj.ticket:
-            return {
+            td = {
                 'id': obj.ticket.id,
                 'event_name': obj.ticket.event.name if obj.ticket.event else (obj.ticket.event_name or 'Unknown Event'),
                 'event_date': obj.ticket.event.date if obj.ticket.event else obj.ticket.event_date,
@@ -516,8 +521,12 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
                 'section': getattr(obj.ticket, 'section', None) or '',
                 'row': getattr(obj.ticket, 'row', None) or '',
                 'seat_numbers': getattr(obj.ticket, 'seat_numbers', None) or '',
+                'original_listing_price': str(obj.ticket.asking_price),
                 'asking_price': str(obj.ticket.asking_price),
             }
+            if obj.final_negotiated_price is not None:
+                td['final_negotiated_price'] = str(obj.final_negotiated_price)
+            return td
         return {
             'event_name': obj.event_name,
         }
@@ -610,12 +619,23 @@ class ProfileListingSerializer(serializers.ModelSerializer):
         return obj.event.venue if obj.event else (obj.venue or '')
     
     def get_expected_payout(self, obj):
-        """Calculate expected payout for sold tickets (100% of asking price - service fee is added on top by buyer)"""
-        if obj.status in ['sold', 'pending_payout', 'paid_out']:
-            # Service fee (10%) is added on top of ticket price by buyer
-            # Seller receives the full asking_price
-            return float(obj.asking_price)
-        return None
+        """Sold listing: seller net from order row when present, else listing asking_price."""
+        if obj.status not in ['sold', 'pending_payout', 'paid_out']:
+            return None
+        order = (
+            Order.objects.filter(status__in=['paid', 'completed'])
+            .filter(Q(ticket_id=obj.id) | Q(ticket_ids__contains=[obj.id]))
+            .order_by('-created_at')
+            .first()
+        )
+        if order is None:
+            for o in Order.objects.filter(status__in=['paid', 'completed']).order_by('-created_at')[:200]:
+                if o.covers_ticket(obj.id):
+                    order = o
+                    break
+        if order and order.net_seller_revenue is not None:
+            return float(order.net_seller_revenue)
+        return float(obj.asking_price)
     
     def get_order_count(self, obj):
         """Get number of orders for this ticket"""

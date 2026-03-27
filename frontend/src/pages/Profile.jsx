@@ -285,7 +285,7 @@ const Profile = () => {
                           <p><strong>תאריך:</strong> {ticket?.event_date ? formatDate(ticket?.event_date) : formatDate(order?.created_at)}</p>
                           <p className="price-info">
                             <span className="asking-price">
-                              {formatPrice(order?.total_amount || 0)} <span className="currency">₪</span>
+                              {formatPrice((order?.total_paid_by_buyer ?? order?.total_amount) || 0)} <span className="currency">₪</span>
                             </span>
                           </p>
                           {order?.pdf_download_url && order?.status !== 'cancelled' && (

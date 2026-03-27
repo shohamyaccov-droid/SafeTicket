@@ -358,6 +358,43 @@ class Order(models.Model):
     
     # Multi-ticket support: list of ticket IDs for download (when quantity > 1)
     ticket_ids = models.JSONField(default=list, blank=True, help_text='List of ticket IDs in this order')
+
+    # Price integrity (negotiated vs list; buyer total; seller net)
+    related_offer = models.ForeignKey(
+        'Offer',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='orders',
+        help_text='Accepted offer this order fulfilled, if any',
+    )
+    final_negotiated_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Seller bundle price: offer amount if negotiated, else asking × quantity',
+    )
+    buyer_service_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text='Amount buyer pays beyond final_negotiated_price (typically platform fee)',
+    )
+    total_paid_by_buyer = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Total charged to buyer (mirrors total_amount when set)',
+    )
+    net_seller_revenue = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Amount seller receives for this sale (negotiated base; no extra commission here)',
+    )
     
     def covers_ticket(self, ticket_id):
         """True if this order includes the given ticket (FK or JSON list; int/str safe)."""

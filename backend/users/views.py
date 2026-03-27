@@ -31,6 +31,31 @@ from pypdf import PdfReader, PdfWriter
 logger = logging.getLogger(__name__)
 
 
+def _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity):
+    """Persist breakdown after order row exists (create_order / guest_checkout)."""
+    breakdown = compute_order_price_breakdown(
+        order.total_amount,
+        negotiated_offer,
+        ticket,
+        order_quantity,
+    )
+    order.final_negotiated_price = breakdown['final_negotiated_price']
+    order.buyer_service_fee = breakdown['buyer_service_fee']
+    order.total_paid_by_buyer = breakdown['total_paid_by_buyer']
+    order.net_seller_revenue = breakdown['net_seller_revenue']
+    order.related_offer = negotiated_offer if negotiated_offer else None
+    order.save(
+        update_fields=[
+            'final_negotiated_price',
+            'buyer_service_fee',
+            'total_paid_by_buyer',
+            'net_seller_revenue',
+            'related_offer',
+            'updated_at',
+        ]
+    )
+
+
 def _log_cloudinary_or_storage_error(exc: BaseException, context: str) -> str:
     """Log full exception for ops; return a short message for API (no secrets)."""
     msg = str(exc).strip() or repr(exc)
@@ -60,6 +85,7 @@ from .serializers import (
     ContactMessageSerializer
 )
 from .models import Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage
+from .pricing import compute_order_price_breakdown
 from django.utils import timezone
 from datetime import timedelta
 from django.conf import settings
@@ -688,6 +714,10 @@ def order_receipt(request, order_id):
         'order_date': order.created_at,
         'status': order.status,
         'total_amount': str(order.total_amount),
+        'total_paid_by_buyer': str(order.total_paid_by_buyer) if order.total_paid_by_buyer is not None else str(order.total_amount),
+        'final_negotiated_price': str(order.final_negotiated_price) if order.final_negotiated_price is not None else None,
+        'buyer_service_fee': str(order.buyer_service_fee) if order.buyer_service_fee is not None else None,
+        'net_seller_revenue': str(order.net_seller_revenue) if order.net_seller_revenue is not None else None,
         'quantity': order.quantity,
         'event_name': order.event_name or (order.ticket.event.name if order.ticket and order.ticket.event else 'Unknown Event'),
         'ticket_details': {
@@ -811,15 +841,12 @@ def create_order(request):
             # The frontend already calculated the correct total (offer.amount + 10% fee)
             # So we trust the total_amount sent, but we verify it matches the offer
             offer_base_amount = float(negotiated_offer.amount)
-            expected_service_fee = offer_base_amount * 0.10
-            expected_total = offer_base_amount + expected_service_fee
+            # Match frontend CheckoutModal: total = ceil(base * 1.10)
+            expected_total = float(math.ceil(offer_base_amount * 1.10))
             received_total = float(request.data.get('total_amount', 0))
-            
-            # Allow tolerance of 2.00 ILS for JS float vs Python Decimal rounding differences
-            AMOUNT_TOLERANCE = 2.00
-            if abs(received_total - expected_total) > AMOUNT_TOLERANCE:
+            if abs(received_total - expected_total) > 0.02:
                 return Response(
-                    {'error': f'Amount mismatch. Expected approx {expected_total:.2f}, got {received_total}'},
+                    {'error': f'Amount mismatch. Expected {expected_total:.2f} (ceil of base×1.10), got {received_total}'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
         except Offer.DoesNotExist:
@@ -1092,6 +1119,7 @@ def create_order(request):
             order = serializer.save(status='paid', quantity=order_quantity)
             order.ticket_ids = ticket_ids
             order.save(update_fields=['ticket_ids'])
+            _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity)
 
         # Send receipt with PDF attachments (outside transaction so email failure doesn't rollback)
         if request.user.email:
@@ -1102,7 +1130,11 @@ def create_order(request):
                 import logging
                 logging.getLogger(__name__).exception(f'Failed to send receipt email: {e}')
 
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        order.refresh_from_db()
+        return Response(
+            OrderSerializer(order, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -1220,11 +1252,10 @@ def payment_simulation(request):
                 offer = Offer.objects.get(id=offer_id, status='accepted')
             
             is_negotiated = True
-            # Use offer amount as base price (it's already the total for the quantity)
+            # Use offer amount as base; total must match CheckoutModal ceil(base * 1.10)
             base_price = float(offer.amount)
-            service_fee = base_price * 0.10
-            expected_amount = base_price + service_fee
-            print(f"Payment simulation: Negotiated price from offer {offer_id}, base={base_price}, expected={expected_amount}")
+            expected_amount = float(math.ceil(base_price * 1.10))
+            print(f"Payment simulation: Negotiated price from offer {offer_id}, base={base_price}, expected_total={expected_amount}")
         except Offer.DoesNotExist:
             print(f"Payment simulation: Offer {offer_id} not found, using ticket price")
             is_negotiated = False
@@ -1236,17 +1267,19 @@ def payment_simulation(request):
         service_fee = base_price * 0.10  # 10% service fee
         expected_amount = base_price + service_fee
     
-    # Allow tolerance of 2.00 ILS for JS float vs Python Decimal rounding differences
-    AMOUNT_TOLERANCE = 2.00
+    AMOUNT_TOLERANCE = 2.00 if not is_negotiated else 0.02
     if abs(float(amount) - expected_amount) > AMOUNT_TOLERANCE:
         return Response(
-            {'error': f'Amount does not match {"negotiated offer" if is_negotiated else "ticket"} price. Expected: {expected_amount:.2f} (Base: {base_price:.2f} + Service Fee: {service_fee:.2f}), Got: {amount}'},
+            {'error': f'Amount does not match {"negotiated offer" if is_negotiated else "ticket"} price. Expected: {expected_amount:.2f}, Got: {amount}'},
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # Calculate service fee for response
-    service_fee = base_price * 0.10
-    total_amount = base_price + service_fee
+    if is_negotiated:
+        total_amount = expected_amount
+        service_fee = total_amount - base_price
+    else:
+        service_fee = base_price * 0.10
+        total_amount = base_price + service_fee
     
     # Simulate payment processing (always succeeds in dev)
     # In production, this would call the actual payment gateway
@@ -1285,14 +1318,13 @@ def guest_checkout(request):
         order_data = serializer.validated_data
         ticket_id = order_data.get('ticket_id')
         
-        # Validate total_amount for negotiated offers with 2.00 ILS tolerance
         if negotiated_offer:
             offer_base = float(negotiated_offer.amount)
-            expected_total = offer_base + (offer_base * 0.10)
+            expected_total = float(math.ceil(offer_base * 1.10))
             received_total = float(order_data.get('total_amount', 0))
-            if abs(received_total - expected_total) > 2.00:
+            if abs(received_total - expected_total) > 0.02:
                 return Response(
-                    {'error': f'Amount mismatch. Expected approx {expected_total:.2f}, got {received_total}'},
+                    {'error': f'Amount mismatch. Expected {expected_total:.2f}, got {received_total}'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
@@ -1505,6 +1537,7 @@ def guest_checkout(request):
                 status='paid',
                 ticket_ids=ticket_ids
             )
+            _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity)
 
         # Send receipt with PDF attachments to guest
         if order.guest_email:
