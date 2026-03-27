@@ -169,6 +169,15 @@ def main() -> int:
     report["cloudinary_pdf_urls"].append(pdf_url_0)
     report["steps"].append({"name": "upload 2 tickets", "ok": True, "first_ticket_id": tid_first})
 
+    # Whole-shekel JSON (integers, not 221.99 strings)
+    ap, op = t0.get("asking_price"), t0.get("original_price")
+    pr_ok = isinstance(ap, int) and isinstance(op, int) and ap == op == 100
+    report["price_rounding"] = {"asking_price": ap, "original_price": op, "ok": pr_ok}
+    if not pr_ok:
+        report["errors"].append(
+            f"price_rounding: expected int 100/100, got asking={ap!r} original={op!r}"
+        )
+
     # Reject non-PDF (expect 400, not 500)
     bad = BytesIO(b"not a pdf")
     r_bad = seller.post(
@@ -258,6 +267,46 @@ def main() -> int:
         print(json.dumps(report, indent=2, ensure_ascii=False))
         return 1
     report["steps"].append({"name": "buyer register", "ok": True, "username": buyer_name})
+
+    r_bp = buyer.get(f"{api_base}/users/profile/", timeout=60)
+    buyer_uid = (r_bp.json() or {}).get("user", {}).get("id") if r_bp.status_code == 200 else None
+    r_ev_tix = buyer.get(f"{api_base}/users/events/{event_id}/tickets/", timeout=60)
+    offer_probe = {"ok": False, "buyer_id": buyer_uid, "ticket_id": tid_a}
+    if r_ev_tix.status_code == 200:
+        body_tix = r_ev_tix.json() or {}
+        arr = body_tix.get("results")
+        if arr is None:
+            arr = body_tix if isinstance(body_tix, list) else []
+        mine = next((x for x in arr if x.get("id") == tid_a), None)
+        if mine:
+            sid = mine.get("seller")
+            offer_probe["seller_id"] = sid
+            offer_probe["can_offer_logic"] = bool(
+                buyer_uid is not None and sid is not None and int(sid) != int(buyer_uid)
+            )
+            offer_probe["ok"] = offer_probe["can_offer_logic"]
+            if not offer_probe["ok"]:
+                report["errors"].append(
+                    "offer_probe: buyer_id matches seller_id — UI would hide Offer (same user)"
+                )
+        else:
+            report["errors"].append("offer_probe: ticket not in GET /events/{id}/tickets/")
+    else:
+        report["errors"].append(f"offer_probe: GET event tickets HTTP {r_ev_tix.status_code}")
+    report["offer_visibility_probe"] = offer_probe
+
+    r_of = buyer.post(
+        f"{api_base}/users/offers/",
+        json={"ticket": tid_a, "amount": "80", "quantity": 1},
+        headers=build_csrf_headers(buyer, api_base),
+        timeout=60,
+    )
+    if r_of.status_code not in (200, 201):
+        report["errors"].append(f"create offer (buyer vs seller): {r_of.status_code} {r_of.text[:400]}")
+    else:
+        report["steps"].append(
+            {"name": "buyer offer on seller listing", "ok": True, "offer_id": r_of.json().get("id")}
+        )
 
     ref_id = tid_a
     unit = 100.0

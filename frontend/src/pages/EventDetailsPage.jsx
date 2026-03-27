@@ -11,6 +11,27 @@ import { getTicketPrice, getUnitPriceWithFee } from '../utils/priceFormat';
 import { getFullImageUrl } from '../utils/formatters';
 import './EventDetailsPage.css';
 
+/** Seller id from API may be a numeric PK or nested object — compare robustly to current user. */
+function isCurrentUserSellerOfTicket(user, ticket, group) {
+  if (!user || !ticket) return false;
+  const uid = Number(user.id);
+  const sidRaw = ticket.seller_id ?? ticket.seller;
+  const sid =
+    sidRaw != null && typeof sidRaw === 'object'
+      ? Number(sidRaw.id)
+      : Number(sidRaw);
+  if (!Number.isNaN(sid) && sid === uid) return true;
+  if (ticket.seller_username && user.username && ticket.seller_username === user.username) return true;
+  const gid = group?.seller_id ?? group?.seller;
+  const gsid =
+    gid != null && typeof gid === 'object'
+      ? Number(gid.id)
+      : Number(gid);
+  if (!Number.isNaN(gsid) && gsid === uid) return true;
+  if (group?.seller_username && user.username && group.seller_username === user.username) return true;
+  return false;
+}
+
 const EventDetailsPage = () => {
   const { eventId } = useParams();
   const navigate = useNavigate();
@@ -86,7 +107,11 @@ const EventDetailsPage = () => {
           tickets: [],
           price: ticket.asking_price || ticket.original_price,
           available_count: 0,
-          seller_id: ticket.seller || ticket.seller_id, // Seller ID for security checks
+          seller_id:
+            ticket.seller_id ??
+            (typeof ticket.seller === 'object' && ticket.seller != null
+              ? ticket.seller.id
+              : ticket.seller),
           seller_username: ticket.seller_username, // Seller username as fallback
           seller_is_verified: ticket.seller_is_verified || false,
           delivery_method: ticket.delivery_method || 'instant',
@@ -1000,39 +1025,42 @@ const EventDetailsPage = () => {
                   {isExpanded && (
                     <div className="ticket-row-expanded">
                       <div className="ticket-actions-row">
-                        <div className="buy-button-wrapper">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleBuy(group);
-                            }}
-                            className="viagogo-buy-button"
-                            disabled={group.available_count <= 0}
-                          >
-                            קנה עכשיו
-                          </button>
-                          <span className="micro-trust-text">🔒 תשלום מאובטח ומוגן</span>
-                        </div>
-                        {/* CRITICAL SECURITY: Hide "Make Offer" button if user is the seller */}
-                        {user && (() => {
-                          const ticket = group.tickets[0];
-                          const isSeller = ticket?.seller === user.id || 
-                                          ticket?.seller_id === user.id || 
-                                          ticket?.seller_username === user.username ||
-                                          group.seller_id === user.id ||
-                                          group.seller_username === user.username;
-                          return !isSeller;
-                        })() && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleMakeOffer(group);
-                            }}
-                            className="viagogo-offer-button"
-                            disabled={group.available_count <= 0}
-                          >
-                            הצע מחיר
-                          </button>
+                        {user && isCurrentUserSellerOfTicket(user, firstTicket, group) ? (
+                          <div className="your-listing-banner" role="status">
+                            <span className="your-listing-icon" aria-hidden="true">📌</span>
+                            <span>זה המודעה שלך — לא ניתן לרכוש או להציע על הכרטיסים שלך</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="buy-button-wrapper">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleBuy(group);
+                                }}
+                                className="viagogo-buy-button"
+                                disabled={group.available_count <= 0}
+                              >
+                                קנה עכשיו
+                              </button>
+                              <span className="micro-trust-text">🔒 תשלום מאובטח ומוגן</span>
+                            </div>
+                            {user ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMakeOffer(group);
+                                }}
+                                className="viagogo-offer-button viagogo-offer-button--prominent"
+                                disabled={group.available_count <= 0}
+                                type="button"
+                              >
+                                הצע מחיר
+                              </button>
+                            ) : (
+                              <p className="offer-login-hint">התחבר כדי להציע מחיר על המודעה</p>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>

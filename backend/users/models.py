@@ -208,13 +208,12 @@ class Ticket(models.Model):
     
     def save(self, *args, **kwargs):
         # Enforce Israeli law: asking_price must always equal original_price
-        # Ensure prices are properly rounded to 2 decimal places
+        # Whole shekels only (clean UI: 222 not 221.99)
         from decimal import Decimal, ROUND_HALF_UP
         if self.original_price is not None:
-            # Convert to Decimal and round to 2 decimal places to prevent floating point errors
-            if isinstance(self.original_price, (int, float, str)):
+            if isinstance(self.original_price, (int, float, str, Decimal)):
                 self.original_price = Decimal(str(self.original_price)).quantize(
-                    Decimal('0.01'), rounding=ROUND_HALF_UP
+                    Decimal('1'), rounding=ROUND_HALF_UP
                 )
             # Set asking_price to exactly match original_price (no deductions)
             self.asking_price = self.original_price
@@ -492,6 +491,12 @@ class Offer(models.Model):
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        from decimal import Decimal, ROUND_HALF_UP
+        if self.amount is not None:
+            self.amount = Decimal(str(self.amount)).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return f"Offer #{self.id}: {self.buyer.username} → {self.ticket.seller.username} - ₪{self.amount} ({self.status})"

@@ -733,7 +733,7 @@ def update_ticket_price(request, ticket_id):
                 from decimal import Decimal, ROUND_HALF_UP
                 # Round to 2 decimal places to match model's save() behavior
                 new_price_decimal = Decimal(str(new_price)).quantize(
-                    Decimal('0.01'), rounding=ROUND_HALF_UP
+                    Decimal('1'), rounding=ROUND_HALF_UP
                 )
                 
                 # Determine which tickets to update

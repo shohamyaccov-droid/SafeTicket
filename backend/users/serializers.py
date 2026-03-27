@@ -5,6 +5,22 @@ from django.db.models import Sum
 from .models import User, Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage
 
 
+def round_shekel_price(value):
+    """Whole shekels for ticket face value (matches Ticket.save rounding)."""
+    from decimal import Decimal, ROUND_HALF_UP
+    if value is None:
+        return None
+    return Decimal(str(value)).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+
+
+def price_as_int_for_json(value):
+    """Whole shekels as int in API JSON (222, not 221.99)."""
+    if value is None:
+        return None
+    from decimal import Decimal
+    return int(Decimal(str(value)).quantize(Decimal('1')))
+
+
 def user_can_access_ticket_pdf(user, ticket) -> bool:
     """Same rules as TicketViewSet.download_pdf: seller, staff, or buyer with paid order."""
     if not user or not user.is_authenticated:
@@ -346,14 +362,10 @@ class TicketSerializer(serializers.ModelSerializer):
                 'original_price': 'Original price (face value) is required.'
             })
         
-        # Convert to Decimal and round to 2 decimal places to prevent floating point errors
-        # This ensures 444 is saved as 444.00, not 443.99
-        from decimal import Decimal, ROUND_HALF_UP
-        if isinstance(original_price, (int, float, str)):
-            original_price = Decimal(str(original_price)).quantize(
-                Decimal('0.01'), rounding=ROUND_HALF_UP
-            )
-            attrs['original_price'] = original_price
+        # Whole shekels only (clean UI: 222 not 221.99)
+        from decimal import Decimal
+        if isinstance(original_price, (int, float, str, Decimal)):
+            attrs['original_price'] = round_shekel_price(original_price)
         
         # Handle event_date timezone - ensure it's interpreted in Israel timezone
         # Django will automatically handle timezone conversion based on TIME_ZONE setting
@@ -398,6 +410,13 @@ class TicketSerializer(serializers.ModelSerializer):
             validated_data['asking_price'] = validated_data['original_price']
         return super().update(instance, validated_data)
 
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        for k in ('original_price', 'asking_price'):
+            if k in ret and ret[k] is not None:
+                ret[k] = price_as_int_for_json(getattr(instance, k))
+        return ret
+
 
 class TicketListSerializer(serializers.ModelSerializer):
     """Simplified serializer for listing tickets (hides PDF)"""
@@ -437,6 +456,13 @@ class TicketListSerializer(serializers.ModelSerializer):
     
     def get_has_pdf_file(self, obj):
         return bool(obj.pdf_file)
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        for k in ('original_price', 'asking_price'):
+            if k in ret and ret[k] is not None:
+                ret[k] = price_as_int_for_json(getattr(instance, k))
+        return ret
 
 
 class ProfileOrderSerializer(serializers.ModelSerializer):
@@ -650,6 +676,15 @@ class OfferSerializer(serializers.ModelSerializer):
             remaining = obj.checkout_expires_at - timezone.now()
             return max(0, int(remaining.total_seconds()))
         return None
+
+    def validate_amount(self, value):
+        return round_shekel_price(value)
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        if 'amount' in ret and ret['amount'] is not None:
+            ret['amount'] = price_as_int_for_json(instance.amount)
+        return ret
 
 
 class ContactMessageSerializer(serializers.ModelSerializer):

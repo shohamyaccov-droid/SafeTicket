@@ -1,26 +1,23 @@
 /**
- * Format price with exactly 2 decimal places
- * Uses precise decimal logic to avoid floating point errors
- * Global fix: Ensures 133 is always displayed as 133.00
+ * Format price for display: whole shekels show without decimals (222), fractional amounts keep 2 decimals (e.g. order totals).
  */
 export const formatPrice = (price) => {
   if (price === null || price === undefined || price === '') {
-    return '0.00';
+    return '0';
   }
-  
-  // Convert to number for precise calculation
-  // Handle Decimal objects from backend by converting to string first
+
   const priceStr = typeof price === 'string' ? price : String(price);
   const numPrice = parseFloat(priceStr);
-  
-  // Check if valid number
+
   if (isNaN(numPrice)) {
-    return '0.00';
+    return '0';
   }
-  
-  // Use toFixed(2) to ensure exactly 2 decimal places
-  // This handles floating point precision issues and ensures 133 -> 133.00
-  return numPrice.toFixed(2);
+
+  const rounded = Math.round(numPrice * 100) / 100;
+  if (Number.isInteger(rounded) || Math.abs(rounded - Math.round(rounded)) < 1e-9) {
+    return String(Math.round(rounded));
+  }
+  return rounded.toFixed(2);
 };
 
 /**
@@ -46,24 +43,16 @@ export const getTotalWithFee = (basePrice, quantity) => {
 };
 
 /**
- * Get the display price from a ticket object
- * Returns the asking_price, original_price, or price field
- * Always returns a string with exactly 2 decimal places
+ * Face value for a ticket listing (whole shekels only: "222", not "221.99").
  */
 export const getTicketPrice = (ticket) => {
-  if (!ticket) return '0.00';
-  
-  // Priority: asking_price > original_price > price
-  // Ensure we handle Decimal fields from backend correctly
-  // CRITICAL: Apply toFixed(2) to raw DB value BEFORE any calculations
+  if (!ticket) return '0';
+
   const price = ticket.asking_price ?? ticket.original_price ?? ticket.price ?? '0';
-  
-  // Convert to string if it's a Decimal object, then format
-  // This ensures the raw DB value (e.g., 444.00) is preserved exactly
   const priceStr = typeof price === 'string' ? price : String(price);
-  
-  // Apply toFixed(2) to the raw value from DB to ensure 444.00, not 443.99
-  return formatPrice(priceStr);
+  const num = parseFloat(priceStr);
+  if (isNaN(num)) return '0';
+  return String(Math.round(num));
 };
 
 /**

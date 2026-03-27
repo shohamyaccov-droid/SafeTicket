@@ -3,6 +3,17 @@ import { authAPI } from '../services/api';
 
 const AuthContext = createContext(null);
 
+function broadcastAuthEvent(type) {
+  try {
+    if (typeof BroadcastChannel === 'undefined') return;
+    const ch = new BroadcastChannel('safeticket-auth');
+    ch.postMessage({ type });
+    ch.close();
+  } catch {
+    /* ignore */
+  }
+}
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -15,26 +26,56 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const applyProfile = (response) => {
+    const userData = response.data.user || response.data;
+    if (userData && typeof userData.is_superuser === 'undefined') {
+      userData.is_superuser = false;
+    }
+    if (userData && typeof userData.is_staff === 'undefined') {
+      userData.is_staff = false;
+    }
+    setUser(userData);
+  };
+
   useEffect(() => {
     // Auth check: NO localStorage - tokens are HttpOnly cookies.
     // Unconditionally call getProfile(); 200 = set user, 401 = set null (interceptor
     // does NOT redirect on getProfile 401 to avoid infinite loop).
     authAPI.getProfile()
       .then((response) => {
-        const userData = response.data.user || response.data;
-        if (userData && typeof userData.is_superuser === 'undefined') {
-          userData.is_superuser = false;
-        }
-        if (userData && typeof userData.is_staff === 'undefined') {
-          userData.is_staff = false;
-        }
-        setUser(userData);
+        applyProfile(response);
         setLoading(false);
       })
       .catch(() => {
         setUser(null);
         setLoading(false);
       });
+  }, []);
+
+  // Multi-tab: login/logout in another tab updates HttpOnly cookies — refresh profile from server.
+  useEffect(() => {
+    const ch =
+      typeof BroadcastChannel !== 'undefined'
+        ? new BroadcastChannel('safeticket-auth')
+        : null;
+    const onMessage = (ev) => {
+      const t = ev?.data?.type;
+      if (t === 'login' || t === 'logout') {
+        authAPI
+          .getProfile()
+          .then((response) => applyProfile(response))
+          .catch(() => setUser(null));
+      }
+    };
+    if (ch) {
+      ch.addEventListener('message', onMessage);
+    }
+    return () => {
+      if (ch) {
+        ch.removeEventListener('message', onMessage);
+        ch.close();
+      }
+    };
   }, []);
 
   const login = async (username, password) => {
@@ -59,6 +100,7 @@ export const AuthProvider = ({ children }) => {
         user.is_staff = false;
       }
       setUser(user);
+      broadcastAuthEvent('login');
       return { success: true };
     } catch (error) {
       console.error('FULL LOGIN ERROR:', error);
@@ -102,6 +144,7 @@ export const AuthProvider = ({ children }) => {
         newUser.is_staff = false;
       }
       setUser(newUser || response.data);
+      broadcastAuthEvent('login');
       return { success: true };
     } catch (error) {
       return {
@@ -119,6 +162,7 @@ export const AuthProvider = ({ children }) => {
       // Ignore - cookies may already be cleared
     }
     setUser(null);
+    broadcastAuthEvent('logout');
   };
 
   return (
