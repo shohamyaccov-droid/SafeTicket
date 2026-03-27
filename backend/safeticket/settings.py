@@ -251,11 +251,11 @@ if USE_CLOUDINARY:
             'CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.'
         )
 
-    # Default sha256: many Cloudinary accounts / API versions expect SHA-256 signatures; sha1 still available via env.
-    _sig_alg_raw = (os.environ.get('CLOUDINARY_SIGNATURE_ALGORITHM') or 'sha256').strip().lower()
+    # Default sha1 (Cloudinary upload API historically uses SHA-1; set CLOUDINARY_SIGNATURE_ALGORITHM=sha256 if needed).
+    _sig_alg_raw = (os.environ.get('CLOUDINARY_SIGNATURE_ALGORITHM') or 'sha1').strip().lower()
     if _sig_alg_raw not in ('sha1', 'sha256'):
         raise ImproperlyConfigured(
-            'CLOUDINARY_SIGNATURE_ALGORITHM must be sha1 or sha256 (default sha256).'
+            'CLOUDINARY_SIGNATURE_ALGORITHM must be sha1 or sha256 (default sha1).'
         )
 
     # pycloudinary.Config() reads env on first import. If CLOUDINARY_CLOUD_NAME is set, it loads
