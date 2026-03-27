@@ -38,13 +38,15 @@
 
 1. **`Order.covers_ticket(ticket_id)`** (`users/models.py`): treats **FK** `ticket_id` and **`ticket_ids` JSON** consistently (int/str). Fixes buyers who purchased **quantity > 1** where the second ticket id might not have matched `ticket.pk in list` if types differed.  
 
-2. **`download_pdf`** (`users/views.py`): when `USE_CLOUDINARY`, fetch bytes via **`cloudinary.utils.cloudinary_url(..., resource_type='raw', sign_url=True)`** + `requests.get`, because **`FileField.read()`** (unsigned CDN URL inside django-cloudinary-storage) can **403** on restricted/signed-delivery setups.  
+2. **`download_pdf`** (`users/views.py`): helper **`_download_ticket_pdf_bytes`** tries in order: **`ticket.pdf_file.url`** (public delivery), **unsigned** `cloudinary_url`, **signed** `cloudinary_url`, then **`FileField.open/read`** via storage. Covers varied Cloudinary delivery / ACL setups.  
 
 3. **Response headers**: ASCII-safe `Content-Disposition` filename to avoid encoding errors.  
 
 4. **Errors**: `logger.exception` server-side; client gets **generic** message unless `DEBUG=True`.  
 
 5. **`user_can_access_ticket_pdf`** (`users/serializers.py`): uses **`order.covers_ticket`**.  
+
+**Commits:** `f528088` (covers_ticket + first signed path), `891e402` (full fetch chain). Push `main` if not already synced.  
 
 ---
 
