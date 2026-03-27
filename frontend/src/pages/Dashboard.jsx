@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authAPI, ticketAPI, orderAPI, offerAPI } from '../services/api';
@@ -185,6 +185,7 @@ const Dashboard = () => {
   const [counterAmount, setCounterAmount] = useState('');
   const [offerExpirationTimers, setOfferExpirationTimers] = useState({});
   const [negotiationModalGroup, setNegotiationModalGroup] = useState(null);
+  const dashboardReadyRef = useRef(false);
 
   useEffect(() => {
     if (!user) return;
@@ -195,15 +196,15 @@ const Dashboard = () => {
   // Refresh offers when opening the tab (fixes stale list after mutations elsewhere)
   useEffect(() => {
     if (!user || activeTab !== 'offers') return;
-    fetchOffers();
+    fetchOffers({ silent: dashboardReadyRef.current });
   }, [user, activeTab]);
 
-  // Polling: refresh dashboard every 30 seconds for live data
+  // Polling: refresh dashboard every 30 seconds for live data (silent — no full-page loader)
   useEffect(() => {
     if (!user) return;
     const pollInterval = setInterval(() => {
-      fetchDashboardData();
-      fetchOffers();
+      fetchDashboardData({ silent: true });
+      fetchOffers({ silent: true });
     }, 30000);
     return () => clearInterval(pollInterval);
   }, [user]);
@@ -254,10 +255,11 @@ const Dashboard = () => {
     return () => clearInterval(timer);
   }, [offersReceived, offersSent]);
 
-  const fetchOffers = async () => {
+  const fetchOffers = async (opts = {}) => {
+    const silent = opts.silent === true;
     if (!user) return;
     try {
-      setOffersLoading(true);
+      if (!silent) setOffersLoading(true);
       // CRITICAL: These API calls MUST match the backend endpoints exactly
       // getReceivedOffers() -> /users/offers/received/ -> ticket__seller=user (seller receives offers on their tickets)
       // getSentOffers() -> /users/offers/sent/ -> buyer=user (buyer sent these offers)
@@ -298,7 +300,7 @@ const Dashboard = () => {
       setOffersReceived([]);
       setOffersSent([]);
     } finally {
-      setOffersLoading(false);
+      if (!silent) setOffersLoading(false);
     }
   };
 
@@ -315,8 +317,8 @@ const Dashboard = () => {
         message: 'ההצעה אושרה בהצלחה! הודעה נשלחה לקונה, ויש לו 4 שעות להשלים את הרכישה.',
         type: 'success'
       });
-      await fetchOffers();
-      await fetchDashboardData();
+      await fetchOffers({ silent: true });
+      await fetchDashboardData({ silent: true });
     } catch (err) {
       const errorMsg = err.response?.data?.error || 'שגיאה באישור ההצעה';
       setToast({
@@ -336,7 +338,7 @@ const Dashboard = () => {
         setOffersSent((prev) => prev.map((o) => (o.id === offerId ? { ...o, ...res.data } : o)));
       }
       setToast({ message: 'ההצעה נדחתה', type: 'info' });
-      await fetchOffers();
+      await fetchOffers({ silent: true });
     } catch (err) {
       const errorMsg = err.response?.data?.error || 'שגיאה בדחיית ההצעה';
       setToast({ message: errorMsg, type: 'error' });
@@ -355,7 +357,7 @@ const Dashboard = () => {
       setToast({ message: 'הצעת הנגד נשלחה בהצלחה', type: 'success' });
       setCounteringOfferId(null);
       setCounterAmount('');
-      await fetchOffers();
+      await fetchOffers({ silent: true });
     } catch (err) {
       const errorMsg = err.response?.data?.error || err.response?.data?.amount?.[0] || 'שגיאה בשליחת הצעת הנגד';
       setToast({ message: errorMsg, type: 'error' });
@@ -381,22 +383,26 @@ const Dashboard = () => {
     setShowCheckout(true);
   };
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (opts = {}) => {
+    const silent = opts.silent === true;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await authAPI.getDashboard();
       setDashboardData(response.data);
       setError('');
+      dashboardReadyRef.current = true;
     } catch (err) {
       console.error('Error fetching dashboard:', err);
-      setError('שגיאה בטעינת הנתונים');
-      setDashboardData({
-        purchases: [],
-        listings: { active: [], sold: [] },
-        summary: { total_purchases: 0, active_listings_count: 0, sold_listings_count: 0, total_expected_payout: 0 }
-      });
+      if (!silent) {
+        setError('שגיאה בטעינת הנתונים');
+        setDashboardData({
+          purchases: [],
+          listings: { active: [], sold: [] },
+          summary: { total_purchases: 0, active_listings_count: 0, sold_listings_count: 0, total_expected_payout: 0 }
+        });
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -464,7 +470,7 @@ const Dashboard = () => {
       await ticketAPI.updateTicketPrice(listingId, parseFloat(newPrice));
       setEditingPrice(null);
       setNewPrice('');
-      fetchDashboardData(); // Refresh data
+      fetchDashboardData({ silent: true }); // Refresh data
     } catch (err) {
       alert('עדכון המחיר נכשל. אנא נסה שוב.');
       console.error('Error updating price:', err);
@@ -482,7 +488,7 @@ const Dashboard = () => {
 
     try {
       await ticketAPI.deleteTicket(listingId);
-      fetchDashboardData(); // Refresh data
+      fetchDashboardData({ silent: true }); // Refresh data
     } catch (err) {
       alert('מחיקת הכרטיס נכשלה. אנא נסה שוב.');
       console.error('Error deleting listing:', err);
@@ -625,6 +631,10 @@ const Dashboard = () => {
 
   const receivedByTicket = groupOffersByTicket(offersReceived);
   const sentByTicket = groupOffersByTicket(offersSent);
+
+  const hasAcceptedOfferPendingPayment = offersSent.some(
+    (o) => o.status === 'accepted' && !isOfferPurchaseComplete(o)
+  );
 
   return (
     <div className="dashboard-container">
@@ -983,7 +993,7 @@ const Dashboard = () => {
         {activeTab === 'offers' && (
           <div className="offers-tab" style={{ width: '100%', maxWidth: '100%', display: 'block' }}>
             <h2 className="section-title">הצעות מחיר — היסטוריית משא ומתן</h2>
-            {offersSent.some((o) => o.status === 'accepted') && (
+            {hasAcceptedOfferPendingPayment && (
               <div className="accepted-offer-banner" role="alert">
                 <span className="accepted-offer-emoji">🎉</span>
                 <span className="accepted-offer-text">הצעתך אושרה! יש לך כרטיס שממתין לתשלום. השלם את הרכישה עכשיו לפני שיפוג התוקף.</span>
@@ -1440,17 +1450,14 @@ const Dashboard = () => {
           onClose={() => setNegotiationModalGroup(null)}
           onAccept={async (id) => {
             await handleAcceptOffer(id);
-            await fetchOffers();
             setNegotiationModalGroup(null);
           }}
           onReject={async (id) => {
             await handleRejectOffer(id);
-            await fetchOffers();
             setNegotiationModalGroup(null);
           }}
           onCounter={async (id, amount) => {
             await handleCounterOffer(id, amount);
-            await fetchOffers();
             setNegotiationModalGroup(null);
           }}
           acceptingOfferId={acceptingOfferId}
@@ -1476,8 +1483,8 @@ const Dashboard = () => {
             setCheckoutTicket(null);
             setCheckoutAcceptedOffer(null);
             // Refresh offers after checkout closes (in case purchase was completed)
-            fetchOffers();
-            fetchDashboardData();
+            fetchOffers({ silent: true });
+            fetchDashboardData({ silent: true });
           }}
         />
       )}
