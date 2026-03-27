@@ -81,9 +81,11 @@ def _download_ticket_pdf_bytes(ticket):
     """
     Load PDF bytes from Cloudinary-backed FileField. Tries public URL, then signed URL, then storage open().
     """
+    import os as _os
     import requests
     import cloudinary.api
     import cloudinary.utils
+    from cloudinary.utils import private_download_url
 
     public_id = (ticket.pdf_file.name or '').replace('\\', '/')
 
@@ -128,6 +130,16 @@ def _download_ticket_pdf_bytes(ticket):
         if not body.startswith(b'%PDF'):
             raise ValueError(f'{label}: response_not_pdf')
         return body
+
+    # 0a) Signed Admin download URL → api.cloudinary.com (works when res.cloudinary.com delivery returns 401)
+    if public_id:
+        for pid in _public_id_variants(public_id):
+            ext = (_os.path.splitext(pid)[1].lstrip('.') or 'pdf').lower()
+            try:
+                api_dl = private_download_url(pid, ext, resource_type='raw', type='upload')
+                return _try_pdf_bytes('private_download_api', api_dl)
+            except Exception as e:
+                errors.append(('private_download_api', str(e)[:400]))
 
     # 0) Admin API + delivery URL matrix (version + signature algorithm vary by account)
     if public_id:
