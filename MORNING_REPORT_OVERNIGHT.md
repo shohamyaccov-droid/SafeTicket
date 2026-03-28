@@ -102,15 +102,7 @@ python manage.py test test_overnight_e2e_journey test_autonomous_marathon_qa -v 
 
 ## Phase 5 — Git
 
-All changes are intended to be on **`main`** with:
-
-```bash
-git add -A
-git commit -m "overnight: cloudinary init, PDF URLs, dashboard CSS, E2E test, seed_israeli_data, price guard"
-git push origin main
-```
-
-(Execute from repo root after review.)
+Changes were committed and pushed to **`origin/main`** as **`eec58b8`** (`overnight: Cloudinary storage order, PDF signed URLs, dashboard sales card overflow, pending-payment price guard, E2E test, seed_israeli_data`).
 
 ---
 
