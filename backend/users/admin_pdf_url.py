@@ -61,7 +61,7 @@ def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
 
     try:
         import cloudinary.api
-        import cloudinary.utils
+        from cloudinary.utils import cloudinary_url
     except ImportError:
         return local_url
 
@@ -72,7 +72,7 @@ def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
     try:
         for pid in _public_id_variants(public_id):
             try:
-                url, _ = cloudinary.utils.cloudinary_url(
+                url, _ = cloudinary_url(
                     pid,
                     resource_type='raw',
                     type='upload',
@@ -106,14 +106,14 @@ def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
                 if ver is not None:
                     opts['version'] = ver
                 try:
-                    url, _ = cloudinary.utils.cloudinary_url(cid, **opts)
+                    url, _ = cloudinary_url(cid, **opts)
                     return url
                 except Exception:
                     continue
 
             for rt in resource_types_try:
                 try:
-                    url, _ = cloudinary.utils.cloudinary_url(
+                    url, _ = cloudinary_url(
                         pid,
                         resource_type=rt,
                         type='upload',

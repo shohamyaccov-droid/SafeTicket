@@ -26,6 +26,7 @@ from django.db import transaction
 from django.core.files.base import ContentFile
 import io
 import logging
+import secrets
 import uuid
 from pypdf import PdfReader, PdfWriter
 
@@ -101,6 +102,16 @@ from django.conf import settings
 import os
 
 User = get_user_model()
+
+
+def _order_pending_checkout_response(order, request):
+    """JSON for create_order / guest_checkout: include one-time payment_confirm_token while pending."""
+    data = OrderSerializer(order, context={'request': request}).data
+    tok = (getattr(order, 'payment_confirm_token', None) or '').strip()
+    if order.status == 'pending_payment' and tok:
+        data['payment_confirm_token'] = tok
+    return Response(data, status=status.HTTP_201_CREATED)
+
 
 # Cart abandonment timeout (minutes)
 RESERVATION_TIMEOUT_MINUTES = 10
@@ -1329,21 +1340,20 @@ def create_order(request):
             else:
                 order.held_ticket = ticket
                 order.held_quantity = held_qty
+            order.payment_confirm_token = secrets.token_urlsafe(32)
             order.save(
                 update_fields=[
                     'ticket_ids',
                     'pending_offer',
                     'held_ticket',
                     'held_quantity',
+                    'payment_confirm_token',
                     'updated_at',
                 ]
             )
 
         order.refresh_from_db()
-        return Response(
-            OrderSerializer(order, context={'request': request}).data,
-            status=status.HTTP_201_CREATED,
-        )
+        return _order_pending_checkout_response(order, request)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -1355,35 +1365,51 @@ def confirm_order_payment(request, order_id):
     Second step after create_order / guest_checkout: PSP / mock webhook confirms funds,
     then inventory is finalized, escrow fields applied, and receipt email sent.
     """
-    webhook_secret = (os.environ.get('MOCK_PAYMENT_WEBHOOK_SECRET') or '').strip()
-    mock_ack = request.data.get('mock_payment_ack') is True or str(
-        request.data.get('mock_payment_ack', '')
-    ).lower() in ('true', '1', 'yes')
-    if webhook_secret:
-        supplied = (
-            (request.data.get('payment_secret') or request.headers.get('X-Payment-Secret') or '')
-        ).strip()
-        if supplied != webhook_secret:
-            return Response(
-                {'error': 'Invalid payment confirmation.'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-    elif not mock_ack:
-        return Response(
-            {
-                'error': (
-                    'Payment not confirmed. Use mock_payment_ack=true for dev, '
-                    'or set MOCK_PAYMENT_WEBHOOK_SECRET and pass payment_secret / X-Payment-Secret.'
-                )
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
     order = Order.objects.filter(pk=order_id).first()
     if not order or order.status != 'pending_payment':
         return Response(
             {'error': 'Order not found or not awaiting payment.'},
             status=status.HTTP_404_NOT_FOUND,
+        )
+
+    webhook_secret = (os.environ.get('MOCK_PAYMENT_WEBHOOK_SECRET') or '').strip()
+    mock_ack = request.data.get('mock_payment_ack') is True or str(
+        request.data.get('mock_payment_ack', '')
+    ).lower() in ('true', '1', 'yes')
+    supplied_secret = (
+        (request.data.get('payment_secret') or request.headers.get('X-Payment-Secret') or '')
+    ).strip()
+    body_token = (request.data.get('payment_confirm_token') or '').strip()
+    stored_tok = (order.payment_confirm_token or '').strip()
+
+    payment_ok = False
+    if webhook_secret and supplied_secret and secrets.compare_digest(webhook_secret, supplied_secret):
+        payment_ok = True
+    elif not webhook_secret and mock_ack:
+        payment_ok = True
+    elif stored_tok and body_token and secrets.compare_digest(stored_tok, body_token):
+        payment_ok = True
+
+    if not payment_ok:
+        if webhook_secret:
+            return Response(
+                {
+                    'error': (
+                        'Invalid payment confirmation. Pass payment_secret, '
+                        'or the payment_confirm_token from the order response.'
+                    ),
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return Response(
+            {
+                'error': (
+                    'Payment not confirmed. Send mock_payment_ack=true, '
+                    'payment_confirm_token from the create-order response, '
+                    'or set MOCK_PAYMENT_WEBHOOK_SECRET and pass payment_secret / X-Payment-Secret.'
+                )
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     if order.user_id:
@@ -1449,7 +1475,8 @@ def confirm_order_payment(request, order_id):
 
             _reject_pending_offers_for_ticket_ids(list(order.ticket_ids or []))
             order.status = 'paid'
-            order.save(update_fields=['status', 'updated_at'])
+            order.payment_confirm_token = None
+            order.save(update_fields=['status', 'payment_confirm_token', 'updated_at'])
             _apply_order_pricing_fields(order, negotiated_offer, ticket_ref, order.quantity)
     except ValueError as e:
         msg = str(e)
@@ -1936,10 +1963,11 @@ def guest_checkout(request):
                 pending_offer=negotiated_offer,
                 held_ticket=(ticket if (not listing_group_id and order_quantity > 1) else None),
                 held_quantity=(held_qty if (not listing_group_id and order_quantity > 1) else 0),
+                payment_confirm_token=secrets.token_urlsafe(32),
             )
 
-        order_serializer = OrderSerializer(order, context={'request': request})
-        return Response(order_serializer.data, status=status.HTTP_201_CREATED)
+        order.refresh_from_db()
+        return _order_pending_checkout_response(order, request)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

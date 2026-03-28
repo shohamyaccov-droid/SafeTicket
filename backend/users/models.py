@@ -454,6 +454,9 @@ class Order(models.Model):
         related_name='pending_orders',
         help_text='Negotiated offer associated with this checkout before payment confirms',
     )
+    # One-time secret returned with the pending order so the client can call confirm-payment
+    # without a global webhook secret (cleared when the order becomes paid).
+    payment_confirm_token = models.CharField(max_length=64, blank=True, null=True)
 
     def covers_ticket(self, ticket_id):
         """True if this order includes the given ticket (FK or JSON list; int/str safe)."""

@@ -88,9 +88,13 @@ class GuestCheckoutConcurrencyQATest(TestCase):
         }
         r1 = self._csrf_post_guest(client, base_payload)
         self.assertEqual(r1.status_code, 201, r1.content.decode())
-        oid = r1.json().get("id")
+        body1 = r1.json()
+        oid = body1.get("id")
+        self.assertTrue(body1.get("payment_confirm_token"), "pending order must return payment_confirm_token")
+        self.assertEqual(body1.get("status"), "pending_payment")
         c1 = self._csrf_confirm_guest(client, oid, base_payload["guest_email"])
         self.assertEqual(c1.status_code, 200, c1.content.decode())
+        self.assertEqual(c1.json().get("status"), "paid")
 
         r2 = self._csrf_post_guest(
             client,
@@ -129,6 +133,7 @@ class GuestCheckoutConcurrencyQATest(TestCase):
         oid = r.json().get("id")
         c = self._csrf_confirm_guest(client, oid, "guest_ok@marathon.test")
         self.assertEqual(c.status_code, 200, c.content.decode())
+        self.assertEqual(c.json().get("status"), "paid")
         self.ticket.refresh_from_db()
         self.assertEqual(self.ticket.status, "sold")
         self.assertEqual(self.ticket.available_quantity, 0)

@@ -373,7 +373,7 @@ class OrderAdmin(admin.ModelAdmin):
     list_display = ['id', 'user', 'guest_email', 'status', 'total_amount', 'event_name', 'created_at']
     list_filter = ['status', 'created_at']
     search_fields = ['user__username', 'guest_email', 'event_name']
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'payment_confirm_token']
 
 
 @admin.register(Offer)

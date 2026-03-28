@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { orderAPI, paymentAPI, ticketAPI } from '../services/api';
+import { authAPI, orderAPI, paymentAPI, ticketAPI } from '../services/api';
 import { getTicketPrice, formatPrice, getUnitPriceWithFee, calculateServiceFee } from '../utils/priceFormat';
 import './CheckoutModal.css';
 
@@ -27,6 +27,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     cardholderName: '',
   });
   const [loading, setLoading] = useState(false);
+  /** 'idle' | 'creating_order' | 'confirming_payment' — shown while pending_payment → paid */
+  const [paymentPhase, setPaymentPhase] = useState('idle');
   const [error, setError] = useState('');
   const [orderId, setOrderId] = useState(null);
   const [orderData, setOrderData] = useState(null);
@@ -243,6 +245,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     }
     setError('');
     setLoading(true);
+    setPaymentPhase('idle');
     paymentSubmittingRef.current = true;
 
     try {
@@ -351,6 +354,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
       // Step 2: Create order - ensure total_amount is a Number
       console.log('Creating order...');
+      setPaymentPhase('creating_order');
       let orderResponse;
       // Get listing_group_id from ticketGroup if available
       const listing_group_id = ticketGroup?.listing_group_id || ticket?.listing_group_id;
@@ -460,7 +464,18 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         throw new Error('יצירת ההזמנה נכשלה — לא התקבל מזהה הזמנה');
       }
 
+      setPaymentPhase('confirming_payment');
+      await authAPI.getCsrf().catch(() => {});
+
       const confirmPayload = { mock_payment_ack: true };
+      const orderTok = pendingOrder?.payment_confirm_token;
+      if (orderTok) {
+        confirmPayload.payment_confirm_token = String(orderTok);
+      }
+      const vitePaySecret = import.meta.env.VITE_MOCK_PAYMENT_WEBHOOK_SECRET;
+      if (vitePaySecret != null && String(vitePaySecret).trim() !== '') {
+        confirmPayload.payment_secret = String(vitePaySecret).trim();
+      }
       if (!user && guestForm?.email?.trim()) {
         confirmPayload.guest_email = guestForm.email.trim();
       }
@@ -520,6 +535,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     } finally {
       paymentSubmittingRef.current = false;
       setLoading(false);
+      setPaymentPhase('idle');
     }
   };
 
@@ -1139,7 +1155,15 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 disabled={loading || checkoutSucceeded || timeRemaining === 0}
                 className="checkout-button checkout-row-btn"
               >
-                {loading ? 'מעבד תשלום...' : timeRemaining === 0 ? 'זמן פג' : 'השלמת תשלום'}
+                {loading
+                  ? paymentPhase === 'creating_order'
+                    ? 'יוצר הזמנה...'
+                    : paymentPhase === 'confirming_payment'
+                      ? 'מעבד תשלום...'
+                      : 'מעבד...'
+                  : timeRemaining === 0
+                    ? 'זמן פג'
+                    : 'השלמת תשלום'}
               </button>
             </div>
             <div className="payment-security-badges">

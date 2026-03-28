@@ -38,14 +38,42 @@ def user_can_access_ticket_pdf(user, ticket) -> bool:
 
 def absolute_file_url(request, fieldfile):
     """Absolute URL for a FileField/ImageField (local MEDIA or Cloudinary/S3 full URL)."""
+    from django.conf import settings
+
     if not fieldfile:
         return None
+    if getattr(settings, 'USE_CLOUDINARY', False):
+        signed = cloudinary_signed_https_image_url(fieldfile)
+        if signed:
+            return signed
     try:
         url = fieldfile.url
     except (ValueError, AttributeError):
         return None
     if url.startswith('http://') or url.startswith('https://'):
         return url
+    if getattr(settings, 'USE_CLOUDINARY', False):
+        name = (getattr(fieldfile, 'name', None) or '').strip().replace('\\', '/')
+        if name:
+            try:
+                import cloudinary.utils
+                from .admin_pdf_url import _public_id_variants
+
+                for pid in _public_id_variants(name):
+                    try:
+                        u, _ = cloudinary.utils.cloudinary_url(
+                            pid,
+                            resource_type='image',
+                            type='upload',
+                            sign_url=True,
+                            secure=True,
+                        )
+                        if u and str(u).startswith('https://'):
+                            return str(u)
+                    except Exception:
+                        continue
+            except Exception:
+                pass
     if request:
         return request.build_absolute_uri(url)
 
