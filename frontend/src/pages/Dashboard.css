@@ -303,6 +303,18 @@
   overflow: visible;
 }
 
+/* My Sales listing rows: same — row action buttons must not clip/hide on card hover */
+.listing-card.enterprise-card.dashboard-compact-card {
+  overflow: visible;
+}
+
+.dashboard-compact-row .row-action-button {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+}
+
 /* Ensure offer cards are clickable - stacking and pointer events */
 .offer-card-interactive {
   position: relative;

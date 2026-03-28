@@ -179,25 +179,18 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-# Static: WhiteNoise. Media: local disk (dev) or Cloudinary (production).
-# Default media MUST be MediaCloudinaryStorage so ImageField uploads (artists, events, profiles) use
-# resource_type=image and persist correctly in admin/API. Ticket PDFs use STORAGES['ticket_pdfs']
-# (RawMediaCloudinaryStorage) on the Ticket.pdf_file field only — raw avoids image validation on PDFs.
-if USE_CLOUDINARY:
-    STORAGES = {
-        'default': {'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage'},
-        'ticket_pdfs': {'BACKEND': 'cloudinary_storage.storage.RawMediaCloudinaryStorage'},
-        'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
-    }
-else:
-    STORAGES = {
-        'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
-        'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
-    }
 
 # Media files (user uploaded files like PDFs)
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# Populated below. On Cloudinary, credentials + cloudinary.config() run before STORAGES so
+# MediaCloudinaryStorage / RawMediaCloudinaryStorage see a fully configured SDK (avoids admin upload quirks).
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+}
+CLOUDINARY_STORAGE = {}
 
 if USE_CLOUDINARY:
     # django-cloudinary-storage/app_settings.py expects CLOUDINARY_STORAGE to include CLOUD_NAME, API_KEY,
@@ -296,6 +289,18 @@ if USE_CLOUDINARY:
         secure=True,
         signature_algorithm=_sig_alg,
     )
+
+    STORAGES = {
+        # Images (Artist, Event, User profile): resource_type=image uploads
+        'default': {'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage'},
+        # Ticket PDFs only: resource_type=raw (required — image storage rejects PDFs)
+        'ticket_pdfs': {'BACKEND': 'cloudinary_storage.storage.RawMediaCloudinaryStorage'},
+        'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+    }
+
+# Larger payloads for admin/API image uploads (django-cloudinary-storage POSTs to Cloudinary)
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get('DATA_UPLOAD_MAX_MEMORY_SIZE', str(12 * 1024 * 1024)))
+FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get('FILE_UPLOAD_MAX_MEMORY_SIZE', str(12 * 1024 * 1024)))
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

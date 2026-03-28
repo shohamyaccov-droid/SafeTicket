@@ -912,6 +912,23 @@ def order_receipt(request, order_id):
     return Response(receipt_data, status=status.HTTP_200_OK)
 
 
+def _pending_payment_blocks_price_edit(ticket: Ticket) -> bool:
+    """True if any awaiting-payment order still holds this listing (row or group)."""
+    candidate_ids = {ticket.id}
+    if ticket.listing_group_id:
+        candidate_ids = set(
+            Ticket.objects.filter(
+                listing_group_id=ticket.listing_group_id,
+                seller_id=ticket.seller_id,
+            ).values_list('id', flat=True)
+        )
+    for order in Order.objects.filter(status='pending_payment').iterator():
+        for tid in candidate_ids:
+            if order.covers_ticket(tid):
+                return True
+    return False
+
+
 @csrf_required
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
@@ -936,6 +953,17 @@ def update_ticket_price(request, ticket_id):
             return Response(
                 {'error': 'Can only update active listings'},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if _pending_payment_blocks_price_edit(ticket):
+            return Response(
+                {
+                    'error': (
+                        'מחיר לא ניתן לשינוי כרגע — קיימת הזמנה הממתינה לתשלום על רשימה זו. '
+                        'נסה שוב לאחר שהעסקה תושלם או תבוטל.'
+                    )
+                },
+                status=status.HTTP_409_CONFLICT,
             )
         
         # Update price

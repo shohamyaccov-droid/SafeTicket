@@ -1,5 +1,5 @@
 """
-Staff-only PDF URLs for Django admin: signed Cloudinary delivery when public URL returns 401.
+Staff-only PDF URLs for Django admin: signed Cloudinary delivery when public/raw URLs return 401.
 """
 from __future__ import annotations
 
@@ -27,11 +27,66 @@ def _public_id_variants(public_id: str) -> list[str]:
     return uniq
 
 
+def _all_public_id_candidates(stored_name: str) -> list[str]:
+    """Try with/without .pdf — django-cloudinary-storage and folder prefixes vary."""
+    base = stored_name.replace('\\', '/').strip()
+    if not base:
+        return []
+    seen = set()
+    ordered: list[str] = []
+
+    def add(p: str):
+        p = p.strip().strip('/')
+        if not p or p in seen:
+            return
+        seen.add(p)
+        ordered.append(p)
+
+    for v in _public_id_variants(base):
+        add(v)
+        low = v.lower()
+        if low.endswith('.pdf'):
+            add(v[:-4])
+        else:
+            add(v + '.pdf')
+    return ordered
+
+
+def _try_cloudinary_signed_raw_urls(public_id: str) -> list[str]:
+    from cloudinary.utils import cloudinary_url
+
+    urls: list[str] = []
+    for pid in _all_public_id_candidates(public_id):
+        option_sets = (
+            {
+                'resource_type': 'raw',
+                'type': 'upload',
+                'sign_url': True,
+                'secure': True,
+                'long_url_signature': True,
+            },
+            {
+                'resource_type': 'raw',
+                'type': 'upload',
+                'sign_url': True,
+                'secure': True,
+            },
+        )
+        for opts in option_sets:
+            try:
+                url, _ = cloudinary_url(pid, **opts)
+                if url and str(url).startswith('https://') and url not in urls:
+                    urls.append(str(url))
+            except Exception:
+                continue
+    return urls
+
+
 def get_ticket_pdf_admin_url(ticket) -> Optional[str]:
     """
     Return a URL suitable for admin download / iframe preview.
     - Local storage: FileField.url
-    - Cloudinary: prefer signed raw delivery URL; fall back to image resource_type for legacy uploads
+    - Cloudinary: prefer signed raw delivery URL; fall back to api.resource + version; legacy image type
     """
     try:
         return _get_ticket_pdf_admin_url_uncaught(ticket)
@@ -68,26 +123,13 @@ def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
     public_id = name.replace('\\', '/')
     resource_types_try = ('raw', 'image')
 
-    # Raw PDFs on Cloudinary require signed delivery; try explicit signed URL per public_id variants first.
-    try:
-        for pid in _public_id_variants(public_id):
-            try:
-                url, _ = cloudinary_url(
-                    pid,
-                    resource_type='raw',
-                    type='upload',
-                    sign_url=True,
-                    secure=True,
-                )
-                if url and str(url).startswith('https://'):
-                    return str(url)
-            except Exception:
-                pass
-    except Exception:
-        pass
+    # 1) Signed delivery URLs (raw) — longest signature first
+    for url in _try_cloudinary_signed_raw_urls(public_id):
+        return url
 
+    # 2) Resolve exact public_id + version from Admin API, then sign
     try:
-        for pid in _public_id_variants(public_id):
+        for pid in _all_public_id_candidates(public_id):
             for rt in resource_types_try:
                 try:
                     info = cloudinary.api.resource(pid, resource_type=rt)
@@ -102,12 +144,14 @@ def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
                     'type': 'upload',
                     'sign_url': True,
                     'secure': True,
+                    'long_url_signature': True,
                 }
                 if ver is not None:
                     opts['version'] = ver
                 try:
                     url, _ = cloudinary_url(cid, **opts)
-                    return url
+                    if url:
+                        return url
                 except Exception:
                     continue
 
@@ -119,8 +163,10 @@ def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
                         type='upload',
                         sign_url=True,
                         secure=True,
+                        long_url_signature=True,
                     )
-                    return url
+                    if url:
+                        return url
                 except Exception:
                     continue
     except Exception:
