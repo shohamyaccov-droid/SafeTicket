@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ticketAPI, eventAPI, artistAPI } from '../services/api';
+import { ticketAPI, eventAPI, artistAPI, eventRequestAPI } from '../services/api';
 import { getVenueSectionOptions } from '../utils/venueMaps';
 import { createListFetchAbort } from '../utils/listFetch';
 import SellFormSkeleton from '../components/skeletons/SellFormSkeleton';
@@ -45,6 +45,16 @@ const Sell = () => {
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [eventRequestOpen, setEventRequestOpen] = useState(false);
+  const [eventRequestHint, setEventRequestHint] = useState('');
+  const [eventRequestDetails, setEventRequestDetails] = useState('');
+  const [eventRequestSubmitting, setEventRequestSubmitting] = useState(false);
+  const [eventRequestFeedback, setEventRequestFeedback] = useState(null);
+
+  const WHATSAPP_SUPPORT_PHONE = '972500000000';
+  const missingEventWhatsAppHref = `https://wa.me/${WHATSAPP_SUPPORT_PHONE}?text=${encodeURIComponent(
+    'היי SafeTicket, אני רוצה למכור כרטיס לאירוע שלא קיים באתר — נא לפרט: שם אמן/קבוצות, תאריך, אולם/עיר.'
+  )}`;
 
   // ALL useEffect HOOKS MUST ALSO BE CALLED BEFORE EARLY RETURNS
   // Parallel fetch: faster Sell page load; backend uses select_related / aggregates for events & artists
@@ -151,6 +161,35 @@ const Sell = () => {
 
     return false;
   });
+
+  const submitEventRequest = async (e) => {
+    e.preventDefault();
+    setEventRequestFeedback(null);
+    if ((eventRequestDetails || '').trim().length < 8) {
+      setEventRequestFeedback({ type: 'error', text: 'נא למלא לפחות כמה מילים עם פרטי האירוע.' });
+      return;
+    }
+    setEventRequestSubmitting(true);
+    try {
+      await eventRequestAPI.create({
+        event_hint: (eventRequestHint || '').trim(),
+        details: eventRequestDetails.trim(),
+        category: selectedCategory,
+      });
+      setEventRequestFeedback({ type: 'ok', text: 'הבקשה נשלחה. הצוות יקבל אותה בלוח הבקרה.' });
+      setEventRequestHint('');
+      setEventRequestDetails('');
+    } catch (err) {
+      const data = err.response?.data;
+      const msg =
+        typeof data === 'object' && data !== null
+          ? Object.values(data).flat().filter(Boolean).join(' ') || err.message
+          : err.message;
+      setEventRequestFeedback({ type: 'error', text: msg || 'שגיאה בשליחה. נסו שוב.' });
+    } finally {
+      setEventRequestSubmitting(false);
+    }
+  };
 
   // Initialize ticket_packages array when quantity changes (seat_number only - row is global)
   useEffect(() => {
@@ -681,6 +720,33 @@ const Sell = () => {
                   <small className="field-hint">אנא בחר אמן תחילה</small>
                 )}
               </div>
+
+              <div className="missing-event-banner" role="region" aria-label="בקשה להוספת אירוע">
+                <div className="missing-event-banner-text">
+                  <strong>לא מצאת את ההופעה או המשחק שלך?</strong>
+                  <span>ספרו לנו באיזה אירוע מדובר — נוסיף אותו לקטלוג כשאפשר.</span>
+                </div>
+                <div className="missing-event-banner-actions">
+                  <button
+                    type="button"
+                    className="missing-event-primary-btn"
+                    onClick={() => {
+                      setEventRequestOpen(true);
+                      setEventRequestFeedback(null);
+                    }}
+                  >
+                    שליחת בקשה מהירה
+                  </button>
+                  <a
+                    className="missing-event-whatsapp-link"
+                    href={missingEventWhatsAppHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    WhatsApp (הודעה מוכנה)
+                  </a>
+                </div>
+              </div>
             </>
           )}
 
@@ -1057,6 +1123,85 @@ const Sell = () => {
             {loading ? 'מציע כרטיס...' : 'הצע כרטיס למכירה'}
           </button>
         </form>
+
+        {eventRequestOpen && (
+          <div
+            className="event-request-modal-overlay"
+            role="presentation"
+            onClick={() => !eventRequestSubmitting && setEventRequestOpen(false)}
+          >
+            <div
+              className="event-request-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="event-request-title"
+              onClick={(ev) => ev.stopPropagation()}
+            >
+              <h3 id="event-request-title">בקשה להוספת אירוע</h3>
+              <p className="event-request-modal-lead">
+                נתאר בקצרה את האירוע החסר. צוות SafeTicket יעדכן את הקטלוג כשהפרטים מאומתים.
+              </p>
+              <form onSubmit={submitEventRequest}>
+                <div className="form-group">
+                  <label htmlFor="event_request_hint">שם אמן / קבוצות / כותרת (אופציונלי)</label>
+                  <input
+                    id="event_request_hint"
+                    type="text"
+                    value={eventRequestHint}
+                    onChange={(e) => setEventRequestHint(e.target.value)}
+                    placeholder="לדוגמה: הפועל ת״א נגד בי״ס"
+                    className="premium-select"
+                    style={{ width: '100%', padding: '0.65rem' }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="event_request_details">פרטים * (תאריך, עיר, אולם…)</label>
+                  <textarea
+                    id="event_request_details"
+                    value={eventRequestDetails}
+                    onChange={(e) => setEventRequestDetails(e.target.value)}
+                    required
+                    rows={4}
+                    placeholder="ככל שתפרטו יותר — נוכל להוסיף מהר יותר."
+                    className="premium-select"
+                    style={{ width: '100%', padding: '0.65rem', resize: 'vertical' }}
+                  />
+                </div>
+                {eventRequestFeedback && (
+                  <p
+                    className={
+                      eventRequestFeedback.type === 'ok' ? 'event-request-feedback ok' : 'event-request-feedback err'
+                    }
+                    role="status"
+                  >
+                    {eventRequestFeedback.text}
+                  </p>
+                )}
+                <div className="event-request-modal-actions">
+                  <button
+                    type="button"
+                    className="missing-event-whatsapp-link"
+                    style={{ border: 'none', cursor: 'pointer' }}
+                    disabled={eventRequestSubmitting}
+                    onClick={() => setEventRequestOpen(false)}
+                  >
+                    ביטול
+                  </button>
+                  <button type="submit" className="missing-event-primary-btn" disabled={eventRequestSubmitting}>
+                    {eventRequestSubmitting ? 'שולח…' : 'שליחה'}
+                  </button>
+                </div>
+              </form>
+              <p className="event-request-modal-foot">
+                או{' '}
+                <a href={missingEventWhatsAppHref} target="_blank" rel="noopener noreferrer">
+                  פתיחת WhatsApp
+                </a>{' '}
+                עם הודעה מוכנה.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

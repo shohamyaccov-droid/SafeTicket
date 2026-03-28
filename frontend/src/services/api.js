@@ -204,5 +204,9 @@ export const contactAPI = {
   createContactMessage: (data) => api.post('/users/contact-messages/', data),
 };
 
+export const eventRequestAPI = {
+  create: (data) => api.post('/users/event-requests/', data),
+};
+
 export default api;
 

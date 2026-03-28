@@ -19,6 +19,7 @@ from .views import (
     ArtistViewSet,
     OfferViewSet,
     ContactMessageViewSet,
+    EventRequestViewSet,
     create_ticket_alert,
     admin_pending_tickets,
     admin_approve_ticket,
@@ -34,6 +35,7 @@ router.register(r'events', EventViewSet, basename='event')
 router.register(r'artists', ArtistViewSet, basename='artist')
 router.register(r'offers', OfferViewSet, basename='offer')
 router.register(r'contact-messages', ContactMessageViewSet, basename='contact-message')
+router.register(r'event-requests', EventRequestViewSet, basename='event-request')
 
 urlpatterns = [
     path('csrf/', csrf_token_view, name='csrf_token'),

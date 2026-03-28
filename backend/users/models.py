@@ -566,6 +566,34 @@ class Offer(models.Model):
         ]
 
 
+class EventRequest(models.Model):
+    """
+    Seller request to add a missing event/artist to the catalog (growth / ops queue).
+    """
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='event_requests',
+    )
+    submitted_email = models.EmailField(blank=True, help_text='Email at time of submission')
+    event_hint = models.CharField(
+        max_length=400,
+        blank=True,
+        help_text='Artist, teams, or event name',
+    )
+    details = models.TextField(help_text='Date, venue, category, or other context')
+    category = models.CharField(max_length=50, blank=True, help_text='Sell flow category (e.g. concert, sport)')
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_handled = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        hint = (self.event_hint or '')[:60]
+        return f'Event request #{self.id} — {self.user.username}: {hint}'
+
+
 class ContactMessage(models.Model):
     """
     Customer service contact messages from users

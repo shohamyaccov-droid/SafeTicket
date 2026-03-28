@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.db.models import Sum, Q
-from .models import User, Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage
+from .models import User, Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage, EventRequest
 
 
 def round_shekel_price(value):
@@ -749,6 +749,30 @@ class OfferSerializer(serializers.ModelSerializer):
         if 'amount' in ret and ret['amount'] is not None:
             ret['amount'] = price_as_int_for_json(instance.amount)
         return ret
+
+
+class EventRequestSerializer(serializers.ModelSerializer):
+    """Authenticated seller submits a missing-event request from the Sell flow."""
+
+    class Meta:
+        model = EventRequest
+        fields = ('id', 'event_hint', 'details', 'category', 'created_at')
+        read_only_fields = ('id', 'created_at')
+
+    def validate_details(self, value):
+        text = (value or '').strip()
+        if len(text) < 8:
+            raise serializers.ValidationError('נא לתת לפחות משפט אחד עם פרטי האירוע.')
+        return text
+
+    def create(self, validated_data):
+        request = self.context['request']
+        user = request.user
+        return EventRequest.objects.create(
+            user=user,
+            submitted_email=(getattr(user, 'email', None) or '').strip(),
+            **validated_data,
+        )
 
 
 class ContactMessageSerializer(serializers.ModelSerializer):

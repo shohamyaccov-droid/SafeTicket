@@ -90,9 +90,10 @@ from .serializers import (
     ArtistListSerializer,
     TicketAlertSerializer,
     OfferSerializer,
-    ContactMessageSerializer
+    ContactMessageSerializer,
+    EventRequestSerializer,
 )
-from .models import Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage
+from .models import Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage, EventRequest
 from .pricing import compute_order_price_breakdown, compute_payout_eligible_date
 from django.utils import timezone
 from datetime import timedelta
@@ -2980,6 +2981,16 @@ class OfferViewSet(viewsets.ModelViewSet):
         queryset = self.filter_queryset(self.get_queryset())
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+
+@method_decorator(csrf_required, name='dispatch')
+class EventRequestViewSet(viewsets.GenericViewSet, viewsets.mixins.CreateModelMixin):
+    """
+    Logged-in sellers request a missing event/artist (Sell flow growth).
+    """
+    queryset = EventRequest.objects.select_related('user').all()
+    serializer_class = EventRequestSerializer
+    permission_classes = [IsAuthenticated]
 
 
 @method_decorator(csrf_required, name='dispatch')

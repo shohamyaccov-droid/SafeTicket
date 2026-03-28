@@ -358,6 +358,10 @@ EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'true').lower() == 'true'
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@safeticket.local')
+# Public origins for buyer receipt emails (no trailing slash). On Render set both explicitly.
+API_PUBLIC_ORIGIN = os.environ.get('API_PUBLIC_ORIGIN', 'http://127.0.0.1:8000').rstrip('/')
+FRONTEND_ORIGIN = os.environ.get('FRONTEND_ORIGIN', 'http://localhost:3000').rstrip('/')
+# Production SMTP: set EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend plus EMAIL_HOST_*
 
 # Cache for OTP storage (10 min TTL)
 CACHES = {

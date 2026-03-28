@@ -868,3 +868,120 @@
   padding: 0;
 }
 
+/* Missing event — growth CTA */
+.missing-event-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0 1.5rem;
+  padding: 1rem 1.1rem;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.12) 0%, rgba(16, 185, 129, 0.1) 100%);
+  border: 1px solid rgba(14, 165, 233, 0.35);
+  border-radius: 12px;
+  direction: rtl;
+  text-align: right;
+}
+
+.missing-event-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.missing-event-banner-text strong {
+  color: var(--text-primary);
+  font-size: 1.02rem;
+}
+
+.missing-event-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.missing-event-primary-btn {
+  padding: 0.55rem 1.1rem;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  color: #fff;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.35);
+}
+
+.missing-event-primary-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.missing-event-whatsapp-link {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #15803d;
+  text-decoration: underline;
+}
+
+.event-request-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.event-request-modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 1.25rem 1.35rem;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: var(--shadow-lg);
+  direction: rtl;
+  text-align: right;
+}
+
+.event-request-modal h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.event-request-modal-lead {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.event-request-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.event-request-modal-foot {
+  margin: 1rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-tertiary);
+}
+
+.event-request-feedback.ok {
+  color: #15803d;
+  font-weight: 600;
+  margin: 0.25rem 0 0;
+}
+
+.event-request-feedback.err {
+  color: #b91c1c;
+  font-size: 0.88rem;
+  margin: 0.25rem 0 0;
+}
+
