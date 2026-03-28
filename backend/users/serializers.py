@@ -48,7 +48,31 @@ def absolute_file_url(request, fieldfile):
         return url
     if request:
         return request.build_absolute_uri(url)
-    return url
+
+
+def artist_effective_image_field(artist):
+    """
+    Single source of truth for artist visuals: cover (banner) first, then profile image.
+    Lets Shoham upload once on the artist and reuse everywhere.
+    """
+    if not artist:
+        return None
+    if getattr(artist, 'cover_image', None):
+        return artist.cover_image
+    if getattr(artist, 'image', None):
+        return artist.image
+    return None
+
+
+def event_effective_image_field(event):
+    """
+    Event card/detail image: event-specific upload wins; else artist cover, then artist image.
+    """
+    if not event:
+        return None
+    if getattr(event, 'image', None):
+        return event.image
+    return artist_effective_image_field(getattr(event, 'artist', None))
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -180,8 +204,9 @@ class ArtistSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at', 'updated_at', 'total_tickets_count')
     
     def get_image_url(self, obj):
-        if obj.image:
-            return absolute_file_url(self.context.get('request'), obj.image)
+        f = artist_effective_image_field(obj)
+        if f:
+            return absolute_file_url(self.context.get('request'), f)
         return None
     
     def get_total_tickets_count(self, obj):
@@ -208,8 +233,9 @@ class ArtistListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
     
     def get_image_url(self, obj):
-        if obj.image:
-            return absolute_file_url(self.context.get('request'), obj.image)
+        f = artist_effective_image_field(obj)
+        if f:
+            return absolute_file_url(self.context.get('request'), f)
         return None
     
     def get_total_tickets_count(self, obj):
@@ -240,8 +266,9 @@ class EventSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at', 'updated_at', 'tickets_count', 'view_count')
     
     def get_image_url(self, obj):
-        if obj.image:
-            return absolute_file_url(self.context.get('request'), obj.image)
+        f = event_effective_image_field(obj)
+        if f:
+            return absolute_file_url(self.context.get('request'), f)
         return None
     
     def get_tickets_count(self, obj):
@@ -267,8 +294,9 @@ class EventListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
     
     def get_image_url(self, obj):
-        if obj.image:
-            return absolute_file_url(self.context.get('request'), obj.image)
+        f = event_effective_image_field(obj)
+        if f:
+            return absolute_file_url(self.context.get('request'), f)
         return None
     
     def get_tickets_count(self, obj):

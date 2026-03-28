@@ -569,6 +569,9 @@ class Offer(models.Model):
 class EventRequest(models.Model):
     """
     Seller request to add a missing event/artist to the catalog (growth / ops queue).
+
+    Must stay defined here: users.admin, serializers, and views import EventRequest from this module.
+    Migration: users.0030_eventrequest.
     """
     user = models.ForeignKey(
         User,
