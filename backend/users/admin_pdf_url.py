@@ -33,6 +33,13 @@ def get_ticket_pdf_admin_url(ticket) -> Optional[str]:
     - Local storage: FileField.url
     - Cloudinary: prefer signed raw delivery URL; fall back to image resource_type for legacy uploads
     """
+    try:
+        return _get_ticket_pdf_admin_url_uncaught(ticket)
+    except Exception:
+        return None
+
+
+def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
     if not ticket:
         return None
     pdf = getattr(ticket, 'pdf_file', None)

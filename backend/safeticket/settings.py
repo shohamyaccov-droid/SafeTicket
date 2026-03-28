@@ -53,6 +53,8 @@ RELAX_PDF_UPLOAD_VALIDATION = os.environ.get('RELAX_PDF_UPLOAD_VALIDATION', 'Fal
 
 # External media (Cloudinary) — avoids lost uploads on Render's ephemeral disk.
 # Set CLOUDINARY_URL (recommended) or CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET.
+# Use one consistent source: mixed/stale split vars + a different CLOUDINARY_URL causes signature failures
+# and uploads that never persist. After changing keys in the Cloudinary dashboard, update Render env in sync.
 USE_CLOUDINARY = bool(
     (os.environ.get('CLOUDINARY_URL') or os.environ.get('CLOUDINARY_CLOUD_NAME') or '').strip()
 )
@@ -178,10 +180,13 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 # Static: WhiteNoise. Media: local disk (dev) or Cloudinary (production).
-# PDFs must use resource_type=raw; MediaCloudinaryStorage defaults to image and rejects PDF uploads → 500.
+# Default media MUST be MediaCloudinaryStorage so ImageField uploads (artists, events, profiles) use
+# resource_type=image and persist correctly in admin/API. Ticket PDFs use STORAGES['ticket_pdfs']
+# (RawMediaCloudinaryStorage) on the Ticket.pdf_file field only — raw avoids image validation on PDFs.
 if USE_CLOUDINARY:
     STORAGES = {
-        'default': {'BACKEND': 'cloudinary_storage.storage.RawMediaCloudinaryStorage'},
+        'default': {'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage'},
+        'ticket_pdfs': {'BACKEND': 'cloudinary_storage.storage.RawMediaCloudinaryStorage'},
         'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
     }
 else:

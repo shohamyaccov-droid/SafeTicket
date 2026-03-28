@@ -52,6 +52,20 @@ class Artist(models.Model):
         ]
 
 
+def _ticket_pdf_storage():
+    """
+    Ticket PDFs must upload as resource_type=raw on Cloudinary.
+    Images (Artist/Event/User) use STORAGES['default'] → MediaCloudinaryStorage.
+    """
+    from django.conf import settings
+
+    if getattr(settings, 'USE_CLOUDINARY', False):
+        from django.core.files.storage import storages
+
+        return storages['ticket_pdfs']
+    return None
+
+
 class Event(models.Model):
     """
     Centralized Event model for grouping tickets
@@ -219,8 +233,12 @@ class Ticket(models.Model):
             self.asking_price = self.original_price
         super().save(*args, **kwargs)
     
-    # PDF file
-    pdf_file = models.FileField(upload_to='tickets/pdfs/', help_text="Upload the PDF ticket file (can contain multiple tickets)")
+    # PDF file (raw storage on Cloudinary — see _ticket_pdf_storage / settings.STORAGES)
+    pdf_file = models.FileField(
+        upload_to='tickets/pdfs/',
+        storage=_ticket_pdf_storage(),
+        help_text="Upload the PDF ticket file (can contain multiple tickets)",
+    )
     
     # Seating information
     is_together = models.BooleanField(default=True, help_text="Are the seats together (next to each other)?")

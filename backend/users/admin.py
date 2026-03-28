@@ -1,14 +1,17 @@
+import logging
 from decimal import Decimal
+from datetime import timedelta
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
-from datetime import timedelta
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from .models import User, Order, Ticket, Event, Artist, Offer, ContactMessage, EventRequest
 from .admin_pdf_url import get_ticket_pdf_admin_url
+
+_admin_log = logging.getLogger(__name__)
 
 
 @admin.register(User)
@@ -31,8 +34,8 @@ class UserAdmin(BaseUserAdmin):
 class TicketAdmin(admin.ModelAdmin):
     list_display = [
         'id',
-        'event_name',
-        'seller',
+        'event_name_display',
+        'seller_display',
         'risk_level',
         'verification_status',
         'ticket_type',
@@ -76,6 +79,41 @@ class TicketAdmin(admin.ModelAdmin):
         }),
     )
 
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        try:
+            return qs.select_related('seller', 'event', 'reserved_by')
+        except Exception as exc:
+            _admin_log.warning('TicketAdmin.get_queryset select_related failed: %s', exc)
+            return qs
+
+    def event_name_display(self, obj):
+        try:
+            name = getattr(obj, 'event_name', None) or ''
+            name = str(name).strip()
+            return (name[:120] + '…') if len(name) > 120 else (name or '—')
+        except Exception as exc:
+            _admin_log.warning('TicketAdmin.event_name_display failed pk=%s: %s', getattr(obj, 'pk', None), exc)
+            return '—'
+
+    event_name_display.short_description = 'Event name'
+    event_name_display.admin_order_field = 'event_name'
+
+    def seller_display(self, obj):
+        try:
+            if not getattr(obj, 'seller_id', None):
+                return '—'
+            u = obj.seller
+            if u is None:
+                return '—'
+            return u.get_username() or str(u.pk)
+        except Exception as exc:
+            _admin_log.warning('TicketAdmin.seller_display failed pk=%s: %s', getattr(obj, 'pk', None), exc)
+            return '—'
+
+    seller_display.short_description = 'Seller'
+    seller_display.admin_order_field = 'seller__username'
+
     def get_readonly_fields(self, request, obj=None):
         ro = list(super().get_readonly_fields(request, obj))
         if obj and obj.pk:
@@ -103,67 +141,85 @@ class TicketAdmin(admin.ModelAdmin):
         return tuple(out)
 
     def risk_level(self, obj):
-        if not obj.seller_id:
-            return format_html('<span style="color:#64748b;">—</span>')
         try:
-            seller = obj.seller
-        except ObjectDoesNotExist:
-            return format_html('<span style="color:#64748b;">—</span>')
-        fresh_cutoff = timezone.now() - timedelta(hours=48)
-        price_high = (obj.original_price or Decimal('0')) > Decimal('1000')
-        seller_new = seller.date_joined > fresh_cutoff
-        if price_high or seller_new:
-            return format_html(
-                '<span style="color:#b91c1c;font-weight:700;" title="מחיר &gt; 1000 ₪ או מוכר חדש (&lt; 48 שעות)">אדום · High Risk</span>'
-            )
-        return format_html('<span style="color:#15803d;font-weight:600;">ירוק · Normal</span>')
+            if not getattr(obj, 'seller_id', None):
+                return '—'
+            try:
+                seller = obj.seller
+            except ObjectDoesNotExist:
+                return '—'
+            if seller is None:
+                return '—'
+            fresh_cutoff = timezone.now() - timedelta(hours=48)
+            op = getattr(obj, 'original_price', None)
+            if op is None:
+                op = Decimal('0')
+            else:
+                op = Decimal(str(op))
+            price_high = op > Decimal('1000')
+            dj = getattr(seller, 'date_joined', None)
+            if dj is None:
+                seller_new = False
+            else:
+                seller_new = dj > fresh_cutoff
+            if price_high or seller_new:
+                return format_html(
+                    '<span style="color:#b91c1c;font-weight:700;" title="מחיר &gt; 1000 ₪ או מוכר חדש (&lt; 48 שעות)">אדום · High Risk</span>'
+                )
+            return format_html('<span style="color:#15803d;font-weight:600;">ירוק · Normal</span>')
+        except Exception as exc:
+            _admin_log.warning('TicketAdmin.risk_level failed pk=%s: %s', getattr(obj, 'pk', None), exc)
+            return '—'
 
     risk_level.short_description = 'רמת סיכון / Risk Level'
 
     def pdf_staff_link(self, obj):
         try:
             url = get_ticket_pdf_admin_url(obj)
-        except Exception:
+            if not url:
+                return '—'
+            return format_html(
+                '<a href="{}" target="_blank" rel="noopener noreferrer">PDF</a>',
+                url,
+            )
+        except Exception as exc:
+            _admin_log.warning('TicketAdmin.pdf_staff_link failed pk=%s: %s', getattr(obj, 'pk', None), exc)
             return '—'
-        if not url:
-            return '—'
-        return format_html(
-            '<a href="{}" target="_blank" rel="noopener noreferrer">PDF</a>',
-            url,
-        )
 
     pdf_staff_link.short_description = 'PDF (סטאף)'
 
     def pdf_file_display(self, obj):
         try:
             url = get_ticket_pdf_admin_url(obj)
-        except Exception:
-            return format_html('<span style="color:#64748b;">אין קובץ</span>')
-        if not url:
-            return format_html('<span style="color:#64748b;">אין קובץ</span>')
-        return format_html(
-            '<a class="button" style="padding:8px 12px;display:inline-block;margin-top:4px;" '
-            'href="{}" target="_blank" rel="noopener noreferrer">פתיחה / הורדת PDF (קישור חתום לסטאף)</a>',
-            url,
-        )
+            if not url:
+                return format_html('<span style="color:#64748b;">אין קובץ</span>')
+            return format_html(
+                '<a class="button" style="padding:8px 12px;display:inline-block;margin-top:4px;" '
+                'href="{}" target="_blank" rel="noopener noreferrer">פתיחה / הורדת PDF (קישור חתום לסטאף)</a>',
+                url,
+            )
+        except Exception as exc:
+            _admin_log.warning('TicketAdmin.pdf_file_display failed pk=%s: %s', getattr(obj, 'pk', None), exc)
+            return format_html('<span style="color:#64748b;">—</span>')
 
     pdf_file_display.short_description = 'קובץ PDF (גישת מנהל)'
 
     def pdf_inline_preview(self, obj):
         try:
             url = get_ticket_pdf_admin_url(obj)
-        except Exception:
+            if not url:
+                return '—'
+            return format_html(
+                '<iframe src="{}" title="PDF preview" '
+                'style="width:100%%;max-width:720px;height:480px;border:1px solid #cbd5e1;'
+                'border-radius:6px;background:#f1f5f9;"></iframe>'
+                '<p style="color:#64748b;font-size:12px;margin-top:8px;max-width:720px;">'
+                'אם המסך ריק, פתחו את הקישור למעלה — חלק מהדפדפנים חוסמים תצוגת PDF בתוך מסגרת.</p>',
+                url,
+            )
+        except Exception as exc:
+            _admin_log.warning('TicketAdmin.pdf_inline_preview failed pk=%s: %s', getattr(obj, 'pk', None), exc)
             return '—'
-        if not url:
-            return '—'
-        return format_html(
-            '<iframe src="{}" title="PDF preview" '
-            'style="width:100%%;max-width:720px;height:480px;border:1px solid #cbd5e1;'
-            'border-radius:6px;background:#f1f5f9;"></iframe>'
-            '<p style="color:#64748b;font-size:12px;margin-top:8px;max-width:720px;">'
-            'אם המסך ריק, פתחו את הקישור למעלה — חלק מהדפדפנים חוסמים תצוגת PDF בתוך מסגרת.</p>',
-            url,
-        )
 
     pdf_inline_preview.short_description = 'תצוגה מקדימה'
 
@@ -177,23 +233,27 @@ class TicketAdmin(admin.ModelAdmin):
     
     def reservation_info(self, obj):
         """Display reservation information in admin list"""
-        if obj.status == 'reserved' and obj.reserved_at:
-            time_remaining = (obj.reserved_at + timedelta(minutes=10)) - timezone.now()
-            if time_remaining.total_seconds() > 0:
-                minutes = int(time_remaining.total_seconds() / 60)
-                try:
-                    rb = obj.reserved_by
-                    reserved_by = rb.username if rb else (obj.reservation_email or 'Guest')
-                except ObjectDoesNotExist:
-                    reserved_by = obj.reservation_email or 'Guest'
-                return format_html(
-                    '<span style="color: orange;">Reserved by {}<br/>{} min remaining</span>',
-                    reserved_by,
-                    minutes
-                )
-            else:
+        try:
+            if getattr(obj, 'status', None) == 'reserved' and obj.reserved_at:
+                time_remaining = (obj.reserved_at + timedelta(minutes=10)) - timezone.now()
+                if time_remaining.total_seconds() > 0:
+                    minutes = int(time_remaining.total_seconds() / 60)
+                    try:
+                        rb = obj.reserved_by
+                        reserved_by = rb.username if rb else (obj.reservation_email or 'Guest')
+                    except ObjectDoesNotExist:
+                        reserved_by = obj.reservation_email or 'Guest'
+                    return format_html(
+                        '<span style="color: orange;">Reserved by {}<br/>{} min remaining</span>',
+                        reserved_by,
+                        minutes,
+                    )
                 return mark_safe('<span style="color: red;">EXPIRED</span>')
-        return '-'
+            return '-'
+        except Exception as exc:
+            _admin_log.warning('TicketAdmin.reservation_info failed pk=%s: %s', getattr(obj, 'pk', None), exc)
+            return '-'
+
     reservation_info.short_description = 'Reservation Info'
     
     @admin.action(description='Force Release Expired Reservations')
