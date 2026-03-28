@@ -331,13 +331,16 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         timestamp: Date.now(),
         listing_group_id: listingGroupId, // CRITICAL: Send listing_group_id so backend checks group availability
       };
-      
+
       // CRITICAL: If this is a negotiated price, include offer_id
       if (isNegotiatedPrice && acceptedOffer && acceptedOffer.id) {
         paymentData.offer_id = acceptedOffer.id;
         console.log('Including offer_id in payment simulation:', acceptedOffer.id);
       }
-      
+      if (!user && guestForm?.email?.trim()) {
+        paymentData.guest_email = guestForm.email.trim();
+      }
+
       const paymentResponse = await paymentAPI.simulatePayment(paymentData);
 
       console.log('Payment response:', paymentResponse);
@@ -450,6 +453,19 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       }
 
       console.log('Order response:', orderResponse);
+
+      const pendingOrder = orderResponse.data;
+      const pendingId = pendingOrder?.id;
+      if (pendingId == null) {
+        throw new Error('יצירת ההזמנה נכשלה — לא התקבל מזהה הזמנה');
+      }
+
+      const confirmPayload = { mock_payment_ack: true };
+      if (!user && guestForm?.email?.trim()) {
+        confirmPayload.guest_email = guestForm.email.trim();
+      }
+      const confirmResponse = await orderAPI.confirmPayment(pendingId, confirmPayload);
+      orderResponse = confirmResponse;
 
       const raw = orderResponse.data;
       if (!raw) {

@@ -3,7 +3,8 @@ Ultimate E2E Bid Flow Test - Simulates exact API calls
 Run with: python manage.py test test_ultimate_bid_flow
 """
 
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken
 from users.models import Ticket, Event, Artist, Offer
@@ -14,7 +15,16 @@ import json
 
 User = get_user_model()
 
+_OFFER_THROTTLE_RF = {
+    **settings.REST_FRAMEWORK,
+    'DEFAULT_THROTTLE_RATES': {
+        **settings.REST_FRAMEWORK.get('DEFAULT_THROTTLE_RATES', {}),
+        'offers': '1000/min',
+    },
+}
 
+
+@override_settings(REST_FRAMEWORK=_OFFER_THROTTLE_RF)
 class UltimateBidFlowTest(TestCase):
     """Ultimate E2E test simulating exact API flow"""
     

@@ -3,7 +3,8 @@ E2E Test for Premium Offer Modal and Routing Logic
 Run with: python manage.py test test_premium_offer_e2e
 """
 
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken
 from users.models import Ticket, Event, Artist, Offer, Order
@@ -170,6 +171,15 @@ class PremiumOfferE2ETest(TestCase):
         print("  - Buyer does NOT see offer in 'Received': OK")
         print("  - Quick button calculations correct: OK")
 
+    @override_settings(
+        REST_FRAMEWORK={
+            **settings.REST_FRAMEWORK,
+            'DEFAULT_THROTTLE_RATES': {
+                **settings.REST_FRAMEWORK.get('DEFAULT_THROTTLE_RATES', {}),
+                'offers': '1000/min',
+            },
+        }
+    )
     def test_purchase_completed_true_after_paid_order(self):
         """Completed purchase (paid order + related_offer) → API exposes purchase_completed for UI lock."""
         response = self.buyer_client.post(
@@ -253,6 +263,14 @@ class PremiumOfferE2ETest(TestCase):
             **self.buyer_headers,
         )
         self.assertEqual(order_r.status_code, 201, order_r.content.decode())
+        oid = order_r.json()['id']
+        conf_r = self.buyer_client.post(
+            f'/api/users/orders/{oid}/confirm-payment/',
+            {'mock_payment_ack': True},
+            format='json',
+            **self.buyer_headers,
+        )
+        self.assertEqual(conf_r.status_code, 200, conf_r.content.decode())
 
         self.ticket.refresh_from_db()
         self.assertEqual(self.ticket.status, 'sold')

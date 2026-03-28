@@ -337,6 +337,7 @@ class Order(models.Model):
     """
     STATUS_CHOICES = [
         ('pending', 'Pending'),
+        ('pending_payment', 'Pending payment'),
         ('paid', 'Paid'),
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
@@ -430,6 +431,28 @@ class Order(models.Model):
         null=True,
         blank=True,
         help_text='When seller payout becomes eligible (24 hours after event start)',
+    )
+
+    # Single-row multi-qty: inventory held on the ticket row until payment confirms or order expires
+    held_ticket = models.ForeignKey(
+        'Ticket',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pending_payment_holds',
+        help_text='Ticket row with decremented available_quantity while order is pending_payment',
+    )
+    held_quantity = models.PositiveIntegerField(
+        default=0,
+        help_text='Quantity subtracted from held_ticket.available_quantity for this pending order',
+    )
+    pending_offer = models.ForeignKey(
+        'Offer',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pending_orders',
+        help_text='Negotiated offer associated with this checkout before payment confirms',
     )
 
     def covers_ticket(self, ticket_id):

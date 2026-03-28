@@ -68,6 +68,24 @@ def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
     public_id = name.replace('\\', '/')
     resource_types_try = ('raw', 'image')
 
+    # Raw PDFs on Cloudinary require signed delivery; try explicit signed URL per public_id variants first.
+    try:
+        for pid in _public_id_variants(public_id):
+            try:
+                url, _ = cloudinary.utils.cloudinary_url(
+                    pid,
+                    resource_type='raw',
+                    type='upload',
+                    sign_url=True,
+                    secure=True,
+                )
+                if url and str(url).startswith('https://'):
+                    return str(url)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     try:
         for pid in _public_id_variants(public_id):
             for rt in resource_types_try:

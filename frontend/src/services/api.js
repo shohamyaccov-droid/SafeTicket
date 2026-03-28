@@ -130,6 +130,7 @@ export const paymentAPI = {
 export const orderAPI = {
   createOrder: (data) => api.post('/users/orders/', data),
   guestCheckout: (data) => api.post('/users/orders/guest/', data),
+  confirmPayment: (orderId, data) => api.post(`/users/orders/${orderId}/confirm-payment/`, data),
   getReceipt: (orderId) => api.get(`/users/orders/${orderId}/receipt/`),
 };
 

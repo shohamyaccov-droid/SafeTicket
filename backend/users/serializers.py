@@ -50,6 +50,51 @@ def absolute_file_url(request, fieldfile):
         return request.build_absolute_uri(url)
 
 
+def cloudinary_signed_https_image_url(fieldfile):
+    """
+    Fully qualified https:// delivery URL for ImageField on Cloudinary (signed).
+    Falls back to None so callers can use absolute_file_url.
+    """
+    from django.conf import settings
+
+    if not fieldfile or not getattr(settings, 'USE_CLOUDINARY', False):
+        return None
+    name = (getattr(fieldfile, 'name', None) or '').strip()
+    if not name:
+        return None
+    try:
+        import cloudinary.utils
+        from .admin_pdf_url import _public_id_variants
+    except ImportError:
+        return None
+
+    public_id = name.replace('\\', '/')
+    for pid in _public_id_variants(public_id):
+        try:
+            url, _ = cloudinary.utils.cloudinary_url(
+                pid,
+                resource_type='image',
+                type='upload',
+                sign_url=True,
+                secure=True,
+            )
+            if url and str(url).startswith('https://'):
+                return str(url)
+        except Exception:
+            continue
+    return None
+
+
+def resolved_image_url(request, fieldfile):
+    """Prefer signed Cloudinary HTTPS URL; else build absolute API/media URL."""
+    if not fieldfile:
+        return None
+    u = cloudinary_signed_https_image_url(fieldfile)
+    if u:
+        return u
+    return absolute_file_url(request, fieldfile)
+
+
 def artist_effective_image_field(artist):
     """
     Single source of truth for artist visuals: cover (banner) first, then profile image.
@@ -206,7 +251,7 @@ class ArtistSerializer(serializers.ModelSerializer):
     def get_image_url(self, obj):
         f = artist_effective_image_field(obj)
         if f:
-            return absolute_file_url(self.context.get('request'), f)
+            return resolved_image_url(self.context.get('request'), f)
         return None
     
     def get_total_tickets_count(self, obj):
@@ -235,7 +280,7 @@ class ArtistListSerializer(serializers.ModelSerializer):
     def get_image_url(self, obj):
         f = artist_effective_image_field(obj)
         if f:
-            return absolute_file_url(self.context.get('request'), f)
+            return resolved_image_url(self.context.get('request'), f)
         return None
     
     def get_total_tickets_count(self, obj):
@@ -268,7 +313,7 @@ class EventSerializer(serializers.ModelSerializer):
     def get_image_url(self, obj):
         f = event_effective_image_field(obj)
         if f:
-            return absolute_file_url(self.context.get('request'), f)
+            return resolved_image_url(self.context.get('request'), f)
         return None
     
     def get_tickets_count(self, obj):
@@ -296,7 +341,7 @@ class EventListSerializer(serializers.ModelSerializer):
     def get_image_url(self, obj):
         f = event_effective_image_field(obj)
         if f:
-            return absolute_file_url(self.context.get('request'), f)
+            return resolved_image_url(self.context.get('request'), f)
         return None
     
     def get_tickets_count(self, obj):
@@ -314,6 +359,7 @@ class GuestCheckoutSerializer(serializers.Serializer):
     total_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
     quantity = serializers.IntegerField(required=True, min_value=1, max_value=10)
     event_name = serializers.CharField(max_length=255, required=False)
+    listing_group_id = serializers.CharField(required=False, allow_blank=True, max_length=120)
 
 
 class TicketSerializer(serializers.ModelSerializer):
@@ -470,6 +516,7 @@ class TicketListSerializer(serializers.ModelSerializer):
     delivery_method = serializers.ChoiceField(choices=Ticket.DELIVERY_CHOICES, read_only=True)
     split_type = serializers.CharField(required=False, allow_blank=True, allow_null=True, read_only=True)
     has_pdf_file = serializers.SerializerMethodField()
+    is_reserved_slot = serializers.SerializerMethodField()
     # Event data
     event_name = serializers.SerializerMethodField()
     event_date = serializers.SerializerMethodField()
@@ -483,9 +530,12 @@ class TicketListSerializer(serializers.ModelSerializer):
             'row_number', 'seat_number', 'listing_group_id',
             'original_price', 'asking_price', 'delivery_method',
             'is_together', 'available_quantity', 'split_type', 'status', 'has_pdf_file',
-            'reserved_at', 'reserved_by', 'reservation_email', 'created_at'
+            'is_reserved_slot', 'created_at'
         )
         read_only_fields = fields
+
+    def get_is_reserved_slot(self, obj):
+        return obj.status == 'reserved'
     
     def get_event_name(self, obj):
         return obj.event.name if obj.event else (obj.event_name or '')

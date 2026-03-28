@@ -98,6 +98,7 @@ from .pricing import compute_order_price_breakdown, compute_payout_eligible_date
 from django.utils import timezone
 from datetime import timedelta
 from django.conf import settings
+import os
 
 User = get_user_model()
 
@@ -423,10 +424,136 @@ def release_abandoned_carts():
             )
     stale_count = stale_orders.update(status='cancelled')
     released += stale_count
+
+    # 3. payment pending orders: release inventory like abandoned carts
+    stale_pending = list(
+        Order.objects.filter(status='pending_payment', created_at__lt=cutoff)
+        .only('id', 'held_ticket_id', 'held_quantity', 'ticket_ids')
+    )
+    for po in stale_pending:
+        _restore_order_held_inventory(po)
+        _release_pending_payment_group_reservations(po.ticket_ids or [])
+    if stale_pending:
+        released += Order.objects.filter(
+            pk__in=[x.pk for x in stale_pending]
+        ).update(status='cancelled')
     return released
 
 
-@method_decorator(csrf_required, name='dispatch')
+def _restore_order_held_inventory(order):
+    """Restore single-row partial quantity held on pending_payment orders."""
+    hid = getattr(order, 'held_ticket_id', None) or getattr(order, 'held_ticket', None)
+    hq = getattr(order, 'held_quantity', None) or 0
+    if hid and hq:
+        pk = hid if isinstance(hid, int) else hid.pk
+        t = Ticket.objects.filter(pk=pk).first()
+        if t:
+            t.available_quantity = (t.available_quantity or 0) + int(hq)
+            if t.status == 'reserved' and (t.available_quantity or 0) > 0:
+                t.status = 'active'
+            t.reserved_at = None
+            t.reserved_by = None
+            t.reservation_email = None
+            t.save(
+                update_fields=[
+                    'available_quantity',
+                    'status',
+                    'reserved_at',
+                    'reserved_by',
+                    'reservation_email',
+                    'updated_at',
+                ]
+            )
+
+
+def _release_pending_payment_group_reservations(ticket_ids):
+    for tid in ticket_ids or []:
+        Ticket.objects.filter(pk=tid, status='reserved').update(
+            status='active',
+            reserved_at=None,
+            reserved_by=None,
+            reservation_email=None,
+        )
+
+
+def _guest_offer_email_matches(negotiated_offer, guest_email: str) -> bool:
+    if not negotiated_offer:
+        return True
+    ge = (guest_email or '').strip().lower()
+    be = (negotiated_offer.buyer.email or '').strip().lower()
+    return bool(be) and ge == be
+
+
+def _reserve_rows_for_pending_checkout(available_tickets, user=None, guest_email: str = ''):
+    """Hold inventory: active -> reserved; existing reservation must match buyer."""
+    guest_email = (guest_email or '').strip()
+    now = timezone.now()
+    for t in available_tickets:
+        if t.status == 'active':
+            t.status = 'reserved'
+            t.reserved_at = now
+            if user and getattr(user, 'is_authenticated', False):
+                t.reserved_by = user
+                t.reservation_email = None
+            else:
+                t.reserved_by = None
+                t.reservation_email = guest_email or None
+            t.save(
+                update_fields=[
+                    'status',
+                    'reserved_at',
+                    'reserved_by',
+                    'reservation_email',
+                    'updated_at',
+                ]
+            )
+        elif t.status == 'reserved':
+            if user and getattr(user, 'is_authenticated', False):
+                if t.reserved_by_id != user.id:
+                    raise PermissionDenied('Reservation does not belong to this buyer.')
+            else:
+                if (t.reservation_email or '').strip().lower() != guest_email.lower():
+                    raise PermissionDenied('Reservation does not belong to this guest email.')
+        else:
+            raise ValueError('ticket_not_available')
+
+
+def _verify_reservations_fresh(reserved_before, user=None, guest_email: str = ''):
+    """Ensure checkout reservations have not expired (RESERVATION_TIMEOUT_MINUTES)."""
+    cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
+    guest_email = (guest_email or '').strip()
+    for t in reserved_before:
+        t.refresh_from_db()
+        if t.status != 'reserved':
+            raise ValueError('ticket_state_changed')
+        if not t.reserved_at or t.reserved_at < cutoff:
+            raise ValueError('reservation_expired')
+        if user and getattr(user, 'is_authenticated', False):
+            if t.reserved_by_id != user.id:
+                raise PermissionDenied('Reservation owner mismatch.')
+        else:
+            if (t.reservation_email or '').strip().lower() != guest_email.lower():
+                raise PermissionDenied('Reservation email mismatch.')
+
+
+def _finalize_group_sale_ticket_rows(ticket_ids):
+    for tid in ticket_ids or []:
+        t = Ticket.objects.select_for_update().get(pk=tid)
+        t.status = 'sold'
+        t.available_quantity = 0
+        t.reserved_at = None
+        t.reserved_by = None
+        t.reservation_email = None
+        t.save(
+            update_fields=[
+                'status',
+                'available_quantity',
+                'reserved_at',
+                'reserved_by',
+                'reservation_email',
+                'updated_at',
+            ]
+        )
 class RegisterView(generics.CreateAPIView):
     """
     User registration endpoint. Returns JWT tokens immediately for instant login.
@@ -1050,17 +1177,19 @@ def create_order(request):
                                 {'error': 'This ticket was just sold to someone else.'},
                                 status=status.HTTP_400_BAD_REQUEST
                             )
-                    # Mark specific tickets as sold
-                    ticket_ids = []
-                    for t in available_tickets:
-                        t.status = 'sold'
-                        t.available_quantity = 0
-                        t.reserved_at = None
-                        t.reserved_by = None
-                        t.reservation_email = None
-                        t.save()
-                        ticket_ids.append(t.id)
-                        print(f"Marked ticket {t.id} (Row {t.row_number}, Seat {t.seat_number}) as sold")
+                    ticket_ids = [t.id for t in available_tickets]
+                    try:
+                        _reserve_rows_for_pending_checkout(available_tickets, user=request.user)
+                    except PermissionDenied as e:
+                        return Response(
+                            {'error': getattr(e, 'detail', str(e))},
+                            status=status.HTTP_403_FORBIDDEN,
+                        )
+                    except ValueError:
+                        return Response(
+                            {'error': 'Ticket is no longer available.'},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
 
                     # Use the first ticket as the base ticket for the order
                     ticket = available_tickets[0]
@@ -1159,34 +1288,56 @@ def create_order(request):
                         {'error': f'Not enough tickets available. Available: {ticket.available_quantity or 1}, Requested: {order_quantity}'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-                ticket.available_quantity -= order_quantity
-                ticket.reserved_at = None
-                ticket.reserved_by = None
-                ticket.reservation_email = None
-                if ticket.available_quantity <= 0:
-                    ticket.status = 'sold'
-                    ticket.available_quantity = 0
+                held_qty = 0
+                if order_quantity == 1:
+                    try:
+                        _reserve_rows_for_pending_checkout([ticket], user=request.user)
+                    except PermissionDenied as e:
+                        return Response(
+                            {'error': getattr(e, 'detail', str(e))},
+                            status=status.HTTP_403_FORBIDDEN,
+                        )
+                    except ValueError:
+                        return Response(
+                            {'error': 'Ticket is no longer available.'},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    ticket_ids = [ticket.id]
                 else:
-                    ticket.status = 'active'
-                ticket.save()
-                ticket_ids = [ticket.id]
+                    ticket.available_quantity -= order_quantity
+                    held_qty = order_quantity
+                    ticket.reserved_at = timezone.now()
+                    ticket.reserved_by = request.user
+                    ticket.reservation_email = None
+                    if ticket.available_quantity <= 0:
+                        ticket.available_quantity = 0
+                        ticket.status = 'reserved'
+                    else:
+                        ticket.status = 'active'
+                    ticket.save()
+                    ticket_ids = [ticket.id]
 
-            _reject_pending_offers_for_ticket_ids(ticket_ids)
-
-            # Create order with 'paid' status (payment already processed)
-            order = serializer.save(status='paid', quantity=order_quantity)
+            order = serializer.save(status='pending_payment', quantity=order_quantity)
             order.ticket_ids = ticket_ids
-            order.save(update_fields=['ticket_ids'])
-            _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity)
-
-        # Send receipt with PDF attachments (outside transaction so email failure doesn't rollback)
-        if request.user.email:
-            try:
-                from .utils.emails import send_receipt_with_pdf
-                send_receipt_with_pdf(request.user.email, order)
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).exception(f'Failed to send receipt email: {e}')
+            order.pending_offer = negotiated_offer
+            if listing_group_id:
+                order.held_ticket = None
+                order.held_quantity = 0
+            elif order_quantity == 1:
+                order.held_ticket = None
+                order.held_quantity = 0
+            else:
+                order.held_ticket = ticket
+                order.held_quantity = held_qty
+            order.save(
+                update_fields=[
+                    'ticket_ids',
+                    'pending_offer',
+                    'held_ticket',
+                    'held_quantity',
+                    'updated_at',
+                ]
+            )
 
         order.refresh_from_db()
         return Response(
@@ -1194,6 +1345,145 @@ def create_order(request):
             status=status.HTTP_201_CREATED,
         )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@csrf_required
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def confirm_order_payment(request, order_id):
+    """
+    Second step after create_order / guest_checkout: PSP / mock webhook confirms funds,
+    then inventory is finalized, escrow fields applied, and receipt email sent.
+    """
+    webhook_secret = (os.environ.get('MOCK_PAYMENT_WEBHOOK_SECRET') or '').strip()
+    mock_ack = request.data.get('mock_payment_ack') is True or str(
+        request.data.get('mock_payment_ack', '')
+    ).lower() in ('true', '1', 'yes')
+    if webhook_secret:
+        supplied = (
+            (request.data.get('payment_secret') or request.headers.get('X-Payment-Secret') or '')
+        ).strip()
+        if supplied != webhook_secret:
+            return Response(
+                {'error': 'Invalid payment confirmation.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+    elif not mock_ack:
+        return Response(
+            {
+                'error': (
+                    'Payment not confirmed. Use mock_payment_ack=true for dev, '
+                    'or set MOCK_PAYMENT_WEBHOOK_SECRET and pass payment_secret / X-Payment-Secret.'
+                )
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    order = Order.objects.filter(pk=order_id).first()
+    if not order or order.status != 'pending_payment':
+        return Response(
+            {'error': 'Order not found or not awaiting payment.'},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    if order.user_id:
+        if not request.user.is_authenticated or order.user_id != request.user.id:
+            return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+    else:
+        body_email = (request.data.get('guest_email') or '').strip().lower()
+        order_email = (order.guest_email or '').strip().lower()
+        if not body_email or body_email != order_email:
+            return Response(
+                {'error': 'guest_email must match this order.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+    negotiated_offer = order.pending_offer
+
+    try:
+        with transaction.atomic():
+            release_abandoned_carts()
+            order = Order.objects.select_for_update().filter(pk=order_id, status='pending_payment').first()
+            if not order:
+                return Response(
+                    {'error': 'Order not found or not awaiting payment.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            ticket_ref = order.ticket
+
+            if order.held_ticket_id and order.held_quantity:
+                t = Ticket.objects.select_for_update().get(pk=order.held_ticket_id)
+                if timezone.now() - order.created_at > timedelta(
+                    minutes=RESERVATION_TIMEOUT_MINUTES + 5
+                ):
+                    raise ValueError('checkout_expired')
+                if (t.available_quantity or 0) <= 0:
+                    t.status = 'sold'
+                t.reserved_at = None
+                t.reserved_by = None
+                t.reservation_email = None
+                t.save(
+                    update_fields=[
+                        'status',
+                        'available_quantity',
+                        'reserved_at',
+                        'reserved_by',
+                        'reservation_email',
+                        'updated_at',
+                    ]
+                )
+                ticket_ref = t
+            else:
+                tix = list(
+                    Ticket.objects.select_for_update()
+                    .filter(pk__in=(order.ticket_ids or []))
+                    .order_by('id')
+                )
+                if len(tix) != len(order.ticket_ids or []):
+                    raise ValueError('ticket_mismatch')
+                user_obj = order.user if order.user_id else None
+                ge = (order.guest_email or '').strip()
+                _verify_reservations_fresh(tix, user=user_obj, guest_email=ge)
+                _finalize_group_sale_ticket_rows(order.ticket_ids)
+
+            _reject_pending_offers_for_ticket_ids(list(order.ticket_ids or []))
+            order.status = 'paid'
+            order.save(update_fields=['status', 'updated_at'])
+            _apply_order_pricing_fields(order, negotiated_offer, ticket_ref, order.quantity)
+    except ValueError as e:
+        msg = str(e)
+        if msg == 'checkout_expired':
+            return Response(
+                {'error': 'Checkout session expired. Start again.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if msg == 'reservation_expired':
+            return Response(
+                {'error': 'Reservation expired. Start again.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(
+            {'error': 'Cannot complete payment for this order.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    except PermissionDenied as e:
+        return Response(
+            {'error': getattr(e, 'detail', str(e))},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    recipient = (order.user.email if order.user_id else order.guest_email) or ''
+    if recipient:
+        try:
+            from .utils.emails import send_receipt_with_pdf
+
+            send_receipt_with_pdf(recipient, order)
+        except Exception:
+            logger.exception('confirm_order_payment: receipt email failed')
+
+    order.refresh_from_db()
+    return Response(OrderSerializer(order, context={'request': request}).data)
 
 
 @csrf_required
@@ -1306,9 +1596,21 @@ def payment_simulation(request):
             if request.user.is_authenticated:
                 offer = Offer.objects.get(id=offer_id, buyer=request.user, status='accepted')
             else:
-                # For guests, just check if offer exists and is accepted
+                ge = (
+                    (request.data.get('guest_email') or request.data.get('email') or '')
+                    .strip()
+                    .lower()
+                )
                 offer = Offer.objects.get(id=offer_id, status='accepted')
-            
+                be = (offer.buyer.email or '').strip().lower()
+                if not ge or not be or ge != be:
+                    return Response(
+                        {
+                            'error': 'guest_email is required and must match the registered buyer for this offer.',
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
             is_negotiated = True
             # Use offer amount as base; total must match CheckoutModal ceil(base * 1.10)
             base_price = float(offer.amount)
@@ -1364,18 +1666,24 @@ def guest_checkout(request):
     negotiated_offer = None
     if offer_id:
         try:
-            # For guests, verify offer exists and is accepted
-            # Note: We can't verify buyer for guests, but we can check offer status
             negotiated_offer = Offer.objects.get(id=offer_id, status='accepted')
             print(f"Guest checkout: Negotiated offer found: ID={offer_id}, Amount={negotiated_offer.amount}")
         except Offer.DoesNotExist:
+            negotiated_offer = None
             print(f"Guest checkout: Offer ID {offer_id} not found or not accepted")
-    
+
     serializer = GuestCheckoutSerializer(data=request.data)
     if serializer.is_valid():
         order_data = serializer.validated_data
         ticket_id = order_data.get('ticket_id')
-        
+        guest_email_raw = (order_data.get('guest_email') or '').strip()
+
+        if negotiated_offer and not _guest_offer_email_matches(negotiated_offer, guest_email_raw):
+            return Response(
+                {'error': 'Guest email must match the registered buyer who made this offer.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         if negotiated_offer:
             offer_base = float(negotiated_offer.amount)
             expected_total = float(math.ceil(offer_base * 1.10))
@@ -1391,10 +1699,9 @@ def guest_checkout(request):
                 {'error': 'ticket_id is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Get listing_group_id if provided (for grouped tickets)
-        listing_group_id = order_data.get('listing_group_id')
-        
+
+        listing_group_id = order_data.get('listing_group_id') or request.data.get('listing_group_id')
+
         # Get quantity from request (default to 1 if not provided)
         order_quantity = int(order_data.get('quantity', 1))
         
@@ -1492,16 +1799,22 @@ def guest_checkout(request):
                                 {'error': 'This ticket was just sold to someone else.'},
                                 status=status.HTTP_400_BAD_REQUEST
                             )
-                    ticket_ids = []
-                    for t in available_tickets:
-                        t.status = 'sold'
-                        t.available_quantity = 0
-                        t.reserved_at = None
-                        t.reserved_by = None
-                        t.reservation_email = None
-                        t.save()
-                        ticket_ids.append(t.id)
-                        print(f"Guest checkout - Marked ticket {t.id} (Row {t.row_number}, Seat {t.seat_number}) as sold")
+                    ticket_ids = [t.id for t in available_tickets]
+                    ge = (order_data.get('guest_email') or '').strip()
+                    try:
+                        _reserve_rows_for_pending_checkout(
+                            available_tickets, user=None, guest_email=ge
+                        )
+                    except PermissionDenied as e:
+                        return Response(
+                            {'error': getattr(e, 'detail', str(e))},
+                            status=status.HTTP_403_FORBIDDEN,
+                        )
+                    except ValueError:
+                        return Response(
+                            {'error': 'Ticket is no longer available.'},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
                     ticket = available_tickets[0]
                 except Ticket.DoesNotExist:
                     return Response(
@@ -1578,26 +1891,39 @@ def guest_checkout(request):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-                # Partial Inventory Update: Decrement available_quantity instead of marking as sold
-                ticket.available_quantity -= order_quantity
-                ticket.reserved_at = None
-                ticket.reserved_by = None
-                ticket.reservation_email = None
-                if ticket.available_quantity <= 0:
-                    ticket.status = 'sold'
-                    ticket.available_quantity = 0
+                ge = (order_data.get('guest_email') or '').strip()
+                held_qty = 0
+                if order_quantity == 1:
+                    try:
+                        _reserve_rows_for_pending_checkout([ticket], user=None, guest_email=ge)
+                    except PermissionDenied as e:
+                        return Response(
+                            {'error': getattr(e, 'detail', str(e))},
+                            status=status.HTTP_403_FORBIDDEN,
+                        )
+                    except ValueError:
+                        return Response(
+                            {'error': 'Ticket is no longer available.'},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    ticket_ids = [ticket.id]
                 else:
-                    ticket.status = 'active'
-                ticket.save()
-                ticket_ids = [ticket.id]
+                    ticket.available_quantity -= order_quantity
+                    held_qty = order_quantity
+                    ticket.reserved_at = timezone.now()
+                    ticket.reserved_by = None
+                    ticket.reservation_email = ge or None
+                    if ticket.available_quantity <= 0:
+                        ticket.available_quantity = 0
+                        ticket.status = 'reserved'
+                    else:
+                        ticket.status = 'active'
+                    ticket.save()
+                    ticket_ids = [ticket.id]
 
-            _reject_pending_offers_for_ticket_ids(ticket_ids)
-
-            # Use ticket's asking price and event name
             total_amount = order_data.get('total_amount', ticket.asking_price)
             event_name = order_data.get('event_name', ticket.event_name)
 
-            # Create order with 'paid' status (payment already processed)
             order = Order.objects.create(
                 guest_email=order_data['guest_email'],
                 guest_phone=order_data['guest_phone'],
@@ -1605,21 +1931,14 @@ def guest_checkout(request):
                 total_amount=total_amount,
                 quantity=order_quantity,
                 event_name=event_name,
-                status='paid',
-                ticket_ids=ticket_ids
+                status='pending_payment',
+                ticket_ids=ticket_ids,
+                pending_offer=negotiated_offer,
+                held_ticket=(ticket if (not listing_group_id and order_quantity > 1) else None),
+                held_quantity=(held_qty if (not listing_group_id and order_quantity > 1) else 0),
             )
-            _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity)
 
-        # Send receipt with PDF attachments to guest
-        if order.guest_email:
-            try:
-                from .utils.emails import send_receipt_with_pdf
-                send_receipt_with_pdf(order.guest_email, order)
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).exception(f'Failed to send receipt email: {e}')
-
-        order_serializer = OrderSerializer(order)
+        order_serializer = OrderSerializer(order, context={'request': request})
         return Response(order_serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1953,11 +2272,8 @@ class TicketViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['get'])
     def details(self, request, pk=None):
-        """
-        Get detailed ticket information including PDF URL
-        Only available to authenticated users
-        """
-        ticket = get_object_or_404(Ticket, pk=pk)
+        """Ticket detail; scoped to the same queryset as retrieve (no arbitrary ID peek)."""
+        ticket = self.get_object()
         serializer = TicketSerializer(ticket, context={'request': request})
         return Response(serializer.data)
     
