@@ -1,12 +1,13 @@
+from decimal import Decimal
+
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils import timezone
 from datetime import timedelta
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
-from django.urls import reverse
-from django.http import HttpResponseRedirect
 from .models import User, Order, Ticket, Event, Artist, Offer, ContactMessage
+from .admin_pdf_url import get_ticket_pdf_admin_url
 
 
 @admin.register(User)
@@ -27,11 +28,27 @@ class UserAdmin(BaseUserAdmin):
 
 @admin.register(Ticket)
 class TicketAdmin(admin.ModelAdmin):
-    list_display = ['id', 'event_name', 'seller', 'verification_status', 'ticket_type', 'original_price', 'status', 'reservation_info', 'created_at']
+    list_display = [
+        'id',
+        'event_name',
+        'seller',
+        'risk_level',
+        'verification_status',
+        'ticket_type',
+        'original_price',
+        'status',
+        'pdf_staff_link',
+        'reservation_info',
+        'created_at',
+    ]
     list_filter = ['verification_status', 'ticket_type', 'status', 'split_type', 'is_obstructed_view', 'created_at', 'event_date']
     search_fields = ['event_name', 'seller__username', 'venue', 'section', 'row']
     readonly_fields = ['created_at', 'updated_at', 'asking_price']
-    actions = ['force_release_expired_reservations', 'force_release_all_reserved']
+    actions = [
+        'approve_and_activate_selected',
+        'force_release_expired_reservations',
+        'force_release_all_reserved',
+    ]
     fieldsets = (
         ('Event & Seller Information', {
             'fields': ('event', 'seller', 'event_name', 'event_date', 'venue')
@@ -57,6 +74,92 @@ class TicketAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+    def get_readonly_fields(self, request, obj=None):
+        ro = list(super().get_readonly_fields(request, obj))
+        if obj and obj.pk:
+            ro += [
+                'seller',
+                'event',
+                'original_price',
+                'pdf_file_display',
+                'pdf_inline_preview',
+            ]
+        return ro
+
+    def get_fieldsets(self, request, obj=None):
+        if obj is None:
+            return self.fieldsets
+        out = []
+        for title, options in self.fieldsets:
+            row = []
+            for name in options.get('fields', ()):
+                if name == 'pdf_file':
+                    row.extend(['pdf_file_display', 'pdf_inline_preview'])
+                else:
+                    row.append(name)
+            out.append((title, {**options, 'fields': tuple(row)}))
+        return tuple(out)
+
+    def risk_level(self, obj):
+        if not obj.seller_id:
+            return format_html('<span style="color:#64748b;">—</span>')
+        fresh_cutoff = timezone.now() - timedelta(hours=48)
+        price_high = (obj.original_price or Decimal('0')) > Decimal('1000')
+        seller_new = obj.seller.date_joined > fresh_cutoff
+        if price_high or seller_new:
+            return format_html(
+                '<span style="color:#b91c1c;font-weight:700;" title="מחיר &gt; 1000 ₪ או מוכר חדש (&lt; 48 שעות)">אדום · High Risk</span>'
+            )
+        return format_html('<span style="color:#15803d;font-weight:600;">ירוק · Normal</span>')
+
+    risk_level.short_description = 'רמת סיכון / Risk Level'
+
+    def pdf_staff_link(self, obj):
+        url = get_ticket_pdf_admin_url(obj)
+        if not url:
+            return '—'
+        return format_html(
+            '<a href="{}" target="_blank" rel="noopener noreferrer">PDF</a>',
+            url,
+        )
+
+    pdf_staff_link.short_description = 'PDF (סטאף)'
+
+    def pdf_file_display(self, obj):
+        url = get_ticket_pdf_admin_url(obj)
+        if not url:
+            return format_html('<span style="color:#64748b;">אין קובץ</span>')
+        return format_html(
+            '<a class="button" style="padding:8px 12px;display:inline-block;margin-top:4px;" '
+            'href="{}" target="_blank" rel="noopener noreferrer">פתיחה / הורדת PDF (קישור חתום לסטאף)</a>',
+            url,
+        )
+
+    pdf_file_display.short_description = 'קובץ PDF (גישת מנהל)'
+
+    def pdf_inline_preview(self, obj):
+        url = get_ticket_pdf_admin_url(obj)
+        if not url:
+            return '—'
+        return format_html(
+            '<iframe src="{}" title="PDF preview" '
+            'style="width:100%%;max-width:720px;height:480px;border:1px solid #cbd5e1;'
+            'border-radius:6px;background:#f1f5f9;"></iframe>'
+            '<p style="color:#64748b;font-size:12px;margin-top:8px;max-width:720px;">'
+            'אם המסך ריק, פתחו את הקישור למעלה — חלק מהדפדפנים חוסמים תצוגת PDF בתוך מסגרת.</p>',
+            url,
+        )
+
+    pdf_inline_preview.short_description = 'תצוגה מקדימה'
+
+    @admin.action(description='אישור והפעלת כרטיסים מסומנים / Approve and Activate Selected Tickets')
+    def approve_and_activate_selected(self, request, queryset):
+        updated = queryset.update(verification_status='מאומת', status='active')
+        self.message_user(
+            request,
+            f'אושרו והופעלו {updated} כרטיסים · Approved and activated {updated} ticket(s).',
+        )
     
     def reservation_info(self, obj):
         """Display reservation information in admin list"""
