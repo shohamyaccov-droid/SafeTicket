@@ -2,11 +2,12 @@ from decimal import Decimal
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 from datetime import timedelta
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
-from .models import User, Order, Ticket, Event, Artist, Offer, ContactMessage
+from .models import User, Order, Ticket, Event, Artist, Offer, ContactMessage, EventRequest
 from .admin_pdf_url import get_ticket_pdf_admin_url
 
 
@@ -104,9 +105,13 @@ class TicketAdmin(admin.ModelAdmin):
     def risk_level(self, obj):
         if not obj.seller_id:
             return format_html('<span style="color:#64748b;">—</span>')
+        try:
+            seller = obj.seller
+        except ObjectDoesNotExist:
+            return format_html('<span style="color:#64748b;">—</span>')
         fresh_cutoff = timezone.now() - timedelta(hours=48)
         price_high = (obj.original_price or Decimal('0')) > Decimal('1000')
-        seller_new = obj.seller.date_joined > fresh_cutoff
+        seller_new = seller.date_joined > fresh_cutoff
         if price_high or seller_new:
             return format_html(
                 '<span style="color:#b91c1c;font-weight:700;" title="מחיר &gt; 1000 ₪ או מוכר חדש (&lt; 48 שעות)">אדום · High Risk</span>'
@@ -116,7 +121,10 @@ class TicketAdmin(admin.ModelAdmin):
     risk_level.short_description = 'רמת סיכון / Risk Level'
 
     def pdf_staff_link(self, obj):
-        url = get_ticket_pdf_admin_url(obj)
+        try:
+            url = get_ticket_pdf_admin_url(obj)
+        except Exception:
+            return '—'
         if not url:
             return '—'
         return format_html(
@@ -127,7 +135,10 @@ class TicketAdmin(admin.ModelAdmin):
     pdf_staff_link.short_description = 'PDF (סטאף)'
 
     def pdf_file_display(self, obj):
-        url = get_ticket_pdf_admin_url(obj)
+        try:
+            url = get_ticket_pdf_admin_url(obj)
+        except Exception:
+            return format_html('<span style="color:#64748b;">אין קובץ</span>')
         if not url:
             return format_html('<span style="color:#64748b;">אין קובץ</span>')
         return format_html(
@@ -139,7 +150,10 @@ class TicketAdmin(admin.ModelAdmin):
     pdf_file_display.short_description = 'קובץ PDF (גישת מנהל)'
 
     def pdf_inline_preview(self, obj):
-        url = get_ticket_pdf_admin_url(obj)
+        try:
+            url = get_ticket_pdf_admin_url(obj)
+        except Exception:
+            return '—'
         if not url:
             return '—'
         return format_html(
@@ -153,7 +167,7 @@ class TicketAdmin(admin.ModelAdmin):
 
     pdf_inline_preview.short_description = 'תצוגה מקדימה'
 
-    @admin.action(description='אישור והפעלת כרטיסים מסומנים / Approve and Activate Selected Tickets')
+    @admin.action(description='Approve & Activate Selected Tickets (אישור והפעלת כרטיסים)')
     def approve_and_activate_selected(self, request, queryset):
         updated = queryset.update(verification_status='מאומת', status='active')
         self.message_user(
@@ -167,7 +181,11 @@ class TicketAdmin(admin.ModelAdmin):
             time_remaining = (obj.reserved_at + timedelta(minutes=10)) - timezone.now()
             if time_remaining.total_seconds() > 0:
                 minutes = int(time_remaining.total_seconds() / 60)
-                reserved_by = obj.reserved_by.username if obj.reserved_by else (obj.reservation_email or 'Guest')
+                try:
+                    rb = obj.reserved_by
+                    reserved_by = rb.username if rb else (obj.reservation_email or 'Guest')
+                except ObjectDoesNotExist:
+                    reserved_by = obj.reservation_email or 'Guest'
                 return format_html(
                     '<span style="color: orange;">Reserved by {}<br/>{} min remaining</span>',
                     reserved_by,
@@ -320,6 +338,18 @@ class OfferAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+
+@admin.register(EventRequest)
+class EventRequestAdmin(admin.ModelAdmin):
+    list_display = ['id', 'user', 'event_hint', 'category', 'submitted_email', 'created_at', 'is_handled']
+    list_filter = ['is_handled', 'category', 'created_at']
+    search_fields = ['event_hint', 'details', 'user__username', 'submitted_email']
+    readonly_fields = ['user', 'submitted_email', 'created_at']
+    ordering = ['-created_at']
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(ContactMessage)

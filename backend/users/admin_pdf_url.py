@@ -3,7 +3,6 @@ Staff-only PDF URLs for Django admin: signed Cloudinary delivery when public URL
 """
 from __future__ import annotations
 
-import os
 from typing import Optional
 
 from django.conf import settings
@@ -34,11 +33,19 @@ def get_ticket_pdf_admin_url(ticket) -> Optional[str]:
     - Local storage: FileField.url
     - Cloudinary: prefer signed raw delivery URL; fall back to image resource_type for legacy uploads
     """
-    if not ticket or not ticket.pdf_file:
+    if not ticket:
+        return None
+    pdf = getattr(ticket, 'pdf_file', None)
+    if not pdf:
+        return None
+    name = (getattr(pdf, 'name', None) or '').strip()
+    if not name:
         return None
 
     try:
-        local_url = ticket.pdf_file.url
+        local_url = pdf.url
+    except (ValueError, AttributeError):
+        local_url = None
     except Exception:
         local_url = None
 
@@ -51,45 +58,47 @@ def get_ticket_pdf_admin_url(ticket) -> Optional[str]:
     except ImportError:
         return local_url
 
-    public_id = (ticket.pdf_file.name or '').replace('\\', '/')
+    public_id = name.replace('\\', '/')
     resource_types_try = ('raw', 'image')
 
-    for pid in _public_id_variants(public_id):
-        ext = (os.path.splitext(pid)[1].lstrip('.') or 'pdf').lower()
-        for rt in resource_types_try:
-            try:
-                info = cloudinary.api.resource(pid, resource_type=rt)
-            except Exception:
-                info = None
-            if not info:
-                continue
-            cid = info.get('public_id') or pid
-            ver = info.get('version')
-            opts = {
-                'resource_type': rt,
-                'type': 'upload',
-                'sign_url': True,
-                'secure': True,
-            }
-            if ver is not None:
-                opts['version'] = ver
-            try:
-                url, _ = cloudinary.utils.cloudinary_url(cid, **opts)
-                return url
-            except Exception:
-                continue
+    try:
+        for pid in _public_id_variants(public_id):
+            for rt in resource_types_try:
+                try:
+                    info = cloudinary.api.resource(pid, resource_type=rt)
+                except Exception:
+                    info = None
+                if not info:
+                    continue
+                cid = info.get('public_id') or pid
+                ver = info.get('version')
+                opts = {
+                    'resource_type': rt,
+                    'type': 'upload',
+                    'sign_url': True,
+                    'secure': True,
+                }
+                if ver is not None:
+                    opts['version'] = ver
+                try:
+                    url, _ = cloudinary.utils.cloudinary_url(cid, **opts)
+                    return url
+                except Exception:
+                    continue
 
-        for rt in resource_types_try:
-            try:
-                url, _ = cloudinary.utils.cloudinary_url(
-                    pid,
-                    resource_type=rt,
-                    type='upload',
-                    sign_url=True,
-                    secure=True,
-                )
-                return url
-            except Exception:
-                continue
+            for rt in resource_types_try:
+                try:
+                    url, _ = cloudinary.utils.cloudinary_url(
+                        pid,
+                        resource_type=rt,
+                        type='upload',
+                        sign_url=True,
+                        secure=True,
+                    )
+                    return url
+                except Exception:
+                    continue
+    except Exception:
+        return local_url
 
     return local_url
