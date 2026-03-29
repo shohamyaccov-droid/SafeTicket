@@ -10,6 +10,25 @@ import NegotiationModal from '../components/NegotiationModal';
 import Toast from '../components/Toast';
 import './Dashboard.css';
 
+/** Merge PATCH response into local offer without dropping nested ticket_details (prevents modal/list crash). */
+function mergeOfferPatch(prev, updated) {
+  if (!updated || updated.id == null) return prev;
+  return {
+    ...prev,
+    ...updated,
+    ticket_details: updated.ticket_details ?? prev.ticket_details,
+    ticket: updated.ticket !== undefined && updated.ticket !== null ? updated.ticket : prev.ticket,
+    buyer: updated.buyer !== undefined ? updated.buyer : prev.buyer,
+  };
+}
+
+function offerTicketGroupKey(offer) {
+  const t = offer?.ticket;
+  if (t != null && typeof t === 'object' && t.id != null) return t.id;
+  if (typeof t === 'number' || typeof t === 'string') return t;
+  return offer?.ticket_details?.id ?? `unknown-${offer?.id}`;
+}
+
 /* --- Account Settings Tab Component --- */
 const AccountSettingsTab = () => {
   const { user } = useAuth();
@@ -297,8 +316,10 @@ const Dashboard = () => {
       setOffersSent(sentOffers);
     } catch (err) {
       console.error('Error fetching offers:', err);
-      setOffersReceived([]);
-      setOffersSent([]);
+      if (!silent) {
+        setOffersReceived([]);
+        setOffersSent([]);
+      }
     } finally {
       if (!silent) setOffersLoading(false);
     }
@@ -310,14 +331,20 @@ const Dashboard = () => {
       const res = await offerAPI.acceptOffer(offerId);
       const updated = res.data;
       if (updated?.id) {
-        setOffersReceived((prev) => prev.map((o) => (o.id === offerId ? { ...o, ...updated } : o)));
-        setOffersSent((prev) => prev.map((o) => (o.id === offerId ? { ...o, ...updated } : o)));
+        setOffersReceived((prev) =>
+          prev.map((o) => (o.id === offerId ? mergeOfferPatch(o, updated) : o))
+        );
+        setOffersSent((prev) =>
+          prev.map((o) => (o.id === offerId ? mergeOfferPatch(o, updated) : o))
+        );
         setNegotiationModalGroup((prev) => {
           if (!prev?.offers?.length) return prev;
           if (!prev.offers.some((o) => o.id === offerId)) return prev;
           return {
             ...prev,
-            offers: prev.offers.map((o) => (o.id === offerId ? { ...o, ...updated } : o)),
+            offers: prev.offers.map((o) =>
+              o.id === offerId ? mergeOfferPatch(o, updated) : o
+            ),
           };
         });
       }
@@ -610,7 +637,7 @@ const Dashboard = () => {
   const groupOffersByTicket = (offers) => {
     const groups = {};
     offers.forEach((offer) => {
-      const tid = offer.ticket || offer.ticket_details?.id || `unknown-${offer.id}`;
+      const tid = offerTicketGroupKey(offer);
       if (!groups[tid]) {
         groups[tid] = {
           ticketId: tid,

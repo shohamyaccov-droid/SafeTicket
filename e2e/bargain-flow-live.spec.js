@@ -1,7 +1,7 @@
 // @ts-check
 /**
- * LIVE E2E: seller lists @ 500 → buyer offers 400 → seller accepts → buyer checkout.
- * Asserts negotiated base 400, total charged ceil(400*1.1)=440, admin PDF button present.
+ * LIVE E2E: seller lists @ 500 → buyer offers 400 → seller accepts (after 10s timer check) → buyer checkout.
+ * Asserts negotiated price, buyer PDF download 200, admin signed PDF URL 200.
  */
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
@@ -282,6 +282,18 @@ test.describe('Live bargain flow', () => {
     await expect(page.locator('.negotiation-footer-actions')).toBeVisible({
       timeout: 30_000,
     });
+    const timerLocator = page
+      .locator('.negotiation-footer-timer, .negotiation-modal-footer')
+      .first();
+    const timerBefore =
+      (await timerLocator.textContent().catch(() => '')) || '';
+    await page.waitForTimeout(10_000);
+    const timerAfter =
+      (await timerLocator.textContent().catch(() => '')) || '';
+    results.steps.push({
+      timerProbe: { before: timerBefore.slice(0, 200), after: timerAfter.slice(0, 200) },
+    });
+    await expect(page.locator('.negotiation-modal')).toBeVisible();
     const acceptPost = page.waitForResponse(
       (r) =>
         r.url().includes(`/api/users/offers/${offerId}/accept/`) && r.request().method() === 'POST',
@@ -330,7 +342,24 @@ test.describe('Live bargain flow', () => {
     expect(fn, 'final_negotiated_price = offer base 400').toBe(OFFER_BASE);
     expect(ta, `total charged (buyer) = ceil(base*1.1) = ${EXPECT_TOTAL}`).toBe(EXPECT_TOTAL);
 
-    // --- Admin PDF button (Django admin session) ---
+    const tickets = orderPayload.tickets || orderPayload.ticket || [];
+    const firstTicket = Array.isArray(tickets) ? tickets[0] : tickets;
+    const buyerPdfUrl = firstTicket?.pdf_file_url || orderPayload.pdf_download_url;
+    if (buyerPdfUrl) {
+      const absBuyer = String(buyerPdfUrl).startsWith('http')
+        ? buyerPdfUrl
+        : `${apiBase}${String(buyerPdfUrl).startsWith('/') ? '' : '/'}${buyerPdfUrl}`;
+      const buyerSt = await page.evaluate(async (url) => {
+        const r = await fetch(url, { credentials: 'include' });
+        return r.status;
+      }, absBuyer);
+      results.buyerPdfHttpStatus = buyerSt;
+      expect(buyerSt, `buyer post-purchase PDF download should return 200`).toBe(200);
+    } else {
+      results.buyerPdfHttpStatus = 'no_url_in_payload';
+    }
+
+    // --- Admin PDF button (Django admin session) + signed URL must return 200 ---
     await logoutViaApi(page, apiRoot);
     await djangoAdminLogin(page, apiBase, adminUser, adminPass);
     await page.goto(`${apiBase}/admin/users/ticket/${ticketId}/change/`, {
@@ -341,6 +370,19 @@ test.describe('Live bargain flow', () => {
       hasPdfCta: adminHtml.includes('פתח PDF מאובטח') || adminHtml.includes('פתיחה / הורדת PDF'),
     };
     expect(results.adminCheck.hasPdfCta, 'admin change page should show staff PDF open button').toBe(true);
+
+    const adminPdfLink = page.locator(
+      `a[href*="cloudinary"], a[href*="api.cloudinary.com"]`
+    ).first();
+    await expect(adminPdfLink).toBeVisible({ timeout: 30_000 });
+    const adminPdfHref = await adminPdfLink.getAttribute('href');
+    expect(adminPdfHref, 'admin PDF link href').toBeTruthy();
+    const adminPdfResp = await page.request.get(adminPdfHref, { timeout: 90_000 });
+    results.adminPdfHttpStatus = adminPdfResp.status();
+    expect(
+      adminPdfResp.ok(),
+      `admin signed PDF URL must return 200, got ${adminPdfResp.status()}`
+    ).toBe(true);
 
     // eslint-disable-next-line no-console
     console.log(JSON.stringify({ ok: true, results }, null, 2));
