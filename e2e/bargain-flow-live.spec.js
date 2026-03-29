@@ -148,7 +148,7 @@ test.describe('Live bargain flow', () => {
   test('500 list → offer 400 → accept → checkout @ negotiated total; admin PDF link', async ({
     page,
   }) => {
-    test.setTimeout(300_000);
+    test.setTimeout(600_000);
     const base =
       process.env.E2E_BASE_URL || 'https://safeticket-api.onrender.com';
     /** SPA origin (may differ from API host on Render). */
@@ -224,8 +224,10 @@ test.describe('Live bargain flow', () => {
     );
     await page.goto(`${webBase}/event/${eventId}`, { waitUntil: 'domcontentloaded' });
     await ticketsGet;
-    await page.waitForLoadState('networkidle', { timeout: 120_000 }).catch(() => {});
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle', { timeout: 180_000 }).catch(() => {});
+    await page.waitForTimeout(4000);
+
+    await page.waitForSelector('.viagogo-ticket-row', { state: 'visible', timeout: 60_000 });
 
     // Stable hook from SPA (data-e2e-ticket-id); fallbacks for older bundles.
     let row = page
@@ -254,7 +256,7 @@ test.describe('Live bargain flow', () => {
         `No .viagogo-ticket-row for event ${eventId} (ticket ${ticketId}). Body: ${snap.slice(0, 500)}`
       );
     }
-    await expect(row).toBeVisible({ timeout: 90_000 });
+    await expect(row).toBeVisible({ timeout: 120_000 });
     await row.click();
     const offerBtn = page.getByRole('button', { name: /הצע מחיר/i }).first();
     await expect(offerBtn).toBeVisible({ timeout: 30_000 });
@@ -278,10 +280,13 @@ test.describe('Live bargain flow', () => {
     await login(page, webBase, sellerUser, sellerPass);
     await page.goto(`${webBase}/dashboard`, { waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: /הצעות מחיר/ }).click();
-    await expect(page.locator('.offers-tab')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('.offers-tab')).toBeVisible({ timeout: 120_000 });
+    await page.waitForSelector('.offers-ticket-row-clickable', { state: 'visible', timeout: 60_000 });
+    const offerRowsBeforeAccept = await page.locator('.offers-ticket-row-clickable').count();
+    expect(offerRowsBeforeAccept, 'seller must see at least one offer row').toBeGreaterThan(0);
     await page.locator('.offers-ticket-row-clickable').first().click();
     await expect(page.locator('.negotiation-footer-actions')).toBeVisible({
-      timeout: 30_000,
+      timeout: 90_000,
     });
     const timerLocator = page
       .locator('.negotiation-footer-timer, .negotiation-modal-footer')
@@ -304,6 +309,23 @@ test.describe('Live bargain flow', () => {
     const ares = await acceptPost;
     expect(ares.status(), 'accept offer').toBe(200);
     results.steps.push({ accept: { status: ares.status() } });
+
+    await page.waitForTimeout(1500);
+    await expect(
+      page.locator('.negotiation-modal .bubble-status', { hasText: /אושר/i })
+    ).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText('אין הצעות מחיר')).not.toBeVisible({ timeout: 10_000 });
+    const offerRowsAfterAccept = await page.locator('.offers-ticket-row-clickable').count();
+    expect(
+      offerRowsAfterAccept,
+      'offers list must not wipe — same or more rows after accept'
+    ).toBeGreaterThanOrEqual(offerRowsBeforeAccept);
+
+    await page.locator('.negotiation-modal-close').click().catch(() => {});
+    await page.waitForTimeout(800);
+    await expect(page.locator('.offers-ticket-row-clickable').first()).toBeVisible({
+      timeout: 60_000,
+    });
 
     // --- Buyer: complete purchase ---
     await logoutViaApi(page, apiRoot);

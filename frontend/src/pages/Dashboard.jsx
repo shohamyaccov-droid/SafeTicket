@@ -10,16 +10,40 @@ import NegotiationModal from '../components/NegotiationModal';
 import Toast from '../components/Toast';
 import './Dashboard.css';
 
+function offerBuyerId(offer) {
+  const b = offer?.buyer;
+  if (b != null && typeof b === 'object' && b.id != null) return Number(b.id);
+  if (typeof b === 'number' || typeof b === 'string') return Number(b);
+  return null;
+}
+
 /** Merge PATCH response into local offer without dropping nested ticket_details (prevents modal/list crash). */
 function mergeOfferPatch(prev, updated) {
   if (!updated || updated.id == null) return prev;
+  const nextBuyer = updated.buyer !== undefined && updated.buyer !== null ? updated.buyer : prev.buyer;
   return {
     ...prev,
     ...updated,
     ticket_details: updated.ticket_details ?? prev.ticket_details,
     ticket: updated.ticket !== undefined && updated.ticket !== null ? updated.ticket : prev.ticket,
-    buyer: updated.buyer !== undefined ? updated.buyer : prev.buyer,
+    buyer: nextBuyer,
+    buyer_username: updated.buyer_username ?? prev.buyer_username,
   };
+}
+
+/** Merge server rows with previous state so nested ticket_details survive thin API payloads. */
+function mergeOffersListWithPrevious(incoming, previous) {
+  if (!Array.isArray(incoming) || incoming.length === 0) {
+    return incoming || [];
+  }
+  const prevById = new Map(
+    (previous || []).map((o) => [Number(o.id), o])
+  );
+  return incoming.map((o) => {
+    const id = Number(o.id);
+    const old = prevById.get(id);
+    return old ? mergeOfferPatch(old, o) : o;
+  });
 }
 
 function offerTicketGroupKey(offer) {
@@ -205,6 +229,15 @@ const Dashboard = () => {
   const [offerExpirationTimers, setOfferExpirationTimers] = useState({});
   const [negotiationModalGroup, setNegotiationModalGroup] = useState(null);
   const dashboardReadyRef = useRef(false);
+  const offersReceivedRef = useRef([]);
+  const offersSentRef = useRef([]);
+
+  useEffect(() => {
+    offersReceivedRef.current = offersReceived;
+  }, [offersReceived]);
+  useEffect(() => {
+    offersSentRef.current = offersSent;
+  }, [offersSent]);
 
   useEffect(() => {
     if (!user) return;
@@ -300,20 +333,50 @@ const Dashboard = () => {
         index === self.findIndex(o => o.id === offer.id)
       );
       
-      // Filter for Received: offers where current user is NOT the buyer
-      const receivedOffers = uniqueOffers.filter(offer => {
-        const buyerId = typeof offer.buyer === 'object' ? offer.buyer?.id : offer.buyer;
-        return buyerId !== user.id && offer.buyer_username !== user.username;
+      const uid = Number(user.id);
+
+      // Received = I am not the buyer (normalize IDs — API may return string PKs)
+      const receivedOffers = uniqueOffers.filter((offer) => {
+        const bid = offerBuyerId(offer);
+        if (bid != null && !Number.isNaN(bid) && bid === uid) return false;
+        if (offer.buyer_username && user.username && offer.buyer_username === user.username) {
+          return false;
+        }
+        return true;
       });
-      
-      // Filter for Sent: offers where current user IS the buyer
-      const sentOffers = uniqueOffers.filter(offer => {
-        const buyerId = typeof offer.buyer === 'object' ? offer.buyer?.id : offer.buyer;
-        return buyerId === user.id || offer.buyer_username === user.username;
+
+      const sentOffers = uniqueOffers.filter((offer) => {
+        const bid = offerBuyerId(offer);
+        if (bid != null && !Number.isNaN(bid) && bid === uid) return true;
+        if (offer.buyer_username && user.username && offer.buyer_username === user.username) {
+          return true;
+        }
+        return false;
       });
-      
-      setOffersReceived(receivedOffers);
-      setOffersSent(sentOffers);
+
+      const recvPrev = offersReceivedRef.current;
+      const sentPrev = offersSentRef.current;
+
+      // Silent refresh: never wipe UI with empty arrays (race, replica lag, transient API glitch)
+      if (silent && receivedOffers.length === 0 && recvPrev.length > 0) {
+        /* keep previous — avoid empty race wiping UI */
+      } else {
+        setOffersReceived(
+          receivedOffers.length > 0
+            ? mergeOffersListWithPrevious(receivedOffers, recvPrev)
+            : receivedOffers
+        );
+      }
+
+      if (silent && sentOffers.length === 0 && sentPrev.length > 0) {
+        /* keep previous */
+      } else {
+        setOffersSent(
+          sentOffers.length > 0
+            ? mergeOffersListWithPrevious(sentOffers, sentPrev)
+            : sentOffers
+        );
+      }
     } catch (err) {
       console.error('Error fetching offers:', err);
       if (!silent) {
@@ -326,24 +389,29 @@ const Dashboard = () => {
   };
 
   const handleAcceptOffer = async (offerId) => {
+    const oid = Number(offerId);
     setAcceptingOfferId(offerId);
     try {
       const res = await offerAPI.acceptOffer(offerId);
       const updated = res.data;
       if (updated?.id) {
         setOffersReceived((prev) =>
-          prev.map((o) => (o.id === offerId ? mergeOfferPatch(o, updated) : o))
+          prev.map((o) =>
+            Number(o.id) === oid ? mergeOfferPatch(o, updated) : o
+          )
         );
         setOffersSent((prev) =>
-          prev.map((o) => (o.id === offerId ? mergeOfferPatch(o, updated) : o))
+          prev.map((o) =>
+            Number(o.id) === oid ? mergeOfferPatch(o, updated) : o
+          )
         );
         setNegotiationModalGroup((prev) => {
           if (!prev?.offers?.length) return prev;
-          if (!prev.offers.some((o) => o.id === offerId)) return prev;
+          if (!prev.offers.some((o) => Number(o.id) === oid)) return prev;
           return {
             ...prev,
             offers: prev.offers.map((o) =>
-              o.id === offerId ? mergeOfferPatch(o, updated) : o
+              Number(o.id) === oid ? mergeOfferPatch(o, updated) : o
             ),
           };
         });
@@ -361,7 +429,9 @@ const Dashboard = () => {
     } finally {
       setAcceptingOfferId(null);
     }
-    fetchOffers({ silent: true }).catch(() => {});
+    window.setTimeout(() => {
+      fetchOffers({ silent: true }).catch(() => {});
+    }, 1600);
     fetchDashboardData({ silent: true }).catch(() => {});
   };
 
