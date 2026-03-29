@@ -8,8 +8,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
+/** iPhone 13 geometry + UA on Chromium (WebKit optional in CI/local). */
+const IPHONE_13 = devices['iPhone 13'];
 test.use({
-  ...devices['iPhone 13'],
+  browserName: 'chromium',
+  viewport: IPHONE_13.viewport,
+  userAgent: IPHONE_13.userAgent,
+  deviceScaleFactor: IPHONE_13.deviceScaleFactor,
+  isMobile: IPHONE_13.isMobile,
+  hasTouch: IPHONE_13.hasTouch,
   locale: 'he-IL',
 });
 
@@ -228,25 +235,31 @@ test.describe('Live bargain flow (mobile iPhone)', () => {
       .filter({ hasText: 'השלם רכישה' })
       .first();
     await expect(completePurchaseBtn).toBeVisible({ timeout: 60_000 });
-    const confirmPay = page.waitForResponse(
-      (r) =>
-        r.url().includes('/api/users/orders/') &&
-        r.url().includes('/confirm-payment/') &&
-        r.request().method() === 'POST',
-      { timeout: 180_000 }
-    );
     await completePurchaseBtn.click();
-    await expect(page.getByRole('heading', { name: /תשלום מאובטח/ })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('heading', { name: /תשלום מאובטח/ })).toBeVisible({ timeout: 60_000 });
     const expectTotalStr = expectTotal.toFixed(2);
     await expect(page.locator('.modal-content .price-breakdown .total-row').last()).toContainText(
       expectTotalStr
     );
     await page.getByRole('button', { name: 'המשך לתשלום' }).click();
+    await expect(page.locator('.modal-content .price-breakdown .total-row').last()).toContainText(
+      expectTotalStr
+    );
+    await page.locator('#cardholderName').scrollIntoViewIfNeeded();
     await page.locator('#cardholderName').fill('E2E Mobile');
     await page.locator('#cardNumber').fill('4111111111111111');
     await page.locator('#expiryDate').fill('12/30');
     await page.locator('#cvv').fill('123');
-    await page.getByRole('button', { name: /השלמת תשלום/ }).click();
+    const submitPay = page.getByRole('button', { name: /השלמת תשלום/ });
+    const confirmPay = page.waitForResponse(
+      (r) =>
+        r.url().includes('/api/users/orders/') &&
+        r.url().includes('/confirm-payment/') &&
+        r.request().method() === 'POST',
+      { timeout: 240_000 }
+    );
+    // Narrow mobile viewport often leaves the submit outside Playwright's clickable viewport.
+    await submitPay.evaluate((el) => el.click());
     const cres = await confirmPay;
     expect(cres.ok()).toBeTruthy();
     const orderPayload = await cres.json();

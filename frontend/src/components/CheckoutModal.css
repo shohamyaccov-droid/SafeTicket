@@ -1336,6 +1336,8 @@
     max-height: 100dvh;
     border-radius: var(--radius-md) var(--radius-md) 0 0;
     padding: 1.25rem 1rem 2rem;
+    /* Keep sticky checkout actions reachable when the keyboard / safe-area shrinks the viewport */
+    scroll-padding-bottom: max(6rem, env(safe-area-inset-bottom, 0px));
   }
   .checkout-buttons-row {
     flex-direction: column-reverse;
