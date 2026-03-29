@@ -170,14 +170,6 @@ test.describe('Live bargain flow', () => {
 
     // --- Seller: list ticket @ 500 ---
     await login(page, webBase, sellerUser, sellerPass);
-    const createTicketResp = page.waitForResponse(
-      (r) =>
-        r.url().includes('/api/users/tickets/') &&
-        r.request().method() === 'POST' &&
-        !r.url().includes('download'),
-      { timeout: 120_000 }
-    );
-
     await page.goto(`${webBase}/sell`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#category_select')).toBeVisible({ timeout: 90_000 });
     await page.locator('#category_select').selectOption('theater');
@@ -187,6 +179,13 @@ test.describe('Live bargain flow', () => {
     await page.locator('#single_multi_page_pdf').setInputFiles(pdfPath);
     await page.locator('#acceptedTerms').check();
 
+    const createTicketResp = page.waitForResponse(
+      (r) =>
+        r.url().includes('/api/users/tickets/') &&
+        r.request().method() === 'POST' &&
+        !r.url().includes('download'),
+      { timeout: 180_000 }
+    );
     await page.getByRole('button', { name: /הצע כרטיס למכירה/ }).click();
     const tres = await createTicketResp;
     expect(tres.status(), 'ticket create 201').toBe(201);
