@@ -84,7 +84,14 @@ test.describe('Seller onboarding (live)', () => {
     const DEFAULT_WEB = 'https://safeticket-web.onrender.com';
     const envBase = process.env.E2E_BASE_URL;
     const apiBase = trimSlash(process.env.E2E_API_URL || envBase || DEFAULT_API);
-    const webBase = trimSlash(process.env.E2E_WEB_URL || envBase || DEFAULT_WEB);
+    let webBase = trimSlash(process.env.E2E_WEB_URL || envBase || DEFAULT_WEB);
+    if (
+      process.env.E2E_SPA_ON_API_HOST !== '1' &&
+      webBase === apiBase &&
+      apiBase === trimSlash(DEFAULT_API)
+    ) {
+      webBase = trimSlash(DEFAULT_WEB);
+    }
     const apiRoot = `${apiBase}/api`;
     const adminUser = process.env.E2E_ADMIN_USERNAME || 'qa_bot';
     const adminPass = process.env.E2E_ADMIN_PASSWORD || 'SafeTicketQA2026!';
