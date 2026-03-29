@@ -1,23 +1,28 @@
 """
 URL configuration for safeticket project.
 
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/4.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
+The `urlpatterns` list routes requests to views. For more information please see:
+https://docs.djangoproject.com/en/4.2/topics/http/urls/
 """
+from pathlib import Path
+
 from django.contrib import admin
-from django.urls import path, include
+from django.http import FileResponse, Http404
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
+
+
+def spa_index_view(request):
+    """
+    React SPA (Vite build copied by collectstatic). Without this, /login and /sell return 404 on the API host
+    even though /static/index.html exists — breaks browser flows that use https://safeticket-api.onrender.com/...
+    """
+    index = Path(settings.STATIC_ROOT) / 'index.html'
+    if not index.is_file():
+        raise Http404('index.html missing — run build_render.sh then collectstatic.')
+    return FileResponse(index.open('rb'), content_type='text/html; charset=utf-8')
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -31,3 +36,8 @@ if settings.DEBUG:
     if not getattr(settings, 'USE_CLOUDINARY', False):
         urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
+# Client-side routes: same origin as API (build_render.sh → collectstatic).
+urlpatterns += [
+    path('', spa_index_view),
+    re_path(r'^(?!api/|admin/|static/).+$', spa_index_view),
+]

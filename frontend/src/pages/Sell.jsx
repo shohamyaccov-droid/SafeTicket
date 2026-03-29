@@ -7,6 +7,8 @@ import { createListFetchAbort } from '../utils/listFetch';
 import SellFormSkeleton from '../components/skeletons/SellFormSkeleton';
 import './Sell.css';
 
+const SELL_PAGE_BUILD_TAG = import.meta.env.VITE_BUILD_ID || 'local-dev';
+
 const Sell = () => {
   // ALL HOOKS MUST BE CALLED FIRST - BEFORE ANY EARLY RETURNS
   const { user, loading: authLoading } = useAuth();
@@ -117,6 +119,10 @@ const Sell = () => {
       clear();
     };
   }, [catalogRetryKey]);
+
+  useEffect(() => {
+    console.log('Frontend Version (Sell):', SELL_PAGE_BUILD_TAG);
+  }, []);
 
   // Helper function to get event display name (handles sports events)
   const getEventDisplayName = (event) => {
@@ -620,6 +626,9 @@ const Sell = () => {
             <h2>תהליך הצעת כרטיס מאובטח</h2>
           </div>
           <p className="listing-subtitle">הצע את הכרטיס שלך בצורה בטוחה ומאובטחת</p>
+          <p className="listing-build-id" dir="ltr" style={{ fontSize: '0.72rem', opacity: 0.75, marginTop: '0.35rem' }}>
+            Frontend build: {SELL_PAGE_BUILD_TAG}
+          </p>
         </div>
         {error && <div className="error-message">{error}</div>}
         

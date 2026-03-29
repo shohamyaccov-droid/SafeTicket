@@ -89,6 +89,10 @@ def _ticket_pdf_persisted(ticket) -> bool:
     """
     Ticket row must reference a PDF that storage can see.
     Prevents 'ghost' listings when multipart was wrong or upload silently failed.
+
+    Cloudinary RawMediaCloudinaryStorage.exists() uses HTTP HEAD on the delivery URL; many
+    raw PDF URLs return 403/405 to HEAD while GET (and Django FieldFile.open) still works.
+    Treat failed exists + readable %PDF magic as persisted.
     """
     try:
         ticket.refresh_from_db()
@@ -99,12 +103,32 @@ def _ticket_pdf_persisted(ticket) -> bool:
         if not name:
             return False
         storage = getattr(pf, 'storage', None)
+        use_cloudinary = getattr(settings, 'USE_CLOUDINARY', False)
+
         if storage is not None and hasattr(storage, 'exists'):
+            exists_ok = False
+            exists_failed = False
             try:
-                return bool(storage.exists(name))
+                exists_ok = bool(storage.exists(name))
             except Exception:
+                exists_failed = True
                 logger.warning('storage.exists failed ticket pk=%s', ticket.pk, exc_info=True)
-                return False
+
+            if exists_ok:
+                return True
+
+            if use_cloudinary or exists_failed:
+                try:
+                    pf.open('rb')
+                    try:
+                        magic = pf.read(5)
+                    finally:
+                        pf.close()
+                    return bool(magic.startswith(b'%PDF'))
+                except Exception:
+                    logger.warning('pdf persistence verify read failed pk=%s', ticket.pk, exc_info=True)
+                    return False
+            return False
         return True
     except Exception:
         logger.warning('_ticket_pdf_persisted failed pk=%s', getattr(ticket, 'pk', None), exc_info=True)

@@ -45,7 +45,8 @@ services:
     name: safeticket-web
     runtime: static
     rootDir: frontend
-    buildCommand: npm install && npm run build
+    # RENDER_GIT_COMMIT is set by Render during build — same visibility as API bundle.
+    buildCommand: export VITE_BUILD_ID="${VITE_BUILD_ID:-${RENDER_GIT_COMMIT:-unknown}}" && npm install && npm run build
     staticPublishPath: dist
     envVars:
       # Public API origin; vite build bakes this in. Override in dashboard if you use a custom domain.

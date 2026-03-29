@@ -184,6 +184,23 @@ async function postTicketMultipart(formData) {
     if (token) {
       headers['X-CSRFToken'] = token;
     }
+    console.log('[SafeTicket] POST /users/tickets/ FormData (multipart) before fetch:');
+    for (const [key, val] of formData.entries()) {
+      if (typeof File !== 'undefined' && val instanceof File) {
+        console.log(
+          `  ${key}:`,
+          'File',
+          val.name,
+          `size=${val.size}`,
+          `type=${val.type || '(empty)'}`,
+          val.size === 0 ? '(EMPTY FILE)' : ''
+        );
+      } else if (typeof Blob !== 'undefined' && val instanceof Blob && !(val instanceof File)) {
+        console.log(`  ${key}:`, 'Blob', `size=${val.size}`, `type=${val.type || '(empty)'}`);
+      } else {
+        console.log(`  ${key}:`, val);
+      }
+    }
     return fetch(ticketUrl, {
       method: 'POST',
       credentials: 'include',

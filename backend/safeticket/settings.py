@@ -343,10 +343,13 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# CORS / CSRF origins — production uses a single exact SPA origin (no trailing slash).
+# CORS / CSRF origins — exact SPA origins (no trailing slash).
+# Default production allows both the static Render site and the Django-served SPA on the API host
+# (same machine: build_render.sh → Vite → collectstatic). Override via CORS_ALLOWED_ORIGINS / CSRF_TRUSTED_ORIGINS in dashboard.
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 _RENDER_WEB_ORIGIN = 'https://safeticket-web.onrender.com'
+_RENDER_API_ORIGIN = 'https://safeticket-api.onrender.com'
 if DEBUG:
     CORS_ALLOWED_ORIGINS = _env_origin_list(
         'CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000'
@@ -355,8 +358,14 @@ if DEBUG:
         'CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000'
     )
 else:
-    CORS_ALLOWED_ORIGINS = [_RENDER_WEB_ORIGIN]
-    CSRF_TRUSTED_ORIGINS = [_RENDER_WEB_ORIGIN]
+    CORS_ALLOWED_ORIGINS = _env_origin_list(
+        'CORS_ALLOWED_ORIGINS',
+        f'{_RENDER_WEB_ORIGIN},{_RENDER_API_ORIGIN}',
+    )
+    CSRF_TRUSTED_ORIGINS = _env_origin_list(
+        'CSRF_TRUSTED_ORIGINS',
+        f'{_RENDER_WEB_ORIGIN},{_RENDER_API_ORIGIN}',
+    )
 
 # JWT HttpOnly cookie names
 JWT_ACCESS_COOKIE_NAME = 'access_token'
