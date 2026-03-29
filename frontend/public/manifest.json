@@ -1,0 +1,19 @@
+{
+  "name": "SafeTicket IL",
+  "short_name": "SafeTicket",
+  "description": "שוק כרטיסים מאובטח בישראל",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0045af",
+  "lang": "he",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

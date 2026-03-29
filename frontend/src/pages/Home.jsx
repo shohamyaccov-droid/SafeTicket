@@ -5,6 +5,8 @@ import { artistAPI, eventAPI } from '../services/api';
 import { getFullImageUrl } from '../utils/formatters';
 import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
+import EmptyState from '../components/EmptyState';
+import { toastError } from '../utils/toast';
 import './Home.css';
 
 const Home = () => {
@@ -53,7 +55,6 @@ const Home = () => {
         setArtists(artistsData);
       } catch (error) {
         if (cancelled) return;
-        console.error('Error fetching data:', error);
         const msg = error?.message || '';
         const code = error?.code;
         const aborted =
@@ -63,6 +64,9 @@ const Home = () => {
         setLoadError(aborted ? 'timeout' : 'error');
         setEvents([]);
         setArtists([]);
+        if (!aborted) {
+          toastError('לא ניתן לטעון את דף הבית. נסו לרענן או לבדוק את החיבור.');
+        }
       } finally {
         clear();
         if (!cancelled) setLoading(false);
@@ -545,9 +549,16 @@ const Home = () => {
               </div>
             ))
           ) : (
-            <div className="empty-state">
-              <p>אין אמנים זמינים כרגע</p>
-            </div>
+            <EmptyState
+              icon="🎤"
+              title="אין אמנים להצגה"
+              description="נסו קטגוריה אחרת או נקו את החיפוש — אולי יופיעו תוצאות מתאימות."
+              actionLabel="איפוס חיפוש וקטגוריה"
+              onAction={() => {
+                setSearchQuery('');
+                setSelectedCategory('הכל');
+              }}
+            />
           )}
         </div>
       </section>

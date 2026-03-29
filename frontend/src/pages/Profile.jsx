@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { authAPI, ticketAPI } from '../services/api';
 import { getTicketPrice, formatPrice } from '../utils/priceFormat';
 import { translateSectionDisplay } from '../utils/venueMaps';
+import { toastError } from '../utils/toast';
 import './Profile.css';
 
 const Profile = () => {
@@ -72,7 +73,7 @@ const Profile = () => {
         setProfileData(data);
         setError(''); // Clear any previous errors
       } catch (err) {
-        console.error('Error fetching profile:', err);
+        toastError('לא ניתן לטעון את הפרופיל המלא. מוצגות נתונים חלקיות.');
         // Don't set error state - just show friendly message in render
         setProfileData({
           user: { username: user?.username || '', email: user?.email || '', role: user?.role || 'buyer' },
@@ -103,8 +104,7 @@ const Profile = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      alert('הורדת ה-PDF נכשלה. אנא נסה שוב מאוחר יותר.');
-      console.error('Error downloading PDF:', err);
+      toastError('הורדת ה-PDF נכשלה. אנא נסה שוב מאוחר יותר.');
     }
   };
 
@@ -124,7 +124,7 @@ const Profile = () => {
       setError('');
     } catch (err) {
       setError('ביטול המכירה נכשל. אנא נסה שוב.');
-      console.error('Error canceling listing:', err);
+      toastError('ביטול המכירה נכשל. אנא נסה שוב.');
     }
   };
 
@@ -145,8 +145,7 @@ const Profile = () => {
         minute: '2-digit',
         hour12: false
       }).format(date);
-    } catch (error) {
-      console.error('Error formatting date:', error);
+    } catch {
       return 'TBA';
     }
   };
@@ -298,9 +297,8 @@ const Profile = () => {
                           )}
                         </div>
                       );
-                    } catch (cardError) {
+                    } catch {
                       // Skip this card if it fails to render
-                      console.error('Error rendering order card:', cardError, order);
                     }
                   });
                   return safeOrders;
@@ -366,9 +364,8 @@ const Profile = () => {
                           )}
                         </div>
                       );
-                    } catch (cardError) {
+                    } catch {
                       // Skip this card if it fails to render
-                      console.error('Error rendering listing card:', cardError, listing);
                     }
                   });
                   return safeListings;

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { adminAPI, ticketAPI } from '../services/api';
 import { translateSectionDisplay } from '../utils/venueMaps';
+import { toastError, toastSuccess } from '../utils/toast';
 import './AdminVerificationPage.css';
 
 const AdminVerificationPage = () => {
@@ -38,8 +39,8 @@ const AdminVerificationPage = () => {
       const response = await adminAPI.getPendingTickets();
       setPendingTickets(response.data.tickets || []);
     } catch (err) {
-      console.error('Error fetching pending tickets:', err);
       setError('שגיאה בטעינת הכרטיסים הממתינים לאימות');
+      toastError('שגיאה בטעינת הכרטיסים הממתינים לאימות');
       if (err.response?.status === 403) {
         navigate('/dashboard');
       }
@@ -54,11 +55,10 @@ const AdminVerificationPage = () => {
     try {
       setProcessing(prev => new Set(prev).add(ticketId));
       await adminAPI.approveTicket(ticketId);
-      // Remove approved ticket from list
       setPendingTickets(prev => prev.filter(t => t.id !== ticketId));
+      toastSuccess('הכרטיס אושר בהצלחה');
     } catch (err) {
-      console.error('Error approving ticket:', err);
-      alert('שגיאה באישור הכרטיס. אנא נסה שוב.');
+      toastError('שגיאה באישור הכרטיס. אנא נסה שוב.');
     } finally {
       setProcessing(prev => {
         const newSet = new Set(prev);
@@ -80,8 +80,7 @@ const AdminVerificationPage = () => {
       // Remove rejected ticket from list
       setPendingTickets(prev => prev.filter(t => t.id !== ticketId));
     } catch (err) {
-      console.error('Error rejecting ticket:', err);
-      alert('שגיאה בדחיית הכרטיס. אנא נסה שוב.');
+      toastError('שגיאה בדחיית הכרטיס. אנא נסה שוב.');
     } finally {
       setProcessing(prev => {
         const newSet = new Set(prev);
@@ -100,8 +99,7 @@ const AdminVerificationPage = () => {
       // Clean up after a delay
       setTimeout(() => window.URL.revokeObjectURL(url), 100);
     } catch (err) {
-      console.error('Error downloading PDF:', err);
-      alert('שגיאה בפתיחת קובץ ה-PDF. אנא נסה שוב.');
+      toastError('שגיאה בפתיחת קובץ ה-PDF. אנא נסה שוב.');
     }
   };
 

@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authAPI, orderAPI, paymentAPI, ticketAPI } from '../services/api';
 import { getTicketPrice, formatPrice, buyerChargeFromBase } from '../utils/priceFormat';
+import { toastError } from '../utils/toast';
 import './CheckoutModal.css';
 
 const normalizeSplitType = (rawSplitType) => {
@@ -527,17 +528,17 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           const url = window.URL.createObjectURL(blob);
           setPdfUrl(url);
         } catch (pdfError) {
-          console.error('Error fetching PDF:', pdfError);
+          toastError('לא ניתן להכין את ה-PDF כרגע. ניתן להוריד שוב מעמוד ההזמנה.');
         }
       })();
     } catch (err) {
-      console.error('Payment error:', err);
       const message = err.response?.data?.detail ||
                      err.response?.data?.error ||
                      (typeof err.response?.data === 'string' ? err.response.data : JSON.stringify(err.response?.data)) ||
                      err.message ||
                      'שגיאה בתקשורת עם השרת';
       setError(message);
+      toastError(message);
       // Enterprise UX: Show Toast for "ticket was just sold" - beautiful feedback instead of raw alert
       const isSoldError = /sold|נמכר|just sold/i.test(message);
       if (isSoldError && onErrorToParent) {
@@ -552,8 +553,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
   const handleDownloadPDF = async (ticketId, index = null) => {
     if (!ticketId) {
-      console.error('handleDownloadPDF: No ticket ID provided');
-      setError('שגיאה: מזהה כרטיס חסר');
+      const msg = 'שגיאה: מזהה כרטיס חסר';
+      setError(msg);
+      toastError(msg);
       return;
     }
     if (pdfDownloadBusyId != null) {
@@ -575,8 +577,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('PDF download failed:', err?.response?.status, err?.response?.data, err);
-      setError('הורדת ה-PDF נכשלה. אנא נסה שוב מאוחר יותר.');
+      const msg = 'הורדת ה-PDF נכשלה. אנא נסה שוב מאוחר יותר.';
+      setError(msg);
+      toastError(msg);
     } finally {
       setPdfDownloadBusyId(null);
     }
@@ -628,13 +631,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           console.log('Ticket reserved successfully');
         }
       } catch (err) {
-        console.error('Error reserving ticket:', err);
-        console.error('Error response:', err.response?.data);
-        
         // Check if ticket is reserved by someone else
         if (err.response?.data?.status === 'reserved' || err.response?.data?.error?.includes('someone else')) {
           const errorMsg = err.response?.data?.error || 'הכרטיס נמצא כעת בעגלה של מישהו אחר. הוא עשוי להיות זמין שוב בעוד כמה דקות.';
           setError(errorMsg);
+          toastError(errorMsg);
           // Close modal after showing error
           setTimeout(() => {
             handleClose();
@@ -642,6 +643,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         } else if (err.response?.data?.error?.includes('no longer available') || err.response?.data?.error?.includes('not available')) {
           const errorMsg = err.response?.data?.error || 'הכרטיס אינו זמין עוד. אנא נסה כרטיס אחר.';
           setError(errorMsg);
+          toastError(errorMsg);
           setTimeout(() => {
             handleClose();
           }, 3000);
@@ -649,6 +651,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           // If reservation fails for other reasons, still allow checkout but show warning
           const errorMsg = err.response?.data?.error || err.response?.data?.detail || 'לא ניתן לשמור את הכרטיס כרגע. אנא נסה שוב.';
           setError(errorMsg);
+          toastError(errorMsg);
         }
       }
     };
@@ -665,8 +668,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             const email = user ? null : guestForm.email || null;
             await ticketAPI.releaseReservation(ticket.id, email);
             console.log('Reservation released on modal close');
-          } catch (err) {
-            console.error('Error releasing reservation:', err);
+          } catch {
+            /* best-effort release */
           }
         };
         releaseReservation();
@@ -694,12 +697,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 const email = user ? null : guestForm.email || null;
                 await ticketAPI.releaseReservation(ticket?.id, email);
                 reservationRef.current = false;
-              } catch (err) {
-                console.error('Error releasing reservation:', err);
+              } catch {
+                /* best-effort release */
               }
             };
             releaseReservation();
-            setError('פג הזמן. הכרטיסים שוחררו חזרה למלאי. אנא נסה שוב.');
+            const expiredMsg = 'פג הזמן. הכרטיסים שוחררו חזרה למלאי. אנא נסה שוב.';
+            setError(expiredMsg);
+            toastError(expiredMsg);
             setStep('info'); // Close payment step, back to info
             return 0;
           }
@@ -748,8 +753,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         const email = user ? null : guestForm.email || null;
         await ticketAPI.releaseReservation(ticket.id, email);
         reservationRef.current = false;
-      } catch (err) {
-        console.error('Error releasing reservation:', err);
+      } catch {
+        /* best-effort release */
       }
     }
     

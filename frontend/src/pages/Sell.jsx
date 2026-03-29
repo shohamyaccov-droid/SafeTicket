@@ -6,6 +6,7 @@ import { getVenueSectionOptions } from '../utils/venueMaps';
 import { createListFetchAbort } from '../utils/listFetch';
 import SellFormSkeleton from '../components/skeletons/SellFormSkeleton';
 import BecomeSellerModal from '../components/BecomeSellerModal';
+import { toastError } from '../utils/toast';
 import './Sell.css';
 
 const SELL_PAGE_BUILD_TAG = import.meta.env.VITE_BUILD_ID || 'local-dev';
@@ -97,7 +98,6 @@ const Sell = () => {
           setEvents(upcomingEvents);
         }
       } catch (err) {
-        console.error('Error fetching artists/events:', err);
         if (!cancelled) {
           const code = err?.code;
           const aborted =
@@ -105,6 +105,9 @@ const Sell = () => {
           setCatalogError(aborted ? 'timeout' : 'error');
           setArtists([]);
           setEvents([]);
+          if (!aborted) {
+            toastError('לא ניתן לטעון אמנים ואירועים. בדקו את החיבור ונסו שוב.');
+          }
         }
       } finally {
         clear();
@@ -574,16 +577,13 @@ const Sell = () => {
 
     try {
       await ensureCsrfToken();
-      const response = await ticketAPI.createTicket(submitData);
+      await ticketAPI.createTicket(submitData);
       setSuccess(true);
       // Show success message for 3 seconds before redirect
       setTimeout(() => {
         navigate('/');
       }, 3000);
     } catch (err) {
-      console.error('Ticket creation error:', err);
-      console.error('Error response:', err.response?.data);
-      
       let errorMessage = 'יצירת רשימת הכרטיס נכשלה. אנא נסה שוב.';
       
       if (err.response?.data) {
@@ -619,6 +619,7 @@ const Sell = () => {
       }
       
       setError(errorMessage);
+      toastError(errorMessage);
     } finally {
       setLoading(false);
     }

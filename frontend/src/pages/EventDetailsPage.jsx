@@ -10,6 +10,7 @@ import { VENUE_MAPS, getVenueConfig, normalizeSection } from '../utils/venueMaps
 import { getTicketPrice } from '../utils/priceFormat';
 import BuyerListingPrice from '../components/BuyerListingPrice';
 import { getFullImageUrl } from '../utils/formatters';
+import { toastError } from '../utils/toast';
 import './EventDetailsPage.css';
 
 /** Seller id from API may be a numeric PK or nested object — compare robustly to current user. */
@@ -243,7 +244,7 @@ const EventDetailsPage = () => {
         // Fetch tickets for this event with filters
         await fetchTickets();
       } catch (error) {
-        console.error('Error fetching event data:', error);
+        toastError('לא ניתן לטעון את האירוע. בדקו את החיבור או חזרו לדף הבית.');
       } finally {
         setLoading(false);
       }
@@ -291,8 +292,7 @@ const EventDetailsPage = () => {
       );
       setTickets(ticketsArray);
       return ticketsArray;
-    } catch (error) {
-      console.error('Error fetching tickets:', error);
+    } catch {
       return [];
     }
   };
@@ -311,8 +311,8 @@ const EventDetailsPage = () => {
         const res = await artistAPI.getArtists();
         const data = res.data;
         setArtists(Array.isArray(data) ? data : (data?.results || []));
-      } catch (err) {
-        console.error('Error fetching artists:', err);
+      } catch {
+        /* optional artist list for images — non-fatal */
       }
     };
     fetchArtists();
@@ -413,8 +413,7 @@ const EventDetailsPage = () => {
         }
       });
       return prices;
-    } catch (error) {
-      console.error('Error building section prices:', error);
+    } catch {
       return {};
     }
   }, [ticketGroups]);
@@ -434,8 +433,8 @@ const EventDetailsPage = () => {
           prices[sectionId] = base;
         }
       });
-    } catch (error) {
-      console.error('Error building lowestPricesPerSection:', error);
+    } catch {
+      /* ignore map price aggregation errors */
     }
     return prices;
   }, [ticketGroups]);
@@ -498,15 +497,15 @@ const EventDetailsPage = () => {
             if (ticketRow) {
               ticketRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
-          } catch (scrollError) {
-            console.error('Error scrolling to ticket:', scrollError);
+          } catch {
+            /* scrollIntoView unavailable */
           }
         }, 100);
       } else {
         console.log(`No tickets found for section ${sectionId}`);
       }
-    } catch (error) {
-      console.error('Error handling section click:', error);
+    } catch {
+      /* invalid map interaction */
     }
   }, [ticketGroups]);
 
@@ -891,8 +890,7 @@ const EventDetailsPage = () => {
                             lowestPrices={lowestPricesPerSection || {}}
                           />
                         );
-                      } catch (mapError) {
-                        console.error('Error rendering InteractiveMenoraMap, falling back to VenueMapPin:', mapError);
+                      } catch {
                         return <VenueMapPin venueName={finalVenueName} sectionName={activeSectionName} />;
                       }
                     }
@@ -1129,8 +1127,8 @@ const EventDetailsPage = () => {
                   return offer;
                 }
               }
-            } catch (e) {
-              console.error('Error parsing accepted offer:', e);
+            } catch {
+              sessionStorage.removeItem('acceptedOffer');
             }
             return null;
           })()}

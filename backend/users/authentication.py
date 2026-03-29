@@ -62,19 +62,20 @@ def clear_jwt_cookies(response):
 
 class JWTCookieAuthentication(JWTAuthentication):
     """
-    Authenticate using JWT from HttpOnly cookie (primary) or Authorization header (fallback).
+    Authenticate using Authorization header first (Safari ITP / cookie fallback), then HttpOnly cookie.
     """
     def authenticate(self, request):
-        # Try cookie first
+        # Bearer header: preferred when SPA uses body-token fallback
+        header_auth = super().authenticate(request)
+        if header_auth:
+            return header_auth
         raw_token = request.COOKIES.get(ACCESS_TOKEN_COOKIE)
         if raw_token:
             try:
-                # get_validated_token may expect bytes in some versions
                 token_bytes = raw_token.encode('utf-8') if isinstance(raw_token, str) else raw_token
                 validated_token = self.get_validated_token(token_bytes)
                 if validated_token:
                     return self.get_user(validated_token), validated_token
             except InvalidToken:
                 pass
-        # Fallback to Authorization header
-        return super().authenticate(request)
+        return None

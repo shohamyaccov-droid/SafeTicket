@@ -325,9 +325,13 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
-    # Rate limiting - anti-spam for offers
     'DEFAULT_THROTTLE_RATES': {
-        'offers': '10/min',
+        'anon': '120/hour',
+        'user': '2000/hour',
+        'auth_login': '30/minute',
+        'auth_register': '20/minute',
+        'offers': '25/minute',
+        'offers_mutations': '90/minute',
     },
 }
 
@@ -404,9 +408,10 @@ USE_X_FORWARDED_HOST = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
-# Production (DEBUG=False): CSRF_COOKIE_SAMESITE / SESSION_COOKIE_SAMESITE = string 'None' (capital N); Secure=True.
-# Local (DEBUG=True): Lax + insecure cookies for http://localhost dev.
-if DEBUG:
+# Cross-site cookies (SPA on different host than API). Safari / ITP requires SameSite=None; Secure=True.
+# Local HTTP: keep Lax unless SAFETICKET_CROSS_SITE_COOKIES=1 (HTTPS dev tunnel, e.g. ngrok/mkcert).
+_FORCE_CROSS_SITE = os.environ.get('SAFETICKET_CROSS_SITE_COOKIES', '').lower() in ('1', 'true', 'yes')
+if DEBUG and not _FORCE_CROSS_SITE:
     CSRF_COOKIE_SECURE = False
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SAMESITE = 'Lax'
@@ -416,6 +421,13 @@ else:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SAMESITE = 'None'
     SESSION_COOKIE_SAMESITE = 'None'
+
+# When True (default in production), login/register also return JWT in JSON for clients where third-party cookies fail.
+# Frontend should prefer HttpOnly cookies; use body tokens only as fallback (memory + Authorization header).
+JWT_RESPONSE_BODY_TOKENS = os.environ.get(
+    'JWT_RESPONSE_BODY_TOKENS',
+    'false' if DEBUG and not _FORCE_CROSS_SITE else 'true',
+).lower() in ('1', 'true', 'yes')
 
 CSRF_COOKIE_PATH = '/'
 SESSION_COOKIE_PATH = '/'

@@ -9,6 +9,11 @@ def csrf_required(view):
     return view
 from rest_framework import generics, status, viewsets
 from rest_framework.throttling import ScopedRateThrottle
+from .throttles import (
+    AuthLoginScopedThrottle,
+    AuthRegisterScopedThrottle,
+    OffersMutationScopedThrottle,
+)
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
@@ -22,6 +27,7 @@ from django.http import FileResponse
 from django.db.models import F, Q, Count, Sum, Exists, OuterRef, Value, Prefetch
 from django.db.models.functions import Coalesce
 from django.db import transaction
+from django.conf import settings as dj_settings
 from django.core.files.base import ContentFile
 import io
 import logging
@@ -658,7 +664,8 @@ class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = [AllowAny]
     serializer_class = UserRegistrationSerializer
-    
+    throttle_classes = [AuthRegisterScopedThrottle]
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -680,6 +687,9 @@ class RegisterView(generics.CreateAPIView):
         }, status=status.HTTP_201_CREATED)
         from .authentication import set_jwt_cookies
         set_jwt_cookies(response, token_data.access_token, token_data)
+        if getattr(dj_settings, 'JWT_RESPONSE_BODY_TOKENS', False):
+            response.data['access'] = str(token_data.access_token)
+            response.data['refresh'] = str(token_data)
         return response
 
 
@@ -736,10 +746,11 @@ def verify_email(request):
 class CustomTokenObtainPairView(TokenObtainPairView):
     """
     Custom login endpoint. Sets JWT tokens as HttpOnly cookies (XSS-safe).
-    Returns user data in JSON body; tokens are NOT in body.
+    Optionally duplicates tokens in JSON when JWT_RESPONSE_BODY_TOKENS is enabled.
     """
     serializer_class = CustomTokenObtainPairSerializer
-    
+    throttle_classes = [AuthLoginScopedThrottle]
+
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
         if response.status_code == 200:
@@ -748,9 +759,12 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             refresh = response.data.get('refresh')
             if access and refresh:
                 set_jwt_cookies(response, access, refresh)
-                # Remove tokens from body - they are in HttpOnly cookies
-                del response.data['access']
-                del response.data['refresh']
+                if getattr(dj_settings, 'JWT_RESPONSE_BODY_TOKENS', False):
+                    response.data['access'] = str(access)
+                    response.data['refresh'] = str(refresh)
+                else:
+                    del response.data['access']
+                    del response.data['refresh']
             # Ensure user data in response
             username = request.data.get('username')
             try:
@@ -794,8 +808,13 @@ class CookieTokenRefreshView(TokenRefreshView):
         data = serializer.validated_data
         access = data.get('access')
         new_refresh = data.get('refresh')
+        refresh_out = new_refresh or refresh_cookie
         response = Response({'detail': 'Token refreshed.'}, status=status.HTTP_200_OK)
-        set_jwt_cookies(response, access, new_refresh or refresh)
+        set_jwt_cookies(response, access, refresh_out)
+        if getattr(dj_settings, 'JWT_RESPONSE_BODY_TOKENS', False) and access:
+            response.data['access'] = str(access)
+            if refresh_out:
+                response.data['refresh'] = str(refresh_out)
         return response
 
 
@@ -1175,44 +1194,8 @@ def create_order(request):
     # Include user in the data so serializer validation passes
     order_data = request.data.copy()
     order_data['user'] = request.user.id
-    
-    # CRITICAL: negotiated checkout — strict offer_id (never fall back to list price if client sent offer_id)
     offer_id = request.data.get('offer_id')
-    negotiated_offer = None
-    if offer_id not in (None, '', []):
-        try:
-            oid = int(offer_id)
-        except (TypeError, ValueError):
-            return Response({'error': 'Invalid offer_id.'}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            negotiated_offer = Offer.objects.get(
-                id=oid,
-                buyer=request.user,
-                status='accepted',
-            )
-            print(
-                f"Negotiated offer found: ID={oid}, Amount={negotiated_offer.amount}, Quantity={negotiated_offer.quantity}"
-            )
-            expected_total = expected_negotiated_total_from_offer_base(negotiated_offer.amount)
-            received_total = decimal_money(request.data.get('total_amount', 0))
-            if not payment_amounts_match(received_total, expected_total):
-                return Response(
-                    {
-                        'error': (
-                            f'Amount mismatch. Expected {expected_total:.2f} (base + 10% fee), '
-                            f'got {received_total}'
-                        )
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        except Offer.DoesNotExist:
-            return Response(
-                {
-                    'error': 'Invalid or ineligible offer for checkout (must be accepted and belong to you).',
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-    
+
     serializer = OrderSerializer(data=order_data)
     if serializer.is_valid():
         ticket_id = request.data.get('ticket')
@@ -1239,6 +1222,39 @@ def create_order(request):
         # CRITICAL: Use transaction.atomic + select_for_update to prevent double-selling (race conditions)
         with transaction.atomic():
             release_abandoned_carts()
+            negotiated_offer = None
+            if offer_id not in (None, '', []):
+                try:
+                    oid = int(offer_id)
+                except (TypeError, ValueError):
+                    return Response({'error': 'Invalid offer_id.'}, status=status.HTTP_400_BAD_REQUEST)
+                negotiated_offer = Offer.objects.select_for_update().filter(
+                    id=oid,
+                    buyer=request.user,
+                    status='accepted',
+                ).first()
+                if not negotiated_offer:
+                    return Response(
+                        {
+                            'error': 'Invalid or ineligible offer for checkout (must be accepted and belong to you).',
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                print(
+                    f"Negotiated offer found: ID={oid}, Amount={negotiated_offer.amount}, Quantity={negotiated_offer.quantity}"
+                )
+                expected_total = expected_negotiated_total_from_offer_base(negotiated_offer.amount)
+                received_total = decimal_money(request.data.get('total_amount', 0))
+                if not payment_amounts_match(received_total, expected_total):
+                    return Response(
+                        {
+                            'error': (
+                                f'Amount mismatch. Expected {expected_total:.2f} (base + 10% fee), '
+                                f'got {received_total}'
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
             # If listing_group_id is provided, IGNORE the specific ticket_id and find any active tickets in the group
             if listing_group_id:
                 print(f"Checking availability for Group: {listing_group_id}")
@@ -3262,9 +3278,8 @@ class OfferViewSet(viewsets.ModelViewSet):
     pagination_class = None  # Full negotiation history for dashboard (no 20-item page cut-off)
 
     def get_throttles(self):
-        # Accept/reject/counter must not share the 10/min create quota (would block sellers mid-flow).
         if getattr(self, 'action', None) in ('accept', 'reject', 'counter'):
-            return []
+            return [OffersMutationScopedThrottle()]
         return super().get_throttles()
 
     def _annotate_offer_flags(self, queryset):

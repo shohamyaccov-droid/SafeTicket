@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { toastError, toastSuccess } from '../utils/toast';
 import '../pages/Auth.css';
 
 /**
@@ -37,6 +38,7 @@ export function LoginForm() {
       const result = await login(formData.username.trim(), formData.password);
 
       if (result.success) {
+        toastSuccess('התחברת בהצלחה');
         navigate('/', { replace: true });
         return;
       }
@@ -55,8 +57,8 @@ export function LoginForm() {
             : String(result.error);
       }
       setError(errorMessage);
+      toastError(errorMessage);
     } catch (err) {
-      console.error('Login error:', err);
       const isNetworkError = !err?.response || err?.message === 'Network Error';
       const errorMessage = isNetworkError
         ? 'שגיאת תקשורת עם השרת'
@@ -65,6 +67,7 @@ export function LoginForm() {
           err?.response?.data?.message ||
           'שם משתמש או סיסמה אינם נכונים';
       setError(errorMessage);
+      toastError(errorMessage);
     } finally {
       setLoading(false);
     }

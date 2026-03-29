@@ -12,27 +12,6 @@ const InteractiveMenoraMap = ({ activeSection, onSectionClick, sectionPrices = {
     setZoomLevel(prev => Math.max(prev - 0.2, 0.5));
   }, []);
 
-  const handleSectionHover = useCallback((event, sectionId) => {
-    try {
-      setHoveredSection(sectionId);
-      const rect = event.currentTarget.getBoundingClientRect();
-      const container = event.currentTarget.closest('.interactive-map-container');
-      if (container) {
-        const containerRect = container.getBoundingClientRect();
-        setTooltipPosition({
-          x: rect.left + rect.width / 2 - containerRect.left,
-          y: rect.top - containerRect.top - 10
-        });
-      }
-    } catch (error) {
-      console.error('Error handling section hover:', error);
-    }
-  }, []);
-
-  const handleSectionLeave = useCallback(() => {
-    setHoveredSection(null);
-  }, []);
-
   const handleSectionClick = useCallback((sectionId) => {
     if (onSectionClick) {
       onSectionClick(sectionId);

@@ -6,6 +6,7 @@ import BuyerListingPrice from '../components/BuyerListingPrice';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
+import { toastError } from '../utils/toast';
 import './EventGroupPage.css';
 
 const EventGroupPage = () => {
@@ -70,12 +71,14 @@ const EventGroupPage = () => {
         setTickets(sortedEvents);
       } catch (error) {
         if (cancelled) return;
-        console.error('Error fetching tickets:', error);
         const code = error?.code;
         const aborted =
           code === 'ERR_CANCELED' || error?.name === 'CanceledError' || String(error?.message || '').toLowerCase().includes('canceled');
         setLoadError(aborted ? 'timeout' : 'error');
         setTickets([]);
+        if (!aborted) {
+          toastError('לא ניתן לטעון כרטיסים לקבוצת האירוע. נסו שוב.');
+        }
       } finally {
         clear();
         if (!cancelled) setLoading(false);

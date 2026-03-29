@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { toastError, toastSuccess } from '../utils/toast';
 import './Auth.css';
 
 const Register = () => {
@@ -47,17 +48,23 @@ const Register = () => {
     setLoading(false);
 
     if (result.success) {
+      toastSuccess('נרשמת בהצלחה — ברוך הבא!');
       navigate('/');
     } else {
+      let msg = 'ההרשמה נכשלה. אנא נסה שוב.';
       if (typeof result.error === 'string') {
+        msg = result.error;
         setError(result.error);
       } else if (result.error && typeof result.error === 'object') {
         const vals = Object.values(result.error);
         const flat = vals.flat().filter(Boolean);
+        msg = flat.length ? flat.join(', ') : msg;
         setError(flat.length ? flat.join(', ') : 'ההרשמה נכשלה');
       } else {
+        msg = result.error?.message || msg;
         setError(result.error?.message || 'ההרשמה נכשלה. אנא נסה שוב.');
       }
+      toastError(msg);
     }
   };
 

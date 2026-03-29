@@ -5,6 +5,7 @@ import EmailAlertModal from '../components/EmailAlertModal';
 import { getFullImageUrl } from '../utils/formatters';
 import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
+import { toastError } from '../utils/toast';
 import './ArtistEventsPage.css';
 
 const ArtistEventsPage = () => {
@@ -37,7 +38,6 @@ const ArtistEventsPage = () => {
         setArtist(artistResponse.data);
       } catch (error) {
         if (cancelled) return;
-        console.error('Error fetching artist:', error);
         const code = error?.code;
         const aborted =
           code === 'ERR_CANCELED' || error?.name === 'CanceledError' || String(error?.message || '').toLowerCase().includes('canceled');
@@ -46,6 +46,9 @@ const ArtistEventsPage = () => {
         setEvents([]);
         clear();
         if (!cancelled) setLoading(false);
+        if (!aborted) {
+          toastError('לא ניתן לטעון את פרטי האמן. נסו שוב.');
+        }
         return;
       }
 
@@ -65,12 +68,14 @@ const ArtistEventsPage = () => {
         setEvents(Array.isArray(eventsData) ? eventsData : []);
       } catch (error) {
         if (cancelled) return;
-        console.error('Error fetching artist events:', error);
         const code = error?.code;
         const aborted =
           code === 'ERR_CANCELED' || error?.name === 'CanceledError' || String(error?.message || '').toLowerCase().includes('canceled');
         setLoadError(aborted ? 'timeout' : 'error');
         setEvents([]);
+        if (!aborted) {
+          toastError('לא ניתן לטעון אירועים של האמן. נסו שוב.');
+        }
       } finally {
         clear();
         if (!cancelled) setLoading(false);

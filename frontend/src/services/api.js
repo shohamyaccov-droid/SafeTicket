@@ -12,6 +12,42 @@ export function resetCsrfTokenCache() {
   csrfTokenFromApi = null;
 }
 
+/** Optional Bearer fallback when cross-site HttpOnly cookies are blocked (Safari ITP). */
+let bearerAccessToken = null;
+let bearerRefreshToken = null;
+const BEARER_REFRESH_KEY = 'safeticket_bearer_refresh';
+
+export function setBearerFallback(access, refresh) {
+  bearerAccessToken = access || null;
+  if (refresh) {
+    bearerRefreshToken = String(refresh);
+    try {
+      sessionStorage.setItem(BEARER_REFRESH_KEY, bearerRefreshToken);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+export function clearBearerFallback() {
+  bearerAccessToken = null;
+  bearerRefreshToken = null;
+  try {
+    sessionStorage.removeItem(BEARER_REFRESH_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function getRefreshForBearerFallback() {
+  if (bearerRefreshToken) return bearerRefreshToken;
+  try {
+    return sessionStorage.getItem(BEARER_REFRESH_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
 /** Production API when VITE_API_URL is missing at build time (never fall back to localhost in prod). */
 const PRODUCTION_API_BASE_URL = 'https://safeticket-api.onrender.com/api';
 
@@ -86,6 +122,9 @@ api.interceptors.request.use(
   (config) => {
     const method = (config.method || 'get').toLowerCase();
     stripContentTypeForMultipart(config);
+    if (bearerAccessToken) {
+      config.headers.Authorization = `Bearer ${bearerAccessToken}`;
+    }
     if (method !== 'get' && method !== 'head' && method !== 'options') {
       const token = getCsrfTokenForRequest();
       if (token) {
@@ -117,9 +156,14 @@ api.interceptors.response.use(
     if (is401 && noRetryYet && !isAuthEndpoint) {
       originalRequest._retry = true;
       try {
-        // Refresh uses HttpOnly cookie (withCredentials) - no localStorage
-        await api.post('/users/token/refresh/');
-        // Retry original request - browser now has new access_token cookie
+        const rTok = getRefreshForBearerFallback();
+        const refreshRes = await api.post(
+          '/users/token/refresh/',
+          rTok ? { refresh: rTok } : {},
+        );
+        if (refreshRes.data?.access) {
+          setBearerFallback(refreshRes.data.access, refreshRes.data.refresh);
+        }
         return api(originalRequest);
       } catch (refreshError) {
         // getProfile 401 = not logged in; let AuthContext handle it (set user null)
@@ -190,6 +234,9 @@ async function postTicketMultipart(formData) {
     if (token) {
       headers['X-CSRFToken'] = token;
     }
+    if (bearerAccessToken) {
+      headers.Authorization = `Bearer ${bearerAccessToken}`;
+    }
     console.log('[SafeTicket] POST /users/tickets/ FormData (multipart) before fetch:');
     for (const [key, val] of formData.entries()) {
       if (typeof File !== 'undefined' && val instanceof File) {
@@ -220,6 +267,7 @@ async function postTicketMultipart(formData) {
     try {
       await ensureCsrfToken();
       const tok = getCsrfTokenForRequest();
+      const rTok = getRefreshForBearerFallback();
       await fetch(refreshUrl, {
         method: 'POST',
         credentials: 'include',
@@ -227,7 +275,7 @@ async function postTicketMultipart(formData) {
           ...(tok ? { 'X-CSRFToken': tok } : {}),
           'Content-Type': 'application/json',
         },
-        body: '{}',
+        body: JSON.stringify(rTok ? { refresh: rTok } : {}),
       });
     } catch {
       /* retry below may still 401 */

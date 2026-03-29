@@ -6,6 +6,7 @@ import CheckoutModal from '../components/CheckoutModal';
 import { getTicketPrice, getTotalWithFee, formatPrice } from '../utils/priceFormat';
 import BuyerListingPrice from '../components/BuyerListingPrice';
 import { translateSectionDisplay } from '../utils/venueMaps';
+import { toastError } from '../utils/toast';
 import './TicketSelectionPage.css';
 
 const TicketSelectionPage = () => {
@@ -43,7 +44,7 @@ const TicketSelectionPage = () => {
           setQuantity(Math.min(1, maxQty));
         }
       } catch (error) {
-        console.error('Error fetching ticket:', error);
+        toastError('לא ניתן לטעון את פרטי הכרטיס. חזרו לרשימה ונסו שוב.');
       } finally {
         setLoading(false);
       }
@@ -98,8 +99,8 @@ const TicketSelectionPage = () => {
         const maxQty = foundTicket.available_quantity ?? foundTicket.quantity ?? 1;
         setQuantity(Math.min(quantity, maxQty));
       }
-    } catch (error) {
-      console.error('Error refreshing ticket:', error);
+    } catch {
+      toastError('עדכון פרטי הכרטיס נכשל. נסו לרענן את הדף.');
     }
   };
 

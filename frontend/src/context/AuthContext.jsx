@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { authAPI, resetCsrfTokenCache } from '../services/api';
+import { authAPI, resetCsrfTokenCache, setBearerFallback, clearBearerFallback } from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -89,6 +89,9 @@ export const AuthProvider = ({ children }) => {
         // Cross-origin: establish csrftoken on API host before POST (CSRF + CORS credentials)
         await authAPI.getCsrf();
         const response = await authAPI.login({ username, password });
+        if (response.data?.access) {
+          setBearerFallback(response.data.access, response.data.refresh);
+        }
         let user = response.data?.user;
         if (!user) {
           try {
@@ -121,7 +124,6 @@ export const AuthProvider = ({ children }) => {
     if (!error) {
       return { success: false, error: 'שגיאת התחברות' };
     }
-    console.error('FULL LOGIN ERROR:', error);
     // Network/CORS errors: error.response is undefined
     if (!error.response || error.message === 'Network Error') {
       return { success: false, error: 'שגיאת תקשורת עם השרת' };
@@ -159,6 +161,9 @@ export const AuthProvider = ({ children }) => {
         }
         await authAPI.getCsrf();
         const response = await authAPI.register(userData);
+        if (response.data?.access) {
+          setBearerFallback(response.data.access, response.data.refresh);
+        }
         const newUser = response.data?.user;
         if (newUser && typeof newUser.is_superuser === 'undefined') {
           newUser.is_superuser = false;
@@ -190,6 +195,7 @@ export const AuthProvider = ({ children }) => {
     } catch {
       // Ignore - cookies may already be cleared
     }
+    clearBearerFallback();
     setUser(null);
     broadcastAuthEvent('logout');
   };

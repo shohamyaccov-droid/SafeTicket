@@ -8,6 +8,8 @@ import { getOfferExpirationDisplay, getResponsesLeft } from '../utils/offerTimer
 import CheckoutModal from '../components/CheckoutModal';
 import NegotiationModal from '../components/NegotiationModal';
 import Toast from '../components/Toast';
+import DashboardSkeleton from '../components/skeletons/DashboardSkeleton';
+import { toastError, toastSuccess } from '../utils/toast';
 import './Dashboard.css';
 
 function offerBuyerId(offer) {
@@ -82,7 +84,7 @@ const AccountSettingsTab = () => {
   };
 
   const handleChangePassword = () => {
-    alert('שינוי סיסמה – יישום בהמשך');
+    toastSuccess('שינוי סיסמה – בקרוב באפליקציה');
   };
 
   return (
@@ -380,10 +382,10 @@ const Dashboard = () => {
         );
       }
     } catch (err) {
-      console.error('Error fetching offers:', err);
       if (!silent) {
         setOffersReceived([]);
         setOffersSent([]);
+        toastError('לא ניתן לטעון הצעות מחיר. נסו לרענן.');
       }
     } finally {
       if (!silent) setOffersLoading(false);
@@ -488,7 +490,7 @@ const Dashboard = () => {
     const ticketId = group?.ticketId || offer.ticket || offer.ticket_details?.id;
     if (!ticketId) {
       checkoutOpeningRef.current = false;
-      alert('שגיאה: לא נמצא מזהה כרטיס');
+      toastError('שגיאה: לא נמצא מזהה כרטיס');
       return;
     }
     const ticket = {
@@ -510,9 +512,9 @@ const Dashboard = () => {
       setError('');
       dashboardReadyRef.current = true;
     } catch (err) {
-      console.error('Error fetching dashboard:', err);
       if (!silent) {
         setError('שגיאה בטעינת הנתונים');
+        toastError('שגיאה בטעינת לוח הבקרה. נסו שוב.');
         setDashboardData({
           purchases: [],
           listings: { active: [], sold: [] },
@@ -526,11 +528,9 @@ const Dashboard = () => {
 
   const handleDownloadPDF = async (ticketId) => {
     if (!ticketId) {
-      console.error('handleDownloadPDF: No ticket ID provided');
-      alert('שגיאה: מזהה כרטיס חסר');
+      toastError('שגיאה: מזהה כרטיס חסר');
       return;
     }
-    console.log('Downloading ticket ID:', ticketId);
     try {
       const response = await ticketAPI.downloadPDF(ticketId);
       const blob = new Blob([response.data], { type: 'application/pdf' });
@@ -543,8 +543,7 @@ const Dashboard = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      alert('הורדת ה-PDF נכשלה. אנא נסה שוב מאוחר יותר.');
-      console.error('Error downloading PDF:', err?.response?.status, err?.response?.data, err);
+      toastError('הורדת ה-PDF נכשלה. אנא נסה שוב מאוחר יותר.');
     }
   };
 
@@ -573,8 +572,7 @@ const Dashboard = () => {
         </html>
       `);
     } catch (err) {
-      alert('טעינת הקבלה נכשלה. אנא נסה שוב מאוחר יותר.');
-      console.error('Error loading receipt:', err);
+      toastError('טעינת הקבלה נכשלה. אנא נסה שוב מאוחר יותר.');
     }
   };
 
@@ -590,8 +588,7 @@ const Dashboard = () => {
       setNewPrice('');
       fetchDashboardData({ silent: true }); // Refresh data
     } catch (err) {
-      alert('עדכון המחיר נכשל. אנא נסה שוב.');
-      console.error('Error updating price:', err);
+      toastError('עדכון המחיר נכשל. אנא נסה שוב.');
     }
   };
 
@@ -608,8 +605,7 @@ const Dashboard = () => {
       await ticketAPI.deleteTicket(listingId);
       fetchDashboardData({ silent: true }); // Refresh data
     } catch (err) {
-      alert('מחיקת הכרטיס נכשלה. אנא נסה שוב.');
-      console.error('Error deleting listing:', err);
+      toastError('מחיקת הכרטיס נכשלה. אנא נסה שוב.');
     }
   };
 
@@ -670,14 +666,7 @@ const Dashboard = () => {
   };
 
   if (loading) {
-    return (
-      <div className="dashboard-container">
-        <div className="loading-state">
-          <div className="loading-spinner"></div>
-          <p>טוען נתונים...</p>
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (!dashboardData) {
