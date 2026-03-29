@@ -182,7 +182,12 @@ test.describe('Seller onboarding (live)', () => {
     await login(page, webBase, buyerUser, buyerPass);
     await page.goto(`${webBase}/event/${eventId}`, { waitUntil: 'load', timeout: 180_000 });
     await page.waitForSelector('.viagogo-ticket-row', { state: 'visible', timeout: 120_000 });
-    await page.locator('.viagogo-ticket-row').first().click();
+    const ourRow = page
+      .locator(`.viagogo-ticket-row[data-e2e-ticket-id="${ticketId}"]`)
+      .or(page.locator('.viagogo-ticket-row').filter({ hasText: `₪${LIST_PRICE}` }))
+      .first();
+    await expect(ourRow).toBeVisible({ timeout: 60_000 });
+    await ourRow.click();
     await page.getByRole('button', { name: /הצע מחיר/i }).first().click();
     await page.locator('#offerAmount').fill(String(OFFER_BASE));
 
