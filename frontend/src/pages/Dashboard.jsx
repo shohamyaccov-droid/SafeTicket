@@ -1576,10 +1576,7 @@ const Dashboard = () => {
           user={user}
           isOfferPurchaseComplete={isOfferPurchaseComplete}
           onClose={() => setNegotiationModalGroup(null)}
-          onAccept={async (id) => {
-            await handleAcceptOffer(id);
-            setNegotiationModalGroup(null);
-          }}
+          onAccept={handleAcceptOffer}
           onReject={async (id) => {
             await handleRejectOffer(id);
             setNegotiationModalGroup(null);

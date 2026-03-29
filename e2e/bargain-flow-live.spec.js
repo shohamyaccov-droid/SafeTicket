@@ -225,12 +225,28 @@ test.describe('Live bargain flow', () => {
     page,
   }) => {
     test.setTimeout(600_000);
-    const base =
-      process.env.E2E_BASE_URL || 'https://safeticket-api.onrender.com';
-    /** SPA origin (may differ from API host on Render). */
-    const webBase = trimSlash(process.env.E2E_WEB_URL || base);
-    /** API origin (Django + admin). */
-    const apiBase = trimSlash(process.env.E2E_API_URL || base);
+    /**
+     * Render: fresh SPA is usually `safeticket-web`; Django `safeticket-api` may serve an older
+     * collectstatic bundle. If env points both web+API at the API host (common local shell export),
+     * use the static site unless E2E_SPA_ON_API_HOST=1.
+     */
+    const DEFAULT_API = 'https://safeticket-api.onrender.com';
+    const DEFAULT_WEB = 'https://safeticket-web.onrender.com';
+    const envBase = process.env.E2E_BASE_URL;
+    const apiBase = trimSlash(
+      process.env.E2E_API_URL || envBase || DEFAULT_API
+    );
+    let webBase = trimSlash(
+      process.env.E2E_WEB_URL || envBase || DEFAULT_WEB
+    );
+    const spaOnApi = process.env.E2E_SPA_ON_API_HOST === '1';
+    if (
+      !spaOnApi &&
+      webBase === apiBase &&
+      apiBase === trimSlash(DEFAULT_API)
+    ) {
+      webBase = trimSlash(DEFAULT_WEB);
+    }
     const apiRoot = `${apiBase}/api`;
     const sellerUser = process.env.E2E_SELLER_USERNAME || 'israeli_demo_seller';
     const sellerPass = process.env.E2E_SELLER_PASSWORD || 'DemoSeller123!';
