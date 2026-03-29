@@ -93,6 +93,8 @@ npx playwright test iphone-full-journey.spec.js
 
 Requires valid **`E2E_ADMIN_USERNAME` / `E2E_ADMIN_PASSWORD`** if defaults differ on your environment.
 
+**Spec stability (post-push):** Registration waits on **`POST` success** and URL leaving `/register` before asserting the Hebrew success toast; success toast duration was extended to **12s** so Playwright can assert it after navigation to `/`.
+
 ---
 
 ## 9. Verification performed in this workspace
