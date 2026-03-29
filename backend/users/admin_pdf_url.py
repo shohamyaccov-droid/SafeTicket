@@ -15,7 +15,7 @@ _log = logging.getLogger(__name__)
 
 def get_ticket_pdf_admin_url(ticket) -> Optional[str]:
     """
-    URL for admin PDF link / iframe. Local: FileField.url.
+    URL for admin PDF link / new-tab preview. Local: FileField.url.
     Cloudinary: signed raw URL from stored name only (no public_id guessing).
     Never raises: failures (missing file, bad Cloudinary config, NoneType) return None.
     """
@@ -83,7 +83,7 @@ def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
 def is_admin_delivery_url_reachable(url: str, timeout: int = 25) -> bool:
     """
     True if the URL returns OK bytes (HEAD or GET). Used so admin can show a message
-    instead of a blank iframe when the asset is missing (404/401) or legacy disk path.
+    instead of embedding when the asset is missing (404/401) or legacy disk path.
     Never raises (network, SSL, invalid URL, etc.).
     """
     try:

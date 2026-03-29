@@ -291,11 +291,13 @@ class TicketAdmin(admin.ModelAdmin):
                 return _admin_pdf_safe_fallback()
             try:
                 return format_html(
-                    '<iframe src="{}" title="PDF preview" '
-                    'style="width:100%%;max-width:720px;height:480px;border:1px solid #cbd5e1;'
-                    'border-radius:6px;background:#f1f5f9;"></iframe>'
-                    '<p style="color:#64748b;font-size:12px;margin-top:8px;max-width:720px;">'
-                    'אם המסך ריק, פתחו את הקישור למעלה — חלק מהדפדפנים חוסמים תצוגת PDF בתוך מסגרת.</p>',
+                    '<a href="{}" target="_blank" rel="noopener noreferrer" '
+                    'style="display:inline-block;padding:14px 26px;background:linear-gradient(135deg,#0284c7 0%,#0369a1 100%);'
+                    'color:#fff!important;font-weight:700;text-decoration:none;border-radius:10px;'
+                    'box-shadow:0 3px 10px rgba(3,105,161,0.35);font-size:16px;line-height:1.35;'
+                    'border:1px solid #0369a1;">פתח PDF מאובטח בחלון חדש</a>'
+                    '<p style="margin-top:12px;color:#475569;font-size:13px;max-width:560px;line-height:1.5;">'
+                    'דפדפנים מודרניים חוסמים לעיתים תצוגת PDF בתוך העמוד; פתיחה בלשונית חדשה היא הדרך התקינה לצפייה בסטאף.</p>',
                     url,
                 )
             except Exception as fmt_exc:
@@ -310,7 +312,7 @@ class TicketAdmin(admin.ModelAdmin):
             _admin_log.exception('TicketAdmin.pdf_inline_preview failed pk=%s', getattr(obj, 'pk', None))
             return _admin_pdf_safe_fallback()
 
-    pdf_inline_preview.short_description = 'תצוגה מקדימה'
+    pdf_inline_preview.short_description = 'PDF (פתיחה בלשונית חדשה)'
 
     @admin.action(description='Approve & Activate Selected Tickets (אישור והפעלת כרטיסים)')
     def approve_and_activate_selected(self, request, queryset):

@@ -72,14 +72,16 @@ class AdminTicketPdfSafetyTests(TestCase):
         r = self.client.get(f'/admin/users/ticket/{t.pk}/change/')
         self.assertEqual(r.status_code, 200, r.content[:500])
 
-    def test_change_view_shows_iframe_when_pdf_reachable(self):
-        """C) Valid ticket + reachable URL → inline preview markup present (mocked delivery check)."""
+    def test_change_view_shows_new_tab_pdf_cta_when_reachable(self):
+        """C) Valid ticket + reachable URL → prominent new-tab link, no iframe (browser PDF embed blocks)."""
         t = self._make_ticket()
         with mock.patch('users.admin.get_ticket_pdf_admin_url', return_value='https://example.com/ticket.pdf'):
             with mock.patch('users.admin.is_admin_delivery_url_reachable', return_value=True):
                 r = self.client.get(f'/admin/users/ticket/{t.pk}/change/')
         self.assertEqual(r.status_code, 200, r.content[:500])
-        self.assertIn(b'iframe', r.content.lower())
+        self.assertIn('פתח PDF מאובטח בחלון חדש'.encode('utf-8'), r.content)
+        self.assertIn(b'target="_blank"', r.content)
+        self.assertNotIn(b'<iframe', r.content.lower())
 
     def test_changelist_200_ghost_pdf_path(self):
         t = self._make_ticket()
