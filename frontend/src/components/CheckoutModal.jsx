@@ -44,8 +44,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const successSnapshotRef = useRef(null);
   const navigate = useNavigate();
 
-  // Get locked quantity from accepted offer if it exists
-  const isNegotiatedPrice = acceptedOffer && acceptedOffer.status === 'accepted';
+  // Get locked quantity from accepted offer if it exists (accepted_at = server truth after accept)
+  const isNegotiatedPrice =
+    acceptedOffer &&
+    (acceptedOffer.status === 'accepted' || acceptedOffer.accepted_at != null);
   const lockedQuantity = isNegotiatedPrice && acceptedOffer.quantity ? acceptedOffer.quantity : null;
   
   // Get available quantity - if locked quantity exists, use that; otherwise use ticket/group quantity

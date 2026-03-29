@@ -1549,8 +1549,6 @@ def confirm_order_payment(request, order_id):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-    negotiated_offer = order.pending_offer
-
     try:
         with transaction.atomic():
             release_abandoned_carts()
@@ -1561,6 +1559,7 @@ def confirm_order_payment(request, order_id):
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
+            negotiated_offer = order.pending_offer
             ticket_ref = order.ticket
 
             if order.held_ticket_id and order.held_quantity:

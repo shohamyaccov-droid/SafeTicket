@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from .models import User, Order, Ticket, Event, Artist, Offer, ContactMessage, EventRequest
-from .admin_pdf_url import get_ticket_pdf_admin_url, is_admin_delivery_url_reachable
+from .admin_pdf_url import get_ticket_pdf_admin_url
 
 _admin_log = logging.getLogger(__name__)
 
@@ -45,8 +45,6 @@ def _admin_image_preview_html(fieldfile):
         if getattr(settings, 'USE_CLOUDINARY', False):
             url = cloudinary_signed_https_image_url(fieldfile)
             if not url:
-                return _admin_missing_media_message()
-            if not is_admin_delivery_url_reachable(url):
                 return _admin_missing_media_message()
             return format_html(
                 '<img src="{}" style="max-height:220px;border-radius:8px;border:1px solid #e2e8f0;" alt="" />',

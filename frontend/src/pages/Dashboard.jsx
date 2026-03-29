@@ -312,13 +312,19 @@ const Dashboard = () => {
       if (updated?.id) {
         setOffersReceived((prev) => prev.map((o) => (o.id === offerId ? { ...o, ...updated } : o)));
         setOffersSent((prev) => prev.map((o) => (o.id === offerId ? { ...o, ...updated } : o)));
+        setNegotiationModalGroup((prev) => {
+          if (!prev?.offers?.length) return prev;
+          if (!prev.offers.some((o) => o.id === offerId)) return prev;
+          return {
+            ...prev,
+            offers: prev.offers.map((o) => (o.id === offerId ? { ...o, ...updated } : o)),
+          };
+        });
       }
       setToast({
         message: 'ההצעה אושרה בהצלחה! הודעה נשלחה לקונה, ויש לו 4 שעות להשלים את הרכישה.',
         type: 'success'
       });
-      await fetchOffers({ silent: true });
-      await fetchDashboardData({ silent: true });
     } catch (err) {
       const errorMsg = err.response?.data?.error || 'שגיאה באישור ההצעה';
       setToast({
@@ -328,6 +334,8 @@ const Dashboard = () => {
     } finally {
       setAcceptingOfferId(null);
     }
+    fetchOffers({ silent: true }).catch(() => {});
+    fetchDashboardData({ silent: true }).catch(() => {});
   };
 
   const handleRejectOffer = async (offerId) => {
