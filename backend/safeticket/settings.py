@@ -180,6 +180,12 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# Vite output from ../frontend/dist (built by build_render.sh before collectstatic on Render).
+STATICFILES_DIRS = []
+_frontend_dist = BASE_DIR.parent / 'frontend' / 'dist'
+if _frontend_dist.is_dir():
+    STATICFILES_DIRS.append(_frontend_dist)
+
 # Media files (user uploaded files like PDFs)
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'

@@ -12,7 +12,8 @@ services:
     name: safeticket-api
     runtime: python
     rootDir: backend
-    buildCommand: pip install -r requirements.txt && python manage.py migrate --noinput && python manage.py seed_israeli_data && python manage.py collectstatic --noinput
+    # Repo root has build_render.sh: build Vite frontend first so collectstatic picks up fresh assets.
+    buildCommand: bash ../build_render.sh
     # Seed DB (artists/events/qa_bot) then promote admins, then serve.
     startCommand: python seed_production.py && python fix_admin.py && gunicorn safeticket.wsgi --bind 0.0.0.0:$PORT --workers 1 --worker-class gthread --threads 2 --timeout 90
     plan: free
@@ -35,6 +36,9 @@ services:
       # Media (PDFs, images): paste from Cloudinary dashboard — enables persistent storage vs ephemeral disk.
       - key: CLOUDINARY_URL
         sync: false
+      # Baked into Vite build when build_render.sh runs npm run build (must match public API origin).
+      - key: VITE_API_URL
+        value: https://safeticket-api.onrender.com
 
   # React Frontend (Static Site)
   - type: web
