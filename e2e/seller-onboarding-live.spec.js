@@ -185,15 +185,32 @@ test.describe('Seller onboarding (live)', () => {
     await page.locator('.viagogo-ticket-row').first().click();
     await page.getByRole('button', { name: /הצע מחיר/i }).first().click();
     await page.locator('#offerAmount').fill(String(OFFER_BASE));
-    const offerPost = page.waitForResponse(
-      (r) => r.url().includes('/api/users/offers/') && r.request().method() === 'POST',
-      { timeout: 120_000 }
-    );
-    await page.getByRole('button', { name: /שלח הצעה/ }).click();
-    const ores = await offerPost;
-    expect(ores.status()).toBe(201);
-    const offerJson = await ores.json();
-    const offerId = offerJson.id;
+
+    let offerJson;
+    let offerId;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      if (attempt > 0) {
+        await page.waitForTimeout(15_000);
+      }
+      const offerPost = page.waitForResponse(
+        (r) => r.url().includes('/api/users/offers/') && r.request().method() === 'POST',
+        { timeout: 120_000 }
+      );
+      await page.getByRole('button', { name: /שלח הצעה/ }).click();
+      const ores = await offerPost;
+      const st = ores.status();
+      if (st === 429) {
+        continue;
+      }
+      if (st !== 201) {
+        const body = await ores.text();
+        throw new Error(`create offer ${st}: ${body.slice(0, 500)}`);
+      }
+      offerJson = await ores.json();
+      offerId = offerJson.id;
+      break;
+    }
+    expect(offerId, 'offer created (retry on 429)').toBeTruthy();
 
     await logoutViaApi(page, apiRoot);
     await login(page, webBase, newUser, newPass);
