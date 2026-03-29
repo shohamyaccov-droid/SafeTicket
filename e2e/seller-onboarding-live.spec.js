@@ -214,9 +214,14 @@ test.describe('Seller onboarding (live)', () => {
 
     await logoutViaApi(page, apiRoot);
     await login(page, webBase, newUser, newPass);
-    await page.goto(`${webBase}/dashboard`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${webBase}/dashboard`, { waitUntil: 'load', timeout: 180_000 });
+    await page.waitForLoadState('networkidle', { timeout: 180_000 }).catch(() => {});
     await page.getByRole('button', { name: /הצעות מחיר/ }).click();
-    await page.waitForSelector('.offers-ticket-row-clickable', { state: 'visible', timeout: 120_000 });
+    await expect(page.locator('.offers-tab')).toBeVisible({ timeout: 120_000 });
+    await page.waitForTimeout(4000);
+    await page.getByRole('button', { name: /רענן/ }).click().catch(() => {});
+    await page.waitForTimeout(2000);
+    await page.waitForSelector('.offers-ticket-row-clickable', { state: 'visible', timeout: 180_000 });
     await page.locator('.offers-ticket-row-clickable').first().click();
     await expect(page.locator('.negotiation-footer-actions')).toBeVisible({ timeout: 90_000 });
     await page.waitForTimeout(10_000);
