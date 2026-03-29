@@ -350,27 +350,24 @@ const Sell = () => {
           setError('רק קבצי PDF מותרים. אנא בחר קובץ PDF בלבד.');
           return;
         }
-        const newPackages = [...(formData.ticket_packages || [])];
-        if (!newPackages[index]) {
-          newPackages[index] = { seat_number: '', pdf_file: null };
-        }
-        newPackages[index].pdf_file = file;
-        setFormData(prev => ({
-          ...prev,
-          ticket_packages: newPackages,
-          singleMultiPagePdf: null,
-        }));
+        // Always use functional updates so ticket_packages is never copied from a stale closure.
+        setFormData((prev) => {
+          const newPackages = [...(prev.ticket_packages || [])];
+          const cur = newPackages[index] || { seat_number: '', pdf_file: null };
+          newPackages[index] = { ...cur, pdf_file: file };
+          return { ...prev, ticket_packages: newPackages, singleMultiPagePdf: null };
+        });
         setError('');
       }
     } else if (name && name.startsWith('seat_number_pkg_')) {
       const index = parseInt(name.replace('seat_number_pkg_', ''), 10);
       if (!isNaN(index)) {
-        const newPackages = [...(formData.ticket_packages || [])];
-        if (!newPackages[index]) {
-          newPackages[index] = { seat_number: '', pdf_file: null };
-        }
-        newPackages[index].seat_number = value;
-        setFormData(prev => ({ ...prev, ticket_packages: newPackages }));
+        setFormData((prev) => {
+          const newPackages = [...(prev.ticket_packages || [])];
+          const cur = newPackages[index] || { seat_number: '', pdf_file: null };
+          newPackages[index] = { ...cur, seat_number: value };
+          return { ...prev, ticket_packages: newPackages };
+        });
       }
     } else if (name === 'start_seat') {
       // Handle start seat input - auto-generate seat numbers
@@ -518,22 +515,31 @@ const Sell = () => {
 
     if (useSingleFile) {
       // Single PDF auto-split: backend receives pdf_file_0, pdf_files_count=1
-      submitData.append('pdf_files_count', 1);
-      submitData.append('pdf_file_0', formData.singleMultiPagePdf);
+      const pdf0 = formData.singleMultiPagePdf;
+      if (!(pdf0 instanceof File) && !(pdf0 instanceof Blob)) {
+        setError('שגיאה פנימית: קובץ PDF חסר. נסו לבחור את הקובץ שוב.');
+        setLoading(false);
+        return;
+      }
+      const fname0 = pdf0 instanceof File ? pdf0.name : 'ticket.pdf';
+      submitData.append('pdf_files_count', '1');
+      submitData.append('pdf_file_0', pdf0, fname0);
       packages.forEach((pkg, index) => {
         submitData.append(`row_number_${index}`, globalRow);
         submitData.append(`seat_number_${index}`, pkg?.seat_number || '');
       });
     } else {
-      // Separate files: each ticket gets its own PDF
+      // Separate files: each ticket gets its own PDF (third arg = filename; required by some stacks)
       packages.forEach((pkg, index) => {
         if (pkg?.pdf_file) {
-          submitData.append(`pdf_file_${index}`, pkg.pdf_file);
+          const f = pkg.pdf_file;
+          const fn = f instanceof File ? f.name : `ticket_${index}.pdf`;
+          submitData.append(`pdf_file_${index}`, f, fn);
         }
         submitData.append(`row_number_${index}`, globalRow);
         submitData.append(`seat_number_${index}`, pkg?.seat_number || '');
       });
-      submitData.append('pdf_files_count', packages.length);
+      submitData.append('pdf_files_count', String(packages.length));
     }
 
     try {

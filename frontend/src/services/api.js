@@ -166,18 +166,91 @@ export const orderAPI = {
   getReceipt: (orderId) => api.get(`/users/orders/${orderId}/receipt/`),
 };
 
+/**
+ * Ticket upload MUST use browser multipart (boundary set by the browser).
+ * Axios can still merge Content-Type: application/json from defaults in some builds/adapters,
+ * which makes Django parse JSON and leaves request.FILES empty → ghost rows / storage.exists fails.
+ * Native fetch never sets Content-Type on FormData — same as MDN/CORS recommended pattern.
+ */
+async function postTicketMultipart(formData) {
+  await ensureCsrfToken();
+  const base = API_URL.replace(/\/+$/, '');
+  const ticketUrl = `${base}/users/tickets/`;
+  const refreshUrl = `${base}/users/token/refresh/`;
+
+  const postOnce = () => {
+    const token = getCsrfTokenForRequest();
+    const headers = {};
+    if (token) {
+      headers['X-CSRFToken'] = token;
+    }
+    return fetch(ticketUrl, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body: formData,
+    });
+  };
+
+  let res = await postOnce();
+  if (res.status === 401) {
+    try {
+      await ensureCsrfToken();
+      const tok = getCsrfTokenForRequest();
+      await fetch(refreshUrl, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          ...(tok ? { 'X-CSRFToken': tok } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+      });
+    } catch {
+      /* retry below may still 401 */
+    }
+    res = await postOnce();
+  }
+
+  const text = await res.text();
+  let data = {};
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { detail: text };
+    }
+  }
+  if (!res.ok) {
+    const body = data && typeof data === 'object' ? data : {};
+    const rawMsg = body.error || body.detail;
+    const msg =
+      typeof rawMsg === 'string'
+        ? rawMsg
+        : rawMsg != null
+          ? JSON.stringify(rawMsg)
+          : `Request failed: ${res.status}`;
+    const err = new Error(msg);
+    err.response = { status: res.status, data: body };
+    throw err;
+  }
+  return { data, status: res.status, statusText: res.statusText };
+}
+
 export const ticketAPI = {
   getTickets: (config = {}) => api.get('/users/tickets/', config),
   getTicket: (id) => api.get(`/users/tickets/${id}/`),
   getTicketDetails: (id) => api.get(`/users/tickets/${id}/details/`),
-  /** Multipart ticket create: allow large PDFs; FormData Content-Type handled in interceptor. */
+  /** FormData: native fetch (reliable multipart). Otherwise Axios. */
   createTicket: (data) =>
-    api.post('/users/tickets/', data, {
-      ...creds,
-      timeout: 120000,
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity,
-    }),
+    typeof FormData !== 'undefined' && data instanceof FormData
+      ? postTicketMultipart(data)
+      : api.post('/users/tickets/', data, {
+          ...creds,
+          timeout: 120000,
+          maxBodyLength: Infinity,
+          maxContentLength: Infinity,
+        }),
   updateTicket: (id, data) => api.put(`/users/tickets/${id}/`, data),
   updateTicketPrice: (id, price) => api.patch(`/users/tickets/${id}/update-price/`, { original_price: price }),
   deleteTicket: (id) => api.delete(`/users/tickets/${id}/`),
