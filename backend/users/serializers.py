@@ -52,36 +52,15 @@ def absolute_file_url(request, fieldfile):
         return None
     if url.startswith('http://') or url.startswith('https://'):
         return url
-    if getattr(settings, 'USE_CLOUDINARY', False):
-        name = (getattr(fieldfile, 'name', None) or '').strip().replace('\\', '/')
-        if name:
-            try:
-                import cloudinary.utils
-                from .admin_pdf_url import _public_id_variants
-
-                for pid in _public_id_variants(name):
-                    try:
-                        u, _ = cloudinary.utils.cloudinary_url(
-                            pid,
-                            resource_type='image',
-                            type='upload',
-                            sign_url=True,
-                            secure=True,
-                        )
-                        if u and str(u).startswith('https://'):
-                            return str(u)
-                    except Exception:
-                        continue
-            except Exception:
-                pass
     if request:
         return request.build_absolute_uri(url)
+    return None
 
 
 def cloudinary_signed_https_image_url(fieldfile):
     """
     Fully qualified https:// delivery URL for ImageField on Cloudinary (signed).
-    Falls back to None so callers can use absolute_file_url.
+    Uses FieldFile.name as the public_id (MediaCloudinaryStorage). No path guessing.
     """
     from django.conf import settings
 
@@ -92,24 +71,22 @@ def cloudinary_signed_https_image_url(fieldfile):
         return None
     try:
         import cloudinary.utils
-        from .admin_pdf_url import _public_id_variants
     except ImportError:
         return None
 
     public_id = name.replace('\\', '/')
-    for pid in _public_id_variants(public_id):
-        try:
-            url, _ = cloudinary.utils.cloudinary_url(
-                pid,
-                resource_type='image',
-                type='upload',
-                sign_url=True,
-                secure=True,
-            )
-            if url and str(url).startswith('https://'):
-                return str(url)
-        except Exception:
-            continue
+    try:
+        url, _ = cloudinary.utils.cloudinary_url(
+            public_id,
+            resource_type='image',
+            type='upload',
+            sign_url=True,
+            secure=True,
+        )
+        if url and str(url).startswith('https://'):
+            return str(url)
+    except Exception:
+        return None
     return None
 
 

@@ -9,9 +9,52 @@ from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from .models import User, Order, Ticket, Event, Artist, Offer, ContactMessage, EventRequest
-from .admin_pdf_url import get_ticket_pdf_admin_url
+from .admin_pdf_url import get_ticket_pdf_admin_url, is_admin_delivery_url_reachable
 
 _admin_log = logging.getLogger(__name__)
+
+
+def _admin_missing_media_message():
+    return format_html(
+        '<div style="padding:12px;border:1px solid #fecaca;background:#fef2f2;border-radius:8px;'
+        'max-width:720px;color:#991b1b;line-height:1.45;">'
+        '<strong>File not found or corrupted.</strong> '
+        'The stored path may reference a file that no longer exists (for example legacy uploads on '
+        'ephemeral disk before Cloudinary), or Cloudinary cannot deliver this asset (401/404).'
+        '</div>'
+    )
+
+
+def _admin_image_preview_html(fieldfile):
+    """Signed Cloudinary URL or local storage; show missing banner if unreachable."""
+    from django.conf import settings
+    from users.serializers import cloudinary_signed_https_image_url
+
+    if not fieldfile:
+        return format_html('<span style="color:#64748b;">אין קובץ</span>')
+    if getattr(settings, 'USE_CLOUDINARY', False):
+        url = cloudinary_signed_https_image_url(fieldfile)
+        if not url:
+            return _admin_missing_media_message()
+        if not is_admin_delivery_url_reachable(url):
+            return _admin_missing_media_message()
+        return format_html(
+            '<img src="{}" style="max-height:220px;border-radius:8px;border:1px solid #e2e8f0;" alt="" />',
+            url,
+        )
+    try:
+        if not fieldfile.storage.exists(fieldfile.name):
+            return _admin_missing_media_message()
+    except Exception:
+        return _admin_missing_media_message()
+    try:
+        src = fieldfile.url
+    except Exception:
+        return _admin_missing_media_message()
+    return format_html(
+        '<img src="{}" style="max-height:220px;border-radius:8px;border:1px solid #e2e8f0;" alt="" />',
+        src,
+    )
 
 
 @admin.register(User)
@@ -177,14 +220,16 @@ class TicketAdmin(admin.ModelAdmin):
         try:
             url = get_ticket_pdf_admin_url(obj)
             if not url:
-                return '—'
+                return _admin_missing_media_message()
+            if not is_admin_delivery_url_reachable(url):
+                return _admin_missing_media_message()
             return format_html(
                 '<a href="{}" target="_blank" rel="noopener noreferrer">PDF</a>',
                 url,
             )
         except Exception as exc:
             _admin_log.warning('TicketAdmin.pdf_staff_link failed pk=%s: %s', getattr(obj, 'pk', None), exc)
-            return '—'
+            return _admin_missing_media_message()
 
     pdf_staff_link.short_description = 'PDF (סטאף)'
 
@@ -192,7 +237,9 @@ class TicketAdmin(admin.ModelAdmin):
         try:
             url = get_ticket_pdf_admin_url(obj)
             if not url:
-                return format_html('<span style="color:#64748b;">אין קובץ</span>')
+                return _admin_missing_media_message()
+            if not is_admin_delivery_url_reachable(url):
+                return _admin_missing_media_message()
             return format_html(
                 '<a class="button" style="padding:8px 12px;display:inline-block;margin-top:4px;" '
                 'href="{}" target="_blank" rel="noopener noreferrer">פתיחה / הורדת PDF (קישור חתום לסטאף)</a>',
@@ -200,7 +247,7 @@ class TicketAdmin(admin.ModelAdmin):
             )
         except Exception as exc:
             _admin_log.warning('TicketAdmin.pdf_file_display failed pk=%s: %s', getattr(obj, 'pk', None), exc)
-            return format_html('<span style="color:#64748b;">—</span>')
+            return _admin_missing_media_message()
 
     pdf_file_display.short_description = 'קובץ PDF (גישת מנהל)'
 
@@ -208,7 +255,9 @@ class TicketAdmin(admin.ModelAdmin):
         try:
             url = get_ticket_pdf_admin_url(obj)
             if not url:
-                return '—'
+                return _admin_missing_media_message()
+            if not is_admin_delivery_url_reachable(url):
+                return _admin_missing_media_message()
             return format_html(
                 '<iframe src="{}" title="PDF preview" '
                 'style="width:100%%;max-width:720px;height:480px;border:1px solid #cbd5e1;'
@@ -219,7 +268,7 @@ class TicketAdmin(admin.ModelAdmin):
             )
         except Exception as exc:
             _admin_log.warning('TicketAdmin.pdf_inline_preview failed pk=%s: %s', getattr(obj, 'pk', None), exc)
-            return '—'
+            return _admin_missing_media_message()
 
     pdf_inline_preview.short_description = 'תצוגה מקדימה'
 
@@ -322,13 +371,13 @@ class ArtistAdmin(admin.ModelAdmin):
     list_display = ['name', 'genre', 'created_at']
     list_filter = ['genre', 'created_at']
     search_fields = ['name', 'description', 'genre']
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'image_delivery_preview', 'cover_image_delivery_preview']
     fieldsets = (
         ('Basic Information', {
             'fields': ('name', 'genre', 'description')
         }),
         ('Media & Images', {
-            'fields': ('image', 'cover_image')
+            'fields': ('image', 'cover_image', 'image_delivery_preview', 'cover_image_delivery_preview')
         }),
         ('Social Links', {
             'fields': ('youtube_link', 'spotify_link')
@@ -339,13 +388,23 @@ class ArtistAdmin(admin.ModelAdmin):
         }),
     )
 
+    def image_delivery_preview(self, obj):
+        return _admin_image_preview_html(getattr(obj, 'image', None))
+
+    image_delivery_preview.short_description = 'Image preview (delivery check)'
+
+    def cover_image_delivery_preview(self, obj):
+        return _admin_image_preview_html(getattr(obj, 'cover_image', None))
+
+    cover_image_delivery_preview.short_description = 'Cover preview (delivery check)'
+
 
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     list_display = ['name', 'artist', 'category', 'home_team', 'away_team', 'status', 'date', 'venue', 'city', 'created_at']
     list_filter = ['artist', 'category', 'status', 'venue', 'city', 'age_restriction', 'date', 'created_at']
     search_fields = ['name', 'venue', 'city', 'artist__name', 'home_team', 'away_team', 'tournament']
-    readonly_fields = ['created_at', 'updated_at', 'view_count']
+    readonly_fields = ['created_at', 'updated_at', 'view_count', 'image_delivery_preview']
     fieldsets = (
         ('Basic Information', {
             'fields': ('artist', 'name', 'category', 'status')
@@ -354,7 +413,7 @@ class EventAdmin(admin.ModelAdmin):
             'fields': ('venue', 'city', 'date', 'doors_open')
         }),
         ('Event Details', {
-            'fields': ('age_restriction', 'image', 'view_count')
+            'fields': ('age_restriction', 'image', 'image_delivery_preview', 'view_count')
         }),
         ('Sports Data', {
             'fields': ('home_team', 'away_team', 'tournament'),
@@ -366,6 +425,11 @@ class EventAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+    def image_delivery_preview(self, obj):
+        return _admin_image_preview_html(getattr(obj, 'image', None))
+
+    image_delivery_preview.short_description = 'Image preview (delivery check)'
 
 
 @admin.register(Order)

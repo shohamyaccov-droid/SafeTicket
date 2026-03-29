@@ -1,5 +1,7 @@
 """
-Staff-only PDF URLs for Django admin: signed Cloudinary delivery when public/raw URLs return 401.
+Staff-only PDF URLs for Django admin: signed Cloudinary raw delivery.
+
+Uses FieldFile.name as the Cloudinary public_id (RawMediaCloudinaryStorage contract).
 """
 from __future__ import annotations
 
@@ -8,85 +10,10 @@ from typing import Optional
 from django.conf import settings
 
 
-def _public_id_variants(public_id: str) -> list[str]:
-    pid = (public_id or '').strip().strip('/').replace('\\', '/')
-    if not pid:
-        return []
-    out = [pid]
-    media_prefix = (getattr(settings, 'MEDIA_URL', 'media/') or '').strip().strip('/')
-    if media_prefix and pid.startswith(media_prefix + '/'):
-        out.append(pid[len(media_prefix) + 1 :])
-    elif media_prefix and not pid.startswith(media_prefix):
-        out.append(f'{media_prefix}/{pid}')
-    seen = set()
-    uniq = []
-    for x in out:
-        if x not in seen:
-            seen.add(x)
-            uniq.append(x)
-    return uniq
-
-
-def _all_public_id_candidates(stored_name: str) -> list[str]:
-    """Try with/without .pdf — django-cloudinary-storage and folder prefixes vary."""
-    base = stored_name.replace('\\', '/').strip()
-    if not base:
-        return []
-    seen = set()
-    ordered: list[str] = []
-
-    def add(p: str):
-        p = p.strip().strip('/')
-        if not p or p in seen:
-            return
-        seen.add(p)
-        ordered.append(p)
-
-    for v in _public_id_variants(base):
-        add(v)
-        low = v.lower()
-        if low.endswith('.pdf'):
-            add(v[:-4])
-        else:
-            add(v + '.pdf')
-    return ordered
-
-
-def _try_cloudinary_signed_raw_urls(public_id: str) -> list[str]:
-    from cloudinary.utils import cloudinary_url
-
-    urls: list[str] = []
-    for pid in _all_public_id_candidates(public_id):
-        option_sets = (
-            {
-                'resource_type': 'raw',
-                'type': 'upload',
-                'sign_url': True,
-                'secure': True,
-                'long_url_signature': True,
-            },
-            {
-                'resource_type': 'raw',
-                'type': 'upload',
-                'sign_url': True,
-                'secure': True,
-            },
-        )
-        for opts in option_sets:
-            try:
-                url, _ = cloudinary_url(pid, **opts)
-                if url and str(url).startswith('https://') and url not in urls:
-                    urls.append(str(url))
-            except Exception:
-                continue
-    return urls
-
-
 def get_ticket_pdf_admin_url(ticket) -> Optional[str]:
     """
-    Return a URL suitable for admin download / iframe preview.
-    - Local storage: FileField.url
-    - Cloudinary: prefer signed raw delivery URL; fall back to api.resource + version; legacy image type
+    URL for admin PDF link / iframe. Local: FileField.url.
+    Cloudinary: signed raw URL from stored name only (no public_id guessing).
     """
     try:
         return _get_ticket_pdf_admin_url_uncaught(ticket)
@@ -104,72 +31,73 @@ def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
     if not name:
         return None
 
-    try:
-        local_url = pdf.url
-    except (ValueError, AttributeError):
-        local_url = None
-    except Exception:
-        local_url = None
-
     if not getattr(settings, 'USE_CLOUDINARY', False):
-        return local_url
+        try:
+            return pdf.url
+        except Exception:
+            return None
 
     try:
-        import cloudinary.api
         from cloudinary.utils import cloudinary_url
     except ImportError:
-        return local_url
+        try:
+            return pdf.url
+        except Exception:
+            return None
 
     public_id = name.replace('\\', '/')
-    resource_types_try = ('raw', 'image')
+    url, _ = cloudinary_url(
+        public_id,
+        resource_type='raw',
+        type='upload',
+        sign_url=True,
+        secure=True,
+    )
+    if url and str(url).startswith('https://'):
+        return str(url)
+    return None
 
-    # 1) Signed delivery URLs (raw) — longest signature first
-    for url in _try_cloudinary_signed_raw_urls(public_id):
-        return url
 
-    # 2) Resolve exact public_id + version from Admin API, then sign
+def is_admin_delivery_url_reachable(url: str, timeout: int = 25) -> bool:
+    """
+    True if the URL returns OK bytes (HEAD or GET). Used so admin can show a message
+    instead of a blank iframe when the asset is missing (404/401) or legacy disk path.
+    """
+    if not url or not (str(url).startswith('http://') or str(url).startswith('https://')):
+        return False
     try:
-        for pid in _all_public_id_candidates(public_id):
-            for rt in resource_types_try:
-                try:
-                    info = cloudinary.api.resource(pid, resource_type=rt)
-                except Exception:
-                    info = None
-                if not info:
-                    continue
-                cid = info.get('public_id') or pid
-                ver = info.get('version')
-                opts = {
-                    'resource_type': rt,
-                    'type': 'upload',
-                    'sign_url': True,
-                    'secure': True,
-                    'long_url_signature': True,
-                }
-                if ver is not None:
-                    opts['version'] = ver
-                try:
-                    url, _ = cloudinary_url(cid, **opts)
-                    if url:
-                        return url
-                except Exception:
-                    continue
+        import requests
+    except ImportError:
+        return True
 
-            for rt in resource_types_try:
-                try:
-                    url, _ = cloudinary_url(
-                        pid,
-                        resource_type=rt,
-                        type='upload',
-                        sign_url=True,
-                        secure=True,
-                        long_url_signature=True,
-                    )
-                    if url:
-                        return url
-                except Exception:
-                    continue
+    headers = {'User-Agent': 'SafeTicket-Admin-Reachability/1.0'}
+    try:
+        r = requests.head(url, timeout=timeout, allow_redirects=True, headers=headers)
+        if r.status_code == 200:
+            return True
+        if r.status_code in (401, 403, 404):
+            return False
+        if r.status_code == 405:
+            r2 = requests.get(
+                url,
+                timeout=timeout,
+                allow_redirects=True,
+                headers=headers,
+                stream=True,
+            )
+            return r2.status_code == 200
+        return False
     except Exception:
-        return local_url
-
-    return local_url
+        try:
+            r = requests.get(
+                url,
+                timeout=timeout,
+                allow_redirects=True,
+                headers=headers,
+                stream=True,
+            )
+            ok = r.status_code == 200
+            r.close()
+            return ok
+        except Exception:
+            return False
