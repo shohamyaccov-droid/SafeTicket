@@ -981,6 +981,7 @@ const EventDetailsPage = () => {
                 <div 
                   key={group.id}
                   data-ticket-group-id={groupId}
+                  data-e2e-ticket-id={firstTicket?.id}
                   className={`viagogo-ticket-row ${isExpanded ? 'expanded' : ''} ${isActive ? 'active' : ''}`}
                   style={isActive ? { backgroundColor: '#e0f2fe', border: '2px solid #0284c7', color: '#1e293b' } : {}}
                   onClick={handleTicketClick}

@@ -15,8 +15,12 @@ const LIST_PRICE = 500;
 const OFFER_BASE = 400;
 const EXPECT_TOTAL = Math.ceil(OFFER_BASE * 1.1);
 
+function trimSlash(s) {
+  return String(s || '').replace(/\/+$/, '');
+}
+
 async function login(page, base, username, password) {
-  await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${trimSlash(base)}/login`, { waitUntil: 'domcontentloaded' });
   await page.locator('#username').fill(username);
   await page.locator('#password').fill(password);
   await page.getByRole('button', { name: 'התחברות' }).click();
@@ -25,32 +29,119 @@ async function login(page, base, username, password) {
 
 /** Django admin uses session auth, not the SPA JWT cookies. */
 async function djangoAdminLogin(page, base, username, password) {
-  await page.goto(`${base}/admin/login/`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${trimSlash(base)}/admin/login/`, { waitUntil: 'domcontentloaded' });
   await page.locator('#id_username').fill(username);
   await page.locator('#id_password').fill(password);
   await page.getByRole('button', { name: 'Log in' }).click();
   await page.waitForURL((u) => String(u.pathname).startsWith('/admin/'), { timeout: 120_000 });
 }
 
-async function approveTicketViaApi(page, ticketId) {
-  const out = await page.evaluate(async (tid) => {
-    const origin = window.location.origin;
-    const csrfR = await fetch(`${origin}/api/users/csrf/`, { credentials: 'include' });
-    const csrfD = await csrfR.json().catch(() => ({}));
-    const token = csrfD.csrfToken || '';
-    const r = await fetch(`${origin}/api/users/admin/tickets/${tid}/approve/`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'X-CSRFToken': token } : {}),
-      },
-      body: '{}',
-    });
-    const text = await r.text();
-    return { status: r.status, text: text.slice(0, 600) };
-  }, ticketId);
+async function logoutViaApi(page, apiRoot) {
+  const root = trimSlash(apiRoot);
+  await page.evaluate(async (ar) => {
+    try {
+      const csrfR = await fetch(`${ar}/users/csrf/`, { credentials: 'include' });
+      const csrfD = await csrfR.json().catch(() => ({}));
+      const token = csrfD.csrfToken || '';
+      await fetch(`${ar}/users/logout/`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'X-CSRFToken': token } : {}),
+        },
+        body: '{}',
+      });
+    } catch {
+      /* ignore */
+    }
+  }, root);
+}
+
+async function approveTicketViaApi(page, apiRoot, ticketId) {
+  const root = trimSlash(apiRoot);
+  const out = await page.evaluate(
+    async ({ apiRoot: ar, tid }) => {
+      const csrfR = await fetch(`${ar}/users/csrf/`, { credentials: 'include' });
+      const csrfD = await csrfR.json().catch(() => ({}));
+      const token = csrfD.csrfToken || '';
+      const r = await fetch(`${ar}/users/admin/tickets/${tid}/approve/`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'X-CSRFToken': token } : {}),
+        },
+        body: '{}',
+      });
+      const text = await r.text();
+      return { status: r.status, text: text.slice(0, 600) };
+    },
+    { apiRoot: root, tid: ticketId }
+  );
   return out;
+}
+
+/** Same group key as EventDetailsPage `data-ticket-group-id`: listing_group_id or seller_username_price. */
+function groupDomIdFromTicketJson(t) {
+  const lid = t.listing_group_id;
+  if (lid != null && String(lid).trim() !== '') {
+    return String(lid).trim();
+  }
+  const sellerId =
+    t.seller_username ||
+    (t.seller && typeof t.seller === 'object' ? t.seller.username : null) ||
+    t.seller_id ||
+    'unknown';
+  const price = t.asking_price ?? t.original_price ?? '';
+  return `${sellerId}_${price}`;
+}
+
+/**
+ * Poll public event tickets API until our listing is active (avoids empty UI / wrong row / price text mismatch).
+ */
+async function waitForTicketOnEventListing(page, apiRoot, eventId, ticketId, timeoutMs = 120_000) {
+  const root = trimSlash(apiRoot);
+  const deadline = Date.now() + timeoutMs;
+  let last = null;
+  while (Date.now() < deadline) {
+    const result = await page.evaluate(
+      async ({ ar, eid, tid }) => {
+        const r = await fetch(`${ar}/users/events/${eid}/tickets/`, { credentials: 'include' });
+        const text = await r.text();
+        let j;
+        try {
+          j = JSON.parse(text);
+        } catch {
+          return { ok: r.ok, status: r.status, parseError: true, snippet: text.slice(0, 180) };
+        }
+        const arr = Array.isArray(j) ? j : (j.results || []);
+        const t = arr.find((x) => Number(x.id) === Number(tid));
+        return {
+          ok: r.ok,
+          status: r.status,
+          count: arr.length,
+          found: !!t,
+          ticket: t || null,
+        };
+      },
+      { ar: root, eid: eventId, tid: ticketId }
+    );
+    last = result;
+    const t = result.ticket;
+    if (
+      result.found &&
+      t &&
+      t.status === 'active' &&
+      Number(t.available_quantity) > 0
+    ) {
+      return { groupDomId: groupDomIdFromTicketJson(t), ticket: t };
+    }
+    await page.waitForTimeout(2500);
+  }
+  throw new Error(
+    `Ticket ${ticketId} not active on event ${eventId} within ${timeoutMs}ms. Last: ${JSON.stringify(last)}`
+  );
 }
 
 test.describe('Live bargain flow', () => {
@@ -58,7 +149,13 @@ test.describe('Live bargain flow', () => {
     page,
   }) => {
     test.setTimeout(300_000);
-    const base = process.env.E2E_BASE_URL || 'https://safeticket-api.onrender.com';
+    const base =
+      process.env.E2E_BASE_URL || 'https://safeticket-api.onrender.com';
+    /** SPA origin (may differ from API host on Render). */
+    const webBase = trimSlash(process.env.E2E_WEB_URL || base);
+    /** API origin (Django + admin). */
+    const apiBase = trimSlash(process.env.E2E_API_URL || base);
+    const apiRoot = `${apiBase}/api`;
     const sellerUser = process.env.E2E_SELLER_USERNAME || 'israeli_demo_seller';
     const sellerPass = process.env.E2E_SELLER_PASSWORD || 'DemoSeller123!';
     const buyerUser = process.env.E2E_BUYER_USERNAME || 'israeli_demo_buyer';
@@ -72,7 +169,7 @@ test.describe('Live bargain flow', () => {
     const results = { steps: [], order: null, approve: null, adminCheck: null };
 
     // --- Seller: list ticket @ 500 ---
-    await login(page, base, sellerUser, sellerPass);
+    await login(page, webBase, sellerUser, sellerPass);
     const createTicketResp = page.waitForResponse(
       (r) =>
         r.url().includes('/api/users/tickets/') &&
@@ -81,7 +178,7 @@ test.describe('Live bargain flow', () => {
       { timeout: 120_000 }
     );
 
-    await page.goto(`${base}/sell`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${webBase}/sell`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#category_select')).toBeVisible({ timeout: 90_000 });
     await page.locator('#category_select').selectOption('theater');
     await page.waitForTimeout(2000);
@@ -105,17 +202,57 @@ test.describe('Live bargain flow', () => {
     ).toBeVisible({ timeout: 60_000 });
 
     // --- Staff: activate listing ---
-    await login(page, base, adminUser, adminPass);
-    const appr = await approveTicketViaApi(page, ticketId);
+    await logoutViaApi(page, apiRoot);
+    await login(page, webBase, adminUser, adminPass);
+    const appr = await approveTicketViaApi(page, apiRoot, ticketId);
     results.approve = appr;
     expect(appr.status, `approve status ${appr.text}`).toBe(200);
 
     // --- Buyer: offer 400 ---
-    await login(page, base, buyerUser, buyerPass);
-    await page.goto(`${base}/event/${eventId}`, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(3500);
-    // Listing actions (הצע מחיר) render only after expanding a ticket row.
-    const row = page.locator('.viagogo-ticket-row').filter({ hasText: String(LIST_PRICE) }).first();
+    await logoutViaApi(page, apiRoot);
+    await login(page, webBase, buyerUser, buyerPass);
+    const { groupDomId } = await waitForTicketOnEventListing(
+      page,
+      apiRoot,
+      eventId,
+      ticketId
+    );
+    const ticketsGet = page.waitForResponse(
+      (r) =>
+        r.url().includes(`/users/events/${eventId}/tickets`) &&
+        r.request().method() === 'GET',
+      { timeout: 120_000 }
+    );
+    await page.goto(`${webBase}/event/${eventId}`, { waitUntil: 'domcontentloaded' });
+    await ticketsGet;
+
+    // Stable hook from SPA (data-e2e-ticket-id); fallbacks for older bundles.
+    let row = page
+      .locator(`.viagogo-ticket-row[data-e2e-ticket-id="${ticketId}"]`)
+      .first();
+    if ((await row.count()) === 0) {
+      row = page
+        .locator(`.viagogo-ticket-row[data-ticket-group-id="${groupDomId}"]`)
+        .first();
+    }
+    if ((await row.count()) === 0) {
+      row = page
+        .locator('.viagogo-ticket-row')
+        .filter({ hasText: 'הורדה מיידית' })
+        .filter({
+          has: page.locator('.buyer-listing-price-main', {
+            hasText: `₪${LIST_PRICE}`,
+          }),
+        })
+        .first();
+    }
+    const rowCount = await page.locator('.viagogo-ticket-row').count();
+    if (rowCount === 0) {
+      const snap = (await page.textContent('body')) || '';
+      throw new Error(
+        `No .viagogo-ticket-row for event ${eventId} (ticket ${ticketId}). Body: ${snap.slice(0, 500)}`
+      );
+    }
     await expect(row).toBeVisible({ timeout: 90_000 });
     await row.click();
     const offerBtn = page.getByRole('button', { name: /הצע מחיר/i }).first();
@@ -136,8 +273,9 @@ test.describe('Live bargain flow', () => {
     results.steps.push({ offer: { offerId, status: ores.status() } });
 
     // --- Seller: accept ---
-    await login(page, base, sellerUser, sellerPass);
-    await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded' });
+    await logoutViaApi(page, apiRoot);
+    await login(page, webBase, sellerUser, sellerPass);
+    await page.goto(`${webBase}/dashboard`, { waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: /הצעות מחיר/ }).click();
     await expect(page.locator('.offers-tab')).toBeVisible({ timeout: 60_000 });
     await page.locator('.offers-ticket-row-clickable').first().click();
@@ -155,8 +293,9 @@ test.describe('Live bargain flow', () => {
     results.steps.push({ accept: { status: ares.status() } });
 
     // --- Buyer: complete purchase ---
-    await login(page, base, buyerUser, buyerPass);
-    await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded' });
+    await logoutViaApi(page, apiRoot);
+    await login(page, webBase, buyerUser, buyerPass);
+    await page.goto(`${webBase}/dashboard`, { waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: /הצעות מחיר/ }).click();
     await page.waitForTimeout(1500);
     await page.locator('.offers-ticket-row-clickable').first().click();
@@ -192,8 +331,11 @@ test.describe('Live bargain flow', () => {
     expect(ta, `total charged (buyer) = ceil(base*1.1) = ${EXPECT_TOTAL}`).toBe(EXPECT_TOTAL);
 
     // --- Admin PDF button (Django admin session) ---
-    await djangoAdminLogin(page, base, adminUser, adminPass);
-    await page.goto(`${base}/admin/users/ticket/${ticketId}/change/`, { waitUntil: 'domcontentloaded' });
+    await logoutViaApi(page, apiRoot);
+    await djangoAdminLogin(page, apiBase, adminUser, adminPass);
+    await page.goto(`${apiBase}/admin/users/ticket/${ticketId}/change/`, {
+      waitUntil: 'domcontentloaded',
+    });
     const adminHtml = await page.content();
     results.adminCheck = {
       hasPdfCta: adminHtml.includes('פתח PDF מאובטח') || adminHtml.includes('פתיחה / הורדת PDF'),
