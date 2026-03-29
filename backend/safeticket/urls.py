@@ -37,7 +37,8 @@ if settings.DEBUG:
         urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # Client-side routes: same origin as API (build_render.sh → collectstatic).
+# Vite emits /assets/*.js|css at repo root of collectstatic — must not be caught by SPA (would return HTML).
 urlpatterns += [
     path('', spa_index_view),
-    re_path(r'^(?!api/|admin/|static/).+$', spa_index_view),
+    re_path(r'^(?!api/|admin/|static/|assets/).+$', spa_index_view),
 ]

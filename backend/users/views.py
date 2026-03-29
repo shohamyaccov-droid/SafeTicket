@@ -124,10 +124,21 @@ def _ticket_pdf_persisted(ticket) -> bool:
                         magic = pf.read(5)
                     finally:
                         pf.close()
-                    return bool(magic.startswith(b'%PDF'))
+                    if magic.startswith(b'%PDF'):
+                        return True
                 except Exception:
                     logger.warning('pdf persistence verify read failed pk=%s', ticket.pk, exc_info=True)
-                    return False
+
+                if use_cloudinary:
+                    try:
+                        import cloudinary.api
+
+                        public_id = name.replace('\\', '/')
+                        cloudinary.api.resource(public_id, resource_type='raw')
+                        return True
+                    except Exception:
+                        logger.warning('cloudinary.api.resource failed pk=%s', ticket.pk, exc_info=True)
+                return False
             return False
         return True
     except Exception:
