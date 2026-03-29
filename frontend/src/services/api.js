@@ -51,18 +51,19 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Attach X-CSRFToken for unsafe methods (POST, PUT, PATCH, DELETE)
+// Attach X-CSRFToken for unsafe methods (POST, PUT, PATCH, DELETE).
+// FormData: strip Content-Type first so axios sets multipart boundary; set CSRF after so it is never dropped.
 api.interceptors.request.use(
   (config) => {
     const method = (config.method || 'get').toLowerCase();
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
     if (method !== 'get' && method !== 'head' && method !== 'options') {
       const token = getCsrfTokenForRequest();
       if (token) {
         config.headers['X-CSRFToken'] = token;
       }
-    }
-    if (config.data instanceof FormData) {
-      delete config.headers['Content-Type'];
     }
     return config;
   },
@@ -122,6 +123,15 @@ export const authAPI = {
     return response;
   },
 };
+
+/** Warm CSRF cache before multipart uploads (cross-origin: cookie not readable for API host). */
+export async function ensureCsrfToken() {
+  try {
+    await authAPI.getCsrf();
+  } catch {
+    // Same-site dev may still work via csrftoken cookie in interceptor
+  }
+}
 
 export const paymentAPI = {
   simulatePayment: (data) => api.post('/users/payments/simulate/', data),

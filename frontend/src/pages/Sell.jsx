@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ticketAPI, eventAPI, artistAPI, eventRequestAPI } from '../services/api';
+import { ticketAPI, eventAPI, artistAPI, eventRequestAPI, ensureCsrfToken } from '../services/api';
 import { getVenueSectionOptions } from '../utils/venueMaps';
 import { createListFetchAbort } from '../utils/listFetch';
 import SellFormSkeleton from '../components/skeletons/SellFormSkeleton';
@@ -536,6 +536,7 @@ const Sell = () => {
     }
 
     try {
+      await ensureCsrfToken();
       const response = await ticketAPI.createTicket(submitData);
       setSuccess(true);
       // Show success message for 3 seconds before redirect
@@ -602,7 +603,7 @@ const Sell = () => {
 
   return (
     <div className="sell-container">
-      <div className="listing-card">
+      <div className="listing-card sell-form-compact">
         <div className="listing-card-header">
           <div className="secure-listing-header">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -783,11 +784,13 @@ const Sell = () => {
             <small>בחר את מספר הכרטיסים שברצונך למכור (1-10).</small>
           </div>
 
-          {/* Seating Details - Global Section & Row (shared by all tickets) */}
-          <div className="seating-details-section">
-            <h3 className="seating-section-title">פרטי ישיבה</h3>
-            <small className="section-hint">גוש ושורה משותפים לכל הכרטיסים. מספר כיסא יוזן לכל כרטיס בנפרד.</small>
-            <div className="form-row">
+          {/* Seating + optional auto seat numbers (single compact section) */}
+          <div className="seating-and-seats-compact">
+            <h3 className="seating-section-title">פרטי ישיבה ומושבים</h3>
+            <small className="section-hint">
+              גוש ושורה משותפים לכל הכרטיסים. מספר כיסא לכל כרטיס מוזן למטה; אפשר למלא רצף מושבים אוטומטית כשמוכרים יותר מכרטיס אחד.
+            </small>
+            <div className="form-row seating-row-compact">
               <div className="form-group">
                 <label htmlFor="section">גוש (אופציונלי)</label>
                 {(() => {
@@ -835,6 +838,55 @@ const Sell = () => {
                 />
               </div>
             </div>
+            {formData.available_quantity > 1 && (
+              <div className="auto-seat-inline">
+                <div className="form-row auto-seat-row">
+                  <div className="form-group">
+                    <label htmlFor="start_seat">מושב התחלה (מלאה אוטומטית)</label>
+                    <input
+                      type="number"
+                      id="start_seat"
+                      name="start_seat"
+                      value={formData.start_seat || ''}
+                      onChange={handleChange}
+                      placeholder="לדוגמה: 1"
+                      min="1"
+                    />
+                  </div>
+                  <div className="form-group auto-seat-btn-wrap">
+                    <span className="auto-seat-btn-label" aria-hidden="true">
+                      &nbsp;
+                    </span>
+                    <button
+                      type="button"
+                      className="auto-fill-btn"
+                      onClick={() => {
+                        const startSeat = parseInt(formData.start_seat, 10);
+                        const quantity = formData.available_quantity || 1;
+                        if (!startSeat || isNaN(startSeat)) {
+                          setError('אנא הזן מושב התחלה.');
+                          return;
+                        }
+                        const newPackages = Array.from({ length: quantity }, (_, i) => {
+                          const existing = formData.ticket_packages[i] || { seat_number: '', pdf_file: null };
+                          return { ...existing, seat_number: String(startSeat + i) };
+                        });
+                        setFormData((prev) => ({ ...prev, ticket_packages: newPackages }));
+                        setError('');
+                      }}
+                    >
+                      צור מספרי מושבים
+                    </button>
+                  </div>
+                </div>
+                <small className="auto-seat-range-hint">
+                  ימלא כיסאות {formData.start_seat || 'X'} עד{' '}
+                  {formData.start_seat
+                    ? parseInt(formData.start_seat, 10) + (formData.available_quantity || 1) - 1
+                    : '?'}
+                </small>
+              </div>
+            )}
           </div>
 
           {/* PDF Upload Toggle */}
@@ -912,46 +964,6 @@ const Sell = () => {
           {/* Ticket Cards - Seat only (+ PDF when separate_files) */}
           <div className="form-group ticket-packages-section">
             <label>כרטיסים למכירה *</label>
-            {formData.available_quantity > 1 && (
-              <div className="auto-seat-generator">
-                <h4>יצירת מספרי מושבים אוטומטית</h4>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="start_seat">מושב התחלה</label>
-                    <input
-                      type="number"
-                      id="start_seat"
-                      name="start_seat"
-                      value={formData.start_seat || ''}
-                      onChange={handleChange}
-                      placeholder="לדוגמה: 1"
-                      min="1"
-                    />
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="auto-fill-btn"
-                  onClick={() => {
-                    const startSeat = parseInt(formData.start_seat, 10);
-                    const quantity = formData.available_quantity || 1;
-                    if (!startSeat || isNaN(startSeat)) {
-                      setError('אנא הזן מושב התחלה.');
-                      return;
-                    }
-                    const newPackages = Array.from({ length: quantity }, (_, i) => {
-                      const existing = formData.ticket_packages[i] || { seat_number: '', pdf_file: null };
-                      return { ...existing, seat_number: String(startSeat + i) };
-                    });
-                    setFormData(prev => ({ ...prev, ticket_packages: newPackages }));
-                    setError('');
-                  }}
-                >
-                  צור מספרי מושבים אוטומטית
-                </button>
-                <small>ימלא כיסאות {formData.start_seat || 'X'} עד {formData.start_seat ? parseInt(formData.start_seat, 10) + (formData.available_quantity || 1) - 1 : '?'}</small>
-              </div>
-            )}
             {Array.from({ length: formData.available_quantity }, (_, index) => {
               const packageData = formData.ticket_packages[index] || { seat_number: '', pdf_file: null };
               return (

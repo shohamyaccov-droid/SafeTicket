@@ -3,7 +3,7 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: var(--spacing-xl) var(--spacing-lg);
+  padding: var(--spacing-md) var(--spacing-md);
 }
 
 .catalog-error-banner {
@@ -35,6 +35,75 @@
   width: 100%;
   max-width: 700px;
   box-shadow: var(--shadow-sm);
+}
+
+/* Sell form: tighter vertical rhythm */
+.sell-form-compact {
+  padding: var(--spacing-md) var(--spacing-md);
+}
+.sell-form-compact .listing-card-header {
+  margin-bottom: var(--spacing-sm);
+}
+.sell-form-compact .secure-listing-header h2 {
+  font-size: 1.45rem;
+}
+.sell-form-compact .listing-subtitle {
+  font-size: 0.88rem;
+}
+.sell-form-compact .form-group {
+  margin-bottom: 0.65rem;
+}
+.sell-form-compact .form-row {
+  gap: 0.65rem;
+  margin-bottom: 0.65rem;
+}
+.sell-form-compact .catalog-error-banner {
+  padding: 0.65rem;
+  margin-bottom: 0.65rem;
+}
+.sell-form-compact .missing-event-banner {
+  padding: 0.65rem 0.75rem;
+  margin-top: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+.sell-form-compact .pdf-upload-toggle-section {
+  margin-top: 0.35rem;
+}
+.sell-form-compact .upload-method-options {
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+}
+.sell-form-compact .upload-method-option {
+  padding: 0.55rem 0.75rem;
+}
+.sell-form-compact .ticket-packages-section {
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+}
+.sell-form-compact .ticket-package-row {
+  padding: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+.sell-form-compact .package-header {
+  margin-bottom: 0.45rem;
+  padding-bottom: 0.45rem;
+}
+.sell-form-compact .package-content {
+  gap: 0.55rem;
+}
+.sell-form-compact .ticket-details-section {
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.65rem;
+}
+.sell-form-compact .ticket-details-section-title {
+  margin-bottom: 0.45rem;
+  font-size: 1.05rem;
+}
+.sell-form-compact .checkbox-group {
+  padding: 0.65rem;
+}
+.sell-form-compact .single-pdf-dropzone .file-dropzone-box {
+  padding: 0.65rem;
 }
 
 .listing-card-header {
@@ -251,9 +320,56 @@
   font-size: 0.875rem;
 }
 
-/* Seating Details - Global Section */
-.seating-details-section {
-  margin-bottom: 1.5rem;
+/* Merged seating + auto seat block */
+.seating-and-seats-compact {
+  padding: 0.65rem 0.85rem;
+  background: #f8f9fa;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  margin-bottom: 0.65rem;
+  direction: rtl;
+}
+.seating-and-seats-compact .seating-section-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.3rem 0;
+  font-family: 'Heebo', 'Assistant', sans-serif;
+}
+.seating-and-seats-compact .section-hint {
+  margin-bottom: 0.45rem;
+  font-size: 0.82rem;
+}
+.seating-row-compact {
+  margin-bottom: 0 !important;
+}
+.auto-seat-inline {
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--border-light);
+}
+.auto-seat-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  margin-bottom: 0.25rem !important;
+}
+.auto-seat-btn-wrap {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.auto-seat-btn-label {
+  display: block;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  min-height: 1.2em;
+  visibility: hidden;
+}
+.auto-seat-range-hint {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
 }
 
 .section-hint {
@@ -348,28 +464,16 @@
   font-size: 0.95rem;
 }
 
-/* Auto-seat generator (simplified) */
-.auto-seat-generator {
-  margin-bottom: 1.25rem;
-  padding: 1rem;
-  background: #f5f5f5;
-  border-radius: var(--radius-md);
-}
-
-.auto-seat-generator h4 {
-  margin: 0 0 0.75rem;
-  font-size: 0.95rem;
-}
-
 .auto-fill-btn {
-  padding: 0.5rem 1rem;
+  padding: 0.45rem 0.85rem;
   background: var(--primary-blue);
   color: white;
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.9rem;
-  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  margin-top: 0;
+  white-space: nowrap;
 }
 
 .auto-fill-btn:hover {
@@ -518,25 +622,6 @@
   font-size: 0.875rem;
   line-height: 1.5;
   font-style: italic;
-  direction: rtl;
-}
-
-/* Seating Details Section */
-.seating-details-section {
-  padding: 1.5rem;
-  background: #f8f9fa;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  margin-bottom: 1.5rem;
-  direction: rtl;
-}
-
-.seating-section-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0 0 1rem 0;
-  font-family: 'Heebo', 'Assistant', sans-serif;
   direction: rtl;
 }
 
