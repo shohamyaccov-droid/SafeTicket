@@ -738,6 +738,12 @@ const Dashboard = () => {
 
   const receivedByTicket = groupOffersByTicket(offersReceived);
   const sentByTicket = groupOffersByTicket(offersSent);
+  const firstSellerActionGroup = receivedByTicket.find((g) =>
+    g.offers.some((o) => isOfferActionRequired(o, true))
+  );
+  const firstBuyerActionGroup = sentByTicket.find((g) =>
+    g.offers.some((o) => isOfferActionRequired(o, false))
+  );
 
   const hasAcceptedOfferPendingPayment = offersSent.some(
     (o) => o.status === 'accepted' && !isOfferPurchaseComplete(o)
@@ -776,20 +782,30 @@ const Dashboard = () => {
       </div>
 
       {totalActionRequired > 0 && (
-        <div className="action-required-banner">
-          <span className="action-required-text">
-            יש לך {totalActionRequired} הצעות מחיר שממתינות לתשובה שלך!
+        <button
+          type="button"
+          className="action-required-banner action-required-banner-thread"
+          onClick={() => {
+            setActiveTab('offers');
+            void fetchOffers({ silent: false });
+            if (firstSellerActionGroup) {
+              setNegotiationModalGroup({ ...firstSellerActionGroup, isSeller: true });
+            } else if (firstBuyerActionGroup) {
+              setNegotiationModalGroup({ ...firstBuyerActionGroup, isSeller: false });
+            }
+          }}
+        >
+          <span className="action-required-text action-required-banner-thread-text">
+            {actionRequiredReceivedCount > 0 && actionRequiredSentCount === 0
+              ? `התקבלו ${actionRequiredReceivedCount} הצעות מחיר — לחיצה פותחת את מסך המשא ומתן`
+              : actionRequiredSentCount > 0 && actionRequiredReceivedCount === 0
+                ? `נשלחו ${actionRequiredSentCount} הצעות שממתינות למוכר — לחיצה פותחת את מסך המשא ומתן`
+                : `יש לך ${totalActionRequired} הצעות מחיר שממתינות לתשובה — לחיצה פותחת את הדיון`}
           </span>
-          <button
-            type="button"
-            className="action-required-btn"
-            onClick={() => {
-              setActiveTab('offers');
-            }}
-          >
-            עבור להצעות
-          </button>
-        </div>
+          <span className="action-required-banner-thread-hint" aria-hidden>
+            פתיחה
+          </span>
+        </button>
       )}
 
       <div className="dashboard-tabs">

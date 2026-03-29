@@ -11,7 +11,9 @@ def build_profile_orders_serialization_context(request, orders_queryset):
     (avoids N+1 in get_tickets / get_status_timeline).
     """
     orders = list(
-        orders_queryset.select_related('ticket', 'ticket__event', 'related_offer')
+        orders_queryset.select_related(
+            'ticket', 'ticket__event', 'ticket__event__artist', 'related_offer'
+        )
     )
     ticket_ids = set()
     for o in orders:
@@ -26,7 +28,9 @@ def build_profile_orders_serialization_context(request, orders_queryset):
     if ticket_ids:
         profile_tickets_by_id = {
             t.id: t
-            for t in Ticket.objects.filter(id__in=ticket_ids).select_related('event')
+            for t in Ticket.objects.filter(id__in=ticket_ids).select_related(
+                'event', 'event__artist'
+            )
         }
     return {
         'request': request,
@@ -300,7 +304,7 @@ class OrderSerializer(serializers.ModelSerializer):
             t = cache.get(tid)
             if t is None:
                 try:
-                    t = Ticket.objects.select_related('event').get(id=tid)
+                    t = Ticket.objects.select_related('event', 'event__artist').get(id=tid)
                 except Ticket.DoesNotExist:
                     continue
             url = None
@@ -694,7 +698,7 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
             t = cache.get(tid)
             if t is None:
                 try:
-                    t = Ticket.objects.select_related('event').get(id=tid)
+                    t = Ticket.objects.select_related('event', 'event__artist').get(id=tid)
                 except Ticket.DoesNotExist:
                     continue
             url = None
@@ -744,9 +748,15 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
         return f'/api/users/orders/{obj.id}/receipt/'
     
     def get_event_image_url(self, obj):
-        """Get event image URL from ticket's event"""
-        if obj.ticket and obj.ticket.event and obj.ticket.event.image:
-            return absolute_file_url(self.context.get('request'), obj.ticket.event.image)
+        """Event card image: event upload, or artist cover/image (fixes artists like Omar Adam with no per-event image)."""
+        if not obj.ticket:
+            return None
+        ev = obj.ticket.event
+        if not ev:
+            return None
+        f = event_effective_image_field(ev)
+        if f:
+            return resolved_image_url(self.context.get('request'), f)
         return None
     
     def get_status_timeline(self, obj):

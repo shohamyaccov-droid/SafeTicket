@@ -226,6 +226,39 @@
   background: #d97706;
 }
 
+/* Full-row clickable “thread” — opens negotiation modal on pending offers */
+.action-required-banner-thread {
+  width: 100%;
+  cursor: pointer;
+  border: 1px solid #f59e0b;
+  font: inherit;
+  text-align: right;
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+
+.action-required-banner-thread:hover {
+  filter: brightness(0.97);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
+}
+
+.action-required-banner-thread:focus-visible {
+  outline: 2px solid #d97706;
+  outline-offset: 2px;
+}
+
+.action-required-banner-thread-text {
+  flex: 1;
+  text-align: right;
+}
+
+.action-required-banner-thread-hint {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #b45309;
+  padding-inline-start: 0.5rem;
+}
+
 /* Accepted Offer Banner - Prominent success notification */
 .accepted-offer-banner {
   display: flex;

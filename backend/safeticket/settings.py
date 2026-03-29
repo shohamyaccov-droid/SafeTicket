@@ -317,8 +317,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # SessionAuthentication enforces CSRF; removed for JWT-only API (avoids 403 on cross-origin login)
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'users.authentication.JWTCookieAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'users.authentication.JWTCookieAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
@@ -422,11 +422,11 @@ else:
     CSRF_COOKIE_SAMESITE = 'None'
     SESSION_COOKIE_SAMESITE = 'None'
 
-# When True (default in production), login/register also return JWT in JSON for clients where third-party cookies fail.
-# Frontend should prefer HttpOnly cookies; use body tokens only as fallback (memory + Authorization header).
+# When True, login/register return JWT in JSON so mobile Safari can use Authorization: Bearer (cookies often blocked on cross-origin XHR).
+# Set JWT_RESPONSE_BODY_TOKENS=false only for legacy same-site dev without bearer storage.
 JWT_RESPONSE_BODY_TOKENS = os.environ.get(
     'JWT_RESPONSE_BODY_TOKENS',
-    'false' if DEBUG and not _FORCE_CROSS_SITE else 'true',
+    'true',
 ).lower() in ('1', 'true', 'yes')
 
 CSRF_COOKIE_PATH = '/'

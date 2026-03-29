@@ -1026,7 +1026,11 @@ def order_receipt(request, order_id):
     """
     # IDOR FIX: Filter by owner first - never fetch orders we don't own
     if request.user.is_authenticated:
-        order = Order.objects.filter(user=request.user, id=order_id).first()
+        order = (
+            Order.objects.filter(user=request.user, id=order_id)
+            .select_related('ticket', 'ticket__event', 'ticket__event__artist')
+            .first()
+        )
     else:
         order = None
     if not order:
@@ -1037,11 +1041,15 @@ def order_receipt(request, order_id):
                 {'error': 'Authentication or email required for guest order receipts'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
-        order = Order.objects.filter(
-            guest_email__iexact=guest_email,
-            id=order_id,
-            status__in=['paid', 'completed']
-        ).first()
+        order = (
+            Order.objects.filter(
+                guest_email__iexact=guest_email,
+                id=order_id,
+                status__in=['paid', 'completed'],
+            )
+            .select_related('ticket', 'ticket__event', 'ticket__event__artist')
+            .first()
+        )
     if not order:
         return Response(
             {'error': 'Order not found'},
@@ -3302,6 +3310,7 @@ class OfferViewSet(viewsets.ModelViewSet):
             'ticket',
             'ticket__seller',
             'ticket__event',
+            'ticket__event__artist',
             'parent_offer',
             'counter_offer',
         ).all()

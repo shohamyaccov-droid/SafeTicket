@@ -12,40 +12,90 @@ export function resetCsrfTokenCache() {
   csrfTokenFromApi = null;
 }
 
-/** Optional Bearer fallback when cross-site HttpOnly cookies are blocked (Safari ITP). */
+/**
+ * Mobile-first JWT: Authorization Bearer is the primary auth for cross-origin API calls.
+ * Access + refresh are persisted in localStorage so iOS Safari survives reloads without cookies.
+ */
 let bearerAccessToken = null;
 let bearerRefreshToken = null;
-const BEARER_REFRESH_KEY = 'safeticket_bearer_refresh';
+const BEARER_ACCESS_KEY = 'safeticket_jwt_access';
+const BEARER_REFRESH_KEY = 'safeticket_jwt_refresh';
 
-export function setBearerFallback(access, refresh) {
-  bearerAccessToken = access || null;
-  if (refresh) {
-    bearerRefreshToken = String(refresh);
+function _readLs(key) {
+  try {
+    const v = localStorage.getItem(key);
+    return v && v !== '' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function _writeLs(key, val) {
+  try {
+    if (val == null || val === '') {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, String(val));
+    }
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+/** Effective access token: memory wins, then localStorage (hydrate after reload). */
+export function getEffectiveBearerAccess() {
+  if (bearerAccessToken) return bearerAccessToken;
+  const s = _readLs(BEARER_ACCESS_KEY);
+  if (s) {
+    bearerAccessToken = s;
+  }
+  return bearerAccessToken;
+}
+
+function hydrateRefreshFromStorage() {
+  if (bearerRefreshToken) return;
+  let s = _readLs(BEARER_REFRESH_KEY);
+  if (!s) {
     try {
-      sessionStorage.setItem(BEARER_REFRESH_KEY, bearerRefreshToken);
+      const legacy = sessionStorage.getItem('safeticket_bearer_refresh');
+      if (legacy) {
+        _writeLs(BEARER_REFRESH_KEY, legacy);
+        sessionStorage.removeItem('safeticket_bearer_refresh');
+        s = legacy;
+      }
     } catch {
       /* ignore */
     }
+  }
+  if (s) bearerRefreshToken = s;
+}
+
+hydrateRefreshFromStorage();
+const _storedAccess = _readLs(BEARER_ACCESS_KEY);
+if (_storedAccess) {
+  bearerAccessToken = _storedAccess;
+}
+
+export function setBearerFallback(access, refresh) {
+  bearerAccessToken = access != null && access !== '' ? String(access) : null;
+  _writeLs(BEARER_ACCESS_KEY, bearerAccessToken);
+  if (refresh != null && refresh !== '') {
+    bearerRefreshToken = String(refresh);
+    _writeLs(BEARER_REFRESH_KEY, bearerRefreshToken);
   }
 }
 
 export function clearBearerFallback() {
   bearerAccessToken = null;
   bearerRefreshToken = null;
-  try {
-    sessionStorage.removeItem(BEARER_REFRESH_KEY);
-  } catch {
-    /* ignore */
-  }
+  _writeLs(BEARER_ACCESS_KEY, null);
+  _writeLs(BEARER_REFRESH_KEY, null);
 }
 
 function getRefreshForBearerFallback() {
   if (bearerRefreshToken) return bearerRefreshToken;
-  try {
-    return sessionStorage.getItem(BEARER_REFRESH_KEY) || null;
-  } catch {
-    return null;
-  }
+  hydrateRefreshFromStorage();
+  return bearerRefreshToken;
 }
 
 /** Production API when VITE_API_URL is missing at build time (never fall back to localhost in prod). */
@@ -122,8 +172,9 @@ api.interceptors.request.use(
   (config) => {
     const method = (config.method || 'get').toLowerCase();
     stripContentTypeForMultipart(config);
-    if (bearerAccessToken) {
-      config.headers.Authorization = `Bearer ${bearerAccessToken}`;
+    const bearer = getEffectiveBearerAccess();
+    if (bearer) {
+      config.headers.Authorization = `Bearer ${bearer}`;
     }
     if (method !== 'get' && method !== 'head' && method !== 'options') {
       const token = getCsrfTokenForRequest();
@@ -162,7 +213,10 @@ api.interceptors.response.use(
           rTok ? { refresh: rTok } : {},
         );
         if (refreshRes.data?.access) {
-          setBearerFallback(refreshRes.data.access, refreshRes.data.refresh);
+          setBearerFallback(
+            refreshRes.data.access,
+            refreshRes.data.refresh || rTok || undefined,
+          );
         }
         return api(originalRequest);
       } catch (refreshError) {
@@ -234,8 +288,9 @@ async function postTicketMultipart(formData) {
     if (token) {
       headers['X-CSRFToken'] = token;
     }
-    if (bearerAccessToken) {
-      headers.Authorization = `Bearer ${bearerAccessToken}`;
+    const bearer = getEffectiveBearerAccess();
+    if (bearer) {
+      headers.Authorization = `Bearer ${bearer}`;
     }
     console.log('[SafeTicket] POST /users/tickets/ FormData (multipart) before fetch:');
     for (const [key, val] of formData.entries()) {
@@ -268,7 +323,7 @@ async function postTicketMultipart(formData) {
       await ensureCsrfToken();
       const tok = getCsrfTokenForRequest();
       const rTok = getRefreshForBearerFallback();
-      await fetch(refreshUrl, {
+      const refreshRes = await fetch(refreshUrl, {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -277,6 +332,17 @@ async function postTicketMultipart(formData) {
         },
         body: JSON.stringify(rTok ? { refresh: rTok } : {}),
       });
+      const rtxt = await refreshRes.text();
+      if (refreshRes.ok && rtxt) {
+        try {
+          const rd = JSON.parse(rtxt);
+          if (rd.access) {
+            setBearerFallback(rd.access, rd.refresh || rTok || undefined);
+          }
+        } catch {
+          /* ignore */
+        }
+      }
     } catch {
       /* retry below may still 401 */
     }
