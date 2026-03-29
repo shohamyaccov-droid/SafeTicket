@@ -510,7 +510,8 @@ const Sell = () => {
     // Lock ticket_type to PDF on the backend for security
     submitData.append('ticket_type', 'כרטיס אלקטרוני / PDF');
     submitData.append('split_type', formData.split_type || 'כל כמות');
-    submitData.append('is_obstructed_view', formData.is_obstructed_view || false);
+    // Multipart: send explicit boolean strings (avoid FormData coercing booleans oddly).
+    submitData.append('is_obstructed_view', formData.is_obstructed_view ? 'true' : 'false');
     
     const packages = formData.ticket_packages || [];
     const globalRow = formData.row || '';

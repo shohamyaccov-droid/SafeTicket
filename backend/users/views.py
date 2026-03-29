@@ -75,6 +75,40 @@ def _log_cloudinary_or_storage_error(exc: BaseException, context: str) -> str:
         if raw and isinstance(raw, str) and len(raw) < 2000:
             logger.error('Cloudinary detail [%s] %s=%r', context, attr, raw)
     return msg
+
+
+def _rollback_tickets(created):
+    for t in created:
+        try:
+            t.delete()
+        except Exception:
+            logger.warning('Rollback: could not delete ticket pk=%s', getattr(t, 'pk', None), exc_info=True)
+
+
+def _ticket_pdf_persisted(ticket) -> bool:
+    """
+    Ticket row must reference a PDF that storage can see.
+    Prevents 'ghost' listings when multipart was wrong or upload silently failed.
+    """
+    try:
+        ticket.refresh_from_db()
+        pf = getattr(ticket, 'pdf_file', None)
+        if pf is None:
+            return False
+        name = (getattr(pf, 'name', None) or '').strip()
+        if not name:
+            return False
+        storage = getattr(pf, 'storage', None)
+        if storage is not None and hasattr(storage, 'exists'):
+            try:
+                return bool(storage.exists(name))
+            except Exception:
+                logger.warning('storage.exists failed ticket pk=%s', ticket.pk, exc_info=True)
+                return False
+        return True
+    except Exception:
+        logger.warning('_ticket_pdf_persisted failed pk=%s', getattr(ticket, 'pk', None), exc_info=True)
+        return False
 from .serializers import (
     UserRegistrationSerializer, 
     UserSerializer,
@@ -2271,6 +2305,22 @@ class TicketViewSet(viewsets.ModelViewSet):
                     ticket.listing_group_id = listing_group_id
                     ticket.save(update_fields=['listing_group_id'])
 
+                if not _ticket_pdf_persisted(ticket):
+                    _rollback_tickets(created_tickets)
+                    try:
+                        ticket.delete()
+                    except Exception:
+                        pass
+                    return Response(
+                        {
+                            'error': (
+                                'הקובץ לא נשמר בשרת האחסון. ייתכן שהדפדפן לא שלח את הקובץ (multipart). '
+                                'PDF did not persist to storage — check the upload request.'
+                            ),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
                 print(f'Ticket {ticket.id} saved (auto-split page {i + 1}/{available_quantity}), Row: {ticket_data.get("row_number", "N/A")}, Seat: {ticket_data.get("seat_number", "N/A")}, Listing Group: {listing_group_id}')
                 created_tickets.append(ticket)
         else:
@@ -2303,6 +2353,22 @@ class TicketViewSet(viewsets.ModelViewSet):
                 if not ticket.listing_group_id:
                     ticket.listing_group_id = listing_group_id
                     ticket.save(update_fields=['listing_group_id'])
+
+                if not _ticket_pdf_persisted(ticket):
+                    _rollback_tickets(created_tickets)
+                    try:
+                        ticket.delete()
+                    except Exception:
+                        pass
+                    return Response(
+                        {
+                            'error': (
+                                'הקובץ לא נשמר בשרת האחסון. ייתכן שהדפדפן לא שלח את הקובץ (multipart). '
+                                'PDF did not persist to storage — check the upload request.'
+                            ),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
                 print(f'Ticket {ticket.id} saved with PDF: {pdf_file.name}, Row: {ticket_data.get("row_number", "N/A")}, Seat: {ticket_data.get("seat_number", "N/A")}, Listing Group: {ticket.listing_group_id}')
                 created_tickets.append(ticket)

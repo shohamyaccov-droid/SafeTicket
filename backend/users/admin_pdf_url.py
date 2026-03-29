@@ -94,7 +94,13 @@ def is_admin_delivery_url_reachable(url: str, timeout: int = 25) -> bool:
         except ImportError:
             return True
 
-        headers = {'User-Agent': 'SafeTicket-Admin-Reachability/1.0'}
+        # Some CDNs (incl. Cloudinary signed raw) return 403 to non-browser HEAD; use a real Chrome UA.
+        headers = {
+            'User-Agent': (
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                '(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            ),
+        }
         try:
             r = requests.head(url, timeout=timeout, allow_redirects=True, headers=headers)
             if r.status_code == 200:

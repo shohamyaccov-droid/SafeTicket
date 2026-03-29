@@ -413,7 +413,7 @@ class TicketSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'seller', 'status', 'created_at', 'updated_at', 'asking_price', 
                            'reserved_at', 'reserved_by', 'reservation_email', 'event_name', 'event_date', 'venue')
         extra_kwargs = {
-            'pdf_file': {'write_only': True},
+            'pdf_file': {'write_only': True, 'required': True, 'allow_empty_file': False},
         }
     
     def get_event_name(self, obj):
@@ -443,6 +443,13 @@ class TicketSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(f'/api/users/tickets/{obj.id}/download_pdf/')
         return f'/api/users/tickets/{obj.id}/download_pdf/'
     
+    def validate_pdf_file(self, value):
+        if not value:
+            raise serializers.ValidationError('קובץ PDF נדרש / A PDF file is required.')
+        if getattr(value, 'size', None) is not None and int(value.size) < 1:
+            raise serializers.ValidationError('קובץ PDF ריק / PDF file is empty.')
+        return value
+
     def validate(self, attrs):
         # Israeli Consumer Protection Law (Section 19A): asking_price must equal original_price
         # Remove asking_price from attrs if present (it's read-only)

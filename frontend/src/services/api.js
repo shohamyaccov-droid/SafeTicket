@@ -51,14 +51,36 @@ const api = axios.create({
   withCredentials: true,
 });
 
+function stripContentTypeForMultipart(config) {
+  if (!(config.data instanceof FormData)) {
+    return;
+  }
+  const h = config.headers;
+  if (!h) {
+    return;
+  }
+  // Axios 1.x often uses AxiosHeaders; default instance also merges post/common Content-Type: application/json.
+  if (typeof h.delete === 'function') {
+    h.delete('Content-Type');
+    h.delete('content-type');
+  } else {
+    delete h['Content-Type'];
+    delete h['content-type'];
+  }
+  if (h.common) {
+    delete h.common['Content-Type'];
+  }
+  if (h.post) {
+    delete h.post['Content-Type'];
+  }
+}
+
 // Attach X-CSRFToken for unsafe methods (POST, PUT, PATCH, DELETE).
-// FormData: strip Content-Type first so axios sets multipart boundary; set CSRF after so it is never dropped.
+// FormData: strip every Content-Type variant first, then set CSRF (multipart boundary must not be forced).
 api.interceptors.request.use(
   (config) => {
     const method = (config.method || 'get').toLowerCase();
-    if (config.data instanceof FormData) {
-      delete config.headers['Content-Type'];
-    }
+    stripContentTypeForMultipart(config);
     if (method !== 'get' && method !== 'head' && method !== 'options') {
       const token = getCsrfTokenForRequest();
       if (token) {
@@ -148,7 +170,14 @@ export const ticketAPI = {
   getTickets: (config = {}) => api.get('/users/tickets/', config),
   getTicket: (id) => api.get(`/users/tickets/${id}/`),
   getTicketDetails: (id) => api.get(`/users/tickets/${id}/details/`),
-  createTicket: (data) => api.post('/users/tickets/', data),
+  /** Multipart ticket create: allow large PDFs; FormData Content-Type handled in interceptor. */
+  createTicket: (data) =>
+    api.post('/users/tickets/', data, {
+      ...creds,
+      timeout: 120000,
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    }),
   updateTicket: (id, data) => api.put(`/users/tickets/${id}/`, data),
   updateTicketPrice: (id, price) => api.patch(`/users/tickets/${id}/update-price/`, { original_price: price }),
   deleteTicket: (id) => api.delete(`/users/tickets/${id}/`),
