@@ -52,9 +52,17 @@ async function registerUi(page, webBase, { first, last, email, password }) {
   await page.locator('#email').fill(email);
   await page.locator('#password').fill(password);
   await page.locator('#password2').fill(password);
+  const regPost = page.waitForResponse(
+    (r) =>
+      (r.url().includes('/users/register') || r.url().includes('/register')) &&
+      r.request().method() === 'POST',
+    { timeout: 120_000 }
+  );
   await page.getByRole('button', { name: 'הרשמה' }).click();
-  await expect(page.getByText('נרשמת בהצלחה', { exact: false })).toBeVisible({ timeout: 60_000 });
+  const rr = await regPost;
+  expect(rr.ok(), `register failed: ${rr.status()} ${(await rr.text()).slice(0, 500)}`).toBeTruthy();
   await page.waitForURL((u) => !String(u.pathname).endsWith('/register'), { timeout: 180_000 });
+  await expect(page.getByText(/נרשמת בהצלחה/)).toBeVisible({ timeout: 20_000 });
 }
 
 async function logoutViaApi(page, apiRoot) {

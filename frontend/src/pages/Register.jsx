@@ -48,7 +48,7 @@ const Register = () => {
     setLoading(false);
 
     if (result.success) {
-      toastSuccess('נרשמת בהצלחה — ברוך הבא!');
+      toastSuccess('נרשמת בהצלחה — ברוך הבא!', { duration: 12_000 });
       navigate('/');
     } else {
       let msg = 'ההרשמה נכשלה. אנא נסה שוב.';

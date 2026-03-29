@@ -9,12 +9,22 @@ const base = {
   },
 };
 
-export function toastSuccess(message) {
-  return toast.success(message, { ...base, iconTheme: { primary: '#10b981', secondary: '#fff' } });
+export function toastSuccess(message, opts = {}) {
+  return toast.success(message, {
+    ...base,
+    ...opts,
+    style: { ...base.style, ...opts.style },
+    iconTheme: { primary: '#10b981', secondary: '#fff' },
+  });
 }
 
-export function toastError(message) {
-  return toast.error(message, { ...base, iconTheme: { primary: '#dc2626', secondary: '#fff' } });
+export function toastError(message, opts = {}) {
+  return toast.error(message, {
+    ...base,
+    ...opts,
+    style: { ...base.style, ...opts.style },
+    iconTheme: { primary: '#dc2626', secondary: '#fff' },
+  });
 }
 
 export function toastLoading(message) {
