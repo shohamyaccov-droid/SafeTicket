@@ -85,7 +85,7 @@ test.describe('Live Sell flow', () => {
     console.log(JSON.stringify(out, null, 2));
 
     expect(status, `ticket POST should succeed; body=${bodySnippet}`).toBe(201);
-    await expect(page.getByText(/הכרטיס הועלה בהצלחה|Listing Created Successfully/i)).toBeVisible({
+    await expect(page.getByRole('heading', { name: /Listing Created Successfully/i })).toBeVisible({
       timeout: 30_000,
     });
 
