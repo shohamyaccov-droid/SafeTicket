@@ -447,7 +447,12 @@ test.describe('Live bargain flow', () => {
     await page.getByRole('button', { name: /הצעות מחיר/ }).click();
     await page.waitForTimeout(1500);
     await page.locator('.offers-ticket-row-clickable').first().click();
-    await expect(page.getByRole('button', { name: 'השלם רכישה' })).toBeVisible({ timeout: 60_000 });
+    // Strict mode: several rows can expose "השלם רכישה"; target the real checkout CTA.
+    const completePurchaseBtn = page
+      .locator('button.checkout-btn')
+      .filter({ hasText: 'השלם רכישה' })
+      .first();
+    await expect(completePurchaseBtn).toBeVisible({ timeout: 60_000 });
     const confirmPay = page.waitForResponse(
       (r) =>
         r.url().includes('/api/users/orders/') &&
@@ -455,7 +460,7 @@ test.describe('Live bargain flow', () => {
         r.request().method() === 'POST',
       { timeout: 180_000 }
     );
-    await page.getByRole('button', { name: 'השלם רכישה' }).click();
+    await completePurchaseBtn.click();
     await expect(page.getByRole('heading', { name: /תשלום מאובטח/ })).toBeVisible({ timeout: 30_000 });
     await page.getByRole('button', { name: 'המשך לתשלום' }).click();
     await page.locator('#cardholderName').fill('E2E Buyer');
