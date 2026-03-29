@@ -231,10 +231,11 @@ class TicketAdmin(admin.ModelAdmin):
 
     def pdf_staff_link(self, obj):
         try:
+            pdf = getattr(obj, 'pdf_file', None)
+            if not pdf or not str(getattr(pdf, 'name', None) or '').strip():
+                return _admin_pdf_safe_fallback()
             url = get_ticket_pdf_admin_url(obj)
             if not url:
-                return _admin_pdf_safe_fallback()
-            if not is_admin_delivery_url_reachable(url):
                 return _admin_pdf_safe_fallback()
             try:
                 return format_html(
@@ -257,10 +258,11 @@ class TicketAdmin(admin.ModelAdmin):
 
     def pdf_file_display(self, obj):
         try:
+            pdf = getattr(obj, 'pdf_file', None)
+            if not pdf or not str(getattr(pdf, 'name', None) or '').strip():
+                return _admin_pdf_safe_fallback()
             url = get_ticket_pdf_admin_url(obj)
             if not url:
-                return _admin_pdf_safe_fallback()
-            if not is_admin_delivery_url_reachable(url):
                 return _admin_pdf_safe_fallback()
             try:
                 return format_html(
@@ -284,10 +286,11 @@ class TicketAdmin(admin.ModelAdmin):
 
     def pdf_inline_preview(self, obj):
         try:
+            pdf = getattr(obj, 'pdf_file', None)
+            if not pdf or not str(getattr(pdf, 'name', None) or '').strip():
+                return _admin_pdf_safe_fallback()
             url = get_ticket_pdf_admin_url(obj)
             if not url:
-                return _admin_pdf_safe_fallback()
-            if not is_admin_delivery_url_reachable(url):
                 return _admin_pdf_safe_fallback()
             try:
                 return format_html(

@@ -1105,35 +1105,43 @@ def create_order(request):
     order_data = request.data.copy()
     order_data['user'] = request.user.id
     
-    # CRITICAL: Check if this is a negotiated price from an accepted offer
+    # CRITICAL: negotiated checkout — strict offer_id (never fall back to list price if client sent offer_id)
     offer_id = request.data.get('offer_id')
     negotiated_offer = None
-    if offer_id:
+    if offer_id not in (None, '', []):
+        try:
+            oid = int(offer_id)
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid offer_id.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             negotiated_offer = Offer.objects.get(
-                id=offer_id,
+                id=oid,
                 buyer=request.user,
-                status='accepted'
+                status='accepted',
             )
-            print(f"Negotiated offer found: ID={offer_id}, Amount={negotiated_offer.amount}, Quantity={negotiated_offer.quantity}")
-            # Override total_amount validation by using the offer's amount + service fee
-            # The frontend already calculated the correct total (offer.amount + 10% fee)
-            # So we trust the total_amount sent, but we verify it matches the offer
+            print(
+                f"Negotiated offer found: ID={oid}, Amount={negotiated_offer.amount}, Quantity={negotiated_offer.quantity}"
+            )
             offer_base_amount = float(negotiated_offer.amount)
-            # Match frontend CheckoutModal: total = ceil(base * 1.10)
             expected_total = float(math.ceil(offer_base_amount * 1.10))
             received_total = float(request.data.get('total_amount', 0))
             if abs(received_total - expected_total) > 0.02:
                 return Response(
-                    {'error': f'Amount mismatch. Expected {expected_total:.2f} (ceil of base×1.10), got {received_total}'},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {
+                        'error': (
+                            f'Amount mismatch. Expected {expected_total:.2f} (ceil of base×1.10), '
+                            f'got {received_total}'
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
         except Offer.DoesNotExist:
-            print(f"WARNING: Offer ID {offer_id} not found or not accepted for user {request.user.id}")
-            # Continue without offer validation (backward compatibility)
-        except Exception as e:
-            print(f"ERROR checking offer: {str(e)}")
-            # Continue without offer validation
+            return Response(
+                {
+                    'error': 'Invalid or ineligible offer for checkout (must be accepted and belong to you).',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
     
     serializer = OrderSerializer(data=order_data)
     if serializer.is_valid():
@@ -1425,6 +1433,26 @@ def create_order(request):
                     ticket.save()
                     ticket_ids = [ticket.id]
 
+            if negotiated_offer:
+                if int(negotiated_offer.quantity or 1) != int(order_quantity):
+                    return Response(
+                        {'error': 'Order quantity must match the accepted offer.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if listing_group_id:
+                    og = negotiated_offer.ticket.listing_group_id
+                    if str(og or '') != str(listing_group_id):
+                        return Response(
+                            {'error': 'Offer does not apply to this listing.'},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                else:
+                    if int(negotiated_offer.ticket_id) != int(ticket_id):
+                        return Response(
+                            {'error': 'Offer does not apply to this ticket.'},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
             order = serializer.save(status='pending_payment', quantity=order_quantity)
             order.ticket_ids = ticket_ids
             order.pending_offer = negotiated_offer
@@ -1711,21 +1739,23 @@ def payment_simulation(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # CRITICAL: Check if this is a negotiated price from an accepted offer
     offer_id = request.data.get('offer_id')
     is_negotiated = False
-    if offer_id:
+    if offer_id not in (None, '', []):
         try:
-            # For authenticated users, verify the offer belongs to them
+            oid = int(offer_id)
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid offer_id.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
             if request.user.is_authenticated:
-                offer = Offer.objects.get(id=offer_id, buyer=request.user, status='accepted')
+                offer = Offer.objects.get(id=oid, buyer=request.user, status='accepted')
             else:
                 ge = (
                     (request.data.get('guest_email') or request.data.get('email') or '')
                     .strip()
                     .lower()
                 )
-                offer = Offer.objects.get(id=offer_id, status='accepted')
+                offer = Offer.objects.get(id=oid, status='accepted')
                 be = (offer.buyer.email or '').strip().lower()
                 if not ge or not be or ge != be:
                     return Response(
@@ -1736,13 +1766,16 @@ def payment_simulation(request):
                     )
 
             is_negotiated = True
-            # Use offer amount as base; total must match CheckoutModal ceil(base * 1.10)
             base_price = float(offer.amount)
             expected_amount = float(math.ceil(base_price * 1.10))
-            print(f"Payment simulation: Negotiated price from offer {offer_id}, base={base_price}, expected_total={expected_amount}")
+            print(
+                f"Payment simulation: Negotiated offer {oid}, base={base_price}, expected_total={expected_amount}"
+            )
         except Offer.DoesNotExist:
-            print(f"Payment simulation: Offer {offer_id} not found, using ticket price")
-            is_negotiated = False
+            return Response(
+                {'error': 'Invalid or ineligible offer for payment simulation.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
     
     if not is_negotiated:
         # Calculate expected amount with 10% service fee
@@ -1785,16 +1818,21 @@ def guest_checkout(request):
     """
     Create order for guest (non-authenticated) user after payment
     """
-    # CRITICAL: Check if this is a negotiated price from an accepted offer
     offer_id = request.data.get('offer_id')
     negotiated_offer = None
-    if offer_id:
+    if offer_id not in (None, '', []):
         try:
-            negotiated_offer = Offer.objects.get(id=offer_id, status='accepted')
-            print(f"Guest checkout: Negotiated offer found: ID={offer_id}, Amount={negotiated_offer.amount}")
+            oid = int(offer_id)
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid offer_id.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            negotiated_offer = Offer.objects.get(id=oid, status='accepted')
+            print(f"Guest checkout: Negotiated offer found: ID={oid}, Amount={negotiated_offer.amount}")
         except Offer.DoesNotExist:
-            negotiated_offer = None
-            print(f"Guest checkout: Offer ID {offer_id} not found or not accepted")
+            return Response(
+                {'error': 'Invalid or ineligible offer for checkout.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     serializer = GuestCheckoutSerializer(data=request.data)
     if serializer.is_valid():
@@ -2044,6 +2082,26 @@ def guest_checkout(request):
                         ticket.status = 'active'
                     ticket.save()
                     ticket_ids = [ticket.id]
+
+            if negotiated_offer:
+                if int(negotiated_offer.quantity or 1) != int(order_quantity):
+                    return Response(
+                        {'error': 'Order quantity must match the accepted offer.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if listing_group_id:
+                    og = negotiated_offer.ticket.listing_group_id
+                    if str(og or '') != str(listing_group_id):
+                        return Response(
+                            {'error': 'Offer does not apply to this listing.'},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                else:
+                    if int(negotiated_offer.ticket_id) != int(ticket_id):
+                        return Response(
+                            {'error': 'Offer does not apply to this ticket.'},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
 
             total_amount = order_data.get('total_amount', ticket.asking_price)
             event_name = order_data.get('event_name', ticket.event_name)
@@ -3144,6 +3202,12 @@ class OfferViewSet(viewsets.ModelViewSet):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'offers'
     pagination_class = None  # Full negotiation history for dashboard (no 20-item page cut-off)
+
+    def get_throttles(self):
+        # Accept/reject/counter must not share the 10/min create quota (would block sellers mid-flow).
+        if getattr(self, 'action', None) in ('accept', 'reject', 'counter'):
+            return []
+        return super().get_throttles()
 
     def _annotate_offer_flags(self, queryset):
         """One Exists subquery — avoids N+1 when serializing purchase_completed."""

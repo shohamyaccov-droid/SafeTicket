@@ -314,13 +314,25 @@ export const alertAPI = {
 };
 
 export const offerAPI = {
-  createOffer: (data) => api.post('/users/offers/', data),
+  createOffer: async (data) => {
+    await ensureCsrfToken();
+    return api.post('/users/offers/', data);
+  },
   getOffers: () => api.get('/users/offers/'),
   getReceivedOffers: () => api.get('/users/offers/received/'),
   getSentOffers: () => api.get('/users/offers/sent/'),
-  acceptOffer: (offerId) => api.post(`/users/offers/${offerId}/accept/`),
-  rejectOffer: (offerId) => api.post(`/users/offers/${offerId}/reject/`),
-  counterOffer: (offerId, data) => api.post(`/users/offers/${offerId}/counter/`, data),
+  acceptOffer: async (offerId) => {
+    await ensureCsrfToken();
+    return api.post(`/users/offers/${offerId}/accept/`);
+  },
+  rejectOffer: async (offerId) => {
+    await ensureCsrfToken();
+    return api.post(`/users/offers/${offerId}/reject/`);
+  },
+  counterOffer: async (offerId, data) => {
+    await ensureCsrfToken();
+    return api.post(`/users/offers/${offerId}/counter/`, data);
+  },
   getOffer: (offerId) => api.get(`/users/offers/${offerId}/`),
 };
 

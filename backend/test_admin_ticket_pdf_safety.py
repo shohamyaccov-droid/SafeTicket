@@ -1,5 +1,6 @@
 """
 Admin Ticket PDF: changelist and change view must not 500 on missing/ghost PDFs or URL errors.
+Ticket PDF links: trust DB path + signed URL helper — no server-side HEAD/GET to Cloudinary (Render false negatives).
 """
 from unittest import mock
 
@@ -72,28 +73,27 @@ class AdminTicketPdfSafetyTests(TestCase):
         r = self.client.get(f'/admin/users/ticket/{t.pk}/change/')
         self.assertEqual(r.status_code, 200, r.content[:500])
 
-    def test_change_view_shows_new_tab_pdf_cta_when_reachable(self):
-        """C) Valid ticket + reachable URL → prominent new-tab link, no iframe (browser PDF embed blocks)."""
+    def test_change_view_shows_new_tab_pdf_cta_when_url_helper_returns_value(self):
+        """Valid ticket + non-empty pdf name + URL helper succeeds → prominent new-tab link."""
         t = self._make_ticket()
         with mock.patch('users.admin.get_ticket_pdf_admin_url', return_value='https://example.com/ticket.pdf'):
-            with mock.patch('users.admin.is_admin_delivery_url_reachable', return_value=True):
-                r = self.client.get(f'/admin/users/ticket/{t.pk}/change/')
+            r = self.client.get(f'/admin/users/ticket/{t.pk}/change/')
         self.assertEqual(r.status_code, 200, r.content[:500])
         self.assertIn('פתח PDF מאובטח בחלון חדש'.encode('utf-8'), r.content)
         self.assertIn(b'target="_blank"', r.content)
         self.assertNotIn(b'<iframe', r.content.lower())
 
-    def test_changelist_200_ghost_pdf_path(self):
-        t = self._make_ticket()
-        Ticket.objects.filter(pk=t.pk).update(pdf_file='tickets/pdfs/nonexistent_ghost_file.pdf')
-        r = self.client.get('/admin/users/ticket/')
+    def test_changelist_200_when_url_helper_returns_none(self):
+        self._make_ticket()
+        with mock.patch('users.admin.get_ticket_pdf_admin_url', return_value=None):
+            r = self.client.get('/admin/users/ticket/')
         self.assertEqual(r.status_code, 200, r.content[:500])
         self.assertIn(b'File Error / Missing', r.content)
 
-    def test_change_view_200_ghost_pdf_path(self):
+    def test_change_view_200_when_url_helper_returns_none(self):
         t = self._make_ticket()
-        Ticket.objects.filter(pk=t.pk).update(pdf_file='tickets/pdfs/nonexistent_ghost_file.pdf')
-        r = self.client.get(f'/admin/users/ticket/{t.pk}/change/')
+        with mock.patch('users.admin.get_ticket_pdf_admin_url', return_value=None):
+            r = self.client.get(f'/admin/users/ticket/{t.pk}/change/')
         self.assertEqual(r.status_code, 200, r.content[:500])
         self.assertIn(b'File Error / Missing', r.content)
 
@@ -110,8 +110,8 @@ class AdminTicketPdfSafetyTests(TestCase):
         from users.admin import TicketAdmin
 
         t = self._make_ticket()
-        Ticket.objects.filter(pk=t.pk).update(pdf_file='tickets/pdfs/ghost.pdf')
-        adm = TicketAdmin(Ticket, None)
-        html = adm.pdf_inline_preview(t)
+        with mock.patch('users.admin.get_ticket_pdf_admin_url', return_value=None):
+            adm = TicketAdmin(Ticket, None)
+            html = adm.pdf_inline_preview(t)
         self.assertIsNotNone(html)
         self.assertIn('File Error / Missing', str(html))
