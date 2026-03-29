@@ -57,6 +57,7 @@ test.describe('Live bargain flow', () => {
   test('500 list → offer 400 → accept → checkout @ negotiated total; admin PDF link', async ({
     page,
   }) => {
+    test.setTimeout(300_000);
     const base = process.env.E2E_BASE_URL || 'https://safeticket-api.onrender.com';
     const sellerUser = process.env.E2E_SELLER_USERNAME || 'israeli_demo_seller';
     const sellerPass = process.env.E2E_SELLER_PASSWORD || 'DemoSeller123!';
@@ -112,9 +113,13 @@ test.describe('Live bargain flow', () => {
     // --- Buyer: offer 400 ---
     await login(page, base, buyerUser, buyerPass);
     await page.goto(`${base}/event/${eventId}`, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(2500);
+    await page.waitForTimeout(3500);
+    // Listing actions (הצע מחיר) render only after expanding a ticket row.
+    const row = page.locator('.viagogo-ticket-row').filter({ hasText: String(LIST_PRICE) }).first();
+    await expect(row).toBeVisible({ timeout: 90_000 });
+    await row.click();
     const offerBtn = page.getByRole('button', { name: /הצע מחיר/i }).first();
-    await expect(offerBtn).toBeVisible({ timeout: 90_000 });
+    await expect(offerBtn).toBeVisible({ timeout: 30_000 });
     await offerBtn.click();
     await expect(page.locator('#offerAmount')).toBeVisible({ timeout: 30_000 });
     await page.locator('#offerAmount').fill(String(OFFER_BASE));
