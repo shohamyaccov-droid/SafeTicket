@@ -7,6 +7,11 @@ axios.defaults.xsrfHeaderName = 'X-CSRFToken';
 /** In-memory CSRF for cross-origin: csrftoken cookie is not visible on document.cookie for the API host. */
 let csrfTokenFromApi = null;
 
+/** Clear cached CSRF (e.g. stale token on mobile / after 403). */
+export function resetCsrfTokenCache() {
+  csrfTokenFromApi = null;
+}
+
 /** Production API when VITE_API_URL is missing at build time (never fall back to localhost in prod). */
 const PRODUCTION_API_BASE_URL = 'https://safeticket-api.onrender.com/api';
 

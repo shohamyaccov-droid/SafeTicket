@@ -24,7 +24,6 @@ const Navbar = () => {
     setIsMobileMenuOpen(false);
   };
 
-  // Fetch offer counts for notification dots (when logged in)
   useEffect(() => {
     if (!user) {
       setOfferCounts({ actionRequired: 0, acceptedOffers: 0 });
@@ -70,14 +69,15 @@ const Navbar = () => {
     return () => clearInterval(poll);
   }, [user]);
 
-  // Show loading state while auth is initializing
   if (loading) {
     return (
       <nav className="navbar">
-        <div className="nav-container">
-          <Link to="/" className="nav-logo">
-            SafeTicket IL
-          </Link>
+        <div className="nav-container nav-container--loading">
+          <div className="nav-logo-block">
+            <Link to="/" className="nav-logo">
+              SafeTicket IL
+            </Link>
+          </div>
         </div>
       </nav>
     );
@@ -86,45 +86,35 @@ const Navbar = () => {
   return (
     <nav className="navbar">
       <div className="nav-container">
-        {/* Right side (RTL): Logo + Main Navigation */}
-        <div className="nav-brand-group">
+        <div className="nav-logo-block">
           <Link to="/" className="nav-logo" onClick={closeMobileMenu}>
             SafeTicket IL
           </Link>
-          <button 
-            className="hamburger-menu"
-            onClick={toggleMobileMenu}
-            aria-label="תפריט"
-            aria-expanded={isMobileMenuOpen}
-          >
-            <span className={`hamburger-line ${isMobileMenuOpen ? 'open' : ''}`}></span>
-            <span className={`hamburger-line ${isMobileMenuOpen ? 'open' : ''}`}></span>
-            <span className={`hamburger-line ${isMobileMenuOpen ? 'open' : ''}`}></span>
-          </button>
-          <nav className={`nav-menu ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
-            <Link to="/" className="nav-link" onClick={closeMobileMenu}>
-              בית
-            </Link>
-            {user && (
-              <Link to="/dashboard" className="nav-link nav-link-personal" onClick={closeMobileMenu}>
-                {offerCounts.acceptedOffers > 0 && <span className="nav-dot nav-dot-accepted" aria-hidden="true" />}
-                {offerCounts.acceptedOffers === 0 && offerCounts.actionRequired > 0 && <span className="nav-dot nav-dot-action" aria-hidden="true" />}
-                האזור האישי
-              </Link>
-            )}
-            <Link to="/sell" className="nav-link sell-btn" onClick={closeMobileMenu}>
-              מכירת כרטיס
-            </Link>
-          </nav>
         </div>
-        {/* Left side (RTL): User Actions */}
-        <div className="user-actions">
+
+        <nav className="nav-menu nav-menu-desktop">
+          <Link to="/" className="nav-link" onClick={closeMobileMenu}>
+            בית
+          </Link>
+          {user && (
+            <Link to="/dashboard" className="nav-link nav-link-personal" onClick={closeMobileMenu}>
+              {offerCounts.acceptedOffers > 0 && <span className="nav-dot nav-dot-accepted" aria-hidden="true" />}
+              {offerCounts.acceptedOffers === 0 && offerCounts.actionRequired > 0 && <span className="nav-dot nav-dot-action" aria-hidden="true" />}
+              האזור האישי
+            </Link>
+          )}
+          <Link to="/sell" className="nav-link sell-btn" onClick={closeMobileMenu}>
+            מכירת כרטיס
+          </Link>
+        </nav>
+
+        <div className="user-actions user-actions-desktop">
           {user ? (
             <>
               <Link to="/dashboard?tab=settings" className="nav-link user-greeting" onClick={closeMobileMenu}>
                 שלום, {user?.username || 'משתמש'}
               </Link>
-              <button onClick={handleLogout} className="nav-link logout-btn">
+              <button type="button" onClick={handleLogout} className="nav-link logout-btn">
                 התנתקות
               </button>
             </>
@@ -139,8 +129,31 @@ const Navbar = () => {
             </>
           )}
         </div>
+
+        <div className="nav-mobile-end">
+          {user ? (
+            <button type="button" className="nav-mobile-auth-btn" onClick={handleLogout}>
+              התנתקות
+            </button>
+          ) : (
+            <Link to="/login" className="nav-mobile-auth-btn" onClick={closeMobileMenu}>
+              התחברות
+            </Link>
+          )}
+          <button
+            type="button"
+            className="hamburger-menu"
+            onClick={toggleMobileMenu}
+            aria-label="תפריט"
+            aria-expanded={isMobileMenuOpen}
+          >
+            <span className={`hamburger-line ${isMobileMenuOpen ? 'open' : ''}`}></span>
+            <span className={`hamburger-line ${isMobileMenuOpen ? 'open' : ''}`}></span>
+            <span className={`hamburger-line ${isMobileMenuOpen ? 'open' : ''}`}></span>
+          </button>
+        </div>
       </div>
-      {/* Mobile slide-out overlay: nav + user actions */}
+
       <div className={`mobile-nav-overlay ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
         <nav className="mobile-nav-menu">
           <Link to="/" className="nav-link" onClick={closeMobileMenu}>בית</Link>
@@ -159,7 +172,7 @@ const Navbar = () => {
               <Link to="/dashboard?tab=settings" className="nav-link user-greeting" onClick={closeMobileMenu}>
                 שלום, {user?.username || 'משתמש'}
               </Link>
-              <button onClick={handleLogout} className="nav-link logout-btn">התנתקות</button>
+              <button type="button" onClick={handleLogout} className="nav-link logout-btn">התנתקות</button>
             </>
           ) : (
             <>
@@ -169,7 +182,7 @@ const Navbar = () => {
           )}
         </div>
       </div>
-      {/* Mobile Sell FAB */}
+
       <Link to="/sell" className="mobile-sell-fab" aria-label="מכירת כרטיס">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
@@ -180,4 +193,3 @@ const Navbar = () => {
 };
 
 export default Navbar;
-

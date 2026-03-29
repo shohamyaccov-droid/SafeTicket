@@ -65,12 +65,20 @@
 }
 
 .event-header-title-container img.event-header-title-image {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
   object-fit: cover;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .event-header-title-container img.event-header-title-image {
+    width: 72px;
+    height: 72px;
+    border-radius: 14px;
+  }
 }
 
 .popularity-signal {

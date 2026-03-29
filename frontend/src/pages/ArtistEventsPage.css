@@ -59,7 +59,7 @@
 .compact-artist-image {
   width: 80px;
   height: 80px;
-  border-radius: 50%;
+  border-radius: 14px;
   object-fit: cover;
   border: 2px solid #e5e7eb;
 }
@@ -97,9 +97,23 @@
 .section-title-artist-image {
   width: 48px;
   height: 48px;
-  border-radius: 50%;
+  border-radius: 10px;
   object-fit: cover;
   border: 1px solid #e5e7eb;
+}
+
+@media (max-width: 768px) {
+  .compact-artist-image {
+    width: 88px;
+    height: 88px;
+    border-radius: 16px;
+  }
+
+  .section-title-artist-image {
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+  }
 }
 
 .events-table {

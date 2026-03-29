@@ -68,9 +68,14 @@
   cursor: pointer;
 }
 
+.login-form-mobile {
+  touch-action: manipulation;
+}
+
 .auth-button {
   width: 100%;
-  padding: 0.75rem;
+  min-height: 48px;
+  padding: 0.75rem 1rem;
   background-color: var(--primary-blue);
   color: white;
   border: none;
@@ -80,6 +85,8 @@
   cursor: pointer;
   margin-top: var(--spacing-md);
   transition: background-color 0.2s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .auth-button:hover:not(:disabled) {

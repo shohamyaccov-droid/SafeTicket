@@ -16,16 +16,20 @@
   justify-content: space-between;
   align-items: center;
   direction: rtl;
-}
-
-/* Right side (RTL): Logo + Main Nav */
-.nav-brand-group {
-  display: flex;
-  align-items: center;
   gap: var(--spacing-md);
 }
 
-/* Left side (RTL): User Actions */
+.nav-container--loading {
+  justify-content: center;
+}
+
+.nav-logo-block {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Main nav + user actions (desktop); hidden on small screens in favor of nav-mobile-end */
 .user-actions {
   display: flex;
   align-items: center;
@@ -130,6 +134,42 @@
   background: transparent;
 }
 
+/* Mobile top bar: login/logout + hamburger (physical right in LTR bar) */
+.nav-mobile-end {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.nav-mobile-auth-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  text-decoration: none;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--primary-blue);
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.nav-mobile-auth-btn:hover {
+  border-color: var(--primary-blue);
+  background: rgba(0, 69, 175, 0.06);
+}
+
+a.nav-mobile-auth-btn {
+  color: var(--primary-blue);
+}
+
 /* Hamburger Menu */
 .hamburger-menu {
   display: none;
@@ -208,18 +248,28 @@
     padding: var(--spacing-sm) var(--spacing-md);
     position: relative;
   }
+
+  .nav-container {
+    direction: ltr;
+    justify-content: space-between;
+    align-items: center;
+  }
   
   .nav-logo {
     font-size: 1.25rem;
+  }
+
+  .nav-mobile-end {
+    display: flex;
   }
   
   .hamburger-menu {
     display: flex;
   }
   
-  /* Hide desktop nav-menu and user-actions on mobile */
-  .nav-menu,
-  .user-actions {
+  /* Hide desktop nav links (slide-out + compact bar instead) */
+  .nav-menu-desktop,
+  .user-actions-desktop {
     display: none !important;
   }
   
