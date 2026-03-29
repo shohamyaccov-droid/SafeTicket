@@ -14,47 +14,60 @@ from .admin_pdf_url import get_ticket_pdf_admin_url, is_admin_delivery_url_reach
 _admin_log = logging.getLogger(__name__)
 
 
+def _admin_pdf_safe_fallback():
+    """Non-throwing HTML for admin when PDF URL/preview cannot be built or delivered."""
+    return mark_safe('<span style="color:red;">File Error / Missing</span>')
+
+
 def _admin_missing_media_message():
-    return format_html(
-        '<div style="padding:12px;border:1px solid #fecaca;background:#fef2f2;border-radius:8px;'
-        'max-width:720px;color:#991b1b;line-height:1.45;">'
-        '<strong>File not found or corrupted.</strong> '
-        'The stored path may reference a file that no longer exists (for example legacy uploads on '
-        'ephemeral disk before Cloudinary), or Cloudinary cannot deliver this asset (401/404).'
-        '</div>'
-    )
+    try:
+        return format_html(
+            '<div style="padding:12px;border:1px solid #fecaca;background:#fef2f2;border-radius:8px;'
+            'max-width:720px;color:#991b1b;line-height:1.45;">'
+            '<strong>File not found or corrupted.</strong> '
+            'The stored path may reference a file that no longer exists (for example legacy uploads on '
+            'ephemeral disk before Cloudinary), or Cloudinary cannot deliver this asset (401/404).'
+            '</div>'
+        )
+    except Exception as exc:
+        _admin_log.warning('_admin_missing_media_message failed: %s', exc, exc_info=True)
+        return _admin_pdf_safe_fallback()
 
 
 def _admin_image_preview_html(fieldfile):
     """Signed Cloudinary URL or local storage; show missing banner if unreachable."""
-    from django.conf import settings
-    from users.serializers import cloudinary_signed_https_image_url
+    try:
+        from django.conf import settings
+        from users.serializers import cloudinary_signed_https_image_url
 
-    if not fieldfile:
-        return format_html('<span style="color:#64748b;">אין קובץ</span>')
-    if getattr(settings, 'USE_CLOUDINARY', False):
-        url = cloudinary_signed_https_image_url(fieldfile)
-        if not url:
+        if not fieldfile:
+            return format_html('<span style="color:#64748b;">אין קובץ</span>')
+        if getattr(settings, 'USE_CLOUDINARY', False):
+            url = cloudinary_signed_https_image_url(fieldfile)
+            if not url:
+                return _admin_missing_media_message()
+            if not is_admin_delivery_url_reachable(url):
+                return _admin_missing_media_message()
+            return format_html(
+                '<img src="{}" style="max-height:220px;border-radius:8px;border:1px solid #e2e8f0;" alt="" />',
+                url,
+            )
+        try:
+            if not fieldfile.storage.exists(fieldfile.name):
+                return _admin_missing_media_message()
+        except Exception:
             return _admin_missing_media_message()
-        if not is_admin_delivery_url_reachable(url):
+        try:
+            src = fieldfile.url
+        except Exception:
             return _admin_missing_media_message()
         return format_html(
             '<img src="{}" style="max-height:220px;border-radius:8px;border:1px solid #e2e8f0;" alt="" />',
-            url,
+            src,
         )
-    try:
-        if not fieldfile.storage.exists(fieldfile.name):
-            return _admin_missing_media_message()
-    except Exception:
-        return _admin_missing_media_message()
-    try:
-        src = fieldfile.url
-    except Exception:
-        return _admin_missing_media_message()
-    return format_html(
-        '<img src="{}" style="max-height:220px;border-radius:8px;border:1px solid #e2e8f0;" alt="" />',
-        src,
-    )
+    except Exception as exc:
+        _admin_log.exception('_admin_image_preview_html failed: %s', exc)
+        return _admin_pdf_safe_fallback()
 
 
 @admin.register(User)
@@ -206,10 +219,10 @@ class TicketAdmin(admin.ModelAdmin):
             else:
                 seller_new = dj > fresh_cutoff
             if price_high or seller_new:
-                return format_html(
+                return mark_safe(
                     '<span style="color:#b91c1c;font-weight:700;" title="מחיר &gt; 1000 ₪ או מוכר חדש (&lt; 48 שעות)">אדום · High Risk</span>'
                 )
-            return format_html('<span style="color:#15803d;font-weight:600;">ירוק · Normal</span>')
+            return mark_safe('<span style="color:#15803d;font-weight:600;">ירוק · Normal</span>')
         except Exception as exc:
             _admin_log.warning('TicketAdmin.risk_level failed pk=%s: %s', getattr(obj, 'pk', None), exc)
             return '—'
@@ -220,16 +233,25 @@ class TicketAdmin(admin.ModelAdmin):
         try:
             url = get_ticket_pdf_admin_url(obj)
             if not url:
-                return _admin_missing_media_message()
+                return _admin_pdf_safe_fallback()
             if not is_admin_delivery_url_reachable(url):
-                return _admin_missing_media_message()
-            return format_html(
-                '<a href="{}" target="_blank" rel="noopener noreferrer">PDF</a>',
-                url,
-            )
-        except Exception as exc:
-            _admin_log.warning('TicketAdmin.pdf_staff_link failed pk=%s: %s', getattr(obj, 'pk', None), exc)
-            return _admin_missing_media_message()
+                return _admin_pdf_safe_fallback()
+            try:
+                return format_html(
+                    '<a href="{}" target="_blank" rel="noopener noreferrer">PDF</a>',
+                    url,
+                )
+            except Exception as fmt_exc:
+                _admin_log.warning(
+                    'TicketAdmin.pdf_staff_link format_html failed pk=%s: %s',
+                    getattr(obj, 'pk', None),
+                    fmt_exc,
+                    exc_info=True,
+                )
+                return _admin_pdf_safe_fallback()
+        except Exception:
+            _admin_log.exception('TicketAdmin.pdf_staff_link failed pk=%s', getattr(obj, 'pk', None))
+            return _admin_pdf_safe_fallback()
 
     pdf_staff_link.short_description = 'PDF (סטאף)'
 
@@ -237,17 +259,26 @@ class TicketAdmin(admin.ModelAdmin):
         try:
             url = get_ticket_pdf_admin_url(obj)
             if not url:
-                return _admin_missing_media_message()
+                return _admin_pdf_safe_fallback()
             if not is_admin_delivery_url_reachable(url):
-                return _admin_missing_media_message()
-            return format_html(
-                '<a class="button" style="padding:8px 12px;display:inline-block;margin-top:4px;" '
-                'href="{}" target="_blank" rel="noopener noreferrer">פתיחה / הורדת PDF (קישור חתום לסטאף)</a>',
-                url,
-            )
-        except Exception as exc:
-            _admin_log.warning('TicketAdmin.pdf_file_display failed pk=%s: %s', getattr(obj, 'pk', None), exc)
-            return _admin_missing_media_message()
+                return _admin_pdf_safe_fallback()
+            try:
+                return format_html(
+                    '<a class="button" style="padding:8px 12px;display:inline-block;margin-top:4px;" '
+                    'href="{}" target="_blank" rel="noopener noreferrer">פתיחה / הורדת PDF (קישור חתום לסטאף)</a>',
+                    url,
+                )
+            except Exception as fmt_exc:
+                _admin_log.warning(
+                    'TicketAdmin.pdf_file_display format_html failed pk=%s: %s',
+                    getattr(obj, 'pk', None),
+                    fmt_exc,
+                    exc_info=True,
+                )
+                return _admin_pdf_safe_fallback()
+        except Exception:
+            _admin_log.exception('TicketAdmin.pdf_file_display failed pk=%s', getattr(obj, 'pk', None))
+            return _admin_pdf_safe_fallback()
 
     pdf_file_display.short_description = 'קובץ PDF (גישת מנהל)'
 
@@ -255,20 +286,29 @@ class TicketAdmin(admin.ModelAdmin):
         try:
             url = get_ticket_pdf_admin_url(obj)
             if not url:
-                return _admin_missing_media_message()
+                return _admin_pdf_safe_fallback()
             if not is_admin_delivery_url_reachable(url):
-                return _admin_missing_media_message()
-            return format_html(
-                '<iframe src="{}" title="PDF preview" '
-                'style="width:100%%;max-width:720px;height:480px;border:1px solid #cbd5e1;'
-                'border-radius:6px;background:#f1f5f9;"></iframe>'
-                '<p style="color:#64748b;font-size:12px;margin-top:8px;max-width:720px;">'
-                'אם המסך ריק, פתחו את הקישור למעלה — חלק מהדפדפנים חוסמים תצוגת PDF בתוך מסגרת.</p>',
-                url,
-            )
-        except Exception as exc:
-            _admin_log.warning('TicketAdmin.pdf_inline_preview failed pk=%s: %s', getattr(obj, 'pk', None), exc)
-            return _admin_missing_media_message()
+                return _admin_pdf_safe_fallback()
+            try:
+                return format_html(
+                    '<iframe src="{}" title="PDF preview" '
+                    'style="width:100%%;max-width:720px;height:480px;border:1px solid #cbd5e1;'
+                    'border-radius:6px;background:#f1f5f9;"></iframe>'
+                    '<p style="color:#64748b;font-size:12px;margin-top:8px;max-width:720px;">'
+                    'אם המסך ריק, פתחו את הקישור למעלה — חלק מהדפדפנים חוסמים תצוגת PDF בתוך מסגרת.</p>',
+                    url,
+                )
+            except Exception as fmt_exc:
+                _admin_log.warning(
+                    'TicketAdmin.pdf_inline_preview format_html failed pk=%s: %s',
+                    getattr(obj, 'pk', None),
+                    fmt_exc,
+                    exc_info=True,
+                )
+                return _admin_pdf_safe_fallback()
+        except Exception:
+            _admin_log.exception('TicketAdmin.pdf_inline_preview failed pk=%s', getattr(obj, 'pk', None))
+            return _admin_pdf_safe_fallback()
 
     pdf_inline_preview.short_description = 'תצוגה מקדימה'
 
