@@ -446,9 +446,10 @@ test.describe('Live bargain flow', () => {
     await page.goto(`${webBase}/dashboard`, { waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: /הצעות מחיר/ }).click();
     await page.waitForTimeout(1500);
-    await page.locator('.offers-ticket-row-clickable').first().click();
-    // Strict mode: several rows can expose "השלם רכישה"; target the real checkout CTA.
+    // Do not click the whole row — that opens NegotiationModal and blocks the checkout CTA underneath.
     const completePurchaseBtn = page
+      .locator('.offers-ticket-row-clickable')
+      .filter({ has: page.locator('button.checkout-btn') })
       .locator('button.checkout-btn')
       .filter({ hasText: 'השלם רכישה' })
       .first();
