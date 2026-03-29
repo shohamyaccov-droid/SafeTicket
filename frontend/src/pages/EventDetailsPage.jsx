@@ -50,6 +50,7 @@ const EventDetailsPage = () => {
   const [offerQuantity, setOfferQuantity] = useState(1);
   const [toast, setToast] = useState(null);
   const [offerSubmitted, setOfferSubmitted] = useState(false);
+  const [offerSubmitting, setOfferSubmitting] = useState(false);
 
   // Filtering and sorting state
   const [filters, setFilters] = useState({
@@ -583,6 +584,7 @@ const EventDetailsPage = () => {
 
   const handleSubmitOffer = async (e) => {
     e.preventDefault();
+    if (offerSubmitting) return;
     if (!user) {
       setToast({ message: 'אנא התחבר כדי להציע מחיר', type: 'error' });
       return;
@@ -601,6 +603,7 @@ const EventDetailsPage = () => {
       return;
     }
 
+    setOfferSubmitting(true);
     try {
       await offerAPI.createOffer({
         ticket: selectedOfferTicket.id,
@@ -611,6 +614,8 @@ const EventDetailsPage = () => {
     } catch (error) {
       const errorMsg = error.response?.data?.error || error.response?.data?.detail || 'שגיאה בשליחת ההצעה';
       setToast({ message: errorMsg, type: 'error' });
+    } finally {
+      setOfferSubmitting(false);
     }
   };
 
@@ -1287,8 +1292,8 @@ const EventDetailsPage = () => {
                     <button type="button" onClick={handleCloseMakeOffer} className="secondary-button">
                       ביטול
                     </button>
-                    <button type="submit" className="primary-button">
-                      שלח הצעה
+                    <button type="submit" className="primary-button" disabled={offerSubmitting}>
+                      {offerSubmitting ? 'שולח…' : 'שלח הצעה'}
                     </button>
                   </div>
                 </form>

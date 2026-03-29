@@ -223,6 +223,8 @@ const Dashboard = () => {
   const [checkoutAcceptedOffer, setCheckoutAcceptedOffer] = useState(null);
   const [toast, setToast] = useState(null);
   const [acceptingOfferId, setAcceptingOfferId] = useState(null);
+  const [rejectingOfferId, setRejectingOfferId] = useState(null);
+  const checkoutOpeningRef = useRef(false);
   const [countdownTimers, setCountdownTimers] = useState({});
   const [counteringOfferId, setCounteringOfferId] = useState(null);
   const [counterAmount, setCounterAmount] = useState('');
@@ -436,6 +438,10 @@ const Dashboard = () => {
   };
 
   const handleRejectOffer = async (offerId) => {
+    if (rejectingOfferId != null || acceptingOfferId != null) {
+      return;
+    }
+    setRejectingOfferId(offerId);
     try {
       const res = await offerAPI.rejectOffer(offerId);
       if (res.data?.id) {
@@ -447,6 +453,8 @@ const Dashboard = () => {
     } catch (err) {
       const errorMsg = err.response?.data?.error || 'שגיאה בדחיית ההצעה';
       setToast({ message: errorMsg, type: 'error' });
+    } finally {
+      setRejectingOfferId(null);
     }
   };
 
@@ -472,9 +480,14 @@ const Dashboard = () => {
   };
 
   const handleCompletePurchase = (offer, group) => {
+    if (checkoutOpeningRef.current || showCheckout) {
+      return;
+    }
+    checkoutOpeningRef.current = true;
     // Use existing offer and group data - no API fetch needed
     const ticketId = group?.ticketId || offer.ticket || offer.ticket_details?.id;
     if (!ticketId) {
+      checkoutOpeningRef.current = false;
       alert('שגיאה: לא נמצא מזהה כרטיס');
       return;
     }
@@ -1586,6 +1599,7 @@ const Dashboard = () => {
             setNegotiationModalGroup(null);
           }}
           acceptingOfferId={acceptingOfferId}
+          offerMutationBusy={acceptingOfferId != null || rejectingOfferId != null}
           offerExpirationTimers={offerExpirationTimers}
           countdownTimers={countdownTimers}
           onCompletePurchase={(offer) => { const g = negotiationModalGroup; setNegotiationModalGroup(null); handleCompletePurchase(offer, g); }}
@@ -1604,6 +1618,7 @@ const Dashboard = () => {
           quantity={checkoutAcceptedOffer?.quantity || 1}
           acceptedOffer={checkoutAcceptedOffer}
           onClose={() => {
+            checkoutOpeningRef.current = false;
             setShowCheckout(false);
             setCheckoutTicket(null);
             setCheckoutAcceptedOffer(null);

@@ -27,6 +27,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     cardholderName: '',
   });
   const [loading, setLoading] = useState(false);
+  const [infoStepBusy, setInfoStepBusy] = useState(false);
+  const [pdfDownloadBusyId, setPdfDownloadBusyId] = useState(null);
   /** 'idle' | 'creating_order' | 'confirming_payment' — shown while pending_payment → paid */
   const [paymentPhase, setPaymentPhase] = useState('idle');
   const [error, setError] = useState('');
@@ -107,29 +109,26 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     return seats.join(', ');
   })();
 
-  // CRITICAL: When acceptedOffer exists, base price = acceptedOffer.amount (negotiated), NOT ticket.asking_price
-  const basePriceStr = getTicketPrice(ticket);
-  const ticketBaseNum = parseFloat(basePriceStr) || 0;
+  // List unit: whole shekels from API (matches Django Ticket.save / JSON int) — no float rounding drift
+  const listUnitFaceShekels = parseInt(String(getTicketPrice(ticket)), 10);
+  const listUnitFace = Number.isFinite(listUnitFaceShekels) ? listUnitFaceShekels : 0;
   const offerBaseAmountStr = isNegotiatedPrice && acceptedOffer?.amount != null ? String(acceptedOffer.amount) : null;
   const negotiatedQty = lockedQuantity || initialQuantity || 1;
   const negotiatedBaseTotal = offerBaseAmountStr != null ? parseFloat(offerBaseAmountStr) : null;
   const negotiatedUnitBase = negotiatedBaseTotal != null && negotiatedQty > 0 ? negotiatedBaseTotal / negotiatedQty : null;
-  const basePriceNum = negotiatedUnitBase != null ? negotiatedUnitBase : ticketBaseNum;
-  const unitBaseRounded = Math.round(ticketBaseNum);
-  const listBaseSubtotal =
-    !isNegotiatedPrice && unitBaseRounded > 0
-      ? Math.round(unitBaseRounded * quantity * 100) / 100
-      : 0;
+  const basePriceNum = negotiatedUnitBase != null ? negotiatedUnitBase : listUnitFace;
+  const listBaseSubtotalShekels =
+    !isNegotiatedPrice && listUnitFace > 0 ? listUnitFace * quantity : 0;
   const negotiatedBundleBreakdown =
     isNegotiatedPrice && negotiatedBaseTotal != null && negotiatedBaseTotal > 0
       ? buyerChargeFromBase(negotiatedBaseTotal)
       : null;
   const listBreakdown =
-    !isNegotiatedPrice && listBaseSubtotal > 0 ? buyerChargeFromBase(listBaseSubtotal) : null;
+    !isNegotiatedPrice && listBaseSubtotalShekels > 0 ? buyerChargeFromBase(listBaseSubtotalShekels) : null;
   const unitDisplayPrice =
     !isNaN(basePriceNum) && basePriceNum > 0 ? buyerChargeFromBase(basePriceNum).totalAmount : 0;
-  const effectivePrice = String(negotiatedBaseTotal != null ? negotiatedBaseTotal : ticketBaseNum);
-  const effectiveUnitPrice = negotiatedUnitBase != null ? negotiatedUnitBase : ticketBaseNum;
+  const effectivePrice = String(negotiatedBaseTotal != null ? negotiatedBaseTotal : listUnitFace);
+  const effectiveUnitPrice = negotiatedUnitBase != null ? negotiatedUnitBase : listUnitFace;
   const unitPriceForDisplay = unitDisplayPrice;
   const standardReceiptBaseTotal = listBreakdown?.baseAmount ?? 0;
   const standardReceiptTotalPay = listBreakdown?.totalAmount ?? 0;
@@ -218,12 +217,15 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
   const handleInfoSubmit = async (e) => {
     e.preventDefault();
+    if (infoStepBusy) return;
+    setInfoStepBusy(true);
     setError('');
     const q = typeof quantity === 'number' ? quantity : parseInt(quantity, 10);
     const availNum = typeof availableQuantity === 'number' ? availableQuantity : parseInt(availableQuantity, 10);
     const validOptions = buildQuantityOptions();
     if (isNaN(q) || q < 1 || q > availNum) {
       setError(`כמות לא תקינה. ניתן לבחור בין 1 ל-${availNum} כרטיסים`);
+      setInfoStepBusy(false);
       return;
     }
     if (!validOptions.includes(q)) {
@@ -234,15 +236,18 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       } else {
         setError(`כמות לא תקינה. בחר מתוך: ${validOptions.join(', ')}`);
       }
+      setInfoStepBusy(false);
       return;
     }
     if (!user) {
       if (!guestForm.email || !guestForm.phone) {
         setError('אנא מלא את כל השדות הנדרשים');
+        setInfoStepBusy(false);
         return;
       }
     }
     setStep('payment');
+    setInfoStepBusy(false);
   };
 
   const handlePaymentSubmit = async (e) => {
@@ -250,6 +255,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     e.preventDefault();
     e.stopPropagation();
     if (checkoutSucceeded || transactionCompleteRef.current) {
+      return;
+    }
+    if (loading) {
       return;
     }
     setError('');
@@ -276,8 +284,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         serviceFee = ch.serviceFee;
         totalAmount = ch.totalAmount;
       } else {
-        const unit = Math.round(ticketBaseNum);
-        const ch = buyerChargeFromBase(unit * quantity);
+        const unitFace = listUnitFace;
+        if (!Number.isFinite(unitFace) || unitFace < 0) {
+          throw new Error('מחיר כרטיס לא תקין');
+        }
+        const ch = buyerChargeFromBase(unitFace * quantity);
         baseAmount = ch.baseAmount;
         serviceFee = ch.serviceFee;
         totalAmount = ch.totalAmount;
@@ -298,7 +309,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       
       // CRITICAL DEBUG: Trace all values before payment
       console.log('=== PAYMENT FLOW DEBUG ===');
-      console.log('basePriceStr (raw):', basePriceStr, 'unitDisplayPrice:', unitDisplayPrice);
+      console.log('listUnitFace (shekels):', listUnitFace, 'unitDisplayPrice:', unitDisplayPrice);
       console.log('isNegotiatedPrice:', isNegotiatedPrice);
       console.log('acceptedOffer:', acceptedOffer ? {
         id: acceptedOffer.id,
@@ -545,7 +556,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       setError('שגיאה: מזהה כרטיס חסר');
       return;
     }
+    if (pdfDownloadBusyId != null) {
+      return;
+    }
     console.log('Downloading ticket ID:', ticketId);
+    setPdfDownloadBusyId(ticketId);
     try {
       const email = user ? null : (guestForm?.email?.trim() || null);
       const response = await ticketAPI.downloadPDF(ticketId, email);
@@ -562,6 +577,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     } catch (err) {
       console.error('PDF download failed:', err?.response?.status, err?.response?.data, err);
       setError('הורדת ה-PDF נכשלה. אנא נסה שוב מאוחר יותר.');
+    } finally {
+      setPdfDownloadBusyId(null);
     }
   };
 
@@ -826,8 +843,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     return ticketIds.map((tid, idx) => (
                       <button
                         key={tid}
+                        type="button"
                         onClick={() => handleDownloadPDF(tid, idx)}
                         className="success-download-button"
+                        disabled={pdfDownloadBusyId != null}
+                        data-e2e="checkout-success-pdf"
                       >
                         <CheckIcon />
                         <DownloadIcon />
@@ -838,8 +858,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   if (ticketIds.length === 1) {
                     return (
                       <button
+                        type="button"
                         onClick={() => handleDownloadPDF(ticketIds[0])}
                         className="success-download-button"
+                        disabled={pdfDownloadBusyId != null}
+                        data-e2e="checkout-success-pdf"
                       >
                         <CheckIcon />
                         <DownloadIcon />
@@ -849,9 +872,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   }
                   return (
                     <button
+                      type="button"
                       onClick={() => handleDownloadPDF(ticket?.id)}
                       className="success-download-button"
-                      disabled={!ticket?.id}
+                      disabled={!ticket?.id || pdfDownloadBusyId != null}
+                      data-e2e="checkout-success-pdf"
                     >
                       <CheckIcon />
                       <DownloadIcon />
@@ -1336,11 +1361,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               </div>
             )}
             <button
+              type="button"
               onClick={handleInfoSubmit}
-              disabled={loading}
+              disabled={loading || infoStepBusy}
               className="checkout-button"
             >
-              המשך לתשלום
+              {infoStepBusy ? 'ממשיך…' : 'המשך לתשלום'}
             </button>
           </div>
         ) : (
@@ -1378,10 +1404,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             )}
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || infoStepBusy}
                 className="checkout-button"
               >
-                המשך לתשלום
+                {infoStepBusy ? 'ממשיך…' : 'המשך לתשלום'}
               </button>
             </form>
           </div>

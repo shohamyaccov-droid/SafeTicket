@@ -1327,3 +1327,39 @@
   }
 }
 
+@media (max-width: 600px) {
+  .modal-content:not(.success-celebration) {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    min-height: auto;
+    max-height: 100dvh;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    padding: 1.25rem 1rem 2rem;
+  }
+  .checkout-buttons-row {
+    flex-direction: column-reverse;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+  .checkout-row-btn {
+    width: 100%;
+    min-height: 48px;
+    font-size: 1rem;
+  }
+  .price-breakdown .price-row {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    font-size: 0.95rem;
+  }
+  .ticket-summary h3 {
+    font-size: 1.05rem;
+    word-break: break-word;
+    line-height: 1.35;
+  }
+  .negotiated-price-badge {
+    font-size: 0.85rem !important;
+    line-height: 1.4;
+  }
+}
+

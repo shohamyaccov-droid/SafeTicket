@@ -1683,3 +1683,20 @@
   }
 }
 
+@media (max-width: 640px) {
+  .checkout-btn {
+    width: 100%;
+    min-height: 48px;
+    font-size: 1rem;
+  }
+  .offers-ticket-header.enterprise-card {
+    padding: 10px 12px !important;
+  }
+  .row-title {
+    word-break: break-word;
+  }
+  .enterprise-card {
+    overflow-x: hidden;
+  }
+}
+

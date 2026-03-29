@@ -103,6 +103,9 @@ test.describe('Seller onboarding (live)', () => {
     const newEmail = `${newUser}@e2e.local`;
     const newPass = 'E2EOnboard2026!a';
 
+    // Mobile viewport (primary user base)
+    await page.setViewportSize({ width: 390, height: 844 });
+
     await page.goto(`${webBase}/login`, { waitUntil: 'domcontentloaded' });
     const reg = await page.evaluate(
       async ({ ar, username, email, password }) => {
@@ -259,7 +262,13 @@ test.describe('Seller onboarding (live)', () => {
     );
     await completePurchaseBtn.click();
     await expect(page.getByRole('heading', { name: /תשלום מאובטח/ })).toBeVisible({ timeout: 30_000 });
+    const expectTotalStr = expectedBuyerTotalFromBase(OFFER_BASE).toFixed(2);
+    const totalRow = page.locator('.modal-content .price-breakdown .total-row').last();
+    await expect(totalRow).toContainText(expectTotalStr);
     await page.getByRole('button', { name: 'המשך לתשלום' }).click();
+    await expect(page.locator('.modal-content .price-breakdown .total-row').last()).toContainText(
+      expectTotalStr
+    );
     await page.locator('#cardholderName').fill('E2E');
     await page.locator('#cardNumber').fill('4111111111111111');
     await page.locator('#expiryDate').fill('12/30');
@@ -271,6 +280,14 @@ test.describe('Seller onboarding (live)', () => {
     const expectTotal = expectedBuyerTotalFromBase(OFFER_BASE);
     expect(Number(orderPayload.final_negotiated_price)).toBe(OFFER_BASE);
     expect(Number(orderPayload.total_amount ?? orderPayload.total_paid_by_buyer)).toBeCloseTo(expectTotal, 2);
+
+    await expect(page.getByRole('heading', { name: /Order Confirmed/i })).toBeVisible({ timeout: 60_000 });
+    const pdfBtn = page.locator('[data-e2e="checkout-success-pdf"]').first();
+    await expect(pdfBtn).toBeVisible({ timeout: 30_000 });
+    const downloadPromise = page.waitForEvent('download', { timeout: 120_000 });
+    await pdfBtn.click();
+    const dl = await downloadPromise;
+    expect(dl.suggestedFilename().toLowerCase()).toMatch(/\.pdf$/);
 
     try {
       fs.unlinkSync(pdfPath);

@@ -41,19 +41,31 @@ def buyer_charge_from_base_amount(base: Any) -> tuple[Decimal, Decimal, Decimal]
     return b, fee, total
 
 
-def expected_negotiated_total_from_offer_base(offer_base: float) -> float:
-    """Total buyer pays for an accepted offer (bundle base amount before fee)."""
-    _, _, total = buyer_charge_from_base_amount(offer_base)
-    return float(total)
-
-
-def expected_buy_now_total(unit_asking: Any, quantity: int) -> float:
-    """List-price checkout: fee on (unit * qty) subtotal."""
+def list_price_checkout_amounts(unit_asking: Any, quantity: int) -> tuple[Decimal, Decimal, Decimal]:
+    """Buy-now at list price: (base_subtotal, service_fee, total) in agorot-accurate Decimal."""
     q = max(1, int(quantity or 1))
     unit = decimal_money(unit_asking)
     base = (unit * Decimal(q)).quantize(QUANT, rounding=ROUND_HALF_UP)
-    _, _, total = buyer_charge_from_base_amount(base)
-    return float(total)
+    return buyer_charge_from_base_amount(base)
+
+
+def expected_negotiated_total_from_offer_base(offer_base: Any) -> Decimal:
+    """Total buyer pays for an accepted offer (bundle base amount before fee)."""
+    _, _, total = buyer_charge_from_base_amount(offer_base)
+    return total
+
+
+def expected_buy_now_total(unit_asking: Any, quantity: int) -> Decimal:
+    """List-price checkout: fee on (unit × qty) subtotal."""
+    _, _, total = list_price_checkout_amounts(unit_asking, quantity)
+    return total
+
+
+def payment_amounts_match(received: Any, expected: Any, tol: Any = None) -> bool:
+    """Compare checkout totals using Decimal; default ±0.02 ILS tolerance."""
+    if tol is None:
+        tol = Decimal('0.02')
+    return abs(decimal_money(received) - decimal_money(expected)) <= decimal_money(tol)
 
 
 def amounts_close(a: float, b: float, tol: float = 0.01) -> bool:

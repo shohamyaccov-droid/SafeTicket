@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { formatPrice } from '../utils/priceFormat';
+import { formatPrice, buyerChargeFromBase } from '../utils/priceFormat';
 import './NegotiationModal.css';
 
 /**
@@ -17,6 +17,7 @@ const NegotiationModal = ({
   onReject,
   onCounter,
   acceptingOfferId,
+  offerMutationBusy = false,
   offerExpirationTimers,
   countdownTimers,
   onCompletePurchase,
@@ -163,6 +164,7 @@ const NegotiationModal = ({
                   <button
                     type="button"
                     className="primary-button"
+                    data-e2e="negotiation-complete-purchase"
                     onClick={() => onCompletePurchase(acceptedOfferRow)}
                     disabled={
                       (countdownTimers?.[acceptedOfferRow.id] ?? acceptedOfferRow?.checkout_time_remaining) <= 0
@@ -196,14 +198,15 @@ const NegotiationModal = ({
                   type="button"
                   className="accept-button"
                   onClick={() => onAccept(latestPending.id)}
-                  disabled={acceptingOfferId === latestPending.id}
+                  disabled={offerMutationBusy}
                 >
-                  אישור
+                  {acceptingOfferId === latestPending.id ? 'מאשר…' : 'אישור'}
                 </button>
                 <button
                   type="button"
                   className="reject-button"
                   onClick={() => onReject(latestPending.id)}
+                  disabled={offerMutationBusy}
                 >
                   דחייה
                 </button>
@@ -229,14 +232,14 @@ const NegotiationModal = ({
                       {/* PRIVACY: Only show fee preview to BUYER (isSeller=false) */}
                       {!isSeller && parseFloat(counterAmount) > 0 && (
                         <span className="counter-total-preview">
-                          סה"כ לתשלום כולל עמלה (10%): ₪{Math.round(parseFloat(counterAmount) * 1.1)}
+                          סה"כ לתשלום כולל עמלה (10%): ₪{buyerChargeFromBase(parseFloat(counterAmount)).totalAmount.toFixed(2)}
                         </span>
                       )}
                       <button
                         type="button"
                         className="primary-button"
                         onClick={handleCounter}
-                        disabled={!counterAmount || acceptingOfferId === latestPending.id || responsesLeft <= 0}
+                        disabled={!counterAmount || offerMutationBusy || responsesLeft <= 0}
                       >
                         שלח הצעת נגד
                       </button>

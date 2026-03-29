@@ -1086,3 +1086,41 @@
   margin: 0.25rem 0 0;
 }
 
+@media (max-width: 640px) {
+  .sell-container {
+    padding: var(--spacing-sm) var(--spacing-sm);
+    align-items: stretch;
+  }
+  .listing-card {
+    max-width: 100%;
+    padding: var(--spacing-md);
+  }
+  .sell-upgrade-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .sell-upgrade-actions .auth-button {
+    width: 100%;
+    min-height: 48px;
+    font-size: 1rem;
+  }
+  .submit-button {
+    width: 100%;
+    min-height: 50px;
+    font-size: 1.05rem;
+  }
+  .upload-method-option .option-title {
+    font-size: 0.9rem;
+    line-height: 1.35;
+  }
+  .seating-row-compact,
+  .auto-seat-row {
+    flex-direction: column;
+  }
+  .missing-event-banner-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+}
+

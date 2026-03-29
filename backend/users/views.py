@@ -19,7 +19,7 @@ from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.http import FileResponse
-from django.db.models import F, Q, Count, Sum, Exists, OuterRef, Value
+from django.db.models import F, Q, Count, Sum, Exists, OuterRef, Value, Prefetch
 from django.db.models.functions import Coalesce
 from django.db import transaction
 from django.core.files.base import ContentFile
@@ -162,15 +162,19 @@ from .serializers import (
     OfferSerializer,
     ContactMessageSerializer,
     EventRequestSerializer,
+    build_profile_orders_serialization_context,
+    build_listing_primary_order_map,
 )
 from .models import Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage, EventRequest
 from .pricing import (
-    amounts_close,
     buyer_charge_from_base_amount,
     compute_order_price_breakdown,
     compute_payout_eligible_date,
+    decimal_money,
     expected_buy_now_total,
     expected_negotiated_total_from_offer_base,
+    list_price_checkout_amounts,
+    payment_amounts_match,
 )
 from django.utils import timezone
 from datetime import timedelta
@@ -434,10 +438,15 @@ def _pdf_magic_bytes_ok(uploaded_file) -> bool:
 
 def _upload_mime_allowed(uploaded_file, relax: bool) -> bool:
     """
-    Strict: application/pdf only (+ magic bytes).
+    Strict: application/pdf only (+ magic bytes %PDF).
     Relaxed (testing): also allow common browser fallbacks for real PDFs (octet-stream, empty).
+    Reject obvious non-PDF MIME families (images, HTML, etc.) even if magic bytes were spoofed.
     """
     ct = (getattr(uploaded_file, 'content_type', '') or '').strip().lower()
+    if ct and not relax:
+        blocked_prefixes = ('image/', 'text/', 'video/', 'audio/', 'multipart/')
+        if any(ct.startswith(p) for p in blocked_prefixes):
+            return False
     if ct == 'application/pdf':
         return _pdf_magic_bytes_ok(uploaded_file)
     if relax and ct in ('application/octet-stream', 'binary/octet-stream', 'application/x-download', ''):
@@ -831,8 +840,11 @@ def user_profile(request):
         
         # Get user's orders (purchases) - ensure we always return a list
         try:
-            orders = Order.objects.filter(user=user, status__in=['paid', 'completed']).order_by('-created_at')
-            orders_serializer = ProfileOrderSerializer(orders, many=True, context={'request': request})
+            po_ctx, orders_list = build_profile_orders_serialization_context(
+                request,
+                Order.objects.filter(user=user, status__in=['paid', 'completed']).order_by('-created_at'),
+            )
+            orders_serializer = ProfileOrderSerializer(orders_list, many=True, context=po_ctx)
             orders_data = orders_serializer.data if orders_serializer.data else []
         except Exception as e:
             # If serialization fails, return empty list
@@ -842,8 +854,19 @@ def user_profile(request):
         listings_data = []
         if user.role == 'seller':
             try:
-                listings = Ticket.objects.filter(seller=user).order_by('-created_at')
-                listings_serializer = ProfileListingSerializer(listings, many=True, context={'request': request})
+                listings = list(
+                    Ticket.objects.filter(seller=user)
+                    .order_by('-created_at')
+                    .select_related('event')
+                    .prefetch_related(
+                        Prefetch('orders', queryset=Order.objects.only('id', 'ticket_id', 'status'))
+                    )
+                )
+                l_ctx = {
+                    'request': request,
+                    'listing_primary_order_map': build_listing_primary_order_map(listings),
+                }
+                listings_serializer = ProfileListingSerializer(listings, many=True, context=l_ctx)
                 listings_data = listings_serializer.data if listings_serializer.data else []
             except Exception as e:
                 # If serialization fails, return empty list
@@ -911,11 +934,11 @@ def user_activity(request):
         ).update(payout_status='eligible')
         
         # Get purchases (orders)
-        purchases = Order.objects.filter(
-            user=user,
-            status__in=['paid', 'completed']
-        ).order_by('-created_at')
-        purchases_serializer = ProfileOrderSerializer(purchases, many=True, context={'request': request})
+        po_ctx, purchases_list = build_profile_orders_serialization_context(
+            request,
+            Order.objects.filter(user=user, status__in=['paid', 'completed']).order_by('-created_at'),
+        )
+        purchases_serializer = ProfileOrderSerializer(purchases_list, many=True, context=po_ctx)
         
         # Get listings - show ALL tickets where seller=user (regardless of role)
         # Fix: Previously only showed when user.role=='seller'; tickets could exist but not display
@@ -923,8 +946,19 @@ def user_activity(request):
         active_listings = []
         sold_listings = []
         
-        all_listings = Ticket.objects.filter(seller=user).order_by('-created_at')
-        listings_serializer = ProfileListingSerializer(all_listings, many=True, context={'request': request})
+        all_listings = list(
+            Ticket.objects.filter(seller=user)
+            .order_by('-created_at')
+            .select_related('event')
+            .prefetch_related(
+                Prefetch('orders', queryset=Order.objects.only('id', 'ticket_id', 'status'))
+            )
+        )
+        l_ctx = {
+            'request': request,
+            'listing_primary_order_map': build_listing_primary_order_map(all_listings),
+        }
+        listings_serializer = ProfileListingSerializer(all_listings, many=True, context=l_ctx)
         
         for listing in listings_serializer.data:
             # Include both 'active' and 'pending_verification' in active_listings
@@ -1159,10 +1193,9 @@ def create_order(request):
             print(
                 f"Negotiated offer found: ID={oid}, Amount={negotiated_offer.amount}, Quantity={negotiated_offer.quantity}"
             )
-            offer_base_amount = float(negotiated_offer.amount)
-            expected_total = expected_negotiated_total_from_offer_base(offer_base_amount)
-            received_total = float(request.data.get('total_amount', 0))
-            if not amounts_close(received_total, expected_total):
+            expected_total = expected_negotiated_total_from_offer_base(negotiated_offer.amount)
+            received_total = decimal_money(request.data.get('total_amount', 0))
+            if not payment_amounts_match(received_total, expected_total):
                 return Response(
                     {
                         'error': (
@@ -1228,9 +1261,9 @@ def create_order(request):
                     # Validate total_amount ONLY when NOT a negotiated offer (offer_id overrides ticket price)
                     if not negotiated_offer:
                         try:
-                            sent_total = float(request.data.get('total_amount', 0))
+                            sent_total = decimal_money(request.data.get('total_amount', 0))
                             expected_total = expected_buy_now_total(reference_ticket.asking_price, order_quantity)
-                            if not amounts_close(sent_total, expected_total):
+                            if not payment_amounts_match(sent_total, expected_total):
                                 return Response(
                                     {'error': f'Invalid total amount. Expected {expected_total}, got {sent_total}'},
                                     status=status.HTTP_400_BAD_REQUEST
@@ -1364,9 +1397,9 @@ def create_order(request):
                     print(f"Single ticket found: ID={ticket.id}, status={ticket.status}, available_quantity={ticket.available_quantity}")
                     if not negotiated_offer:
                         try:
-                            sent_total = float(request.data.get('total_amount', 0))
+                            sent_total = decimal_money(request.data.get('total_amount', 0))
                             expected_total = expected_buy_now_total(ticket.asking_price, order_quantity)
-                            if not amounts_close(sent_total, expected_total):
+                            if not payment_amounts_match(sent_total, expected_total):
                                 return Response(
                                     {'error': f'Invalid total amount. Expected {expected_total}, got {sent_total}'},
                                     status=status.HTTP_400_BAD_REQUEST
@@ -1798,10 +1831,10 @@ def payment_simulation(request):
                     )
 
             is_negotiated = True
-            base_price = float(offer.amount)
-            expected_amount = expected_negotiated_total_from_offer_base(base_price)
+            base_dec, fee_dec, total_dec = buyer_charge_from_base_amount(offer.amount)
             print(
-                f"Payment simulation: Negotiated offer {oid}, base={base_price}, expected_total={expected_amount}"
+                f"Payment simulation: Negotiated offer {oid}, "
+                f"base={base_dec}, expected_total={total_dec}"
             )
         except Offer.DoesNotExist:
             return Response(
@@ -1810,24 +1843,19 @@ def payment_simulation(request):
             )
     
     if not is_negotiated:
-        base_price = float(ticket.asking_price) * quantity
-        _, service_fee_dec, total_dec = buyer_charge_from_base_amount(base_price)
-        service_fee = float(service_fee_dec)
-        expected_amount = float(total_dec)
+        base_dec, fee_dec, total_dec = list_price_checkout_amounts(ticket.asking_price, quantity)
     
-    AMOUNT_TOLERANCE = 0.02
-    if abs(float(amount) - expected_amount) > AMOUNT_TOLERANCE:
+    amount_dec = decimal_money(amount)
+    if not payment_amounts_match(amount_dec, total_dec):
         return Response(
-            {'error': f'Amount does not match {"negotiated offer" if is_negotiated else "ticket"} price. Expected: {expected_amount:.2f}, Got: {amount}'},
-            status=status.HTTP_400_BAD_REQUEST
+            {
+                'error': (
+                    f'Amount does not match {"negotiated offer" if is_negotiated else "ticket"} price. '
+                    f'Expected: {total_dec:.2f}, Got: {amount}'
+                )
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
-    
-    if is_negotiated:
-        total_amount = expected_amount
-        service_fee = total_amount - base_price
-    else:
-        total_amount = expected_amount
-        # service_fee set above via buyer_charge_from_base_amount
     
     # Simulate payment processing (always succeeds in dev)
     # In production, this would call the actual payment gateway
@@ -1835,9 +1863,9 @@ def payment_simulation(request):
         'success': True,
         'payment_id': f'PAY_{ticket_id}_{request.data.get("timestamp", "")}',
         'message': 'Payment processed successfully',
-        'base_price': base_price,
-        'service_fee': service_fee,
-        'total_amount': total_amount,
+        'base_price': float(base_dec),
+        'service_fee': float(fee_dec),
+        'total_amount': float(total_dec),
         'is_negotiated': is_negotiated
     }, status=status.HTTP_200_OK)
 
@@ -1878,10 +1906,9 @@ def guest_checkout(request):
             )
 
         if negotiated_offer:
-            offer_base = float(negotiated_offer.amount)
-            expected_total = expected_negotiated_total_from_offer_base(offer_base)
-            received_total = float(order_data.get('total_amount', 0))
-            if not amounts_close(received_total, expected_total):
+            expected_total = expected_negotiated_total_from_offer_base(negotiated_offer.amount)
+            received_total = decimal_money(order_data.get('total_amount', 0))
+            if not payment_amounts_match(received_total, expected_total):
                 return Response(
                     {'error': f'Amount mismatch. Expected {expected_total:.2f}, got {received_total}'},
                     status=status.HTTP_400_BAD_REQUEST
@@ -3255,7 +3282,14 @@ class OfferViewSet(viewsets.ModelViewSet):
         from django.utils import timezone
         from django.db.models import Q
         
-        queryset = Offer.objects.select_related('buyer', 'ticket', 'ticket__seller', 'ticket__event').all()
+        queryset = Offer.objects.select_related(
+            'buyer',
+            'ticket',
+            'ticket__seller',
+            'ticket__event',
+            'parent_offer',
+            'counter_offer',
+        ).all()
         
         # Filter by user role
         user = self.request.user

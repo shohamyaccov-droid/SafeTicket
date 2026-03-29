@@ -5,6 +5,68 @@ from django.db.models import Sum, Q
 from .models import User, Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage, EventRequest
 
 
+def build_profile_orders_serialization_context(request, orders_queryset):
+    """
+    Select-related orders + one batched ticket fetch for ProfileOrderSerializer
+    (avoids N+1 in get_tickets / get_status_timeline).
+    """
+    orders = list(
+        orders_queryset.select_related('ticket', 'ticket__event', 'related_offer')
+    )
+    ticket_ids = set()
+    for o in orders:
+        if o.ticket_id:
+            ticket_ids.add(o.ticket_id)
+        for tid in (o.ticket_ids or []):
+            try:
+                ticket_ids.add(int(tid))
+            except (TypeError, ValueError):
+                pass
+    profile_tickets_by_id = {}
+    if ticket_ids:
+        profile_tickets_by_id = {
+            t.id: t
+            for t in Ticket.objects.filter(id__in=ticket_ids).select_related('event')
+        }
+    return {
+        'request': request,
+        'profile_tickets_by_id': profile_tickets_by_id,
+    }, orders
+
+
+def build_listing_primary_order_map(listings):
+    """
+    Map ticket id → latest paid Order for sold listings (ProfileListingSerializer).
+    Single forward scan of recent orders instead of one query per listing.
+    """
+    sold_ids = {
+        t.id
+        for t in listings
+        if getattr(t, 'status', None) in ('sold', 'pending_payout', 'paid_out')
+    }
+    if not sold_ids:
+        return {}
+    orders = (
+        Order.objects.filter(status__in=['paid', 'completed'])
+        .order_by('created_at')
+        .select_related('ticket')[:3000]
+    )
+    ticket_to_order = {}
+    for o in orders:
+        touched = []
+        if o.ticket_id:
+            touched.append(o.ticket_id)
+        for x in (o.ticket_ids or []):
+            try:
+                touched.append(int(x))
+            except (TypeError, ValueError):
+                pass
+        for tid in touched:
+            if tid in sold_ids:
+                ticket_to_order[tid] = o
+    return ticket_to_order
+
+
 def round_shekel_price(value):
     """Whole shekels for ticket face value (matches Ticket.save rounding)."""
     from decimal import Decimal, ROUND_HALF_UP
@@ -226,23 +288,28 @@ class OrderSerializer(serializers.ModelSerializer):
     
     def get_tickets(self, obj):
         """Return array of tickets with id and pdf_file_url for multi-ticket downloads"""
-        ids = getattr(obj, 'ticket_ids', None) or []
-        if not ids and obj.ticket:
+        cache = self.context.get('profile_tickets_by_id') or {}
+        ids = list(getattr(obj, 'ticket_ids', None) or [])
+        if not ids and obj.ticket_id:
+            ids = [obj.ticket_id]
+        elif not ids and obj.ticket:
             ids = [obj.ticket.id]
         tickets = []
         request = self.context.get('request')
         for tid in ids:
-            try:
-                t = Ticket.objects.get(id=tid)
-                url = None
-                if t.pdf_file:
-                    if request:
-                        url = request.build_absolute_uri(f'/api/users/tickets/{t.id}/download_pdf/')
-                    else:
-                        url = f'/api/users/tickets/{t.id}/download_pdf/'
-                tickets.append({'id': t.id, 'pdf_file_url': url})
-            except Ticket.DoesNotExist:
-                pass
+            t = cache.get(tid)
+            if t is None:
+                try:
+                    t = Ticket.objects.select_related('event').get(id=tid)
+                except Ticket.DoesNotExist:
+                    continue
+            url = None
+            if t.pdf_file:
+                if request:
+                    url = request.build_absolute_uri(f'/api/users/tickets/{t.id}/download_pdf/')
+                else:
+                    url = f'/api/users/tickets/{t.id}/download_pdf/'
+            tickets.append({'id': t.id, 'pdf_file_url': url})
         return tickets
     
     def get_ticket_info(self, obj):
@@ -615,23 +682,28 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
 
     def get_tickets(self, obj):
         """Return array of tickets with id and pdf_file_url for multi-ticket downloads"""
-        ids = getattr(obj, 'ticket_ids', None) or []
-        if not ids and obj.ticket:
+        cache = self.context.get('profile_tickets_by_id') or {}
+        ids = list(getattr(obj, 'ticket_ids', None) or [])
+        if not ids and obj.ticket_id:
+            ids = [obj.ticket_id]
+        elif not ids and obj.ticket:
             ids = [obj.ticket.id]
         tickets = []
         request = self.context.get('request')
         for tid in ids:
-            try:
-                t = Ticket.objects.get(id=tid)
-                url = None
-                if t.pdf_file:
-                    if request:
-                        url = request.build_absolute_uri(f'/api/users/tickets/{t.id}/download_pdf/')
-                    else:
-                        url = f'/api/users/tickets/{t.id}/download_pdf/'
-                tickets.append({'id': t.id, 'pdf_file_url': url})
-            except Ticket.DoesNotExist:
-                pass
+            t = cache.get(tid)
+            if t is None:
+                try:
+                    t = Ticket.objects.select_related('event').get(id=tid)
+                except Ticket.DoesNotExist:
+                    continue
+            url = None
+            if t.pdf_file:
+                if request:
+                    url = request.build_absolute_uri(f'/api/users/tickets/{t.id}/download_pdf/')
+                else:
+                    url = f'/api/users/tickets/{t.id}/download_pdf/'
+            tickets.append({'id': t.id, 'pdf_file_url': url})
         return tickets
     
     def get_ticket_details(self, obj):
@@ -679,18 +751,18 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
     
     def get_status_timeline(self, obj):
         """Return status timeline for order progress. When paid+has PDFs, show ready for download."""
-        ids = getattr(obj, 'ticket_ids', None) or []
-        if not ids and obj.ticket:
-            ids = [obj.ticket.id]
+        cache = self.context.get('profile_tickets_by_id') or {}
+        ids = list(getattr(obj, 'ticket_ids', None) or [])
+        if not ids and obj.ticket_id:
+            ids = [obj.ticket_id]
         has_pdf = False
         for tid in ids:
-            try:
-                t = Ticket.objects.get(id=tid)
-                if t.pdf_file:
-                    has_pdf = True
-                    break
-            except Ticket.DoesNotExist:
-                pass
+            t = cache.get(tid)
+            if t is None and obj.ticket_id == tid and obj.ticket:
+                t = obj.ticket
+            if t and t.pdf_file:
+                has_pdf = True
+                break
         if not has_pdf and obj.ticket and obj.ticket.pdf_file:
             has_pdf = True
         # If paid/completed AND has PDFs (instant delivery), show step 3 (ready for download)
@@ -735,6 +807,9 @@ class ProfileListingSerializer(serializers.ModelSerializer):
     def _primary_order_for_sold_ticket(self, obj):
         if obj.status not in ['sold', 'pending_payout', 'paid_out']:
             return None
+        cache_map = self.context.get('listing_primary_order_map')
+        if isinstance(cache_map, dict) and obj.id in cache_map:
+            return cache_map[obj.id]
         order = (
             Order.objects.filter(status__in=['paid', 'completed'])
             .filter(Q(ticket_id=obj.id) | Q(ticket_ids__contains=[obj.id]))
@@ -785,7 +860,7 @@ class ProfileListingSerializer(serializers.ModelSerializer):
     
     def get_order_count(self, obj):
         """Get number of orders for this ticket"""
-        return obj.orders.count()
+        return len(list(obj.orders.all()))
 
 
 class TicketAlertSerializer(serializers.ModelSerializer):
