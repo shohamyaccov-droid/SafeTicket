@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authAPI, orderAPI, paymentAPI, ticketAPI } from '../services/api';
-import { getTicketPrice, formatPrice, getUnitPriceWithFee, calculateServiceFee } from '../utils/priceFormat';
+import { getTicketPrice, formatPrice, buyerChargeFromBase } from '../utils/priceFormat';
 import './CheckoutModal.css';
 
 const normalizeSplitType = (rawSplitType) => {
@@ -115,18 +115,25 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const negotiatedBaseTotal = offerBaseAmountStr != null ? parseFloat(offerBaseAmountStr) : null;
   const negotiatedUnitBase = negotiatedBaseTotal != null && negotiatedQty > 0 ? negotiatedBaseTotal / negotiatedQty : null;
   const basePriceNum = negotiatedUnitBase != null ? negotiatedUnitBase : ticketBaseNum;
-  // UNIFIED: Math.ceil(base * 1.10) - same as EventDetailsPage. Phase 2: ALWAYS whole numbers (no .90 or .99)
-  const unitDisplayPrice = !isNaN(basePriceNum) && basePriceNum > 0 ? getUnitPriceWithFee(basePriceNum) : 0;
+  const unitBaseRounded = Math.round(ticketBaseNum);
+  const listBaseSubtotal =
+    !isNegotiatedPrice && unitBaseRounded > 0
+      ? Math.round(unitBaseRounded * quantity * 100) / 100
+      : 0;
+  const negotiatedBundleBreakdown =
+    isNegotiatedPrice && negotiatedBaseTotal != null && negotiatedBaseTotal > 0
+      ? buyerChargeFromBase(negotiatedBaseTotal)
+      : null;
+  const listBreakdown =
+    !isNegotiatedPrice && listBaseSubtotal > 0 ? buyerChargeFromBase(listBaseSubtotal) : null;
+  const unitDisplayPrice =
+    !isNaN(basePriceNum) && basePriceNum > 0 ? buyerChargeFromBase(basePriceNum).totalAmount : 0;
   const effectivePrice = String(negotiatedBaseTotal != null ? negotiatedBaseTotal : ticketBaseNum);
   const effectiveUnitPrice = negotiatedUnitBase != null ? negotiatedUnitBase : ticketBaseNum;
   const unitPriceForDisplay = unitDisplayPrice;
-  const unitBaseRounded = Math.round(ticketBaseNum);
-  const standardReceiptBaseTotal =
-    !isNegotiatedPrice && ticketBaseNum > 0 ? unitBaseRounded * quantity : 0;
-  const standardReceiptTotalPay = !isNegotiatedPrice ? unitDisplayPrice * quantity : 0;
-  const standardReceiptFeeTotal = !isNegotiatedPrice
-    ? standardReceiptTotalPay - standardReceiptBaseTotal
-    : 0;
+  const standardReceiptBaseTotal = listBreakdown?.baseAmount ?? 0;
+  const standardReceiptTotalPay = listBreakdown?.totalAmount ?? 0;
+  const standardReceiptFeeTotal = listBreakdown?.serviceFee ?? 0;
 
   // Update quantity when initialQuantity prop changes
   useEffect(() => {
@@ -259,21 +266,21 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       let baseAmount, serviceFee, totalAmount;
       
       if (isNegotiatedPrice) {
-        // acceptedOffer.amount is the TOTAL base amount (before fee) for the bundle
         const raw = acceptedOffer.amount;
         const negotiatedBase = typeof raw === 'number' ? raw : parseFloat(String(raw));
         if (isNaN(negotiatedBase) || negotiatedBase <= 0) {
           throw new Error('מחיר הצעה לא תקין');
         }
-        // Phase 2: Force strict rounding - finalTotal and unitDisplayPrice ALWAYS whole numbers (no 141.90 or .99)
-        totalAmount = Math.ceil(negotiatedBase * 1.10); // Total = ceil(base * 1.10), always integer
-        serviceFee = Math.ceil(negotiatedBase * 0.10);  // Service fee rounded up
-        baseAmount = totalAmount - serviceFee;           // Base = total - fee, ensures base + fee = total (both integers)
+        const ch = buyerChargeFromBase(negotiatedBase);
+        baseAmount = ch.baseAmount;
+        serviceFee = ch.serviceFee;
+        totalAmount = ch.totalAmount;
       } else {
-        // Regular flow: unitDisplayPrice = Math.ceil(base * 1.10), total = unitDisplayPrice * quantity
-        baseAmount = unitDisplayPrice * quantity;
-        serviceFee = 0;
-        totalAmount = baseAmount;
+        const unit = Math.round(ticketBaseNum);
+        const ch = buyerChargeFromBase(unit * quantity);
+        baseAmount = ch.baseAmount;
+        serviceFee = ch.serviceFee;
+        totalAmount = ch.totalAmount;
       }
       
       // Final validation
@@ -283,9 +290,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       
       // CRITICAL: Store the actual paid amounts for the success screen (Phase 2: integers for negotiated)
       const paidSnapshot = {
-        baseAmount: Number.isInteger(baseAmount) ? String(baseAmount) : baseAmount.toFixed(2),
-        serviceFee: Number.isInteger(serviceFee) ? String(serviceFee) : serviceFee.toFixed(2),
-        totalAmount: Number.isInteger(totalAmount) ? String(totalAmount) : totalAmount.toFixed(2),
+        baseAmount: baseAmount.toFixed(2),
+        serviceFee: serviceFee.toFixed(2),
+        totalAmount: totalAmount.toFixed(2),
       };
       setPaidAmounts(paidSnapshot);
       
@@ -314,17 +321,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       console.log('Listing Group ID:', listingGroupId);
       console.log('========================');
       
-      // Payload: use exact finalized total (matches UI display). Phase 2: negotiated = Math.ceil(base*1.10)
-      let finalTotal = totalAmount;
-      if (isNegotiatedPrice && acceptedOffer?.amount != null) {
-        const exactBase = parseFloat(acceptedOffer.amount);
-        finalTotal = Math.ceil(exactBase * 1.10); // Always whole number, no .90 or .99
-        console.log('Negotiated: exactBase=', exactBase, 'finalTotal=', finalTotal);
-      } else {
-        // Standard tickets: finalTotal = unitDisplayPrice * quantity (Math.ceil(base*1.10) * qty)
-        finalTotal = unitDisplayPrice * quantity;
-        console.log('Standard: unitDisplayPrice=', unitDisplayPrice, 'quantity=', quantity, 'finalTotal=', finalTotal);
-      }
+      const finalTotal = totalAmount;
+      console.log('finalTotal=', finalTotal, 'isNegotiated=', isNegotiatedPrice);
       
       // Step 1: Simulate payment - send total amount (with service fee)
       console.log('Calling paymentAPI.simulatePayment...');
@@ -789,9 +787,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   </>
                 ) : (
                   <>
-                    <p><strong>מחיר כרטיסים:</strong> ₪{Math.floor((unitDisplayPrice * quantity) / 1.10)}</p>
-                    <p><strong>עמלת שירות (10%):</strong> ₪{(unitDisplayPrice * quantity) - Math.floor((unitDisplayPrice * quantity) / 1.10)}</p>
-                    <p><strong>סה"כ שולם:</strong> ₪{unitDisplayPrice * quantity}</p>
+                    <p><strong>מחיר כרטיסים:</strong> ₪{(negotiatedBundleBreakdown || listBreakdown)?.baseAmount?.toFixed(2) ?? '—'}</p>
+                    <p><strong>עמלת שירות (10%):</strong> ₪{(negotiatedBundleBreakdown || listBreakdown)?.serviceFee?.toFixed(2) ?? '—'}</p>
+                    <p><strong>סה"כ שולם:</strong> ₪{(negotiatedBundleBreakdown || listBreakdown)?.totalAmount?.toFixed(2) ?? '—'}</p>
                   </>
                 )}
               </div>
@@ -1031,22 +1029,22 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   )}
                   <div className="price-row">
                     <span>מחיר כרטיס</span>
-                    <span>₪{offerBaseAmountStr != null ? parseFloat(offerBaseAmountStr).toFixed(2) : parseFloat(effectivePrice).toFixed(2)}</span>
+                    <span>₪{negotiatedBundleBreakdown ? negotiatedBundleBreakdown.baseAmount.toFixed(2) : '0.00'}</span>
                   </div>
                   <div className="price-row">
                     <span>עמלת שירות (10%)</span>
-                    <span>₪{calculateServiceFee(offerBaseAmountStr ?? effectivePrice, 10)}</span>
+                    <span>₪{negotiatedBundleBreakdown ? negotiatedBundleBreakdown.serviceFee.toFixed(2) : '0.00'}</span>
                   </div>
                   <div className="price-row total-row">
                     <span>סך הכל לתשלום:</span>
-                    <span>₪{(parseFloat(offerBaseAmountStr ?? effectivePrice) + parseFloat(calculateServiceFee(offerBaseAmountStr ?? effectivePrice, 10))).toFixed(2)}</span>
+                    <span>₪{negotiatedBundleBreakdown ? negotiatedBundleBreakdown.totalAmount.toFixed(2) : '0.00'}</span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="price-row">
                     <span>מחיר כרטיס</span>
-                    <span>₪{standardReceiptBaseTotal}</span>
+                    <span>₪{Number(standardReceiptBaseTotal).toFixed(2)}</span>
                   </div>
                   <div className="price-row">
                     <span>כמות:</span>
@@ -1060,11 +1058,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   )}
                   <div className="price-row">
                     <span>עמלת שירות (10%)</span>
-                    <span>₪{standardReceiptFeeTotal}</span>
+                    <span>₪{Number(standardReceiptFeeTotal).toFixed(2)}</span>
                   </div>
                   <div className="price-row total-row">
                     <span>סך הכל לתשלום:</span>
-                    <span>₪{standardReceiptTotalPay}</span>
+                    <span>₪{Number(standardReceiptTotalPay).toFixed(2)}</span>
                   </div>
                 </>
               )}
@@ -1288,22 +1286,22 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   )}
                   <div className="price-row">
                     <span>מחיר כרטיס</span>
-                    <span>₪{offerBaseAmountStr != null ? parseFloat(offerBaseAmountStr).toFixed(2) : parseFloat(effectivePrice).toFixed(2)}</span>
+                    <span>₪{negotiatedBundleBreakdown ? negotiatedBundleBreakdown.baseAmount.toFixed(2) : '0.00'}</span>
                   </div>
                   <div className="price-row">
                     <span>עמלת שירות (10%)</span>
-                    <span>₪{calculateServiceFee(effectivePrice, 10)}</span>
+                    <span>₪{negotiatedBundleBreakdown ? negotiatedBundleBreakdown.serviceFee.toFixed(2) : '0.00'}</span>
                   </div>
                   <div className="price-row total-row">
                     <span>סך הכל לתשלום:</span>
-                    <span>₪{(parseFloat(effectivePrice) + parseFloat(calculateServiceFee(effectivePrice, 10))).toFixed(2)}</span>
+                    <span>₪{negotiatedBundleBreakdown ? negotiatedBundleBreakdown.totalAmount.toFixed(2) : '0.00'}</span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="price-row">
                     <span>מחיר כרטיס</span>
-                    <span>₪{standardReceiptBaseTotal}</span>
+                    <span>₪{Number(standardReceiptBaseTotal).toFixed(2)}</span>
                   </div>
                   <div className="price-row">
                     <span>כמות:</span>
@@ -1317,11 +1315,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   )}
                   <div className="price-row">
                     <span>עמלת שירות (10%)</span>
-                    <span>₪{standardReceiptFeeTotal}</span>
+                    <span>₪{Number(standardReceiptFeeTotal).toFixed(2)}</span>
                   </div>
                   <div className="price-row total-row">
                     <span>סך הכל לתשלום:</span>
-                    <span>₪{standardReceiptTotalPay}</span>
+                    <span>₪{Number(standardReceiptTotalPay).toFixed(2)}</span>
                   </div>
                 </>
               )}

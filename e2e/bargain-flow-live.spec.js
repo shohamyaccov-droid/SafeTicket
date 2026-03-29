@@ -13,7 +13,14 @@ const MINIMAL_PDF =
 
 const LIST_PRICE = 500;
 const OFFER_BASE = 400;
-const EXPECT_TOTAL = Math.ceil(OFFER_BASE * 1.1);
+
+function expectedBuyerTotalFromBase(base) {
+  const b = Math.round(Number(base) * 100) / 100;
+  const baseAg = Math.round(b * 100);
+  const feeAg = Math.round((baseAg * 10) / 100);
+  return (baseAg + feeAg) / 100;
+}
+const EXPECT_TOTAL = expectedBuyerTotalFromBase(OFFER_BASE);
 
 function trimSlash(s) {
   return String(s || '').replace(/\/+$/, '');

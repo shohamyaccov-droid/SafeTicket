@@ -12,7 +12,6 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
-import math
 from rest_framework.exceptions import PermissionDenied
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
@@ -154,6 +153,7 @@ from .serializers import (
     TicketListSerializer,
     ProfileOrderSerializer,
     ProfileListingSerializer,
+    UpgradeToSellerSerializer,
     EventSerializer,
     EventListSerializer,
     ArtistSerializer,
@@ -164,7 +164,14 @@ from .serializers import (
     EventRequestSerializer,
 )
 from .models import Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage, EventRequest
-from .pricing import compute_order_price_breakdown, compute_payout_eligible_date
+from .pricing import (
+    amounts_close,
+    buyer_charge_from_base_amount,
+    compute_order_price_breakdown,
+    compute_payout_eligible_date,
+    expected_buy_now_total,
+    expected_negotiated_total_from_offer_base,
+)
 from django.utils import timezone
 from datetime import timedelta
 from django.conf import settings
@@ -856,6 +863,36 @@ def user_profile(request):
         }, status=status.HTTP_200_OK)
 
 
+@csrf_required
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def upgrade_to_seller(request):
+    """
+    Buyer → seller onboarding: payout + escrow acceptance, then role=seller.
+    """
+    if getattr(request.user, 'role', '') == 'seller':
+        return Response({'detail': 'כבר מוגדר כמוכר.'}, status=status.HTTP_400_BAD_REQUEST)
+    ser = UpgradeToSellerSerializer(data=request.data)
+    ser.is_valid(raise_exception=True)
+    u = request.user
+    u.phone_number = ser.validated_data['phone_number']
+    u.payout_details = ser.validated_data['payout_details']
+    u.accepted_escrow_terms = True
+    u.escrow_terms_accepted_at = timezone.now()
+    u.role = 'seller'
+    u.save(
+        update_fields=[
+            'phone_number',
+            'payout_details',
+            'accepted_escrow_terms',
+            'escrow_terms_accepted_at',
+            'role',
+            'updated_at',
+        ]
+    )
+    return Response(UserSerializer(u).data, status=status.HTTP_200_OK)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def user_activity(request):
@@ -1123,13 +1160,13 @@ def create_order(request):
                 f"Negotiated offer found: ID={oid}, Amount={negotiated_offer.amount}, Quantity={negotiated_offer.quantity}"
             )
             offer_base_amount = float(negotiated_offer.amount)
-            expected_total = float(math.ceil(offer_base_amount * 1.10))
+            expected_total = expected_negotiated_total_from_offer_base(offer_base_amount)
             received_total = float(request.data.get('total_amount', 0))
-            if abs(received_total - expected_total) > 0.02:
+            if not amounts_close(received_total, expected_total):
                 return Response(
                     {
                         'error': (
-                            f'Amount mismatch. Expected {expected_total:.2f} (ceil of base×1.10), '
+                            f'Amount mismatch. Expected {expected_total:.2f} (base + 10% fee), '
                             f'got {received_total}'
                         )
                     },
@@ -1192,10 +1229,8 @@ def create_order(request):
                     if not negotiated_offer:
                         try:
                             sent_total = float(request.data.get('total_amount', 0))
-                            unit_base = float(reference_ticket.asking_price)
-                            expected_unit = math.ceil(unit_base * 1.10)
-                            expected_total = expected_unit * order_quantity
-                            if sent_total != expected_total:
+                            expected_total = expected_buy_now_total(reference_ticket.asking_price, order_quantity)
+                            if not amounts_close(sent_total, expected_total):
                                 return Response(
                                     {'error': f'Invalid total amount. Expected {expected_total}, got {sent_total}'},
                                     status=status.HTTP_400_BAD_REQUEST
@@ -1330,10 +1365,8 @@ def create_order(request):
                     if not negotiated_offer:
                         try:
                             sent_total = float(request.data.get('total_amount', 0))
-                            unit_base = float(ticket.asking_price)
-                            expected_unit = math.ceil(unit_base * 1.10)
-                            expected_total = expected_unit * order_quantity
-                            if sent_total != expected_total:
+                            expected_total = expected_buy_now_total(ticket.asking_price, order_quantity)
+                            if not amounts_close(sent_total, expected_total):
                                 return Response(
                                     {'error': f'Invalid total amount. Expected {expected_total}, got {sent_total}'},
                                     status=status.HTTP_400_BAD_REQUEST
@@ -1766,7 +1799,7 @@ def payment_simulation(request):
 
             is_negotiated = True
             base_price = float(offer.amount)
-            expected_amount = float(math.ceil(base_price * 1.10))
+            expected_amount = expected_negotiated_total_from_offer_base(base_price)
             print(
                 f"Payment simulation: Negotiated offer {oid}, base={base_price}, expected_total={expected_amount}"
             )
@@ -1777,13 +1810,12 @@ def payment_simulation(request):
             )
     
     if not is_negotiated:
-        # Calculate expected amount with 10% service fee
-        # Base price = ticket price * quantity
         base_price = float(ticket.asking_price) * quantity
-        service_fee = base_price * 0.10  # 10% service fee
-        expected_amount = base_price + service_fee
+        _, service_fee_dec, total_dec = buyer_charge_from_base_amount(base_price)
+        service_fee = float(service_fee_dec)
+        expected_amount = float(total_dec)
     
-    AMOUNT_TOLERANCE = 2.00 if not is_negotiated else 0.02
+    AMOUNT_TOLERANCE = 0.02
     if abs(float(amount) - expected_amount) > AMOUNT_TOLERANCE:
         return Response(
             {'error': f'Amount does not match {"negotiated offer" if is_negotiated else "ticket"} price. Expected: {expected_amount:.2f}, Got: {amount}'},
@@ -1794,8 +1826,8 @@ def payment_simulation(request):
         total_amount = expected_amount
         service_fee = total_amount - base_price
     else:
-        service_fee = base_price * 0.10
-        total_amount = base_price + service_fee
+        total_amount = expected_amount
+        # service_fee set above via buyer_charge_from_base_amount
     
     # Simulate payment processing (always succeeds in dev)
     # In production, this would call the actual payment gateway
@@ -1847,9 +1879,9 @@ def guest_checkout(request):
 
         if negotiated_offer:
             offer_base = float(negotiated_offer.amount)
-            expected_total = float(math.ceil(offer_base * 1.10))
+            expected_total = expected_negotiated_total_from_offer_base(offer_base)
             received_total = float(order_data.get('total_amount', 0))
-            if abs(received_total - expected_total) > 0.02:
+            if not amounts_close(received_total, expected_total):
                 return Response(
                     {'error': f'Amount mismatch. Expected {expected_total:.2f}, got {received_total}'},
                     status=status.HTTP_400_BAD_REQUEST

@@ -135,6 +135,7 @@ export const authAPI = {
   login: (data) => api.post('/users/login/', data, creds),
   logout: () => api.post('/users/logout/', {}, creds),
   getProfile: () => api.get('/users/profile/', creds),
+  upgradeToSeller: (data) => api.post('/users/me/upgrade-to-seller/', data, creds),
   getDashboard: () => api.get('/users/dashboard/', creds),
   getCsrf: async () => {
     const response = await api.get('/users/csrf/', creds);

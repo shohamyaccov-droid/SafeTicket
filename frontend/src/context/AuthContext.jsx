@@ -165,8 +165,17 @@ export const AuthProvider = ({ children }) => {
     broadcastAuthEvent('logout');
   };
 
+  const refreshProfile = async () => {
+    try {
+      const response = await authAPI.getProfile();
+      applyProfile(response);
+    } catch {
+      setUser(null);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

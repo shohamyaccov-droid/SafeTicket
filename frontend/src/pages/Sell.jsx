@@ -5,13 +5,15 @@ import { ticketAPI, eventAPI, artistAPI, eventRequestAPI, ensureCsrfToken } from
 import { getVenueSectionOptions } from '../utils/venueMaps';
 import { createListFetchAbort } from '../utils/listFetch';
 import SellFormSkeleton from '../components/skeletons/SellFormSkeleton';
+import BecomeSellerModal from '../components/BecomeSellerModal';
 import './Sell.css';
 
 const SELL_PAGE_BUILD_TAG = import.meta.env.VITE_BUILD_ID || 'local-dev';
 
 const Sell = () => {
   // ALL HOOKS MUST BE CALLED FIRST - BEFORE ANY EARLY RETURNS
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, refreshProfile } = useAuth();
+  const [showSellerOnboarding, setShowSellerOnboarding] = useState(false);
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     event_id: '',
@@ -237,15 +239,37 @@ const Sell = () => {
 
   if (user.role !== 'seller') {
     return (
-      <div className="sell-container">
-        <div className="listing-card">
-          <h2>נדרש חשבון מוכר</h2>
-          <p>אתה צריך חשבון מוכר כדי להציע כרטיסים למכירה. אנא עדכן את תפקיד הפרופיל שלך.</p>
-          <button onClick={() => navigate('/')} className="auth-button">
-            חזרה לדף הבית
-          </button>
+      <>
+        <div className="sell-container">
+          <div className="listing-card">
+            <h2>הפוך למוכר</h2>
+            <p>
+              כדי להעלות כרטיסים, יש להשלים הרשמה כמוכר: פרטי תשלום והסכמה לנאמנות — התשלום משוחרר אחרי האירוע.
+            </p>
+            <div className="sell-upgrade-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '1rem' }}>
+              <button
+                type="button"
+                className="auth-button"
+                data-e2e="sell-upgrade-cta"
+                onClick={() => setShowSellerOnboarding(true)}
+              >
+                הפוך למוכר עכשיו
+              </button>
+              <button type="button" className="auth-button secondary" onClick={() => navigate('/')}>
+                חזרה לדף הבית
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+        <BecomeSellerModal
+          open={showSellerOnboarding}
+          onClose={() => setShowSellerOnboarding(false)}
+          onSuccess={async () => {
+            await refreshProfile();
+            setShowSellerOnboarding(false);
+          }}
+        />
+      </>
     );
   }
 

@@ -1,5 +1,30 @@
 /**
- * Format price for display: whole shekels show without decimals (222), fractional amounts keep 2 decimals (e.g. order totals).
+ * Money: align with backend `buyer_charge_from_base_amount` — base + 10% fee, each rounded to 0.01 ILS.
+ * Implemented via integer agorot to avoid float drift.
+ */
+
+/**
+ * @param {number|string} baseInput - Seller-facing base (per unit or bundle) in ILS
+ * @returns {{ baseAmount: number, serviceFee: number, totalAmount: number }}
+ */
+export function buyerChargeFromBase(baseInput) {
+  const raw = parseFloat(String(baseInput ?? 0));
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return { baseAmount: 0, serviceFee: 0, totalAmount: 0 };
+  }
+  const base = Math.round(raw * 100) / 100;
+  const baseAg = Math.round(base * 100);
+  const feeAg = Math.round((baseAg * 10) / 100);
+  const totalAg = baseAg + feeAg;
+  return {
+    baseAmount: baseAg / 100,
+    serviceFee: feeAg / 100,
+    totalAmount: totalAg / 100,
+  };
+}
+
+/**
+ * Format price for display: whole shekels without decimals; otherwise 2 decimals.
  */
 export const formatPrice = (price) => {
   if (price === null || price === undefined || price === '') {
@@ -21,40 +46,36 @@ export const formatPrice = (price) => {
 };
 
 /**
- * Calculate unit price with 10% fee - ROUND UP per Israeli marketplace standard.
- * Used for display on EventDetailsPage and CheckoutModal to ensure consistency.
- * Rule: Math.ceil(base_price * 1.10)
+ * Single listing unit: total buyer pays for one ticket at list/negotiated unit base.
  */
 export const getUnitPriceWithFee = (basePrice) => {
-  const base = parseFloat(String(basePrice ?? 0));
-  if (isNaN(base) || base <= 0) return 0;
-  return Math.ceil(base * 1.10);
+  const { totalAmount } = buyerChargeFromBase(basePrice);
+  return totalAmount;
 };
 
 /**
- * Buyer service fee in whole shekels for one unit (matches checkout: ceil(base×1.10) − rounded base).
+ * Buyer service fee for one unit (total − base).
  */
 export const getBuyerServiceFeeShekels = (basePrice) => {
-  const base = parseFloat(String(basePrice ?? 0));
-  if (isNaN(base) || base <= 0) return 0;
-  const unitBase = Math.round(base);
-  if (unitBase <= 0) return 0;
-  return getUnitPriceWithFee(unitBase) - unitBase;
+  const { serviceFee } = buyerChargeFromBase(basePrice);
+  return serviceFee;
 };
 
 /**
- * Calculate total price for quantity: unitPriceWithFee * quantity.
- * Ensures unitPrice * quantity === totalPrice (no rounding drift).
+ * Total for quantity: 10% fee on (unit base × qty) subtotal.
  */
 export const getTotalWithFee = (basePrice, quantity) => {
-  const unitPrice = getUnitPriceWithFee(basePrice);
   const qty = typeof quantity === 'string' ? parseInt(quantity, 10) : Number(quantity);
   if (isNaN(qty) || qty <= 0) return 0;
-  return unitPrice * qty;
+  const unit = parseFloat(String(basePrice ?? 0));
+  if (isNaN(unit) || unit <= 0) return 0;
+  const baseSubtotal = Math.round(unit * qty * 100) / 100;
+  const { totalAmount } = buyerChargeFromBase(baseSubtotal);
+  return totalAmount;
 };
 
 /**
- * Face value for a ticket listing (whole shekels only: "222", not "221.99").
+ * Face value for a ticket listing (whole shekels for display).
  */
 export const getTicketPrice = (ticket) => {
   if (!ticket) return '0';
@@ -66,58 +87,33 @@ export const getTicketPrice = (ticket) => {
   return String(Math.round(num));
 };
 
-/**
- * Calculate base amount (unit price * quantity) using precise decimal math
- * Returns string with exactly 2 decimal places
- * Global fix: Wraps calculation in .toFixed(2) to ensure precision
- */
 export const calculateBaseAmount = (unitPrice, quantity) => {
-  // Handle Decimal objects from backend
   const priceStr = typeof unitPrice === 'string' ? unitPrice : String(unitPrice);
   const price = parseFloat(priceStr);
   const qty = typeof quantity === 'string' ? parseInt(quantity, 10) : Number(quantity);
-  
+
   if (isNaN(price) || isNaN(qty) || price <= 0 || qty <= 0) {
     return '0.00';
   }
-  
-  // Calculate base amount with precise decimal math
-  // Wrap in .toFixed(2) to ensure exactly 2 decimal places
+
   const baseAmount = price * qty;
-  return parseFloat(baseAmount.toFixed(2)).toFixed(2); // Double ensure precision
+  return parseFloat(baseAmount.toFixed(2)).toFixed(2);
 };
 
-/**
- * Calculate service fee using precise decimal math
- * Returns string with exactly 2 decimal places
- * Global fix: Wraps calculation in .toFixed(2) to ensure precision
- */
 export const calculateServiceFee = (baseAmount, serviceFeePercent = 10) => {
   const amountStr = typeof baseAmount === 'string' ? baseAmount : String(baseAmount);
   const amount = parseFloat(amountStr);
-  
+
   if (isNaN(amount) || amount <= 0) {
     return '0.00';
   }
-  
-  // Calculate service fee with precise decimal math
-  // Wrap in .toFixed(2) to ensure exactly 2 decimal places
-  const serviceFee = (amount * serviceFeePercent) / 100;
-  return parseFloat(serviceFee.toFixed(2)).toFixed(2); // Double ensure precision
+
+  const { serviceFee } = buyerChargeFromBase(amount);
+  return serviceFee.toFixed(2);
 };
 
-/**
- * Calculate total price with service fee using precise decimal math
- * Returns string with exactly 2 decimal places
- * Global fix: Wraps calculation in .toFixed(2) to ensure precision
- */
 export const calculateTotalWithFee = (unitPrice, quantity, serviceFeePercent = 10) => {
   const baseAmount = calculateBaseAmount(unitPrice, quantity);
-  const serviceFee = calculateServiceFee(baseAmount, serviceFeePercent);
-  
-  // Calculate total with precise decimal math
-  // Wrap in .toFixed(2) to ensure exactly 2 decimal places
-  const total = parseFloat(baseAmount) + parseFloat(serviceFee);
-  return parseFloat(total.toFixed(2)).toFixed(2); // Double ensure precision
+  const { totalAmount } = buyerChargeFromBase(parseFloat(baseAmount));
+  return totalAmount.toFixed(2);
 };
-

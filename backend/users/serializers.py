@@ -167,8 +167,32 @@ class UserSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'role', 'phone_number', 'profile_image', 'is_verified_seller', 'is_email_verified', 'is_superuser', 'is_staff', 'date_joined')
-        read_only_fields = ('id', 'date_joined', 'is_verified_seller', 'is_email_verified', 'is_superuser', 'is_staff')
+        fields = (
+            'id', 'username', 'email', 'role', 'phone_number', 'payout_details',
+            'accepted_escrow_terms', 'profile_image', 'is_verified_seller', 'is_email_verified',
+            'is_superuser', 'is_staff', 'date_joined',
+        )
+        read_only_fields = (
+            'id', 'date_joined', 'is_verified_seller', 'is_email_verified', 'is_superuser', 'is_staff',
+            'accepted_escrow_terms',
+        )
+
+
+class UpgradeToSellerSerializer(serializers.Serializer):
+    phone_number = serializers.CharField(max_length=30, required=True)
+    payout_details = serializers.CharField(required=True, min_length=4, max_length=4000)
+    accepted_escrow_terms = serializers.BooleanField(required=True)
+
+    def validate_phone_number(self, value):
+        s = (value or '').strip()
+        if len(s) < 8:
+            raise serializers.ValidationError('נא להזין מספר טלפון תקין.')
+        return s
+
+    def validate_accepted_escrow_terms(self, value):
+        if not value:
+            raise serializers.ValidationError('יש לאשר את תנאי הנאמנות.')
+        return value
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):

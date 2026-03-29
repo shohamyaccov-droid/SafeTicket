@@ -823,6 +823,22 @@
   background: var(--primary-blue-hover);
 }
 
+.auth-button.secondary {
+  background: transparent;
+  color: var(--primary-blue);
+  border: 2px solid var(--primary-blue);
+}
+
+.auth-button.secondary:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.sell-upgrade-actions .auth-button {
+  width: auto;
+  flex: 1 1 160px;
+  margin-top: 0;
+}
+
 /* Event Search Dropdown */
 .event-search-group {
   position: relative;

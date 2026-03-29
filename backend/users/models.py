@@ -13,6 +13,13 @@ class User(AbstractUser):
     
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='buyer')
     phone_number = models.CharField(max_length=20, blank=True, null=True)
+    payout_details = models.TextField(
+        blank=True,
+        default='',
+        help_text='PayPal email, bank transfer details, etc. (seller onboarding)',
+    )
+    accepted_escrow_terms = models.BooleanField(default=False)
+    escrow_terms_accepted_at = models.DateTimeField(null=True, blank=True)
     profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True)
     is_verified_seller = models.BooleanField(default=False, help_text="Verified seller badge (for trust indicators)")
     is_email_verified = models.BooleanField(default=True, help_text="Email verified via OTP (False when OTP enforcement is enabled)")
