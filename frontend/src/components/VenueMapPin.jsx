@@ -134,7 +134,7 @@ const VenueMapPin = ({ venueName, sectionName }) => {
       </div>
       
       <div className="venue-map-wrapper">
-        {imageError || forceShow ? (
+        {imageError ? (
           // SVG Fallback
           renderGenericStadium(venueName, sectionCoords)
         ) : (

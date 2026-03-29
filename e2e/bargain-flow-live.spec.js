@@ -100,6 +100,82 @@ function groupDomIdFromTicketJson(t) {
 /**
  * Poll public event tickets API until our listing is active (avoids empty UI / wrong row / price text mismatch).
  */
+/**
+ * Event page uses the same query params as the SPA (sort=price_asc by default).
+ * After navigation, the UI can briefly lag behind the public API (cold cache / navigation timing).
+ * Patient loop: wait for rows, or refresh/reload when the API already lists our ticket.
+ */
+async function waitForEventPageTicketRows(page, apiRoot, eventId, ticketId, timeoutMs = 240_000) {
+  const root = trimSlash(apiRoot);
+  const deadline = Date.now() + timeoutMs;
+  let lastApi = null;
+
+  async function fetchListingHasTicket() {
+    return page.evaluate(
+      async ({ ar, eid, tid }) => {
+        const url = `${ar}/users/events/${eid}/tickets/?sort=price_asc`;
+        const r = await fetch(url, { credentials: 'include' });
+        const text = await r.text();
+        let j;
+        try {
+          j = JSON.parse(text);
+        } catch {
+          return { ok: r.ok, status: r.status, parseError: true, snippet: text.slice(0, 200) };
+        }
+        const arr = Array.isArray(j) ? j : (j.results || []);
+        const t = arr.find((x) => Number(x.id) === Number(tid));
+        return {
+          ok: r.ok,
+          status: r.status,
+          count: arr.length,
+          found: !!t,
+          qty: t ? t.available_quantity : null,
+          st: t ? t.status : null,
+        };
+      },
+      { ar: root, eid: eventId, tid: ticketId }
+    );
+  }
+
+  while (Date.now() < deadline) {
+    const rowCount = await page.locator('.viagogo-ticket-row').count();
+    if (rowCount > 0) {
+      return;
+    }
+
+    lastApi = await fetchListingHasTicket();
+    const listingOk =
+      lastApi.found &&
+      lastApi.st === 'active' &&
+      Number(lastApi.qty) > 0;
+
+    if (listingOk) {
+      await page
+        .locator('.refresh-btn')
+        .click({ timeout: 10_000 })
+        .catch(() => {});
+      await page.waitForTimeout(3500);
+      if ((await page.locator('.viagogo-ticket-row').count()) > 0) {
+        return;
+      }
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForLoadState('networkidle', { timeout: 180_000 }).catch(() => {});
+      await page.waitForTimeout(3000);
+      if ((await page.locator('.viagogo-ticket-row').count()) > 0) {
+        return;
+      }
+    }
+
+    await page.waitForTimeout(3000);
+  }
+
+  const bodySnippet = ((await page.textContent('body')) || '').slice(0, 800);
+  throw new Error(
+    `No .viagogo-ticket-row within ${timeoutMs}ms (event ${eventId}, ticket ${ticketId}). ` +
+      `Last API: ${JSON.stringify(lastApi)}. Body: ${bodySnippet}`
+  );
+}
+
 async function waitForTicketOnEventListing(page, apiRoot, eventId, ticketId, timeoutMs = 120_000) {
   const root = trimSlash(apiRoot);
   const deadline = Date.now() + timeoutMs;
@@ -107,7 +183,7 @@ async function waitForTicketOnEventListing(page, apiRoot, eventId, ticketId, tim
   while (Date.now() < deadline) {
     const result = await page.evaluate(
       async ({ ar, eid, tid }) => {
-        const r = await fetch(`${ar}/users/events/${eid}/tickets/`, { credentials: 'include' });
+        const r = await fetch(`${ar}/users/events/${eid}/tickets/?sort=price_asc`, { credentials: 'include' });
         const text = await r.text();
         let j;
         try {
@@ -222,11 +298,32 @@ test.describe('Live bargain flow', () => {
         r.request().method() === 'GET',
       { timeout: 120_000 }
     );
-    await page.goto(`${webBase}/event/${eventId}`, { waitUntil: 'domcontentloaded' });
+    page.on('pageerror', (err) => {
+      // eslint-disable-next-line no-console
+      console.error('PAGEERROR', err?.message || err);
+    });
+    await page.goto(`${webBase}/event/${eventId}`, { waitUntil: 'load', timeout: 180_000 });
     await ticketsGet;
     await page.waitForLoadState('networkidle', { timeout: 180_000 }).catch(() => {});
-    await page.waitForTimeout(4000);
 
+    await page.waitForSelector('.event-details-container', { state: 'visible', timeout: 120_000 });
+    await page.waitForFunction(
+      () => {
+        const t = document.body?.innerText || '';
+        if (t.includes('טוען פרטי אירוע')) return false;
+        return (
+          t.includes('כרטיסים זמינים') ||
+          t.includes('אירוע לא נמצא') ||
+          t.includes('אין כרטיסים זמינים לאירוע זה כרגע')
+        );
+      },
+      { timeout: 180_000 }
+    );
+    if (await page.getByText('אירוע לא נמצא').isVisible()) {
+      throw new Error(`Event page says not found for eventId=${eventId}`);
+    }
+
+    await waitForEventPageTicketRows(page, apiRoot, eventId, ticketId, 240_000);
     await page.waitForSelector('.viagogo-ticket-row', { state: 'visible', timeout: 60_000 });
 
     // Stable hook from SPA (data-e2e-ticket-id); fallbacks for older bundles.
