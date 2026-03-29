@@ -224,6 +224,8 @@ test.describe('Live bargain flow', () => {
     );
     await page.goto(`${webBase}/event/${eventId}`, { waitUntil: 'domcontentloaded' });
     await ticketsGet;
+    await page.waitForLoadState('networkidle', { timeout: 120_000 }).catch(() => {});
+    await page.waitForTimeout(2000);
 
     // Stable hook from SPA (data-e2e-ticket-id); fallbacks for older bundles.
     let row = page
