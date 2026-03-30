@@ -76,7 +76,7 @@ const Navbar = () => {
           <div className="nav-cluster">
             <div className="nav-logo-block">
               <Link to="/" className="nav-logo">
-                SafeTrade
+                TixTrade
               </Link>
             </div>
           </div>
@@ -91,7 +91,7 @@ const Navbar = () => {
         <div className="nav-cluster">
           <div className="nav-logo-block">
             <Link to="/" className="nav-logo" onClick={closeMobileMenu}>
-              SafeTrade
+              TixTrade
             </Link>
           </div>
 

@@ -7,7 +7,7 @@ const Footer = () => {
       <div className="footer-container">
         <div className="footer-content">
           <div className="footer-section">
-            <h3>SafeTrade</h3>
+            <h3>TixTrade</h3>
             <p>שוק דיגיטלי מאובטח — כרטיסים ונכסים</p>
           </div>
 
@@ -43,7 +43,7 @@ const Footer = () => {
         </div>
 
         <div className="footer-bottom">
-          <p>&copy; {new Date().getFullYear()} SafeTrade. כל הזכויות שמורות.</p>
+          <p>&copy; {new Date().getFullYear()} TixTrade. כל הזכויות שמורות.</p>
         </div>
       </div>
     </footer>

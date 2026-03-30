@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="SafeTrade IL">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="TixTrade">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#0045af"/>
@@ -6,7 +6,7 @@
     </linearGradient>
   </defs>
   <rect width="1200" height="630" fill="url(#bg)"/>
-  <text x="600" y="260" text-anchor="middle" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="72" font-weight="700">SafeTrade IL</text>
-  <text x="600" y="350" text-anchor="middle" fill="#c7d7ff" font-family="Segoe UI, Arial, sans-serif" font-size="36">Secure marketplace ? tickets and digital assets</text>
+  <text x="600" y="260" text-anchor="middle" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="72" font-weight="700">TixTrade</text>
+  <text x="600" y="350" text-anchor="middle" fill="#c7d7ff" font-family="Segoe UI, Arial, sans-serif" font-size="36">Secure marketplace for tickets</text>
   <rect x="420" y="420" width="360" height="8" rx="4" fill="#4ade80"/>
 </svg>

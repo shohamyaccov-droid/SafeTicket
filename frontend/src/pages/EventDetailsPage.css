@@ -26,23 +26,23 @@
   text-decoration: underline;
 }
 
-/* Side-by-side hero (desktop): contained image + readable info */
+/* Side-by-side hero: image on the left (LTR flex), Hebrew copy stays RTL in the text column */
 .event-hero-card {
   display: flex;
   flex-direction: row;
-  align-items: stretch;
+  align-items: center;
   gap: 1.5rem;
   background: var(--bg-card);
   border-radius: 16px;
   overflow: hidden;
   box-shadow: var(--shadow-md);
   border: 1px solid var(--border-light, #e5e7eb);
-  direction: rtl;
+  direction: ltr;
 }
 
 .event-hero-media {
-  flex: 0 0 42%;
-  max-width: 42%;
+  flex: 0 0 40%;
+  max-width: 40%;
   min-width: 0;
   background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
   display: flex;
@@ -71,6 +71,7 @@
   justify-content: center;
   gap: 0.65rem;
   text-align: right;
+  direction: rtl;
 }
 
 .event-hero-title {
@@ -129,6 +130,8 @@
     flex-direction: column;
     gap: 0;
     border-radius: 14px;
+    direction: rtl;
+    align-items: stretch;
   }
 
   .event-hero-media {
@@ -561,8 +564,8 @@
   }
 }
 
-/* Premium Trust Banner - SafeTrade 100% Guarantee */
-.safeticket-guarantee-banner {
+/* Premium trust banner — TixTrade buyer protection */
+.tixtrade-guarantee-banner {
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -575,13 +578,13 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
-.safeticket-guarantee-banner svg {
+.tixtrade-guarantee-banner svg {
   flex-shrink: 0;
   width: 24px;
   height: 24px;
 }
 
-.safeticket-guarantee-banner span {
+.tixtrade-guarantee-banner span {
   font-weight: 600;
   font-size: 1rem;
   color: #1f2937;

@@ -920,8 +920,8 @@ const EventDetailsPage = () => {
           <div className="tickets-list-container">
             {ticketGroups.length > 0 ? (
               <>
-                {/* Premium Trust Banner - SafeTrade 100% Guarantee */}
-                <div className="safeticket-guarantee-banner">
+                {/* TixTrade buyer-protection banner */}
+                <div className="tixtrade-guarantee-banner">
                   <svg
                     width="24"
                     height="24"

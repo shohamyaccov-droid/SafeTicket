@@ -1,6 +1,6 @@
 {
-  "name": "SafeTrade",
-  "short_name": "SafeTrade",
+  "name": "TixTrade",
+  "short_name": "TixTrade",
   "description": "שוק כרטיסים מאובטח בישראל",
   "start_url": "/",
   "display": "standalone",
