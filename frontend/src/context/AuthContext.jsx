@@ -155,8 +155,6 @@ export const AuthProvider = ({ children }) => {
       return {
         success: false,
         error: detailStr || 'שגיאת שרת פנימית (500) או שגיאה לא ידועה.',
-        _debugStatus: status,
-        _debugData: data,
       };
     }
     let errorMessage = 'שם משתמש או סיסמה אינם נכונים';

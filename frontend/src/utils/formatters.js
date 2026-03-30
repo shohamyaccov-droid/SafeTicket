@@ -11,17 +11,20 @@ const apiOriginForImages = () => {
 
 /**
  * Resolve catalog / media URLs for <img src>.
- * Do NOT mutate https URLs (Cloudinary signed URLs, delivery URLs, query params break if altered).
+ * Absolute http(s) URLs (incl. signed Cloudinary) must be returned byte-for-byte after trim —
+ * never append query params, transforms, or API origin.
  */
 export const getFullImageUrl = (url, _opts = {}) => {
-  if (!url || url === 'undefined' || url === 'null' || typeof url === 'object') return null;
+  if (url == null || url === 'undefined' || url === 'null' || typeof url === 'object') return null;
   const strUrl = String(url).trim();
   if (!strUrl || strUrl === 'undefined' || strUrl === 'null') return null;
-  // Protocol-relative CDN URLs — never prefix with API host
+  if (/^https?:\/\//i.test(strUrl)) {
+    return strUrl;
+  }
   if (strUrl.startsWith('//')) {
     return `https:${strUrl}`;
   }
-  if (strUrl.startsWith('http://') || strUrl.startsWith('https://') || strUrl.startsWith('data:')) {
+  if (strUrl.startsWith('data:')) {
     return strUrl;
   }
   const normalized = strUrl.startsWith('/') ? strUrl : `/${strUrl}`;
