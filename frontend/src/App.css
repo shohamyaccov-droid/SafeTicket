@@ -6,6 +6,15 @@
   background: var(--bg-primary);
 }
 
+/* Ultra-wide: keep content comfortably centered (foldable / supermonitor) */
+@media (min-width: 2200px) {
+  .App {
+    max-width: 2100px;
+    margin: 0 auto;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04);
+  }
+}
+
 .App > main {
   flex: 1;
   padding-top: 0;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { eventAPI, ticketAPI, offerAPI, artistAPI } from '../services/api';
@@ -510,23 +510,28 @@ const EventDetailsPage = () => {
   }, [ticketGroups]);
 
   const handleBuy = async (ticketGroup) => {
-    // Manual re-fetch before opening modal: ensure ticket is still available (prevent double-sell race)
-    const freshTickets = await fetchTickets();
-    const freshGroups = groupTicketsByListing(freshTickets);
-    const groupId = ticketGroup.listing_group_id || ticketGroup.id;
-    const stillAvailable = freshGroups.some(
-      (g) => (g.listing_group_id || g.id) === groupId && (g.available_count || 0) > 0
-    );
-    if (!stillAvailable) {
-      setToast({
-        message: 'הכרטיס נמכר ברגע זה. ריעננו את הרשימה – נסה כרטיס אחר.',
-        type: 'error',
-      });
-      return;
+    if (buyOpeningRef.current) return;
+    buyOpeningRef.current = true;
+    try {
+      const freshTickets = await fetchTickets();
+      const freshGroups = groupTicketsByListing(freshTickets);
+      const groupId = ticketGroup.listing_group_id || ticketGroup.id;
+      const stillAvailable = freshGroups.some(
+        (g) => (g.listing_group_id || g.id) === groupId && (g.available_count || 0) > 0
+      );
+      if (!stillAvailable) {
+        setToast({
+          message: 'הכרטיס נמכר ברגע זה. ריעננו את הרשימה – נסה כרטיס אחר.',
+          type: 'error',
+        });
+        return;
+      }
+      setSelectedTicketGroup(ticketGroup);
+      setQuantity(1);
+      setShowCheckout(true);
+    } finally {
+      buyOpeningRef.current = false;
     }
-    setSelectedTicketGroup(ticketGroup);
-    setQuantity(1);
-    setShowCheckout(true);
   };
 
   const handleMakeOffer = (ticketGroup) => {

@@ -1,4 +1,54 @@
 import { useState, useEffect, useRef } from 'react';
+
+function luhnValid(cardDigits) {
+  const d = String(cardDigits).replace(/\D/g, '');
+  if (d.length < 13 || d.length > 19) return false;
+  let sum = 0;
+  let alt = false;
+  for (let i = d.length - 1; i >= 0; i -= 1) {
+    let n = parseInt(d[i], 10);
+    if (alt) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+    alt = !alt;
+  }
+  return sum % 10 === 0;
+}
+
+function validateGuestContact(email, phone) {
+  const em = String(email || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+    return 'נא להזין אימייל תקין';
+  }
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 9 || digits.length > 15) {
+    return 'נא להזין מספר טלפון תקין (לפחות 9 ספרות)';
+  }
+  return null;
+}
+
+function validateMockPaymentFields(form) {
+  const name = String(form.cardholderName || '').trim();
+  if (name.length < 2) return 'נא להזין שם בעל כרטיס';
+  const rawCard = String(form.cardNumber || '').replace(/\s/g, '');
+  if (!/^\d{13,19}$/.test(rawCard)) return 'מספר כרטיס אשראי לא תקין';
+  if (!luhnValid(rawCard)) return 'מספר כרטיס לא עובר בדיקת checksum';
+  const expRaw = String(form.expiryDate || '').replace(/\D/g, '');
+  if (expRaw.length !== 4) return 'תאריך תפוגה בפורמט MM/YY';
+  const mm = parseInt(expRaw.slice(0, 2), 10);
+  const yy = parseInt(expRaw.slice(2, 4), 10);
+  if (mm < 1 || mm > 12) return 'חודש לא תקין';
+  const now = new Date();
+  const yFull = 2000 + yy;
+  const curY = now.getFullYear();
+  const curM = now.getMonth() + 1;
+  if (yFull < curY || (yFull === curY && mm < curM)) return 'תוקף הכרטיס בעבר';
+  const cvv = String(form.cvv || '').replace(/\D/g, '');
+  if (!/^\d{3,4}$/.test(cvv)) return 'CVV לא תקין';
+  return null;
+}
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authAPI, orderAPI, paymentAPI, ticketAPI } from '../services/api';
@@ -246,6 +296,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         setInfoStepBusy(false);
         return;
       }
+      const gErr = validateGuestContact(guestForm.email, guestForm.phone);
+      if (gErr) {
+        setError(gErr);
+        setInfoStepBusy(false);
+        return;
+      }
     }
     setStep('payment');
     setInfoStepBusy(false);
@@ -262,6 +318,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       return;
     }
     setError('');
+    const payErr = validateMockPaymentFields(paymentForm);
+    if (payErr) {
+      setError(payErr);
+      return;
+    }
     setLoading(true);
     setPaymentPhase('idle');
     paymentSubmittingRef.current = true;

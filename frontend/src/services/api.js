@@ -266,6 +266,7 @@ api.interceptors.response.use(
         if (isGetProfile) {
           return Promise.reject(error);
         }
+        clearBearerFallback();
         window.location.href = '/login';
       }
     }
