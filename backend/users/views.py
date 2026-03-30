@@ -32,6 +32,7 @@ from django.core.files.base import ContentFile
 import io
 import logging
 import secrets
+import traceback
 import uuid
 from pypdf import PdfReader, PdfWriter
 
@@ -222,11 +223,13 @@ def _user_from_access_token_str(access_token_str):
     if not access_token_str:
         return None
     from rest_framework_simplejwt.settings import api_settings as jwt_api_settings
-    from rest_framework_simplejwt.tokens import AccessToken
+    from rest_framework_simplejwt.state import token_backend
 
     try:
-        tok = AccessToken(str(access_token_str))
-        uid = tok[jwt_api_settings.USER_ID_CLAIM]
+        payload = token_backend.decode(str(access_token_str), verify=True)
+        uid = payload.get(jwt_api_settings.USER_ID_CLAIM)
+        if uid is None:
+            return None
         return User.objects.get(**{jwt_api_settings.USER_ID_FIELD: uid})
     except Exception:
         logger.exception('Could not resolve User from access token for login response')
@@ -795,50 +798,57 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     throttle_classes = [AuthLoginScopedThrottle]
 
     def post(self, request, *args, **kwargs):
-        response = super().post(request, *args, **kwargs)
-        if response.status_code != 200:
-            return response
-        from .authentication import set_jwt_cookies
+        try:
+            response = super().post(request, *args, **kwargs)
+            if response.status_code != 200:
+                return response
+            from .authentication import set_jwt_cookies
 
-        raw_data = getattr(response, 'data', None)
-        body = {}
-        if isinstance(raw_data, dict):
-            body = {k: raw_data[k] for k in raw_data}
-        else:
-            try:
-                body = dict(raw_data) if raw_data is not None else {}
-            except Exception:
-                logger.exception('login: could not copy response.data')
-                body = {}
-
-        access = body.get('access')
-        refresh = body.get('refresh')
-        if access and refresh:
-            try:
-                set_jwt_cookies(response, str(access), str(refresh))
-            except Exception:
-                logger.exception('login: set_jwt_cookies failed (JSON body tokens still returned)')
-            body['access'] = str(access)
-            body['refresh'] = str(refresh)
-
-        user = _user_from_access_token_str(access)
-        if user is None:
-            raw = request.data.get(User.USERNAME_FIELD) or request.data.get('username')
-            if raw is not None and not isinstance(raw, str):
-                raw = str(raw)
-            uname = (raw or '').strip()
-            if uname:
+            raw_data = getattr(response, 'data', None)
+            body = {}
+            if isinstance(raw_data, dict):
+                body = {k: raw_data[k] for k in raw_data}
+            else:
                 try:
-                    user = User.objects.get(username=uname)
-                except User.DoesNotExist:
-                    user = None
+                    body = dict(raw_data) if raw_data is not None else {}
+                except Exception:
+                    logger.exception('login: could not copy response.data')
+                    body = {}
 
-        payload = _user_payload_for_auth_response(request, user)
-        if payload is not None:
-            body['user'] = payload
+            access = body.get('access')
+            refresh = body.get('refresh')
+            if access and refresh:
+                try:
+                    set_jwt_cookies(response, str(access), str(refresh))
+                except Exception:
+                    logger.exception('login: set_jwt_cookies failed (JSON body tokens still returned)')
+                body['access'] = str(access)
+                body['refresh'] = str(refresh)
 
-        response.data = body
-        return response
+            user = _user_from_access_token_str(access)
+            if user is None:
+                raw = request.data.get(User.USERNAME_FIELD) or request.data.get('username')
+                if raw is not None and not isinstance(raw, str):
+                    raw = str(raw)
+                uname = (raw or '').strip()
+                if uname:
+                    try:
+                        user = User.objects.get(username=uname)
+                    except User.DoesNotExist:
+                        user = None
+
+            payload = _user_payload_for_auth_response(request, user)
+            if payload is not None:
+                body['user'] = payload
+
+            response.data = body
+            return response
+        except Exception as e:
+            traceback.print_exc()
+            return Response(
+                {'detail': f'Server Crash: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 @method_decorator(csrf_required, name='dispatch')

@@ -137,13 +137,19 @@ export const AuthProvider = ({ children }) => {
         (typeof error === 'string' ? error : 'Network Error — no response (check CORS)');
       return { success: false, error: technical, errorHebrew: 'שגיאת תקשורת עם השרת' };
     }
-    // 500 or HTML/undefined response - server error
+    // 5xx / HTML — surface API detail when present (debug: "Server Crash: ..." from backend)
     const status = error.response?.status;
     const data = error.response?.data;
-    const is500 = status === 500;
     const isHtml = typeof data === 'string' && data.trim().startsWith('<');
-    if (is500 || isHtml || (status >= 500 && (data === undefined || data === null))) {
-      return { success: false, error: 'שגיאת שרת פנימית (500) או שגיאה לא ידועה.' };
+    if ((status != null && status >= 500) || isHtml) {
+      const detailStr =
+        data && typeof data === 'object' && typeof data.detail === 'string'
+          ? data.detail
+          : null;
+      return {
+        success: false,
+        error: detailStr || 'שגיאת שרת פנימית (500) או שגיאה לא ידועה.',
+      };
     }
     let errorMessage = 'שם משתמש או סיסמה אינם נכונים';
     if (typeof data?.detail === 'string') {
