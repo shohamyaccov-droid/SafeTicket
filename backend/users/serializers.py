@@ -230,7 +230,17 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     is_verified_seller = serializers.BooleanField(read_only=True)
     is_email_verified = serializers.BooleanField(read_only=True)
-    
+    profile_image = serializers.SerializerMethodField()
+
+    def get_profile_image(self, obj):
+        try:
+            field = getattr(obj, 'profile_image', None)
+            if not field:
+                return None
+            return resolved_image_url(self.context.get('request'), field)
+        except Exception:
+            return None
+
     class Meta:
         model = User
         fields = (
@@ -265,8 +275,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-        token['role'] = user.role
-        token['username'] = user.username
+        # JWT payload must be JSON-serializable (no lazy proxies / odd types).
+        token['role'] = str(getattr(user, 'role', '') or '')
+        token['username'] = str(getattr(user, 'username', '') or '')
         return token
 
 

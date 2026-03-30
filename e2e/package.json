@@ -2,7 +2,7 @@
   "name": "safeticket-e2e",
   "private": true,
   "version": "1.0.0",
-  "description": "Browser E2E against live SafeTicket (Playwright)",
+  "description": "Browser E2E against live SafeTrade (Playwright)",
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed"

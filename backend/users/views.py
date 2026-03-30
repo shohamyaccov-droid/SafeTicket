@@ -320,7 +320,7 @@ def _download_ticket_pdf_bytes(ticket):
         r = requests.get(
             url,
             timeout=90,
-            headers={'User-Agent': 'SafeTicket-PDF/1.0'},
+            headers={'User-Agent': 'SafeTrade-PDF/1.0'},
         )
         r.raise_for_status()
         return r.content
@@ -800,16 +800,24 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             return response
         from .authentication import set_jwt_cookies
 
-        try:
-            body = dict(response.data)
-        except Exception:
-            logger.exception('login: could not copy response.data')
-            body = getattr(response, 'data', None) or {}
+        raw_data = getattr(response, 'data', None)
+        body = {}
+        if isinstance(raw_data, dict):
+            body = {k: raw_data[k] for k in raw_data}
+        else:
+            try:
+                body = dict(raw_data) if raw_data is not None else {}
+            except Exception:
+                logger.exception('login: could not copy response.data')
+                body = {}
 
         access = body.get('access')
         refresh = body.get('refresh')
         if access and refresh:
-            set_jwt_cookies(response, access, refresh)
+            try:
+                set_jwt_cookies(response, str(access), str(refresh))
+            except Exception:
+                logger.exception('login: set_jwt_cookies failed (JSON body tokens still returned)')
             body['access'] = str(access)
             body['refresh'] = str(refresh)
 

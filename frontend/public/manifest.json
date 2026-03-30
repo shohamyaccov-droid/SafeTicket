@@ -1,6 +1,6 @@
 {
-  "name": "SafeTicket",
-  "short_name": "SafeTicket",
+  "name": "SafeTrade IL",
+  "short_name": "SafeTrade",
   "description": "שוק כרטיסים מאובטח בישראל",
   "start_url": "/",
   "display": "standalone",

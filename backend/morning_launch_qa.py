@@ -44,7 +44,7 @@ from qa_production_render_cycle import (
 
 def session_register_seller(api_base: str, username: str, email: str, password: str) -> requests.Session | None:
     s = requests.Session()
-    s.headers.setdefault("User-Agent", "SafeTicket-MorningQA/1.0")
+    s.headers.setdefault("User-Agent", "SafeTrade-MorningQA/1.0")
     csrf = _fetch_csrf_token(s, api_base)
     if not csrf:
         return None

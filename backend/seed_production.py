@@ -196,7 +196,7 @@ def _download_to_imagefield(instance, field_name: str, url: str) -> None:
         r = requests.get(
             url,
             timeout=25,
-            headers={'User-Agent': 'SafeTicket-Seed/1.0 (+https://safeticket.local)'},
+            headers={'User-Agent': 'SafeTrade-Seed/1.0 (+https://safeticket.local)'},
         )
         r.raise_for_status()
         ext = 'jpg'

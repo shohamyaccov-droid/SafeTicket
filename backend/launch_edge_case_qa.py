@@ -1,5 +1,5 @@
 """
-SafeTicket pre-launch edge-case QA suite.
+SafeTrade pre-launch edge-case QA suite.
 
 Run from backend directory:
     python manage.py test launch_edge_case_qa -v 2

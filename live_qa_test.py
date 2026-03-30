@@ -29,7 +29,7 @@ def log(msg: str) -> None:
 
 def session() -> requests.Session:
     s = requests.Session()
-    s.headers.update({"User-Agent": "SafeTicket-live-qa/1.0"})
+    s.headers.update({"User-Agent": "SafeTrade-live-qa/1.0"})
     return s
 
 
@@ -95,7 +95,7 @@ def main() -> None:
     buyer_e = f"{buyer_u}@liveqa.test"
     pw = "LiveQA2026!Test"
 
-    log("=== SafeTicket LIVE QA ===")
+    log("=== SafeTrade LIVE QA ===")
     log(f"API={API}")
 
     for attempt in range(1, 31):

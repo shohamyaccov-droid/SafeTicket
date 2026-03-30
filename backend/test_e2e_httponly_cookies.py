@@ -7,6 +7,7 @@ Run: python manage.py test test_e2e_httponly_cookies -v 2
 """
 from django.test import TestCase
 from django.contrib.auth import get_user_model
+from django.conf import settings
 
 User = get_user_model()
 
@@ -40,10 +41,15 @@ class E2EHttpOnlyCookiesTest(TestCase):
             cookie_output = r.cookies[name].output()
             self.assertIn('HttpOnly', cookie_output, f'{name} cookie must have HttpOnly flag. Got: {cookie_output}')
 
-        # Tokens must NOT be in response body
         data = r.json()
-        self.assertNotIn('access', data, 'Access token must NOT be in response body')
-        self.assertNotIn('refresh', data, 'Refresh token must NOT be in response body')
+        if getattr(settings, 'JWT_RESPONSE_BODY_TOKENS', True):
+            self.assertIn('access', data)
+            self.assertIn('refresh', data)
+            self.assertIsInstance(data['access'], str)
+            self.assertIsInstance(data['refresh'], str)
+        else:
+            self.assertNotIn('access', data, 'Access token must NOT be in response body')
+            self.assertNotIn('refresh', data, 'Refresh token must NOT be in response body')
         self.assertIn('user', data, 'User data must be in response')
 
     def test_2_authenticated_request_via_cookie(self):

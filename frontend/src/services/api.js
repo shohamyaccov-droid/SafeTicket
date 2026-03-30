@@ -334,7 +334,7 @@ async function postTicketMultipart(formData) {
     if (bearer) {
       headers.Authorization = `Bearer ${bearer}`;
     }
-    console.log('[SafeTicket] POST /users/tickets/ FormData (multipart) before fetch:');
+    console.log('[SafeTrade] POST /users/tickets/ FormData (multipart) before fetch:');
     for (const [key, val] of formData.entries()) {
       if (typeof File !== 'undefined' && val instanceof File) {
         console.log(

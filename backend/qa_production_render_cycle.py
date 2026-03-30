@@ -65,7 +65,7 @@ def build_csrf_headers(session: requests.Session, api_base: str) -> dict:
 def session_login(api_base: str, username: str, password: str) -> tuple[requests.Session | None, str | None]:
     """Returns (session, error_detail). On failure session is None."""
     s = requests.Session()
-    s.headers.setdefault("User-Agent", "SafeTicket-QA/1.0")
+    s.headers.setdefault("User-Agent", "SafeTrade-QA/1.0")
     csrf = _fetch_csrf_token(s, api_base)
     if not csrf:
         return None, "csrf_fetch_failed"
@@ -86,7 +86,7 @@ def session_login(api_base: str, username: str, password: str) -> tuple[requests
 
 def session_register_buyer(api_base: str, username: str, email: str, password: str) -> requests.Session | None:
     s = requests.Session()
-    s.headers.setdefault("User-Agent", "SafeTicket-QA/1.0")
+    s.headers.setdefault("User-Agent", "SafeTrade-QA/1.0")
     csrf = _fetch_csrf_token(s, api_base)
     if not csrf:
         return None

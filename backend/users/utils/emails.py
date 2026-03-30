@@ -102,7 +102,7 @@ def _receipt_subject_body_html(order, recipient_is_guest: bool):
 <html lang="he"><head><meta charset="utf-8" /></head>
 <body style="font-family:Arial,sans-serif;direction:rtl;text-align:right;background:#f8fafc;color:#0f172a;line-height:1.5;">
 <div style="max-width:560px;margin:0 auto;padding:24px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;">
-  <h1 style="font-size:20px;color:#0f766e;margin:0 0 12px;">SafeTicket — תודה שרכשתם אצלנו</h1>
+  <h1 style="font-size:20px;color:#0f766e;margin:0 0 12px;">SafeTrade — תודה שרכשתם אצלנו</h1>
   <p style="margin:0 0 16px;">שלום,</p>
   <p style="margin:0 0 16px;">זוהי <strong>קבלה עבור הרכישה</strong> שלכם. פרטי ההזמנה מוצגים למטה.</p>
   <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:15px;" dir="rtl">
@@ -115,11 +115,11 @@ def _receipt_subject_body_html(order, recipient_is_guest: bool):
   <p style="margin:0 0 8px;">צורפו קבצי PDF למייל זה. בנוסף, אפשר להוריד דרך הקישורים הבאים:</p>
   {links_html or '<p style="color:#64748b;">המערכת תשלח את הכרטיסים כצרופות; אם אין קישורים — התחברו לאתר לצפייה בהורדות.</p>'}
   {guest_note}
-  <p style="margin:24px 0 0;font-size:13px;color:#94a3b8;">בברכה,<br/>צוות SafeTicket</p>
+  <p style="margin:24px 0 0;font-size:13px;color:#94a3b8;">בברכה,<br/>צוות SafeTrade</p>
 </div></body></html>'''
 
     text_lines = [
-        'SafeTicket — קבלה והודעת תודה',
+        'SafeTrade — קבלה והודעת תודה',
         '',
         f'אירוע: {raw_event}',
         f'כמות: {qty}',
@@ -132,10 +132,10 @@ def _receipt_subject_body_html(order, recipient_is_guest: bool):
         text_lines.append(f'{label}: {url}')
     if not link_rows and dash_link and not recipient_is_guest:
         text_lines.append(f'דשבורד: {dash_link}')
-    text_lines.extend(['', '— צוות SafeTicket'])
+    text_lines.extend(['', '— צוות SafeTrade'])
     text_body = '\n'.join(text_lines)
 
-    subject = f'SafeTicket — קבלה עבור {raw_event} (הזמנה #{order_id})'
+    subject = f'SafeTrade — קבלה עבור {raw_event} (הזמנה #{order_id})'
     return subject, text_body, html_body
 
 
@@ -143,16 +143,16 @@ def send_otp_email(user, otp):
     """
     Send OTP verification email to the user.
     """
-    subject = 'SafeTicket - Verify your email'
+    subject = 'SafeTrade - Verify your email'
     body = f'''Hello {user.username or user.email},
 
 Your verification code is: {otp}
 
 This code expires in 10 minutes. Enter it on the verification page to activate your account.
 
-If you did not register for SafeTicket, please ignore this email.
+If you did not register for SafeTrade, please ignore this email.
 
-— SafeTicket Team
+— SafeTrade Team
 '''
     try:
         msg = EmailMultiAlternatives(
@@ -176,14 +176,14 @@ def send_offer_notification(recipient_email, offer_details):
     event_name = offer_details.get('event_name', 'Unknown Event')
     amount = offer_details.get('amount', 'N/A')
     buyer_username = offer_details.get('buyer_username', 'A buyer')
-    subject = f'SafeTicket - New offer on {event_name}'
+    subject = f'SafeTrade - New offer on {event_name}'
     body = f'''Hello,
 
 {buyer_username} has made an offer of ₪{amount} on your listing for {event_name}.
 
-Log in to SafeTicket to accept or reject the offer.
+Log in to SafeTrade to accept or reject the offer.
 
-— SafeTicket Team
+— SafeTrade Team
 '''
     try:
         msg = EmailMultiAlternatives(

@@ -1,5 +1,5 @@
 """
-Comprehensive End-to-End (E2E) Audit Script for SafeTicket Platform
+Comprehensive End-to-End (E2E) Audit Script for SafeTrade Platform
 Tests the complete user journey: Seller upload → Buyer purchase → Security checks
 
 Phase 1: Seller Flow

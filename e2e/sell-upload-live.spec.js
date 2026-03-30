@@ -20,7 +20,7 @@ test.describe('Live Sell flow', () => {
     const logs = [];
     page.on('console', (msg) => {
       const t = msg.text();
-      if (t.includes('Frontend Version') || t.includes('FormData') || t.includes('SafeTicket')) {
+      if (t.includes('Frontend Version') || t.includes('FormData') || t.includes('SafeTrade')) {
         logs.push(`[browser console] ${t}`);
       }
     });
