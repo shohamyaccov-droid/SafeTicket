@@ -31,7 +31,7 @@ User = get_user_model()
 
 SELLER_EMAIL = 'seed_realistic_seller@safeticket.demo'
 
-UA = {'User-Agent': 'TixTrade-Seed/1.1 (+https://github.com)'}
+UA = {'User-Agent': 'TradeTix-Seed/1.1 (+https://github.com)'}
 
 
 def _pdf(name: str = 'demo.pdf') -> ContentFile:

@@ -1,6 +1,6 @@
 {
-  "name": "TixTrade",
-  "short_name": "TixTrade",
+  "name": "TradeTix",
+  "short_name": "TradeTix",
   "description": "שוק כרטיסים מאובטח בישראל",
   "start_url": "/",
   "display": "standalone",

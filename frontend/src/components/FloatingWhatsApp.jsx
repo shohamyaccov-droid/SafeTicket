@@ -5,7 +5,7 @@ import './FloatingWhatsApp.css';
  */
 const FloatingWhatsApp = () => {
   const phone = '972500000000';
-  const text = encodeURIComponent('היי צוות TixTrade, אני צריך עזרה...');
+  const text = encodeURIComponent('היי צוות TradeTix, אני צריך עזרה...');
   const href = `https://wa.me/${phone}?text=${text}`;
 
   return (

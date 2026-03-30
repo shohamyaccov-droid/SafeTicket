@@ -37,6 +37,76 @@
   flex-shrink: 0;
 }
 
+/* Global search */
+.nav-search-form {
+  align-items: stretch;
+  gap: 0;
+  flex: 1 1 auto;
+  max-width: 380px;
+  min-width: 0;
+  margin-inline: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.nav-search-form--desktop {
+  display: none;
+}
+
+.nav-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.nav-search-input:focus {
+  outline: none;
+}
+
+.nav-search-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.85rem;
+  border: none;
+  background: rgba(0, 69, 175, 0.08);
+  color: var(--primary-blue);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.nav-search-submit:hover {
+  background: rgba(0, 69, 175, 0.14);
+}
+
+.nav-search-submit--full {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 0 1rem;
+}
+
+.nav-search-form--mobile {
+  display: flex;
+  width: 100%;
+  margin-bottom: 1rem;
+  max-width: none;
+}
+
+@media (min-width: 901px) {
+  .nav-search-form--desktop {
+    display: flex;
+  }
+}
+
 /* Main nav + user actions (desktop); hidden on small screens in favor of nav-mobile-end */
 .user-actions {
   display: flex;
@@ -295,10 +365,10 @@ a.nav-mobile-auth-btn {
     position: fixed;
     top: 0;
     right: -100%;
-    width: 280px;
+    width: min(320px, 92vw);
     height: 100vh;
     background: var(--bg-secondary);
-    padding: 80px var(--spacing-lg) var(--spacing-lg);
+    padding: 72px var(--spacing-lg) var(--spacing-lg);
     box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
     transition: right 0.3s ease;
     z-index: 1000;

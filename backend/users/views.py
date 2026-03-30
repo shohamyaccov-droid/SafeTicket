@@ -323,7 +323,7 @@ def _download_ticket_pdf_bytes(ticket):
         r = requests.get(
             url,
             timeout=90,
-            headers={'User-Agent': 'TixTrade-PDF/1.0'},
+            headers={'User-Agent': 'TradeTix-PDF/1.0'},
         )
         r.raise_for_status()
         return r.content

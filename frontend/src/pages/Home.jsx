@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { eventAPI } from '../services/api';
 import { getFullImageUrl } from '../utils/formatters';
 import { createListFetchAbort } from '../utils/listFetch';
@@ -36,11 +36,26 @@ function eventCategoryKey(event) {
 
 const Home = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') ?? '');
+
+  const qFromUrl = searchParams.get('q') ?? '';
+  useEffect(() => {
+    setSearchQuery(qFromUrl);
+  }, [qFromUrl]);
+
+  const setSearchQuerySynced = useCallback(
+    (value) => {
+      setSearchQuery(value);
+      const t = value.trim();
+      setSearchParams(t ? { q: t } : {}, { replace: true });
+    },
+    [setSearchParams]
+  );
 
   useEffect(() => {
     const { signal, clear, abort } = createListFetchAbort();
@@ -254,15 +269,18 @@ const Home = () => {
 
       <section className="hero-search-section">
         <div className="hero-content">
+          <p className="hero-eyebrow">TradeTix</p>
           <h1 className="hero-title">מצאו את הכרטיסים המושלמים</h1>
           <div className="search-wrapper">
             <input
-              type="text"
+              type="search"
               className="hero-search-input"
               placeholder="חפשו אמנים, אירועים או ערים"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => setSearchQuerySynced(e.target.value)}
               dir="rtl"
+              enterKeyHint="search"
+              aria-label="חיפוש אירועים"
             />
             <svg
               className="search-icon"
@@ -282,6 +300,52 @@ const Home = () => {
               />
             </svg>
           </div>
+        </div>
+      </section>
+
+      <section className="how-it-works" aria-labelledby="how-it-works-title">
+        <div className="how-it-works-inner">
+          <h2 id="how-it-works-title" className="how-it-works-title">
+            איך זה עובד?
+          </h2>
+          <p className="how-it-works-lead">
+            שלושה צעדים פשוטים — שקיפות, ביטחון וליווי מקצה לקצה מצוות TradeTix.
+          </p>
+          <ol className="how-it-works-steps">
+            <li className="how-step">
+              <span className="how-step-num" aria-hidden="true">
+                1
+              </span>
+              <div className="how-step-body">
+                <h3 className="how-step-title">חיפוש ובחירה</h3>
+                <p className="how-step-text">
+                  מסננים לפי אמן, עיר או סוג אירוע. המחירים והמושבים מוצגים בבירור לפני שמחליטים.
+                </p>
+              </div>
+            </li>
+            <li className="how-step">
+              <span className="how-step-num" aria-hidden="true">
+                2
+              </span>
+              <div className="how-step-body">
+                <h3 className="how-step-title">רכישה או מיקוח</h3>
+                <p className="how-step-text">
+                  קונים במחיר הקובע או מציעים מחיר הוגן. התשלום נשמר בנאמנות עד סיום האירוע — הגנת הקונה מובנית.
+                </p>
+              </div>
+            </li>
+            <li className="how-step">
+              <span className="how-step-num" aria-hidden="true">
+                3
+              </span>
+              <div className="how-step-body">
+                <h3 className="how-step-title">כרטיס דיגיטלי מוכן</h3>
+                <p className="how-step-text">
+                  לאחר אישור, מקבלים כרטיס מאומת להורדה. תמיכה זמינה בכל שלב — כדי שתגיעו לשער בראש שקט.
+                </p>
+              </div>
+            </li>
+          </ol>
         </div>
       </section>
 
@@ -312,7 +376,7 @@ const Home = () => {
             title="אין אירועים עם כרטיסים זמינים"
             description="נסו לרענן מאוחר יותר או לשנות את החיפוש."
             actionLabel="איפוס חיפוש"
-            onAction={() => setSearchQuery('')}
+            onAction={() => setSearchQuerySynced('')}
           />
         </div>
       ) : (

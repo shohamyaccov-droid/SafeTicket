@@ -777,7 +777,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 <path d="M30 50 L45 65 L70 35" className="checkmark-path" />
               </svg>
             </div>
-            <h1 className="success-title-large">Order Confirmed</h1>
+            <h1 className="success-title-large">הרכישה הושלמה</h1>
             <h2 className="success-subtitle">הזמנה אושרה בהצלחה!</h2>
             <p className="success-order-number">מספר הזמנה: #{resolvedOrderId}</p>
             
@@ -935,9 +935,15 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   // Payment screen — never after a completed checkout (even if step lags)
   if (step === 'payment' && !checkoutSucceeded) {
     return (
-      <div className="modal-overlay" onClick={handleClose}>
-        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-          <button className="close-button" onClick={handleClose}>×</button>
+      <div className="modal-overlay checkout-modal-overlay" onClick={handleClose}>
+        <div className="modal-content checkout-modal-shell" onClick={(e) => e.stopPropagation()}>
+          <button type="button" className="close-button" onClick={handleClose} aria-label="סגירה">×</button>
+          <p className="checkout-modal-brand">TradeTix</p>
+          <div className="checkout-stepper" role="list" aria-label="שלבי קופה">
+            <span className="checkout-step checkout-step--done" role="listitem">1 · פרטים</span>
+            <span className="checkout-step-sep" aria-hidden>›</span>
+            <span className="checkout-step checkout-step--active" role="listitem">2 · תשלום</span>
+          </div>
           <div className="secure-checkout-header">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M10 1L3 4V9C3 13.55 6.16 17.74 10 19C13.84 17.74 17 13.55 17 9V4L10 1Z" fill="currentColor"/>
@@ -1225,15 +1231,21 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
   // Info screen (initial)
   return (
-    <div className="modal-overlay" onClick={handleClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <button className="close-button" onClick={handleClose}>×</button>
+    <div className="modal-overlay checkout-modal-overlay" onClick={handleClose}>
+      <div className="modal-content checkout-modal-shell" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="close-button" onClick={handleClose} aria-label="סגירה">×</button>
+        <p className="checkout-modal-brand">TradeTix</p>
+        <div className="checkout-stepper" role="list" aria-label="שלבי קופה">
+          <span className="checkout-step checkout-step--active" role="listitem">1 · פרטים</span>
+          <span className="checkout-step-sep" aria-hidden>›</span>
+          <span className="checkout-step" role="listitem">2 · תשלום</span>
+        </div>
         <div className="secure-checkout-header">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M10 1L3 4V9C3 13.55 6.16 17.74 10 19C13.84 17.74 17 13.55 17 9V4L10 1Z" fill="currentColor"/>
             <path d="M8 9L9 10L12 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-          <h2>תשלום מאובטח</h2>
+          <h2>סיכום והמשך לתשלום</h2>
         </div>
         
         

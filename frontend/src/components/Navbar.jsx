@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { offerAPI } from '../services/api';
 import './Navbar.css';
@@ -8,7 +8,23 @@ const Navbar = () => {
   const { user, logout, loading } = useAuth();
   const [offerCounts, setOfferCounts] = useState({ actionRequired: 0, acceptedOffers: 0 });
   const navigate = useNavigate();
+  const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [navSearch, setNavSearch] = useState('');
+
+  useEffect(() => {
+    if (location.pathname === '/') {
+      const q = new URLSearchParams(location.search).get('q') ?? '';
+      setNavSearch(q);
+    }
+  }, [location.pathname, location.search]);
+
+  const submitNavSearch = (e) => {
+    e.preventDefault();
+    const q = navSearch.trim();
+    navigate(q ? `/?q=${encodeURIComponent(q)}` : '/');
+    setIsMobileMenuOpen(false);
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -76,7 +92,7 @@ const Navbar = () => {
           <div className="nav-cluster">
             <div className="nav-logo-block">
               <Link to="/" className="nav-logo">
-                TixTrade
+                TradeTix
               </Link>
             </div>
           </div>
@@ -91,9 +107,30 @@ const Navbar = () => {
         <div className="nav-cluster">
           <div className="nav-logo-block">
             <Link to="/" className="nav-logo" onClick={closeMobileMenu}>
-              TixTrade
+              TradeTix
             </Link>
           </div>
+
+          <form className="nav-search-form nav-search-form--desktop" onSubmit={submitNavSearch} role="search">
+            <label htmlFor="nav-search-input" className="visually-hidden">
+              חיפוש אירועים
+            </label>
+            <input
+              id="nav-search-input"
+              type="search"
+              className="nav-search-input"
+              placeholder="חיפוש אמן, אירוע, עיר..."
+              value={navSearch}
+              onChange={(e) => setNavSearch(e.target.value)}
+              dir="rtl"
+              autoComplete="off"
+            />
+            <button type="submit" className="nav-search-submit" aria-label="חיפוש">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                <path d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
+          </form>
 
           <nav className="nav-menu nav-menu-desktop">
             <Link to="/" className="nav-link" onClick={closeMobileMenu}>
@@ -159,6 +196,21 @@ const Navbar = () => {
       </div>
 
       <div className={`mobile-nav-overlay ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+        <form className="nav-search-form nav-search-form--mobile" onSubmit={submitNavSearch} role="search">
+          <input
+            type="search"
+            className="nav-search-input"
+            placeholder="חיפוש..."
+            value={navSearch}
+            onChange={(e) => setNavSearch(e.target.value)}
+            dir="rtl"
+            autoComplete="off"
+            aria-label="חיפוש אירועים"
+          />
+          <button type="submit" className="nav-search-submit nav-search-submit--full">
+            חפש
+          </button>
+        </form>
         <nav className="mobile-nav-menu">
           <Link to="/" className="nav-link" onClick={closeMobileMenu}>בית</Link>
           {user && (

@@ -57,7 +57,8 @@
   height: 100%;
   min-height: 220px;
   max-height: 320px;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   display: block;
   border-radius: 14px;
 }
@@ -143,8 +144,13 @@
 
   .event-hero-image {
     min-height: 200px;
-    max-height: 240px;
-    border-radius: 0;
+    max-height: 260px;
+    border-radius: 14px 14px 0 0;
+    object-fit: cover;
+  }
+
+  .event-hero-media {
+    padding: 10px 10px 0;
   }
 
   .event-hero-body {
@@ -564,8 +570,8 @@
   }
 }
 
-/* Premium trust banner — TixTrade buyer protection */
-.tixtrade-guarantee-banner {
+/* Premium trust banner — TradeTix buyer protection */
+.tradetix-guarantee-banner {
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -578,13 +584,13 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
-.tixtrade-guarantee-banner svg {
+.tradetix-guarantee-banner svg {
   flex-shrink: 0;
   width: 24px;
   height: 24px;
 }
 
-.tixtrade-guarantee-banner span {
+.tradetix-guarantee-banner span {
   font-weight: 600;
   font-size: 1rem;
   color: #1f2937;

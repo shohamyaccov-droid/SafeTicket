@@ -1365,3 +1365,59 @@
   }
 }
 
+/* Premium checkout shell + stepper (TradeTix) */
+.modal-overlay.checkout-modal-overlay {
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+
+@media (max-width: 600px) {
+  .modal-overlay.checkout-modal-overlay {
+    align-items: flex-end;
+  }
+}
+
+.modal-content.checkout-modal-shell {
+  border-radius: 20px;
+  border: 1px solid rgba(0, 69, 175, 0.14);
+  box-shadow:
+    0 25px 50px -12px rgba(0, 69, 175, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+
+.checkout-modal-brand {
+  margin: 0 0 0.25rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--primary-blue);
+  text-align: center;
+}
+
+.checkout-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin: 0 0 1rem;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  direction: rtl;
+}
+
+.checkout-stepper .checkout-step--active {
+  color: var(--primary-blue);
+}
+
+.checkout-stepper .checkout-step--done {
+  color: var(--success-green);
+}
+
+.checkout-step-sep {
+  color: var(--border-color);
+  font-weight: 400;
+  opacity: 0.85;
+}
+

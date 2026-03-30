@@ -58,7 +58,7 @@ const Sell = () => {
 
   const WHATSAPP_SUPPORT_PHONE = '972500000000';
   const missingEventWhatsAppHref = `https://wa.me/${WHATSAPP_SUPPORT_PHONE}?text=${encodeURIComponent(
-    'היי TixTrade, אני רוצה למכור כרטיס לאירוע שלא קיים באתר — נא לפרט: שם אמן/קבוצות, תאריך, אולם/עיר.'
+    'היי TradeTix, אני רוצה למכור כרטיס לאירוע שלא קיים באתר — נא לפרט: שם אמן/קבוצות, תאריך, אולם/עיר.'
   )}`;
 
   // ALL useEffect HOOKS MUST ALSO BE CALLED BEFORE EARLY RETURNS
@@ -632,7 +632,7 @@ const Sell = () => {
           <div className="success-icon-large">✓</div>
           <h2 className="success-title">Listing Created Successfully!</h2>
           <h3 className="success-subtitle-hebrew">הכרטיס הועלה בהצלחה!</h3>
-          <p className="success-text">הכרטיס שלך נשלח לאימות על ידי צוות TixTrade ויעלה לאוויר מיד לאחר האישור.</p>
+          <p className="success-text">הכרטיס שלך נשלח לאימות על ידי צוות TradeTix ויעלה לאוויר מיד לאחר האישור.</p>
           <p className="success-redirect-text">מעבר לדף הבית...</p>
         </div>
       </div>
@@ -1168,7 +1168,7 @@ const Sell = () => {
               className="terms-checkbox-input"
             />
             <label htmlFor="acceptedTerms" className="terms-checkbox-label">
-              אני מסכים/ה לתנאי השימוש של TixTrade ומאשר/ת שהתשלום בגין המכירה יועבר אליי כ-24 שעות לאחר קיום האירוע, על מנת להבטיח קנייה בטוחה ואת אמינות הכרטיסים.
+              אני מסכים/ה לתנאי השימוש של TradeTix ומאשר/ת שהתשלום בגין המכירה יועבר אליי כ-24 שעות לאחר קיום האירוע, על מנת להבטיח קנייה בטוחה ואת אמינות הכרטיסים.
             </label>
           </div>
 
@@ -1192,7 +1192,7 @@ const Sell = () => {
             >
               <h3 id="event-request-title">בקשה להוספת אירוע</h3>
               <p className="event-request-modal-lead">
-                נתאר בקצרה את האירוע החסר. צוות TixTrade יעדכן את הקטלוג כשהפרטים מאומתים.
+                נתאר בקצרה את האירוע החסר. צוות TradeTix יעדכן את הקטלוג כשהפרטים מאומתים.
               </p>
               <form onSubmit={submitEventRequest}>
                 <div className="form-group">

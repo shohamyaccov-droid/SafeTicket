@@ -45,7 +45,7 @@ class Command(BaseCommand):
         r = requests.get(
             url,
             timeout=90,
-            headers={'User-Agent': 'TixTrade-verify-cloudinary/1.0'},
+            headers={'User-Agent': 'TradeTix-verify-cloudinary/1.0'},
         )
         if r.status_code != 200:
             raise CommandError(f'Expected HTTP 200 from signed URL, got {r.status_code}')

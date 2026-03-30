@@ -920,8 +920,8 @@ const EventDetailsPage = () => {
           <div className="tickets-list-container">
             {ticketGroups.length > 0 ? (
               <>
-                {/* TixTrade buyer-protection banner */}
-                <div className="tixtrade-guarantee-banner">
+                {/* TradeTix buyer-protection banner */}
+                <div className="tradetix-guarantee-banner">
                   <svg
                     width="24"
                     height="24"
