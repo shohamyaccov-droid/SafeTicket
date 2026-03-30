@@ -265,27 +265,28 @@ const Home = () => {
       if (!aId) {
         return acc; // skip events without an artist for this view
       }
+      const nestedArtist = typeof event.artist === 'object' && event.artist !== null ? event.artist : null;
+      const artistFromList = (artists || []).find((a) => a.id === aId);
       if (!acc[aId]) {
         acc[aId] = {
           id: aId,
           name: aName,
-          image: event.image_url || event.image || (event.artist && event.artist.image_url),
-          events: []
+          image:
+            event.image_url ||
+            event.image ||
+            nestedArtist?.image_url ||
+            nestedArtist?.image ||
+            artistFromList?.image_url ||
+            artistFromList?.image ||
+            null,
+          events: [],
         };
       }
       acc[aId].events.push(event);
       return acc;
     }, {});
-    const groupsArray = Object.values(groupsMap);
-    console.log('Home artistGroups:', groupsArray.map(g => ({
-      id: g.id,
-      name: g.name,
-      eventsCount: g.events.length,
-      image: g.image,
-      fullImageUrl: getFullImageUrl(g.image)
-    })));
-    return groupsArray;
-  }, [filteredEvents]);
+    return Object.values(groupsMap);
+  }, [filteredEvents, artists]);
 
   // Filter artists based on search query and category
   const filteredArtists = useMemo(() => {
@@ -425,6 +426,7 @@ const Home = () => {
                       alt={group.name}
                       className="event-image"
                       onError={(e) => {
+                        console.warn('[SafeTrade] recommended artist image failed', group.name, e.currentTarget.src);
                         e.target.onerror = null;
                         e.target.src = fallbackSrc;
                       }}
@@ -480,6 +482,8 @@ const Home = () => {
                       alt={group.name}
                       className="event-image"
                       onError={(e) => {
+                        console.warn('[SafeTrade] trending artist-group image failed', group.name, e.currentTarget.src);
+                        e.currentTarget.onerror = null;
                         e.target.src = `https://via.placeholder.com/400x300/0045af/ffffff?text=${encodeURIComponent(group.name)}`;
                       }}
                     />
@@ -533,6 +537,8 @@ const Home = () => {
                     alt={artist.name}
                     className="artist-image"
                     onError={(e) => {
+                      console.warn('[SafeTrade] artist card image failed', artist.name, e.currentTarget.src);
+                      e.currentTarget.onerror = null;
                       e.target.src = `https://via.placeholder.com/400x300/0045af/ffffff?text=${encodeURIComponent(artist.name)}`;
                     }}
                   />

@@ -152,6 +152,17 @@ def cloudinary_signed_https_image_url(fieldfile):
         if url and str(url).startswith('https://'):
             return str(url)
     except Exception:
+        pass
+    # Some assets fail signed URL generation (folder/transform edge cases); delivery URL may still work.
+    try:
+        url, _ = cloudinary.utils.cloudinary_url(
+            public_id,
+            resource_type='image',
+            secure=True,
+        )
+        if url and str(url).startswith('https://'):
+            return str(url)
+    except Exception:
         return None
     return None
 
@@ -189,6 +200,39 @@ def event_effective_image_field(event):
     if getattr(event, 'image', None):
         return event.image
     return artist_effective_image_field(getattr(event, 'artist', None))
+
+
+def artist_image_file_candidates(artist):
+    """
+    Cover (banner) first, then profile image — same order as artist_effective_image_field,
+    but returned as separate candidates so we can skip a broken cover and still use profile.
+    """
+    if not artist:
+        return []
+    out = []
+    for attr in ('cover_image', 'image'):
+        ff = getattr(artist, attr, None)
+        if ff and getattr(ff, 'name', None):
+            out.append(ff)
+    return out
+
+
+def first_resolved_image_url_for_artist(request, artist):
+    for ff in artist_image_file_candidates(artist):
+        u = resolved_image_url(request, ff)
+        if u:
+            return u
+    return None
+
+
+def first_resolved_image_url_for_event(request, event):
+    if not event:
+        return None
+    if getattr(event, 'image', None) and getattr(event.image, 'name', None):
+        u = resolved_image_url(request, event.image)
+        if u:
+            return u
+    return first_resolved_image_url_for_artist(request, getattr(event, 'artist', None))
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -360,10 +404,7 @@ class ArtistSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at', 'updated_at', 'total_tickets_count')
     
     def get_image_url(self, obj):
-        f = artist_effective_image_field(obj)
-        if f:
-            return resolved_image_url(self.context.get('request'), f)
-        return None
+        return first_resolved_image_url_for_artist(self.context.get('request'), obj)
     
     def get_total_tickets_count(self, obj):
         ann = getattr(obj, '_artist_tickets_total', None)
@@ -389,10 +430,7 @@ class ArtistListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
     
     def get_image_url(self, obj):
-        f = artist_effective_image_field(obj)
-        if f:
-            return resolved_image_url(self.context.get('request'), f)
-        return None
+        return first_resolved_image_url_for_artist(self.context.get('request'), obj)
     
     def get_total_tickets_count(self, obj):
         ann = getattr(obj, '_artist_tickets_total', None)
@@ -422,10 +460,7 @@ class EventSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at', 'updated_at', 'tickets_count', 'view_count')
     
     def get_image_url(self, obj):
-        f = event_effective_image_field(obj)
-        if f:
-            return resolved_image_url(self.context.get('request'), f)
-        return None
+        return first_resolved_image_url_for_event(self.context.get('request'), obj)
     
     def get_tickets_count(self, obj):
         ann = getattr(obj, '_active_tickets_total', None)
@@ -450,10 +485,7 @@ class EventListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
     
     def get_image_url(self, obj):
-        f = event_effective_image_field(obj)
-        if f:
-            return resolved_image_url(self.context.get('request'), f)
-        return None
+        return first_resolved_image_url_for_event(self.context.get('request'), obj)
     
     def get_tickets_count(self, obj):
         ann = getattr(obj, '_active_tickets_total', None)
@@ -765,10 +797,7 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
         ev = obj.ticket.event
         if not ev:
             return None
-        f = event_effective_image_field(ev)
-        if f:
-            return resolved_image_url(self.context.get('request'), f)
-        return None
+        return first_resolved_image_url_for_event(self.context.get('request'), ev)
     
     def get_status_timeline(self, obj):
         """Return status timeline for order progress. When paid+has PDFs, show ready for download."""

@@ -43,7 +43,7 @@ const Footer = () => {
         </div>
 
         <div className="footer-bottom">
-          <p>&copy; {new Date().getFullYear()} SafeTrade IL. כל הזכויות שמורות.</p>
+          <p>&copy; {new Date().getFullYear()} SafeTrade. כל הזכויות שמורות.</p>
         </div>
       </div>
     </footer>

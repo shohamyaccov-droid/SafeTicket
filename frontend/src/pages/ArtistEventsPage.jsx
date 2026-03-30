@@ -155,13 +155,19 @@ const ArtistEventsPage = () => {
 
       {/* Compact Artist Header */}
       <div className="compact-artist-header">
-        {(artist.image_url || artist.image) && (
-          <img
-            src={getFullImageUrl(artist.image_url || artist.image)}
-            alt={artist.name}
-            className="compact-artist-image"
-          />
-        )}
+        <img
+          src={
+            getFullImageUrl(artist.image_url || artist.image) ||
+            `https://via.placeholder.com/400x300/0045af/ffffff?text=${encodeURIComponent(artist.name || 'Artist')}`
+          }
+          alt={artist.name}
+          className="compact-artist-image"
+          onError={(e) => {
+            console.warn('[SafeTrade] artist header image failed', artist.name, e.currentTarget.src);
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = `https://via.placeholder.com/400x300/0045af/ffffff?text=${encodeURIComponent(artist.name || 'Artist')}`;
+          }}
+        />
         <h1 className="compact-artist-name">{artist.name}</h1>
       </div>
 

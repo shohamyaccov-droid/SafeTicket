@@ -17,7 +17,11 @@ export const getFullImageUrl = (url, _opts = {}) => {
   if (!url || url === 'undefined' || url === 'null' || typeof url === 'object') return null;
   const strUrl = String(url).trim();
   if (!strUrl || strUrl === 'undefined' || strUrl === 'null') return null;
-  if (strUrl.startsWith('http')) {
+  // Protocol-relative CDN URLs — never prefix with API host
+  if (strUrl.startsWith('//')) {
+    return `https:${strUrl}`;
+  }
+  if (strUrl.startsWith('http://') || strUrl.startsWith('https://') || strUrl.startsWith('data:')) {
     return strUrl;
   }
   const normalized = strUrl.startsWith('/') ? strUrl : `/${strUrl}`;
