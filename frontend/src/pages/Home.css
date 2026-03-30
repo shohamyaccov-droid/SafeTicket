@@ -804,12 +804,29 @@
   }
 }
 
-/* Viagogo-style horizontal rows */
+/* Viagogo-style horizontal rows (force horizontal strip; never collapse to CSS grid) */
+.viagogo-home-discover,
 .home-viagogo-rows {
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 0 3rem;
   direction: rtl;
+  display: block;
+}
+
+.viagogo-carousel-track,
+.home-carousel-scroll {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: stretch;
+  gap: 1rem;
+  overflow-x: auto !important;
+  overflow-y: hidden;
+  padding: 0.25rem 1.25rem 0.75rem;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
 .home-empty-wrap {
@@ -833,16 +850,6 @@
   color: var(--text-primary);
   margin: 0;
   font-family: 'Heebo', 'Assistant', sans-serif;
-}
-
-.home-carousel-scroll {
-  display: flex;
-  gap: 1rem;
-  overflow-x: auto;
-  padding: 0.25rem 1.25rem 0.75rem;
-  scroll-snap-type: x proximity;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
 }
 
 .home-carousel-scroll::-webkit-scrollbar {

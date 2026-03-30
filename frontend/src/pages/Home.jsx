@@ -25,6 +25,15 @@ function hasTicketInventory(event) {
   return (event?.tickets_count ?? 0) > 0;
 }
 
+/** Normalize API category (DB uses concert|sport|theater|standup|festival). */
+function eventCategoryKey(event) {
+  const raw = event?.category;
+  if (raw == null || raw === '') return '';
+  const s = String(raw).toLowerCase().trim();
+  if (['concert', 'festival', 'sport', 'theater', 'standup'].includes(s)) return s;
+  return s;
+}
+
 const Home = () => {
   const navigate = useNavigate();
   const [events, setEvents] = useState([]);
@@ -126,17 +135,25 @@ const Home = () => {
 
   const concertEvents = useMemo(
     () =>
-      inventoryEvents.filter((e) => e.category === 'concert' || e.category === 'festival'),
+      inventoryEvents.filter((e) => {
+        const c = eventCategoryKey(e);
+        return c === 'concert' || c === 'festival';
+      }),
     [inventoryEvents]
   );
 
   const sportsEvents = useMemo(
-    () => inventoryEvents.filter((e) => e.category === 'sport'),
+    () => inventoryEvents.filter((e) => eventCategoryKey(e) === 'sport'),
     [inventoryEvents]
   );
 
-  const standupTheaterEvents = useMemo(
-    () => inventoryEvents.filter((e) => e.category === 'standup' || e.category === 'theater'),
+  const standupEvents = useMemo(
+    () => inventoryEvents.filter((e) => eventCategoryKey(e) === 'standup'),
+    [inventoryEvents]
+  );
+
+  const theaterEvents = useMemo(
+    () => inventoryEvents.filter((e) => eventCategoryKey(e) === 'theater'),
     [inventoryEvents]
   );
 
@@ -199,16 +216,17 @@ const Home = () => {
     );
   };
 
-  const CarouselSection = ({ title, items }) => {
+  const CarouselSection = ({ title, items, slug }) => {
+    const id = slug || String(title).replace(/\s+/g, '-');
     if (!items?.length) return null;
     return (
-      <section className="home-carousel-section" aria-labelledby={`row-${title}`}>
+      <section className="home-carousel-section viagogo-row" aria-labelledby={`row-${id}`}>
         <div className="home-carousel-head">
-          <h2 id={`row-${title}`} className="home-carousel-title">
+          <h2 id={`row-${id}`} className="home-carousel-title">
             {title}
           </h2>
         </div>
-        <div className="home-carousel-scroll" role="list">
+        <div className="home-carousel-scroll viagogo-carousel-track" role="list">
           {items.map((event) => (
             <div key={event.id} className="home-carousel-item" role="listitem">
               <EventRowCard event={event} />
@@ -298,11 +316,12 @@ const Home = () => {
           />
         </div>
       ) : (
-        <div className="home-viagogo-rows">
-          <CarouselSection title="מומלצים" items={recommendedEvents} />
-          <CarouselSection title="הופעות" items={concertEvents} />
-          <CarouselSection title="ספורט" items={sportsEvents} />
-          <CarouselSection title="סטנדאפ ותיאטרון" items={standupTheaterEvents} />
+        <div className="home-viagogo-rows viagogo-home-discover">
+          <CarouselSection slug="recommended" title="מומלצים" items={recommendedEvents} />
+          <CarouselSection slug="concerts" title="הופעות" items={concertEvents} />
+          <CarouselSection slug="sports" title="ספורט" items={sportsEvents} />
+          <CarouselSection slug="standup" title="סטנדאפ" items={standupEvents} />
+          <CarouselSection slug="theater" title="תיאטרון" items={theaterEvents} />
         </div>
       )}
     </div>

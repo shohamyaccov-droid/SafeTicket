@@ -2923,7 +2923,9 @@ class EventViewSet(viewsets.ModelViewSet):
     """
     queryset = Event.objects.all()
     permission_classes = [IsAuthenticatedOrReadOnly]
-    
+    # Homepage / Sell need the full upcoming marketplace (default PAGE_SIZE=20 hid whole categories).
+    pagination_class = None
+
     def get_serializer_class(self):
         if self.action == 'list':
             return EventListSerializer
@@ -3148,7 +3150,8 @@ class ArtistViewSet(viewsets.ModelViewSet):
     """
     queryset = Artist.objects.all()
     permission_classes = [IsAuthenticatedOrReadOnly]
-    
+    pagination_class = None
+
     def get_serializer_class(self):
         if self.action == 'list':
             return ArtistListSerializer
