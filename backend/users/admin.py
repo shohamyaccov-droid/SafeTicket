@@ -38,12 +38,12 @@ def _admin_image_preview_html(fieldfile):
     """Signed Cloudinary URL or local storage; show missing banner if unreachable."""
     try:
         from django.conf import settings
-        from users.serializers import cloudinary_signed_https_image_url
+        from users.serializers import resolved_image_url
 
         if not fieldfile:
             return format_html('<span style="color:#64748b;">אין קובץ</span>')
         if getattr(settings, 'USE_CLOUDINARY', False):
-            url = cloudinary_signed_https_image_url(fieldfile)
+            url = resolved_image_url(None, fieldfile)
             if not url:
                 return _admin_missing_media_message()
             return format_html(

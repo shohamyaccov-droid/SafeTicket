@@ -1,5 +1,5 @@
 from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.middleware.csrf import get_token
 
 
@@ -702,10 +702,14 @@ def _finalize_group_sale_ticket_rows(ticket_ids):
                 'updated_at',
             ]
         )
+
+
+@method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(generics.CreateAPIView):
     """
     User registration endpoint. Returns JWT tokens immediately for instant login.
     OTP verification flow is dormant and can be re-enabled when needed.
+    Cross-origin iOS/Safari: JWT in JSON body — CSRF cookie is unreliable under ITP; do not require it here.
     """
     queryset = User.objects.all()
     permission_classes = [AllowAny]
@@ -788,11 +792,12 @@ def verify_email(request):
     }, status=status.HTTP_200_OK)
 
 
-@method_decorator(csrf_required, name='dispatch')
+@method_decorator(csrf_exempt, name='dispatch')
 class CustomTokenObtainPairView(TokenObtainPairView):
     """
     Custom login endpoint. Sets JWT tokens as HttpOnly cookies (XSS-safe).
-    Optionally duplicates tokens in JSON when JWT_RESPONSE_BODY_TOKENS is enabled.
+    JSON body also returns tokens for Bearer clients. CSRF exempt: Safari ITP drops cross-site
+    csrftoken; auth is credential-based (password → JWT), not session-cookie CSRF semantics.
     """
     serializer_class = CustomTokenObtainPairSerializer
     throttle_classes = [AuthLoginScopedThrottle]

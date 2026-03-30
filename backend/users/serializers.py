@@ -102,31 +102,10 @@ def user_can_access_ticket_pdf(user, ticket) -> bool:
     return False
 
 
-def absolute_file_url(request, fieldfile):
-    """Absolute URL for a FileField/ImageField (local MEDIA or Cloudinary/S3 full URL)."""
-    from django.conf import settings
-
-    if not fieldfile:
-        return None
-    if getattr(settings, 'USE_CLOUDINARY', False):
-        signed = cloudinary_signed_https_image_url(fieldfile)
-        if signed:
-            return signed
-    try:
-        url = fieldfile.url
-    except (ValueError, AttributeError):
-        return None
-    if url.startswith('http://') or url.startswith('https://'):
-        return url
-    if request:
-        return request.build_absolute_uri(url)
-    return None
-
-
-def cloudinary_signed_https_image_url(fieldfile):
+def cloudinary_unsigned_https_image_url(fieldfile):
     """
-    Fully qualified https:// delivery URL for ImageField on Cloudinary (signed).
-    Uses FieldFile.name as the public_id (MediaCloudinaryStorage). No path guessing.
+    Unsigned https:// delivery URL from FieldFile.name (public_id).
+    Signed URLs can be wrong for some uploads; storage-backed FieldFile.url is preferred in resolved_image_url.
     """
     from django.conf import settings
 
@@ -141,40 +120,59 @@ def cloudinary_signed_https_image_url(fieldfile):
         return None
 
     public_id = name.replace('\\', '/')
-    try:
-        url, _ = cloudinary.utils.cloudinary_url(
-            public_id,
-            resource_type='image',
-            type='upload',
-            sign_url=True,
-            secure=True,
-        )
-        if url and str(url).startswith('https://'):
-            return str(url)
-    except Exception:
-        pass
-    # Some assets fail signed URL generation (folder/transform edge cases); delivery URL may still work.
-    try:
-        url, _ = cloudinary.utils.cloudinary_url(
-            public_id,
-            resource_type='image',
-            secure=True,
-        )
-        if url and str(url).startswith('https://'):
-            return str(url)
-    except Exception:
-        return None
+    for opts in (
+        {'resource_type': 'image', 'secure': True},
+        {'resource_type': 'image', 'type': 'upload', 'secure': True},
+    ):
+        try:
+            url, _ = cloudinary.utils.cloudinary_url(public_id, **opts)
+            if url and str(url).startswith('https://'):
+                return str(url)
+        except Exception:
+            continue
     return None
 
 
 def resolved_image_url(request, fieldfile):
-    """Prefer signed Cloudinary HTTPS URL; else build absolute API/media URL."""
+    """
+    Prefer the storage layer URL (django-cloudinary-storage knows folder/version/delivery).
+    Fallback: unsigned Cloudinary URL from public_id. Avoid signed URLs — they often 401/404 for some assets.
+    """
     if not fieldfile:
         return None
-    u = cloudinary_signed_https_image_url(fieldfile)
-    if u:
-        return u
-    return absolute_file_url(request, fieldfile)
+    from django.conf import settings
+
+    raw = None
+    try:
+        raw = fieldfile.url
+    except (ValueError, AttributeError):
+        raw = None
+    if raw:
+        s = str(raw).strip()
+        if s.startswith('https://') or s.startswith('http://'):
+            return s
+        if s.startswith('//'):
+            return f'https:{s}'
+        if request and s.startswith('/'):
+            try:
+                return request.build_absolute_uri(s)
+            except Exception:
+                pass
+    if getattr(settings, 'USE_CLOUDINARY', False):
+        u = cloudinary_unsigned_https_image_url(fieldfile)
+        if u:
+            return u
+    if raw and request and not str(raw).startswith('http'):
+        try:
+            return request.build_absolute_uri(str(raw).strip())
+        except Exception:
+            pass
+    return None
+
+
+def absolute_file_url(request, fieldfile):
+    """Same resolution as resolved_image_url (single code path for catalog media)."""
+    return resolved_image_url(request, fieldfile)
 
 
 def artist_effective_image_field(artist):
