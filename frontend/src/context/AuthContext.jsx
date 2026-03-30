@@ -142,13 +142,21 @@ export const AuthProvider = ({ children }) => {
     const data = error.response?.data;
     const isHtml = typeof data === 'string' && data.trim().startsWith('<');
     if ((status != null && status >= 500) || isHtml) {
-      const detailStr =
-        data && typeof data === 'object' && typeof data.detail === 'string'
-          ? data.detail
-          : null;
+      let detailStr = null;
+      if (data && typeof data === 'object' && data.detail != null) {
+        if (typeof data.detail === 'string') {
+          detailStr = data.detail;
+        } else if (Array.isArray(data.detail) && data.detail.length > 0) {
+          detailStr = data.detail
+            .map((x) => (typeof x === 'string' ? x : JSON.stringify(x)))
+            .join('; ');
+        }
+      }
       return {
         success: false,
         error: detailStr || 'שגיאת שרת פנימית (500) או שגיאה לא ידועה.',
+        _debugStatus: status,
+        _debugData: data,
       };
     }
     let errorMessage = 'שם משתמש או סיסמה אינם נכונים';

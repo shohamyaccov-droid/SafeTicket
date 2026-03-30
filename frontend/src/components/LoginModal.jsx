@@ -64,6 +64,21 @@ export function LoginForm() {
       }
       if (!exact) exact = 'Login Failed';
 
+      // Mobile Safari: auth layer catches Axios — failures often never throw; alert raw result too.
+      try {
+        alert(
+          'Login returned failure: ' +
+            JSON.stringify({
+              error: result.error,
+              errorHebrew: result.errorHebrew,
+              _debugStatus: result._debugStatus,
+              _debugData: result._debugData,
+            })
+        );
+      } catch {
+        /* ignore */
+      }
+
       const friendly =
         result.errorHebrew ||
         (typeof result.error === 'string' && result.error.length < 200
@@ -73,6 +88,14 @@ export function LoginForm() {
       setError(friendly);
       toastError(exact);
     } catch (err) {
+      try {
+        alert(
+          'API Response: ' +
+            JSON.stringify(err?.response?.data || err?.message || err)
+        );
+      } catch {
+        /* ignore */
+      }
       const exact =
         responseDetail(err?.response?.data) ||
         err?.message ||

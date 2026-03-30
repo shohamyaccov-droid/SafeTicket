@@ -545,6 +545,9 @@ const Home = () => {
                 </div>
                 <div className="artist-info">
                   <h3 className="artist-name">{artist.name}</h3>
+                  <span className="artist-debug-image-url" data-e2e="debug-artist-image-url">
+                    {artist.image_url ? 'URL OK' : 'URL NULL'}
+                  </span>
                   <p className="artist-tickets-count">
                     <svg className="ticket-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" fill="currentColor"/>

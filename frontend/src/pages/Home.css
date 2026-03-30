@@ -540,6 +540,19 @@
   text-align: right;
 }
 
+.artist-debug-image-url {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin: 0 0 0.35rem 0;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  width: fit-content;
+  background: #fef3c7;
+  color: #92400e;
+  font-family: ui-monospace, monospace;
+}
+
 .artist-tickets-count {
   font-size: 0.85rem;
   color: var(--text-tertiary);
