@@ -1,5 +1,5 @@
 # Product Requirements Document (PRD)
-**Project Name:** SafeTicket IL (MVP)
+**Project Name:** SafeTicket (MVP)
 **Date:** December 16, 2025
 **Version:** 1.3 (Final MVP Scope)
 

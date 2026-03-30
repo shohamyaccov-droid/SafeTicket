@@ -73,10 +73,12 @@ const Navbar = () => {
     return (
       <nav className="navbar">
         <div className="nav-container nav-container--loading">
-          <div className="nav-logo-block">
-            <Link to="/" className="nav-logo">
-              SafeTicket IL
-            </Link>
+          <div className="nav-cluster">
+            <div className="nav-logo-block">
+              <Link to="/" className="nav-logo">
+                SafeTicket
+              </Link>
+            </div>
           </div>
         </div>
       </nav>
@@ -86,27 +88,29 @@ const Navbar = () => {
   return (
     <nav className="navbar">
       <div className="nav-container">
-        <div className="nav-logo-block">
-          <Link to="/" className="nav-logo" onClick={closeMobileMenu}>
-            SafeTicket IL
-          </Link>
-        </div>
-
-        <nav className="nav-menu nav-menu-desktop">
-          <Link to="/" className="nav-link" onClick={closeMobileMenu}>
-            בית
-          </Link>
-          {user && (
-            <Link to="/dashboard" className="nav-link nav-link-personal" onClick={closeMobileMenu}>
-              {offerCounts.acceptedOffers > 0 && <span className="nav-dot nav-dot-accepted" aria-hidden="true" />}
-              {offerCounts.acceptedOffers === 0 && offerCounts.actionRequired > 0 && <span className="nav-dot nav-dot-action" aria-hidden="true" />}
-              האזור האישי
+        <div className="nav-cluster">
+          <div className="nav-logo-block">
+            <Link to="/" className="nav-logo" onClick={closeMobileMenu}>
+              SafeTicket
             </Link>
-          )}
-          <Link to="/sell" className="nav-link sell-btn" onClick={closeMobileMenu}>
-            מכירת כרטיס
-          </Link>
-        </nav>
+          </div>
+
+          <nav className="nav-menu nav-menu-desktop">
+            <Link to="/" className="nav-link" onClick={closeMobileMenu}>
+              בית
+            </Link>
+            {user && (
+              <Link to="/dashboard" className="nav-link nav-link-personal" onClick={closeMobileMenu}>
+                {offerCounts.acceptedOffers > 0 && <span className="nav-dot nav-dot-accepted" aria-hidden="true" />}
+                {offerCounts.acceptedOffers === 0 && offerCounts.actionRequired > 0 && <span className="nav-dot nav-dot-action" aria-hidden="true" />}
+                האזור האישי
+              </Link>
+            )}
+            <Link to="/sell" className="nav-link sell-btn" onClick={closeMobileMenu}>
+              מכירת כרטיס
+            </Link>
+          </nav>
+        </div>
 
         <div className="user-actions user-actions-desktop">
           {user ? (

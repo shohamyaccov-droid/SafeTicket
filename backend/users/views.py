@@ -190,6 +190,49 @@ import os
 User = get_user_model()
 
 
+def _user_payload_for_auth_response(request, user):
+    """
+    Serialize user for login/register/verify responses. Image/storage errors must not 500 the auth flow.
+    """
+    if user is None:
+        return None
+    try:
+        return UserSerializer(user, context={'request': request}).data
+    except Exception:
+        logger.exception('UserSerializer failed in auth response for user pk=%s', user.pk)
+        return {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'role': user.role,
+            'phone_number': user.phone_number or '',
+            'payout_details': user.payout_details or '',
+            'accepted_escrow_terms': user.accepted_escrow_terms,
+            'profile_image': None,
+            'is_verified_seller': user.is_verified_seller,
+            'is_email_verified': user.is_email_verified,
+            'is_superuser': user.is_superuser,
+            'is_staff': user.is_staff,
+            'date_joined': user.date_joined.isoformat() if user.date_joined else None,
+        }
+
+
+def _user_from_access_token_str(access_token_str):
+    """Map JWT access string to User (matches the account that just authenticated)."""
+    if not access_token_str:
+        return None
+    from rest_framework_simplejwt.settings import api_settings as jwt_api_settings
+    from rest_framework_simplejwt.tokens import AccessToken
+
+    try:
+        tok = AccessToken(str(access_token_str))
+        uid = tok[jwt_api_settings.USER_ID_CLAIM]
+        return User.objects.get(**{jwt_api_settings.USER_ID_FIELD: uid})
+    except Exception:
+        logger.exception('Could not resolve User from access token for login response')
+        return None
+
+
 def _order_pending_checkout_response(order, request):
     """JSON for create_order / guest_checkout: include one-time payment_confirm_token while pending."""
     data = OrderSerializer(order, context={'request': request}).data
@@ -683,7 +726,7 @@ class RegisterView(generics.CreateAPIView):
         token_serializer = CustomTokenObtainPairSerializer()
         token_data = token_serializer.get_token(user)
         response = Response({
-            'user': UserSerializer(user).data,
+            'user': _user_payload_for_auth_response(request, user),
         }, status=status.HTTP_201_CREATED)
         from .authentication import set_jwt_cookies
         set_jwt_cookies(response, token_data.access_token, token_data)
@@ -735,7 +778,7 @@ def verify_email(request):
     token_serializer = CustomTokenObtainPairSerializer()
     token_data = token_serializer.get_token(user)
     return Response({
-        'user': UserSerializer(user).data,
+        'user': _user_payload_for_auth_response(request, user),
         'access': str(token_data.access_token),
         'refresh': str(token_data),
         'message': 'Email verified successfully.',
@@ -753,23 +796,40 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
-        if response.status_code == 200:
-            from .authentication import set_jwt_cookies
-            access = response.data.get('access')
-            refresh = response.data.get('refresh')
-            if access and refresh:
-                set_jwt_cookies(response, access, refresh)
-                # Always return tokens in JSON for mobile Safari (Bearer in localStorage).
-                response.data['access'] = str(access)
-                response.data['refresh'] = str(refresh)
-            # Ensure user data in response
-            username = request.data.get('username')
-            try:
-                user = User.objects.get(username=username)
-                user_serializer = UserSerializer(user)
-                response.data['user'] = user_serializer.data
-            except User.DoesNotExist:
-                pass
+        if response.status_code != 200:
+            return response
+        from .authentication import set_jwt_cookies
+
+        try:
+            body = dict(response.data)
+        except Exception:
+            logger.exception('login: could not copy response.data')
+            body = getattr(response, 'data', None) or {}
+
+        access = body.get('access')
+        refresh = body.get('refresh')
+        if access and refresh:
+            set_jwt_cookies(response, access, refresh)
+            body['access'] = str(access)
+            body['refresh'] = str(refresh)
+
+        user = _user_from_access_token_str(access)
+        if user is None:
+            raw = request.data.get(User.USERNAME_FIELD) or request.data.get('username')
+            if raw is not None and not isinstance(raw, str):
+                raw = str(raw)
+            uname = (raw or '').strip()
+            if uname:
+                try:
+                    user = User.objects.get(username=uname)
+                except User.DoesNotExist:
+                    user = None
+
+        payload = _user_payload_for_auth_response(request, user)
+        if payload is not None:
+            body['user'] = payload
+
+        response.data = body
         return response
 
 

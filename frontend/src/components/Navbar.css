@@ -23,6 +23,14 @@
   justify-content: center;
 }
 
+/* Desktop: logo + main links grouped (no stretched “middle”); user actions stay on the far side (RTL). */
+.nav-cluster {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: var(--spacing-lg);
+}
+
 .nav-logo-block {
   display: flex;
   align-items: center;
@@ -54,6 +62,7 @@
   gap: var(--spacing-md);
   align-items: center;
   flex-wrap: wrap;
+  flex: 0 1 auto;
 }
 
 .nav-link {
