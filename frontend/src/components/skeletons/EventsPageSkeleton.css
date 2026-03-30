@@ -122,3 +122,52 @@
 .sell-form-skel-bar--short {
   width: 70%;
 }
+
+/* Home: carousel row placeholders */
+.eps-home-row {
+  margin-bottom: 1.5rem;
+}
+
+.eps-home-row-title {
+  height: 22px;
+  width: 140px;
+  margin: 0 0 0.75rem 0.25rem;
+  border-radius: 8px;
+}
+
+.eps-home-scroll {
+  display: flex;
+  gap: 0.75rem;
+  overflow: hidden;
+  padding-bottom: 0.25rem;
+}
+
+.eps-home-card {
+  flex: 0 0 200px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 0.65rem;
+}
+
+.eps-home-card-thumb {
+  height: 110px;
+  width: 100%;
+  border-radius: 10px;
+  margin-bottom: 0.6rem;
+}
+
+.eps-home-card-line {
+  height: 12px;
+  border-radius: 6px;
+  margin-bottom: 0.4rem;
+}
+
+.eps-home-card-line--title {
+  width: 92%;
+}
+
+.eps-home-card-line--sub {
+  width: 55%;
+  margin-bottom: 0;
+}

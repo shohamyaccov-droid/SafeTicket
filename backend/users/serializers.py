@@ -441,6 +441,20 @@ class ArtistListSerializer(serializers.ModelSerializer):
         return total or 0
 
 
+class ArtistCardSerializer(serializers.ModelSerializer):
+    """Minimal artist nest for event lists (avoids per-row ticket aggregate queries)."""
+
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Artist
+        fields = ('id', 'name', 'image_url')
+        read_only_fields = fields
+
+    def get_image_url(self, obj):
+        return first_resolved_image_url_for_artist(self.context.get('request'), obj)
+
+
 class EventSerializer(serializers.ModelSerializer):
     """Serializer for Event model"""
     image_url = serializers.SerializerMethodField()
@@ -473,11 +487,13 @@ class EventListSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
     tickets_count = serializers.SerializerMethodField()
     artist_name = serializers.CharField(source='artist.name', read_only=True)
-    
+    artist_detail = ArtistCardSerializer(source='artist', read_only=True)
+
     class Meta:
         model = Event
         fields = (
-            'id', 'artist', 'artist_name', 'name', 'date', 'venue', 'city', 'image_url', 'tickets_count', 'view_count',
+            'id', 'artist', 'artist_detail', 'artist_name', 'name', 'date', 'venue', 'city', 'image_url',
+            'tickets_count', 'view_count',
             'category', 'home_team', 'away_team', 'tournament'
         )
         read_only_fields = fields

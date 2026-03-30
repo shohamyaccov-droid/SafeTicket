@@ -108,8 +108,8 @@ class Event(models.Model):
     # Event categorization and status
     CATEGORY_CHOICES = [
         ('concert', 'הופעות'),
-        ('sport', 'משחקי ספורט'),
-        ('theater', 'הצגות תיאטרון'),
+        ('sport', 'ספורט'),
+        ('theater', 'תיאטרון'),
         ('festival', 'פסטיבלים'),
         ('standup', 'סטנדאפ'),
     ]
@@ -160,7 +160,7 @@ class Event(models.Model):
     
     def __str__(self):
         # For sports events with teams, show team matchup
-        if self.category == 'sport' or self.category == 'ספורט':
+        if self.category == 'sport':
             if self.home_team and self.away_team:
                 tournament_str = f" - {self.tournament}" if self.tournament else ""
                 return f"{self.home_team} vs {self.away_team}{tournament_str}"

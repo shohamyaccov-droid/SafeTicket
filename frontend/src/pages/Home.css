@@ -803,3 +803,137 @@
     font-size: 0.85rem;
   }
 }
+
+/* Viagogo-style horizontal rows */
+.home-viagogo-rows {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 0 3rem;
+  direction: rtl;
+}
+
+.home-empty-wrap {
+  max-width: 720px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.home-carousel-section {
+  margin-bottom: 2.25rem;
+}
+
+.home-carousel-head {
+  padding: 0 1.25rem;
+  margin-bottom: 0.875rem;
+}
+
+.home-carousel-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+  font-family: 'Heebo', 'Assistant', sans-serif;
+}
+
+.home-carousel-scroll {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  padding: 0.25rem 1.25rem 0.75rem;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.home-carousel-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.home-carousel-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.home-carousel-item {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  width: min(280px, 78vw);
+}
+
+.home-carousel-card {
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.home-carousel-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+}
+
+.home-carousel-card:focus {
+  outline: 2px solid var(--primary-blue);
+  outline-offset: 2px;
+}
+
+.home-carousel-card__media {
+  aspect-ratio: 16 / 10;
+  background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+  overflow: hidden;
+}
+
+.home-carousel-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.home-carousel-card__body {
+  padding: 1rem 1rem 1.1rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.home-carousel-card__title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.35;
+  color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.home-carousel-card__artist {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-carousel-card__meta {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-tertiary);
+}
+
+.home-carousel-card__tickets {
+  margin: 0.5rem 0 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #059669;
+}

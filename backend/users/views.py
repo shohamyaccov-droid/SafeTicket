@@ -2945,6 +2945,9 @@ class EventViewSet(viewsets.ModelViewSet):
             )
             .order_by('date', 'name')
         )
+        # Marketplace list: never surface events with no listable inventory
+        if self.action == 'list':
+            queryset = queryset.filter(_active_tickets_total__gt=0)
         
         # Optional: Filter by artist if provided
         artist_id = self.request.query_params.get('artist', None)
@@ -3155,11 +3158,17 @@ class ArtistViewSet(viewsets.ModelViewSet):
         queryset = Artist.objects.all().order_by('name')
         # List view: one aggregate per artist (avoid N+1 in total_tickets_count)
         if self.action == 'list':
-            queryset = queryset.annotate(
-                _artist_tickets_total=Coalesce(
-                    Sum('events__tickets__available_quantity', filter=Q(events__tickets__status='active')),
-                    Value(0),
+            queryset = (
+                queryset.annotate(
+                    _artist_tickets_total=Coalesce(
+                        Sum(
+                            'events__tickets__available_quantity',
+                            filter=Q(events__tickets__status='active'),
+                        ),
+                        Value(0),
+                    )
                 )
+                .filter(_artist_tickets_total__gt=0)
             )
         search = self.request.query_params.get('search', None)
         if search:
@@ -3177,9 +3186,9 @@ class ArtistViewSet(viewsets.ModelViewSet):
         Get all events for a specific artist, sorted by date (ascending)
         """
         artist = get_object_or_404(Artist, pk=pk)
-        
+        now = timezone.now()
         events = (
-            Event.objects.filter(artist=artist)
+            Event.objects.filter(artist=artist, date__gte=now)
             .select_related('artist')
             .annotate(
                 _active_tickets_total=Coalesce(
@@ -3187,6 +3196,7 @@ class ArtistViewSet(viewsets.ModelViewSet):
                     Value(0),
                 )
             )
+            .filter(_active_tickets_total__gt=0)
             .order_by('date', 'name')
         )
         serializer = EventListSerializer(events, many=True, context={'request': request})
