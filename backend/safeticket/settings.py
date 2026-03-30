@@ -30,6 +30,19 @@ def _env_origin_list(env_key, default):
     return out
 
 
+def _merge_unique_origins(base_list, *extras):
+    seen = set(base_list)
+    out = list(base_list)
+    for raw in extras:
+        if raw is None or raw == '':
+            continue
+        o = str(raw).strip().rstrip('/')
+        if o and o not in seen:
+            seen.add(o)
+            out.append(o)
+    return out
+
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -354,6 +367,7 @@ CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 _RENDER_WEB_ORIGIN = 'https://safeticket-web.onrender.com'
 _RENDER_API_ORIGIN = 'https://safeticket-api.onrender.com'
+_FRONTEND_FROM_ENV = os.environ.get('FRONTEND_ORIGIN', '').strip().rstrip('/')
 if DEBUG:
     CORS_ALLOWED_ORIGINS = _env_origin_list(
         'CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000'
@@ -361,6 +375,13 @@ if DEBUG:
     CSRF_TRUSTED_ORIGINS = _env_origin_list(
         'CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000'
     )
+    if _FRONTEND_FROM_ENV:
+        CORS_ALLOWED_ORIGINS = _merge_unique_origins(
+            CORS_ALLOWED_ORIGINS, _FRONTEND_FROM_ENV
+        )
+        CSRF_TRUSTED_ORIGINS = _merge_unique_origins(
+            CSRF_TRUSTED_ORIGINS, _FRONTEND_FROM_ENV
+        )
 else:
     CORS_ALLOWED_ORIGINS = _env_origin_list(
         'CORS_ALLOWED_ORIGINS',
@@ -370,6 +391,10 @@ else:
         'CSRF_TRUSTED_ORIGINS',
         f'{_RENDER_WEB_ORIGIN},{_RENDER_API_ORIGIN}',
     )
+    # Always trust the SPA origin: env FRONTEND_ORIGIN or the known Render web URL (lists stay aligned).
+    _fe_trust = _FRONTEND_FROM_ENV or _RENDER_WEB_ORIGIN
+    CORS_ALLOWED_ORIGINS = _merge_unique_origins(CORS_ALLOWED_ORIGINS, _fe_trust)
+    CSRF_TRUSTED_ORIGINS = _merge_unique_origins(CSRF_TRUSTED_ORIGINS, _fe_trust)
 
 # JWT HttpOnly cookie names
 JWT_ACCESS_COOKIE_NAME = 'access_token'
@@ -389,7 +414,11 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@safeticket.local')
 # Public origins for buyer receipt emails (no trailing slash). On Render set both explicitly.
 API_PUBLIC_ORIGIN = os.environ.get('API_PUBLIC_ORIGIN', 'http://127.0.0.1:8000').rstrip('/')
-FRONTEND_ORIGIN = os.environ.get('FRONTEND_ORIGIN', 'http://localhost:3000').rstrip('/')
+FRONTEND_ORIGIN = (
+    _FRONTEND_FROM_ENV
+    if _FRONTEND_FROM_ENV
+    else ('http://localhost:3000' if DEBUG else _RENDER_WEB_ORIGIN)
+).rstrip('/')
 # Production SMTP: set EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend plus EMAIL_HOST_*
 
 # Cache for OTP storage (10 min TTL)

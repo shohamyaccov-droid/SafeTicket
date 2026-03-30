@@ -1,5 +1,10 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { authAPI, resetCsrfTokenCache, setBearerFallback, clearBearerFallback } from '../services/api';
+import api, {
+  authAPI,
+  resetCsrfTokenCache,
+  setBearerFallback,
+  clearBearerFallback,
+} from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -87,9 +92,11 @@ export const AuthProvider = ({ children }) => {
         // Cross-origin: establish csrftoken on API host before POST (CSRF + CORS credentials)
         await authAPI.getCsrf();
         const response = await authAPI.login({ username, password });
-        // Persist immediately (response interceptor also writes — belt and suspenders).
-        if (response.data?.access) {
-          setBearerFallback(response.data.access, response.data.refresh);
+        const access = response.data?.access;
+        const refresh = response.data?.refresh;
+        if (access) {
+          setBearerFallback(access, refresh);
+          api.defaults.headers.common.Authorization = `Bearer ${access}`;
         }
         let user = response.data?.user;
         if (!user) {
@@ -123,9 +130,12 @@ export const AuthProvider = ({ children }) => {
     if (!error) {
       return { success: false, error: 'שגיאת התחברות' };
     }
-    // Network/CORS errors: error.response is undefined
+    // Network/CORS: keep technical string on `error` for LoginForm debug toast
     if (!error.response || error.message === 'Network Error') {
-      return { success: false, error: 'שגיאת תקשורת עם השרת' };
+      const technical =
+        error.message ||
+        (typeof error === 'string' ? error : 'Network Error — no response (check CORS)');
+      return { success: false, error: technical, errorHebrew: 'שגיאת תקשורת עם השרת' };
     }
     // 500 or HTML/undefined response - server error
     const status = error.response?.status;

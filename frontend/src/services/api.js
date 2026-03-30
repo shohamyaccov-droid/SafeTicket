@@ -83,22 +83,6 @@ if (_storedAccess) {
   bearerAccessToken = _storedAccess;
 }
 
-export function setBearerFallback(access, refresh) {
-  bearerAccessToken = access != null && access !== '' ? String(access) : null;
-  _writeLs(BEARER_ACCESS_KEY, bearerAccessToken);
-  if (refresh != null && refresh !== '') {
-    bearerRefreshToken = String(refresh);
-    _writeLs(BEARER_REFRESH_KEY, bearerRefreshToken);
-  }
-}
-
-export function clearBearerFallback() {
-  bearerAccessToken = null;
-  bearerRefreshToken = null;
-  _writeLs(BEARER_ACCESS_KEY, null);
-  _writeLs(BEARER_REFRESH_KEY, null);
-}
-
 function getRefreshForBearerFallback() {
   if (bearerRefreshToken) return bearerRefreshToken;
   hydrateRefreshFromStorage();
@@ -148,6 +132,41 @@ const api = axios.create({
   },
   withCredentials: true,
 });
+
+/**
+ * CRITICAL (iOS Safari): set axios default Authorization synchronously so the very next
+ * request (e.g. getProfile right after login) cannot outrun the interceptor.
+ */
+export function syncAxiosDefaultAuthHeader() {
+  const t = getEffectiveBearerAccess();
+  if (t) {
+    api.defaults.headers.common.Authorization = `Bearer ${t}`;
+  } else {
+    delete api.defaults.headers.common.Authorization;
+  }
+}
+
+export function setBearerFallback(access, refresh) {
+  bearerAccessToken = access != null && access !== '' ? String(access) : null;
+  _writeLs(BEARER_ACCESS_KEY, bearerAccessToken);
+  if (refresh != null && refresh !== '') {
+    bearerRefreshToken = String(refresh);
+    _writeLs(BEARER_REFRESH_KEY, bearerRefreshToken);
+  }
+  syncAxiosDefaultAuthHeader();
+}
+
+export function clearBearerFallback() {
+  bearerAccessToken = null;
+  bearerRefreshToken = null;
+  _writeLs(BEARER_ACCESS_KEY, null);
+  _writeLs(BEARER_REFRESH_KEY, null);
+  syncAxiosDefaultAuthHeader();
+}
+
+if (_storedAccess) {
+  syncAxiosDefaultAuthHeader();
+}
 
 function stripContentTypeForMultipart(config) {
   if (!(config.data instanceof FormData)) {
