@@ -38,9 +38,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    // Auth check: NO localStorage - tokens are HttpOnly cookies.
-    // Unconditionally call getProfile(); 200 = set user, 401 = set null (interceptor
-    // does NOT redirect on getProfile 401 to avoid infinite loop).
+    // JWT in localStorage + Bearer header; getProfile() 200 = logged in, 401 = guest.
     authAPI.getProfile()
       .then((response) => {
         applyProfile(response);
@@ -89,6 +87,7 @@ export const AuthProvider = ({ children }) => {
         // Cross-origin: establish csrftoken on API host before POST (CSRF + CORS credentials)
         await authAPI.getCsrf();
         const response = await authAPI.login({ username, password });
+        // Persist immediately (response interceptor also writes — belt and suspenders).
         if (response.data?.access) {
           setBearerFallback(response.data.access, response.data.refresh);
         }

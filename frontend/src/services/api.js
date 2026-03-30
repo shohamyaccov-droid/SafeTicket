@@ -42,12 +42,19 @@ function _writeLs(key, val) {
   }
 }
 
-/** Effective access token: memory wins, then localStorage (hydrate after reload). */
+/**
+ * Bearer for API calls: localStorage is source of truth (iOS Safari reload / multi-tab).
+ * Memory is synced from LS when present so other code sees the same value.
+ */
 export function getEffectiveBearerAccess() {
-  if (bearerAccessToken) return bearerAccessToken;
-  const s = _readLs(BEARER_ACCESS_KEY);
-  if (s) {
-    bearerAccessToken = s;
+  try {
+    const fromLs = localStorage.getItem(BEARER_ACCESS_KEY);
+    if (fromLs && fromLs !== '') {
+      bearerAccessToken = fromLs;
+      return fromLs;
+    }
+  } catch {
+    /* private mode / denied */
   }
   return bearerAccessToken;
 }
@@ -193,7 +200,23 @@ api.interceptors.request.use(
 // IMPORTANT: Do NOT redirect when the failed request is getProfile - that's the initial
 // auth check. Let it reject so AuthContext can set user=null (avoids infinite redirect loop).
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const url = response.config?.url || '';
+    const st = response.status;
+    if ((st === 200 || st === 201) && response.data && typeof response.data === 'object') {
+      const d = response.data;
+      if (
+        url.includes('/login/') ||
+        url.includes('/register/') ||
+        url.includes('/token/refresh/')
+      ) {
+        if (d.access) {
+          setBearerFallback(d.access, d.refresh);
+        }
+      }
+    }
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
     const is401 = error.response?.status === 401;

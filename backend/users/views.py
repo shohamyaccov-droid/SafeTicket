@@ -687,9 +687,9 @@ class RegisterView(generics.CreateAPIView):
         }, status=status.HTTP_201_CREATED)
         from .authentication import set_jwt_cookies
         set_jwt_cookies(response, token_data.access_token, token_data)
-        if getattr(dj_settings, 'JWT_RESPONSE_BODY_TOKENS', False):
-            response.data['access'] = str(token_data.access_token)
-            response.data['refresh'] = str(token_data)
+        # iOS / cross-origin: SPA must read tokens from JSON (cookies are unreliable).
+        response.data['access'] = str(token_data.access_token)
+        response.data['refresh'] = str(token_data)
         return response
 
 
@@ -759,12 +759,9 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             refresh = response.data.get('refresh')
             if access and refresh:
                 set_jwt_cookies(response, access, refresh)
-                if getattr(dj_settings, 'JWT_RESPONSE_BODY_TOKENS', False):
-                    response.data['access'] = str(access)
-                    response.data['refresh'] = str(refresh)
-                else:
-                    del response.data['access']
-                    del response.data['refresh']
+                # Always return tokens in JSON for mobile Safari (Bearer in localStorage).
+                response.data['access'] = str(access)
+                response.data['refresh'] = str(refresh)
             # Ensure user data in response
             username = request.data.get('username')
             try:
@@ -811,7 +808,7 @@ class CookieTokenRefreshView(TokenRefreshView):
         refresh_out = new_refresh or refresh_cookie
         response = Response({'detail': 'Token refreshed.'}, status=status.HTTP_200_OK)
         set_jwt_cookies(response, access, refresh_out)
-        if getattr(dj_settings, 'JWT_RESPONSE_BODY_TOKENS', False) and access:
+        if access:
             response.data['access'] = str(access)
             if refresh_out:
                 response.data['refresh'] = str(refresh_out)
