@@ -323,7 +323,7 @@ class Command(BaseCommand):
                     'genre': row['genre'],
                 },
             )
-            _download_field(artist, 'image', row['image'])
+            _download_media(self, artist, 'image', row['image'])
             artists_by_name[row['name']] = artist
             self.stdout.write(self.style.SUCCESS(f'Artist OK: {artist.name}'))
 
