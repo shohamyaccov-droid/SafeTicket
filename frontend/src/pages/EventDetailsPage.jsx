@@ -678,51 +678,65 @@ const EventDetailsPage = () => {
     );
   }
 
+  const artistId =
+    typeof event.artist === 'object' ? event.artist?.id : event.artist_id || event.artist;
+  const matchedArtist = artists.find((a) => a.id === artistId);
+  const artistDisplayName =
+    (typeof event.artist === 'object' && event.artist?.name) ||
+    event.artist_name ||
+    matchedArtist?.name ||
+    '';
+  const heroImageCandidates = [
+    event.image_url,
+    event.image,
+    typeof event.artist === 'object' ? event.artist?.image_url || event.artist?.image : null,
+    matchedArtist?.image_url,
+    matchedArtist?.image,
+  ];
+  const heroImageRaw = heroImageCandidates.find(Boolean);
+  const heroImageSrc = heroImageRaw
+    ? getFullImageUrl(heroImageRaw)
+    : `https://via.placeholder.com/640x400/0f172a/e2e8f0?text=${encodeURIComponent((event.name || '').slice(0, 28))}`;
+
   return (
     <div className="event-details-container">
-      {/* Event Header */}
       <div className="event-header">
-        <button onClick={() => navigate(-1)} className="back-button">
+        <button type="button" onClick={() => navigate(-1)} className="back-button">
           ← חזרה
         </button>
-        <div className="event-header-content">
-          {event.image_url && (
-            <img 
-              src={getFullImageUrl(event.image_url)} 
-              alt={event.name}
-              className="event-header-image"
+        <div className="event-hero-card">
+          <div className="event-hero-media">
+            <img
+              src={heroImageSrc}
+              alt=""
+              className="event-hero-image"
+              loading="eager"
+              decoding="async"
               onError={(e) => {
-                e.target.src = `https://via.placeholder.com/800x400/0045af/ffffff?text=${encodeURIComponent(event.name)}`;
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = `https://via.placeholder.com/640x400/0045af/ffffff?text=${encodeURIComponent(
+                  event.name || 'Event'
+                )}`;
               }}
             />
-          )}
-          <div className="event-header-info">
-            <div className="event-title-row">
-              <div className="event-header-title-container">
-                {(() => {
-                  const artistId = typeof event.artist === 'object' ? event.artist?.id : event.artist_id || event.artist;
-                  const matchedArtist = artists.find(a => a.id === artistId);
-                  const rawImg = event.image_url || event.image ||
-                    (typeof event.artist === 'object' ? (event.artist?.image_url || event.artist?.image) : null) ||
-                    matchedArtist?.image_url || matchedArtist?.image;
-                  const headerImgSrc = rawImg ? getFullImageUrl(rawImg) : null;
-                  return headerImgSrc ? (
-                    <img
-                      src={headerImgSrc}
-                      alt={event.name}
-                      className="event-header-title-image"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                      }}
-                    />
-                  ) : null;
-                })()}
-                <h1 className="event-title">{event.name}</h1>
-              </div>
-            </div>
-            <div className="event-meta">
-              <p className="event-date">📅 {formatDate(event.date)}</p>
-              <p className="event-location">📍 {event.venue}, {event.city}</p>
+          </div>
+          <div className="event-hero-body">
+            <h1 className="event-hero-title">{event.name}</h1>
+            {artistDisplayName ? (
+              <p className="event-hero-artist">{artistDisplayName}</p>
+            ) : null}
+            {event.category === 'sport' && (event.home_team || event.away_team) ? (
+              <p className="event-hero-matchup">
+                {event.home_team || '—'} <span className="event-hero-vs">נגד</span> {event.away_team || '—'}
+                {event.tournament ? <span className="event-hero-tournament"> · {event.tournament}</span> : null}
+              </p>
+            ) : null}
+            <div className="event-hero-meta">
+              <p className="event-hero-date">📅 {formatDate(event.date)}</p>
+              <p className="event-hero-location">
+                📍 {event.venue}
+                {event.city ? `, ${event.city}` : ''}
+              </p>
             </div>
           </div>
         </div>

@@ -33,8 +33,6 @@ npm run build
 cd "$ROOT/backend"
 pip install -r requirements.txt
 python manage.py migrate --noinput
-# TEMP: run once so production gets demo inventory without paid Render Shell; remove after Shoham confirms data.
-python manage.py seed_realistic_data
 python manage.py collectstatic --noinput
 
 echo "build_render.sh finished OK"

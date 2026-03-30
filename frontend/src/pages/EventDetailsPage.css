@@ -7,7 +7,7 @@
 }
 
 .event-header {
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .back-button {
@@ -26,58 +26,140 @@
   text-decoration: underline;
 }
 
-.event-header-content {
+/* Side-by-side hero (desktop): contained image + readable info */
+.event-hero-card {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 1.5rem;
   background: var(--bg-card);
-  border-radius: var(--radius-md);
+  border-radius: 16px;
   overflow: hidden;
   box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-light, #e5e7eb);
+  direction: rtl;
 }
 
-.event-header-image {
+.event-hero-media {
+  flex: 0 0 42%;
+  max-width: 42%;
+  min-width: 0;
+  background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.event-hero-image {
   width: 100%;
-  height: 400px;
+  height: 100%;
+  min-height: 220px;
+  max-height: 320px;
   object-fit: cover;
+  display: block;
+  border-radius: 14px;
 }
 
-.event-header-info {
-  padding: 0.75rem 1rem;
-}
-
-.event-title-row {
+.event-hero-body {
+  flex: 1;
+  min-width: 0;
+  padding: 1.35rem 1.5rem 1.5rem 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-md);
+  justify-content: center;
+  gap: 0.65rem;
+  text-align: right;
 }
 
-.event-title {
-  font-size: 2.5rem;
-  font-weight: 700;
+.event-hero-title {
+  font-size: clamp(1.5rem, 2.5vw, 2.15rem);
+  font-weight: 800;
   color: var(--text-primary);
+  margin: 0;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.event-hero-artist {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--primary-blue, #0045af);
   margin: 0;
 }
 
-.event-header-title-container {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.5rem;
+.event-hero-matchup {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.4;
 }
 
-.event-header-title-container img.event-header-title-image {
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
-  object-fit: cover;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  flex-shrink: 0;
+.event-hero-vs {
+  font-weight: 700;
+  color: var(--text-tertiary);
+  margin: 0 0.35rem;
+}
+
+.event-hero-tournament {
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
+.event-hero-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+}
+
+.event-hero-date,
+.event-hero-location {
+  font-size: 1.08rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.45;
 }
 
 @media (max-width: 768px) {
-  .event-header-title-container img.event-header-title-image {
-    width: 72px;
-    height: 72px;
+  .event-hero-card {
+    flex-direction: column;
+    gap: 0;
     border-radius: 14px;
+  }
+
+  .event-hero-media {
+    flex: none;
+    max-width: none;
+    width: 100%;
+    padding: 0;
+  }
+
+  .event-hero-image {
+    min-height: 200px;
+    max-height: 240px;
+    border-radius: 0;
+  }
+
+  .event-hero-body {
+    padding: 1.1rem 1rem 1.25rem;
+    justify-content: flex-start;
+  }
+
+  .event-hero-title {
+    font-size: 1.35rem;
+  }
+
+  .event-hero-artist {
+    font-size: 1.05rem;
+  }
+
+  .event-hero-date,
+  .event-hero-location {
+    font-size: 1rem;
   }
 }
 
@@ -1538,28 +1620,6 @@
   .event-details-container {
     padding: var(--spacing-md) var(--spacing-sm);
     max-width: 100%;
-  }
-  
-  .event-header-image {
-    height: 200px;
-  }
-  
-  .event-header-info {
-    padding: var(--spacing-md);
-  }
-  
-  .event-title {
-    font-size: 1.5rem;
-    line-height: 1.3;
-  }
-  
-  .event-meta {
-    gap: var(--spacing-xs);
-  }
-  
-  .event-date,
-  .event-location {
-    font-size: 1rem;
   }
   
   .tickets-grid {
