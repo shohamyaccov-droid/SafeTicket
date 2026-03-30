@@ -23,12 +23,12 @@
   justify-content: center;
 }
 
-/* Desktop: logo + main links grouped (no stretched “middle”); user actions stay on the far side (RTL). */
-.nav-cluster {
+.nav-bar-start {
   display: flex;
   align-items: center;
   flex-shrink: 0;
   gap: var(--spacing-sm);
+  min-width: 0;
 }
 
 .nav-logo-block {
@@ -41,10 +41,7 @@
 .nav-search-form {
   align-items: stretch;
   gap: 0;
-  flex: 1 1 auto;
-  max-width: 380px;
   min-width: 0;
-  margin-inline: 0.75rem;
   border: 1px solid var(--border-color);
   border-radius: 12px;
   background: var(--bg-primary);
@@ -354,8 +351,13 @@ a.nav-mobile-auth-btn {
   
   /* Hide desktop nav links (slide-out + compact bar instead) */
   .nav-menu-desktop,
-  .user-actions-desktop {
+  .user-actions-desktop,
+  .nav-search-form--desktop {
     display: none !important;
+  }
+
+  .nav-container {
+    display: flex;
   }
   
   /* Mobile slide-out overlay */

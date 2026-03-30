@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { eventAPI } from '../services/api';
 import { getFullImageUrl } from '../utils/formatters';
@@ -186,6 +186,108 @@ const Home = () => {
     );
   }
 
+  /** Horizontal row with arrow controls (Viagogo-style); RTL-aware scroll. */
+  const CarouselSection = ({ title, items, slug }) => {
+    const id = slug || String(title).replace(/\s+/g, '-');
+    const scrollRef = useRef(null);
+    const [canPrev, setCanPrev] = useState(false);
+    const [canNext, setCanNext] = useState(false);
+
+    const updateArrows = useCallback(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const max = el.scrollWidth - el.clientWidth;
+      if (max <= 4) {
+        setCanPrev(false);
+        setCanNext(false);
+        return;
+      }
+      const sl = el.scrollLeft;
+      const eps = 8;
+      if (sl < 0) {
+        setCanPrev(sl < -eps);
+        setCanNext(sl > -max + eps);
+      } else {
+        setCanPrev(sl > eps);
+        setCanNext(sl < max - eps);
+      }
+    }, []);
+
+    useEffect(() => {
+      updateArrows();
+      const el = scrollRef.current;
+      if (!el) return;
+      const ro = new ResizeObserver(() => updateArrows());
+      ro.observe(el);
+      el.addEventListener('scroll', updateArrows, { passive: true });
+      return () => {
+        ro.disconnect();
+        el.removeEventListener('scroll', updateArrows);
+      };
+    }, [items, updateArrows]);
+
+    const goNext = () => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const step = Math.round(el.clientWidth * 0.72);
+      const sl = el.scrollLeft;
+      el.scrollBy({ left: sl < 0 ? -step : step, behavior: 'smooth' });
+    };
+
+    const goPrev = () => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const step = Math.round(el.clientWidth * 0.72);
+      const sl = el.scrollLeft;
+      el.scrollBy({ left: sl < 0 ? step : -step, behavior: 'smooth' });
+    };
+
+    if (!items?.length) return null;
+
+    return (
+      <section className="home-carousel-section viagogo-row" aria-labelledby={`row-${id}`}>
+        <div className="home-carousel-head">
+          <h2 id={`row-${id}`} className="home-carousel-title">
+            {title}
+          </h2>
+        </div>
+        <div
+          className={`home-carousel-wrap${canPrev ? ' home-carousel-wrap--can-prev' : ''}${canNext ? ' home-carousel-wrap--can-next' : ''}`}
+        >
+          <button
+            type="button"
+            className="home-carousel-arrow home-carousel-arrow--prev"
+            onClick={goPrev}
+            disabled={!canPrev}
+            aria-label="גלילה אחורה ברשימה"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+              <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="home-carousel-arrow home-carousel-arrow--next"
+            onClick={goNext}
+            disabled={!canNext}
+            aria-label="גלילה קדימה ברשימה"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+              <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <div ref={scrollRef} className="home-carousel-scroll viagogo-carousel-track" role="list">
+            {items.map((event) => (
+              <div key={event.id} className="home-carousel-item" role="listitem">
+                <EventRowCard event={event} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  };
+
   const EventRowCard = ({ event }) => {
     const img =
       getFullImageUrl(event.image_url) ||
@@ -228,27 +330,6 @@ const Home = () => {
           </p>
         </div>
       </article>
-    );
-  };
-
-  const CarouselSection = ({ title, items, slug }) => {
-    const id = slug || String(title).replace(/\s+/g, '-');
-    if (!items?.length) return null;
-    return (
-      <section className="home-carousel-section viagogo-row" aria-labelledby={`row-${id}`}>
-        <div className="home-carousel-head">
-          <h2 id={`row-${id}`} className="home-carousel-title">
-            {title}
-          </h2>
-        </div>
-        <div className="home-carousel-scroll viagogo-carousel-track" role="list">
-          {items.map((event) => (
-            <div key={event.id} className="home-carousel-item" role="listitem">
-              <EventRowCard event={event} />
-            </div>
-          ))}
-        </div>
-      </section>
     );
   };
 
@@ -309,39 +390,41 @@ const Home = () => {
             איך זה עובד?
           </h2>
           <p className="how-it-works-lead">
-            שלושה צעדים פשוטים — שקיפות, ביטחון וליווי מקצה לקצה מצוות TradeTix.
+            שלושה שלבים — שקיפות וביטחון עם TradeTix.
           </p>
-          <ol className="how-it-works-steps">
-            <li className="how-step">
-              <span className="how-step-num" aria-hidden="true">
-                1
-              </span>
-              <div className="how-step-body">
-                <h3 className="how-step-title">חיפוש ובחירה</h3>
-                <p className="how-step-text">
-                  מסננים לפי אמן, עיר או סוג אירוע. המחירים והמושבים מוצגים בבירור לפני שמחליטים.
+          <ol className="how-it-works-timeline">
+            <li className="how-timeline-row">
+              <div className="how-timeline-node">
+                <span className="how-timeline-badge">1</span>
+                <span className="how-timeline-connector" aria-hidden="true" />
+              </div>
+              <div className="how-timeline-content">
+                <h3 className="how-timeline-title">חיפוש ובחירה</h3>
+                <p className="how-timeline-text">
+                  מסננים לפי אמן, עיר או סוג אירוע. מחירים ומושבים מוצגים בבירור לפני ההחלטה.
                 </p>
               </div>
             </li>
-            <li className="how-step">
-              <span className="how-step-num" aria-hidden="true">
-                2
-              </span>
-              <div className="how-step-body">
-                <h3 className="how-step-title">רכישה או מיקוח</h3>
-                <p className="how-step-text">
-                  קונים במחיר הקובע או מציעים מחיר הוגן. התשלום נשמר בנאמנות עד סיום האירוע — הגנת הקונה מובנית.
+            <li className="how-timeline-row">
+              <div className="how-timeline-node">
+                <span className="how-timeline-badge">2</span>
+                <span className="how-timeline-connector" aria-hidden="true" />
+              </div>
+              <div className="how-timeline-content">
+                <h3 className="how-timeline-title">רכישה או מיקוח</h3>
+                <p className="how-timeline-text">
+                  קונים או מציעים מחיר הוגן. התשלום בנאמנות עד סיום האירוע — הגנת קונה מובנית.
                 </p>
               </div>
             </li>
-            <li className="how-step">
-              <span className="how-step-num" aria-hidden="true">
-                3
-              </span>
-              <div className="how-step-body">
-                <h3 className="how-step-title">כרטיס דיגיטלי מוכן</h3>
-                <p className="how-step-text">
-                  לאחר אישור, מקבלים כרטיס מאומת להורדה. תמיכה זמינה בכל שלב — כדי שתגיעו לשער בראש שקט.
+            <li className="how-timeline-row how-timeline-row--last">
+              <div className="how-timeline-node">
+                <span className="how-timeline-badge">3</span>
+              </div>
+              <div className="how-timeline-content">
+                <h3 className="how-timeline-title">כרטיס דיגיטלי</h3>
+                <p className="how-timeline-text">
+                  לאחר אישור — כרטיס מאומת להורדה ותמיכה בדרך לשער.
                 </p>
               </div>
             </li>
