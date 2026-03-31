@@ -3620,7 +3620,15 @@ class OfferViewSet(viewsets.ModelViewSet):
                 )
 
             ticket = Ticket.objects.select_for_update().get(pk=offer.ticket_id)
-            _sync_expired_cart_reservation(ticket)
+            if ticket.listing_group_id:
+                group_rows = Ticket.objects.select_for_update().filter(
+                    listing_group_id=ticket.listing_group_id,
+                    seller_id=ticket.seller_id,
+                )
+                for t in group_rows:
+                    _sync_expired_cart_reservation(t)
+            else:
+                _sync_expired_cart_reservation(ticket)
             ticket.refresh_from_db()
 
             if ticket.status in ('sold', 'rejected', 'pending_payout', 'paid_out'):
