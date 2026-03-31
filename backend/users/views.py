@@ -24,8 +24,9 @@ from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.http import FileResponse
-from django.db.models import F, Q, Count, Sum, Exists, OuterRef, Value, Prefetch
+from django.db.models import F, Q, Count, Sum, Exists, OuterRef, Value, Prefetch, DecimalField
 from django.db.models.functions import Coalesce
+from decimal import Decimal
 from django.db import transaction
 from django.conf import settings as dj_settings
 from django.core.files.base import ContentFile
@@ -3336,14 +3337,252 @@ def create_ticket_alert(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+def _admin_staff_or_superuser(request):
+    """TradeTix admin dashboard + verification: Django staff or superuser."""
+    u = getattr(request, 'user', None)
+    if not u or not u.is_authenticated:
+        return False
+    return bool(u.is_staff or u.is_superuser)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_dashboard_stats(request):
+    """
+    Aggregated platform metrics for admin control panel.
+    """
+    if not _admin_staff_or_superuser(request):
+        return Response(
+            {'error': 'Permission denied. Admin access required.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    dec = DecimalField(max_digits=14, decimal_places=2)
+    zero = Value(0, output_field=dec)
+    paid_qs = Order.objects.filter(status__in=['paid', 'completed'])
+    start_today = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    paid_today = paid_qs.filter(created_at__gte=start_today)
+
+    def _pack(qs):
+        row = qs.aggregate(
+            revenue=Sum(Coalesce('total_paid_by_buyer', 'total_amount', zero)),
+            fees=Sum(Coalesce('buyer_service_fee', zero)),
+            tickets_sold=Sum('quantity'),
+        )
+        return {
+            'tickets_sold': int(row['tickets_sold'] or 0),
+            'revenue_ils': str(row['revenue'] or Decimal('0')),
+            'platform_fees_ils': str(row['fees'] or Decimal('0')),
+        }
+
+    return Response(
+        {
+            'today': _pack(paid_today),
+            'all_time': _pack(paid_qs),
+        }
+    )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_transactions(request):
+    """
+    Recent orders for admin review (flat list for dashboard table).
+    """
+    if not _admin_staff_or_superuser(request):
+        return Response(
+            {'error': 'Permission denied. Admin access required.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    limit = int(request.query_params.get('limit') or 300)
+    limit = max(1, min(limit, 1000))
+
+    orders = (
+        Order.objects.select_related('user', 'ticket', 'ticket__seller', 'ticket__event')
+        .order_by('-created_at')[:limit]
+    )
+
+    rows = []
+    for o in orders:
+        buyer = '—'
+        if o.user_id and o.user:
+            buyer = f'{o.user.username} ({o.user.email or "—"})'
+        elif o.guest_email:
+            buyer = f'אורח ({o.guest_email})'
+
+        seller_name = '—'
+        event_nm = (o.event_name or '').strip()
+        ids = []
+        if o.ticket_ids:
+            ids.extend([int(x) for x in o.ticket_ids if x is not None])
+        if o.ticket_id:
+            ids.insert(0, int(o.ticket_id))
+        ids = sorted(set(ids))
+        for tid in ids:
+            t = o.ticket if (o.ticket_id and int(o.ticket_id) == tid) else None
+            if t is None:
+                t = Ticket.objects.filter(pk=tid).select_related('seller', 'event').first()
+            if t:
+                if t.seller:
+                    seller_name = t.seller.username
+                if not event_nm and t.event:
+                    event_nm = t.event.name
+                break
+        if seller_name == '—' and o.ticket and o.ticket.seller:
+            seller_name = o.ticket.seller.username
+        if not event_nm and o.ticket and o.ticket.event:
+            event_nm = o.ticket.event.name
+
+        amount = o.total_paid_by_buyer if o.total_paid_by_buyer is not None else o.total_amount
+        rows.append(
+            {
+                'id': o.id,
+                'buyer': buyer,
+                'seller': seller_name,
+                'event_name': event_nm or '—',
+                'price_ils': str(amount) if amount is not None else '0',
+                'quantity': o.quantity,
+                'status': o.status,
+                'payout_status': o.payout_status,
+                'created_at': o.created_at.isoformat() if o.created_at else None,
+            }
+        )
+
+    return Response({'count': len(rows), 'transactions': rows})
+
+
+@csrf_required
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_cancel_order(request, order_id):
+    """
+    Admin: cancel an order, release inventory / escrow holds.
+    Optional JSON body: { "fraud": true } → mark tickets rejected instead of re-listing active.
+    """
+    if not _admin_staff_or_superuser(request):
+        return Response(
+            {'error': 'Permission denied. Admin access required.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    fraud = request.data.get('fraud') is True or str(request.data.get('fraud', '')).lower() in (
+        '1',
+        'true',
+        'yes',
+    )
+
+    try:
+        with transaction.atomic():
+            order = Order.objects.select_for_update().filter(pk=order_id).first()
+            if not order:
+                return Response({'error': 'Order not found.'}, status=status.HTTP_404_NOT_FOUND)
+            if order.status == 'cancelled':
+                return Response({'error': 'Order is already cancelled.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if order.status == 'pending_payment':
+                if order.held_ticket_id and order.held_quantity:
+                    ht = Ticket.objects.select_for_update().get(pk=order.held_ticket_id)
+                    ht.available_quantity = (ht.available_quantity or 0) + int(order.held_quantity)
+                    if (ht.available_quantity or 0) > 0:
+                        ht.status = 'active'
+                    ht.reserved_at = None
+                    ht.reserved_by = None
+                    ht.reservation_email = None
+                    ht.save(
+                        update_fields=[
+                            'available_quantity',
+                            'status',
+                            'reserved_at',
+                            'reserved_by',
+                            'reservation_email',
+                            'updated_at',
+                        ]
+                    )
+                else:
+                    _release_pending_payment_group_reservations(order.ticket_ids)
+
+            elif order.status in ('paid', 'completed'):
+                ids = [int(x) for x in (order.ticket_ids or []) if x is not None]
+                if order.ticket_id:
+                    ids.append(int(order.ticket_id))
+                ids = sorted(set(ids))
+                target = 'rejected' if fraud else 'active'
+                for tid in ids:
+                    t = Ticket.objects.select_for_update().filter(pk=tid).first()
+                    if not t:
+                        continue
+                    if t.status not in ('sold', 'pending_payout', 'paid_out', 'reserved'):
+                        continue
+                    if target == 'rejected':
+                        t.status = 'rejected'
+                        t.available_quantity = 0
+                    else:
+                        t.status = 'active'
+                        t.available_quantity = max(1, int(t.available_quantity or 0) or 1)
+                    t.reserved_at = None
+                    t.reserved_by = None
+                    t.reservation_email = None
+                    t.save(
+                        update_fields=[
+                            'status',
+                            'available_quantity',
+                            'reserved_at',
+                            'reserved_by',
+                            'reservation_email',
+                            'updated_at',
+                        ]
+                    )
+                if order.related_offer_id:
+                    Offer.objects.filter(pk=order.related_offer_id, status='accepted').update(
+                        status='rejected'
+                    )
+
+            elif order.status == 'pending':
+                pass
+            else:
+                return Response(
+                    {'error': f'Cannot cancel order in status {order.status}.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            order.status = 'cancelled'
+            order.payout_status = 'locked'
+            order.payout_eligible_date = None
+            order.payment_confirm_token = None
+            order.save(
+                update_fields=[
+                    'status',
+                    'payout_status',
+                    'payout_eligible_date',
+                    'payment_confirm_token',
+                    'updated_at',
+                ]
+            )
+
+        order.refresh_from_db()
+        return Response(
+            {
+                'success': True,
+                'message': 'Order cancelled.',
+                'order': OrderSerializer(order, context={'request': request}).data,
+            }
+        )
+    except Ticket.DoesNotExist:
+        return Response(
+            {'error': 'Associated ticket row not found.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_pending_tickets(request):
     """
     Admin endpoint to get all pending verification tickets
-    Only accessible by superusers (admins)
+    Only accessible by staff or superusers
     """
-    if not request.user.is_superuser:
+    if not _admin_staff_or_superuser(request):
         return Response(
             {'error': 'Permission denied. Admin access required.'},
             status=status.HTTP_403_FORBIDDEN
@@ -3364,9 +3603,9 @@ def admin_pending_tickets(request):
 def admin_approve_ticket(request, ticket_id):
     """
     Admin endpoint to approve a pending ticket (change status to 'active')
-    Only accessible by superusers (admins)
+    Only accessible by staff or superusers
     """
-    if not request.user.is_superuser:
+    if not _admin_staff_or_superuser(request):
         return Response(
             {'error': 'Permission denied. Admin access required.'},
             status=status.HTTP_403_FORBIDDEN
@@ -3404,9 +3643,9 @@ def admin_approve_ticket(request, ticket_id):
 def admin_reject_ticket(request, ticket_id):
     """
     Admin endpoint to reject a pending ticket (change status to 'rejected')
-    Only accessible by superusers (admins)
+    Only accessible by staff or superusers
     """
-    if not request.user.is_superuser:
+    if not _admin_staff_or_superuser(request):
         return Response(
             {'error': 'Permission denied. Admin access required.'},
             status=status.HTTP_403_FORBIDDEN

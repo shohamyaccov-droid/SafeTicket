@@ -15,6 +15,8 @@ import Sell from './pages/Sell';
 import Profile from './pages/Profile';
 import Dashboard from './pages/Dashboard';
 import AdminVerificationPage from './pages/AdminVerificationPage';
+import AdminDashboard from './pages/AdminDashboard';
+import AdminRoute from './components/AdminRoute';
 import FAQ from './pages/FAQ';
 import Contact from './pages/Contact';
 import TermsPage from './pages/TermsPage';
@@ -47,6 +49,14 @@ function App() {
               <Route path="/sell" element={<Sell />} />
               <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route
+                path="/admin-panel"
+                element={
+                  <AdminRoute>
+                    <AdminDashboard />
+                  </AdminRoute>
+                }
+              />
               <Route path="/admin/verification" element={<AdminVerificationPage />} />
               <Route path="/faq" element={<FAQ />} />
               <Route path="/contact" element={<Contact />} />

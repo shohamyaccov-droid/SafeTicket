@@ -26,6 +26,9 @@ from .views import (
     admin_pending_tickets,
     admin_approve_ticket,
     admin_reject_ticket,
+    admin_dashboard_stats,
+    admin_transactions,
+    admin_cancel_order,
 )
 
 app_name = 'users'
@@ -57,6 +60,9 @@ urlpatterns = [
     path('orders/<int:order_id>/confirm-payment/', confirm_order_payment, name='confirm_order_payment'),
     path('alerts/', create_ticket_alert, name='create_ticket_alert'),
     path('admin/pending-tickets/', admin_pending_tickets, name='admin_pending_tickets'),
+    path('admin/dashboard/stats/', admin_dashboard_stats, name='admin_dashboard_stats'),
+    path('admin/transactions/', admin_transactions, name='admin_transactions'),
+    path('admin/orders/<int:order_id>/cancel/', admin_cancel_order, name='admin_cancel_order'),
     path('admin/tickets/<int:ticket_id>/approve/', admin_approve_ticket, name='admin_approve_ticket'),
     path('admin/tickets/<int:ticket_id>/reject/', admin_reject_ticket, name='admin_reject_ticket'),
     path('', include(router.urls)),

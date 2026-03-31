@@ -1,0 +1,303 @@
+.admin-dashboard-page {
+  min-height: calc(100vh - 120px);
+  direction: rtl;
+  text-align: right;
+  padding: 1.25rem clamp(0.75rem, 3vw, 1.5rem) 3rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  background: linear-gradient(180deg, #f1f5f9 0%, #f8fafc 40%, #fff 100%);
+}
+
+.admin-dash-header {
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f2744 100%);
+  color: #f8fafc;
+  border-radius: 16px;
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 1.75rem;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.25);
+}
+
+.admin-dash-header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.admin-dash-title {
+  margin: 0 0 0.35rem;
+  font-size: clamp(1.35rem, 2.5vw, 1.85rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.admin-dash-sub {
+  margin: 0;
+  font-size: 0.95rem;
+  opacity: 0.88;
+}
+
+.admin-dash-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.admin-dash-link-secondary {
+  color: #e2e8f0;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 0.45rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.admin-dash-link-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.admin-dash-refresh {
+  background: #0045af;
+  color: #fff;
+  border: none;
+  font-weight: 700;
+  padding: 0.5rem 1.1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: filter 0.15s ease, opacity 0.15s ease;
+}
+
+.admin-dash-refresh:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.admin-dash-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admin-dash-loading {
+  text-align: center;
+  padding: 3rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.admin-stats-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.admin-stats-section {
+  background: #fff;
+  border-radius: 14px;
+  padding: 1.25rem 1.35rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+}
+
+.admin-stats-section--accent {
+  border-color: rgba(0, 69, 175, 0.2);
+  box-shadow: 0 4px 20px rgba(0, 69, 175, 0.08);
+}
+
+.admin-stats-heading {
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.admin-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.admin-stat-card {
+  background: linear-gradient(145deg, #f8fafc, #fff);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1.1rem 1.15rem;
+}
+
+.admin-stats-section--accent .admin-stat-card {
+  background: linear-gradient(145deg, rgba(0, 69, 175, 0.04), #fff);
+  border-color: rgba(0, 69, 175, 0.12);
+}
+
+.admin-stat-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.45rem;
+}
+
+.admin-stat-value {
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.admin-stat-value--currency::before {
+  content: '₪';
+  font-size: 0.75em;
+  font-weight: 700;
+  opacity: 0.85;
+  margin-left: 0.2rem;
+}
+
+.admin-stat-sub {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.admin-table-section {
+  background: #fff;
+  border-radius: 14px;
+  padding: 1.25rem 1rem 1.5rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+}
+
+.admin-table-title {
+  margin: 0 0 1rem;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #0f172a;
+  padding: 0 0.25rem;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-transactions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.admin-transactions-table th,
+.admin-transactions-table td {
+  padding: 0.65rem 0.75rem;
+  text-align: right;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.admin-transactions-table th {
+  font-weight: 800;
+  color: #475569;
+  background: #f8fafc;
+  white-space: nowrap;
+}
+
+.admin-transactions-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.admin-td-clip {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-status {
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.admin-status--paid,
+.admin-status--completed {
+  color: #15803d;
+}
+
+.admin-status--pending_payment {
+  color: #b45309;
+}
+
+.admin-status--cancelled {
+  color: #64748b;
+}
+
+.admin-payout {
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
+.admin-btn-cancel {
+  background: #fff;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-btn-cancel:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #f87171;
+}
+
+.admin-btn-cancel:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.admin-empty {
+  text-align: center;
+  padding: 2rem;
+  color: #94a3b8;
+}
+
+@media (max-width: 768px) {
+  .admin-transactions-table thead {
+    display: none;
+  }
+
+  .admin-transactions-table tr {
+    display: block;
+    margin-bottom: 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 0.5rem 0;
+  }
+
+  .admin-transactions-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border: none;
+    padding: 0.45rem 0.85rem;
+  }
+
+  .admin-transactions-table td::before {
+    content: attr(data-label);
+    font-weight: 700;
+    color: #64748b;
+    flex-shrink: 0;
+  }
+
+  .admin-td-clip {
+    max-width: none;
+    white-space: normal;
+    text-align: left;
+  }
+}

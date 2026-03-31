@@ -159,6 +159,20 @@
   gap: 6px;
 }
 
+.nav-link-admin {
+  font-weight: 700;
+  color: #0f172a !important;
+  background: rgba(250, 204, 21, 0.35);
+  padding: 0.35rem 0.65rem !important;
+  border-radius: 8px;
+  border: 1px solid rgba(180, 134, 11, 0.35);
+}
+
+.nav-link-admin:hover {
+  background: rgba(250, 204, 21, 0.55);
+  color: #0f172a !important;
+}
+
 .nav-dot {
   width: 8px;
   height: 8px;

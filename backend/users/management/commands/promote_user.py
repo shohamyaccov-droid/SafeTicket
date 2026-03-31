@@ -42,7 +42,9 @@ class Command(BaseCommand):
             self.stdout.write(f'  - is_superuser: {user.is_superuser}')
             self.stdout.write(f'  - is_staff: {user.is_staff}')
             self.stdout.write(self.style.SUCCESS(f'\n[SUCCESS] User "{username}" has been promoted to superuser and staff!'))
-            self.stdout.write(self.style.SUCCESS('The user can now access the admin verification dashboard.'))
+            self.stdout.write(self.style.SUCCESS(
+                'The user can access /admin-panel (TradeTix admin dashboard) and /admin/verification.'
+            ))
             
         except User.DoesNotExist:
             self.stdout.write(self.style.ERROR(f'\n[ERROR] User with username "{username}" does not exist.'))

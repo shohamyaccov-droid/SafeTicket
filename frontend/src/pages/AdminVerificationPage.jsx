@@ -22,8 +22,8 @@ const AdminVerificationPage = () => {
       return;
     }
 
-    // After loading completes, check if user is admin
-    if (!user || !user.is_superuser) {
+    // After loading completes, check if user is staff or superuser
+    if (!user || (!user.is_staff && !user.is_superuser)) {
       navigate('/dashboard');
       return;
     }

@@ -508,8 +508,20 @@ export const offerAPI = {
 
 export const adminAPI = {
   getPendingTickets: () => api.get('/users/admin/pending-tickets/'),
-  approveTicket: (ticketId) => api.post(`/users/admin/tickets/${ticketId}/approve/`),
-  rejectTicket: (ticketId) => api.post(`/users/admin/tickets/${ticketId}/reject/`),
+  getDashboardStats: () => api.get('/users/admin/dashboard/stats/'),
+  getTransactions: (params) => api.get('/users/admin/transactions/', { params }),
+  cancelOrder: async (orderId, data = {}) => {
+    await ensureCsrfToken();
+    return api.post(`/users/admin/orders/${orderId}/cancel/`, data);
+  },
+  approveTicket: async (ticketId) => {
+    await ensureCsrfToken();
+    return api.post(`/users/admin/tickets/${ticketId}/approve/`);
+  },
+  rejectTicket: async (ticketId) => {
+    await ensureCsrfToken();
+    return api.post(`/users/admin/tickets/${ticketId}/reject/`);
+  },
 };
 
 export const contactAPI = {

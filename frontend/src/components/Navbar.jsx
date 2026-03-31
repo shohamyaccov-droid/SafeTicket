@@ -85,6 +85,8 @@ const Navbar = () => {
     return () => clearInterval(poll);
   }, [user]);
 
+  const isAdminUser = Boolean(user && (user.is_staff || user.is_superuser));
+
   if (loading) {
     return (
       <nav className="navbar">
@@ -116,11 +118,18 @@ const Navbar = () => {
               בית
             </Link>
             {user && (
-              <Link to="/dashboard" className="nav-link nav-link-personal" onClick={closeMobileMenu}>
-                {offerCounts.acceptedOffers > 0 && <span className="nav-dot nav-dot-accepted" aria-hidden="true" />}
-                {offerCounts.acceptedOffers === 0 && offerCounts.actionRequired > 0 && <span className="nav-dot nav-dot-action" aria-hidden="true" />}
-                האזור האישי
-              </Link>
+              <>
+                <Link to="/dashboard" className="nav-link nav-link-personal" onClick={closeMobileMenu}>
+                  {offerCounts.acceptedOffers > 0 && <span className="nav-dot nav-dot-accepted" aria-hidden="true" />}
+                  {offerCounts.acceptedOffers === 0 && offerCounts.actionRequired > 0 && <span className="nav-dot nav-dot-action" aria-hidden="true" />}
+                  האזור האישי
+                </Link>
+                {isAdminUser && (
+                  <Link to="/admin-panel" className="nav-link nav-link-admin" onClick={closeMobileMenu}>
+                    ניהול
+                  </Link>
+                )}
+              </>
             )}
             <Link to="/sell" className="nav-link sell-btn" onClick={closeMobileMenu}>
               מכירת כרטיס
@@ -155,6 +164,11 @@ const Navbar = () => {
               <Link to="/dashboard?tab=settings" className="nav-link user-greeting" onClick={closeMobileMenu}>
                 שלום, {user?.username || 'משתמש'}
               </Link>
+              {isAdminUser && (
+                <Link to="/admin-panel" className="nav-link nav-link-admin" onClick={closeMobileMenu}>
+                  לוח ניהול
+                </Link>
+              )}
               <button type="button" onClick={handleLogout} className="nav-link logout-btn">
                 התנתקות
               </button>
@@ -214,11 +228,18 @@ const Navbar = () => {
         <nav className="mobile-nav-menu">
           <Link to="/" className="nav-link" onClick={closeMobileMenu}>בית</Link>
           {user && (
-            <Link to="/dashboard" className="nav-link nav-link-personal" onClick={closeMobileMenu}>
-              {offerCounts.acceptedOffers > 0 && <span className="nav-dot nav-dot-accepted" aria-hidden="true" />}
-              {offerCounts.acceptedOffers === 0 && offerCounts.actionRequired > 0 && <span className="nav-dot nav-dot-action" aria-hidden="true" />}
-              האזור האישי
-            </Link>
+            <>
+              <Link to="/dashboard" className="nav-link nav-link-personal" onClick={closeMobileMenu}>
+                {offerCounts.acceptedOffers > 0 && <span className="nav-dot nav-dot-accepted" aria-hidden="true" />}
+                {offerCounts.acceptedOffers === 0 && offerCounts.actionRequired > 0 && <span className="nav-dot nav-dot-action" aria-hidden="true" />}
+                האזור האישי
+              </Link>
+              {isAdminUser && (
+                <Link to="/admin-panel" className="nav-link nav-link-admin" onClick={closeMobileMenu}>
+                  לוח ניהול
+                </Link>
+              )}
+            </>
           )}
           <Link to="/sell" className="nav-link sell-btn" onClick={closeMobileMenu}>מכירת כרטיס</Link>
         </nav>
@@ -228,6 +249,11 @@ const Navbar = () => {
               <Link to="/dashboard?tab=settings" className="nav-link user-greeting" onClick={closeMobileMenu}>
                 שלום, {user?.username || 'משתמש'}
               </Link>
+              {isAdminUser && (
+                <Link to="/admin-panel" className="nav-link nav-link-admin" onClick={closeMobileMenu}>
+                  לוח ניהול
+                </Link>
+              )}
               <button type="button" onClick={handleLogout} className="nav-link logout-btn">התנתקות</button>
             </>
           ) : (
