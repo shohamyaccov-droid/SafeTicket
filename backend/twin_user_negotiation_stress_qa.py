@@ -50,6 +50,208 @@ def _one_page_pdf_bytes() -> bytes:
     return buf.getvalue()
 
 
+def run_grouped_two_ticket_negotiation_flow(
+    api_base: str,
+    seller: requests.Session,
+    buyer: requests.Session,
+    admin: requests.Session,
+    event_id: int,
+    event_name: str,
+    pdf_bytes: bytes,
+    ts: str,
+) -> dict:
+    """
+    2 PDF rows, same listing_group_id. Offer qty=2, reserve, seller accept (regression: no 400).
+    Bundle base 250 NIS → buyer pays 275.
+    """
+    gl: dict = {"ok": False, "label": "grouped_2_tickets_list300_offer250_bundle", "steps": []}
+    offer_base = 250
+    qty = 2
+    total_float = float(_buyer_total_for_negotiated_base(offer_base))
+    f1 = f"grp_a_{ts}.pdf"
+    f2 = f"grp_b_{ts}.pdf"
+    form = {
+        "event_id": str(event_id),
+        "original_price": "150",
+        "available_quantity": "2",
+        "pdf_files_count": "2",
+        "is_together": "true",
+        "row_number_0": "GRP",
+        "seat_number_0": f"GA{ts[-4:]}",
+        "row_number_1": "GRP",
+        "seat_number_1": f"GB{ts[-4:]}",
+    }
+    r_up = seller.post(
+        f"{api_base}/users/tickets/",
+        data=form,
+        files=[
+            ("pdf_file_0", (f1, BytesIO(pdf_bytes), "application/pdf")),
+            ("pdf_file_1", (f2, BytesIO(pdf_bytes), "application/pdf")),
+        ],
+        headers=build_csrf_headers(seller, api_base),
+        timeout=120,
+    )
+    if r_up.status_code != 201:
+        gl["error"] = f"group_upload: {r_up.status_code} {r_up.text[:500]}"
+        return gl
+    body_up = r_up.json()
+    tid_first = body_up.get("id")
+    listing_group_id = body_up.get("listing_group_id")
+    gl["steps"].append({"upload": True, "first_ticket_id": tid_first, "listing_group_id": listing_group_id})
+
+    r_list = seller.get(f"{api_base}/users/tickets/", timeout=60)
+    ids_in_group: list = []
+    if r_list.status_code == 200:
+        data = r_list.json()
+        arr = data.get("results") if isinstance(data, dict) else data
+        for row in arr or []:
+            if str(row.get("listing_group_id")) == str(listing_group_id):
+                ids_in_group.append(row.get("id"))
+    ids_in_group = sorted(set(ids_in_group))
+    if len(ids_in_group) < 2:
+        gl["error"] = f"group_resolve_ids: got {ids_in_group}"
+        return gl
+    gl["ticket_ids"] = ids_in_group
+
+    for tid in ids_in_group:
+        r_ap = admin.post(
+            f"{api_base}/users/admin/tickets/{tid}/approve/",
+            json={},
+            headers=build_csrf_headers(admin, api_base),
+            timeout=60,
+        )
+        if r_ap.status_code != 200:
+            gl["error"] = f"group_approve {tid}: {r_ap.status_code}"
+            return gl
+    gl["steps"].append({"admin_approve_x2": True})
+
+    r_of = buyer.post(
+        f"{api_base}/users/offers/",
+        json={"ticket": tid_first, "amount": str(offer_base), "quantity": qty},
+        headers=build_csrf_headers(buyer, api_base),
+        timeout=60,
+    )
+    if r_of.status_code not in (200, 201):
+        gl["error"] = f"group_offer: {r_of.status_code} {r_of.text[:400]}"
+        return gl
+    oid_offer = r_of.json().get("id")
+    gl["offer_id"] = oid_offer
+    gl["steps"].append({"offer_qty2": True, "offer_id": oid_offer})
+
+    r_res = buyer.post(
+        f"{api_base}/users/tickets/{tid_first}/reserve/",
+        json={},
+        headers=build_csrf_headers(buyer, api_base),
+        timeout=60,
+    )
+    gl["steps"].append({"reserve_first_row": r_res.status_code in (200, 201), "http": r_res.status_code})
+
+    r_acc = seller.post(
+        f"{api_base}/users/offers/{oid_offer}/accept/",
+        json={},
+        headers=build_csrf_headers(seller, api_base),
+        timeout=60,
+    )
+    if r_acc.status_code != 200:
+        gl["error"] = f"group_accept: {r_acc.status_code} {r_acc.text[:800]}"
+        return gl
+    gl["steps"].append({"accept": True, "status": r_acc.json().get("status")})
+
+    r_pay = buyer.post(
+        f"{api_base}/users/payments/simulate/",
+        json={
+            "ticket_id": tid_first,
+            "amount": float(total_float),
+            "quantity": qty,
+            "listing_group_id": listing_group_id,
+            "offer_id": oid_offer,
+            "timestamp": int(time.time() * 1000),
+        },
+        headers=build_csrf_headers(buyer, api_base),
+        timeout=60,
+    )
+    if r_pay.status_code != 200:
+        gl["error"] = f"group_pay: {r_pay.status_code} {r_pay.text[:400]}"
+        return gl
+
+    r_ord = buyer.post(
+        f"{api_base}/users/orders/",
+        json={
+            "ticket": tid_first,
+            "total_amount": float(total_float),
+            "quantity": qty,
+            "event_name": event_name,
+            "listing_group_id": listing_group_id,
+            "offer_id": oid_offer,
+        },
+        headers=build_csrf_headers(buyer, api_base),
+        timeout=60,
+    )
+    if r_ord.status_code != 201:
+        gl["error"] = f"group_order: {r_ord.status_code} {r_ord.text[:500]}"
+        return gl
+    ord_body = r_ord.json()
+    cf_status, cf_body = confirm_pending_order_payment(buyer, api_base, ord_body)
+    if cf_status != 200 or not isinstance(cf_body, dict) or cf_body.get("status") != "paid":
+        gl["error"] = f"group_confirm: {cf_status} {str(cf_body)[:500]}"
+        return gl
+
+    fnp = cf_body.get("final_negotiated_price")
+    tpb = cf_body.get("total_paid_by_buyer")
+    try:
+        fnp_f = float(fnp) if fnp is not None else None
+        tpb_f = float(tpb) if tpb is not None else None
+    except (TypeError, ValueError):
+        fnp_f = tpb_f = None
+    fin_ok = (
+        fnp_f is not None
+        and tpb_f is not None
+        and abs(fnp_f - float(offer_base)) <= 0.02
+        and abs(tpb_f - float(total_float)) <= 0.05
+    )
+    gl["financial_audit"] = {
+        "negotiated_base_ils": offer_base,
+        "buyer_total_charged": total_float,
+        "final_negotiated_price": fnp,
+        "total_paid_by_buyer": tpb,
+        "financial_truth_pass": fin_ok,
+    }
+    if not fin_ok:
+        gl["error"] = "group_financial_mismatch"
+        return gl
+
+    r_dash = seller.get(f"{api_base}/users/dashboard/", timeout=60)
+    sold_hits = []
+    if r_dash.status_code == 200:
+        sold = (r_dash.json().get("listings") or {}).get("sold") or []
+        for tid in ids_in_group:
+            for x in sold:
+                if x.get("id") == tid:
+                    sold_hits.append(
+                        {
+                            "id": x.get("id"),
+                            "status": x.get("status"),
+                            "expected_payout": x.get("expected_payout"),
+                        }
+                    )
+                    break
+    gl["seller_dashboard"] = {"sold_rows_for_group": sold_hits, "http": r_dash.status_code}
+    if len(sold_hits) < 2:
+        gl["error"] = f"group_dashboard: expected 2 sold rows, got {sold_hits}"
+        return gl
+    for r in sold_hits:
+        if r.get("status") != "sold":
+            gl["error"] = f"group_dashboard: row not sold {r}"
+            return gl
+    payouts = [float(r.get("expected_payout") or 0) for r in sold_hits]
+    if not any(abs(p - float(offer_base)) <= 0.1 for p in payouts):
+        gl["error"] = f"group_dashboard: no expected_payout ~{offer_base} in {sold_hits}"
+        return gl
+
+    gl["ok"] = True
+    return gl
+
+
 def _ensure_user_session(
     api_base: str,
     username: str,
@@ -87,8 +289,10 @@ def main() -> int:
         "api_base": api_base,
         "users": {"seller": "Seller_B", "buyer": "Buyer_A"},
         "fix_summary": (
-            "Backend: reservation block uses int(pk) + reservation_email vs offer.buyer.email. "
-            "Frontend: Accept shows Confirming… only for accept-in-flight; counter uses שולח… via counteringOfferId."
+            "Grouped listings: OfferViewSet.accept uses _group_reservation_blocks_seller_accept_offer and "
+            "_group_available_units_for_offer_accept (sum active + buyer-reserved rows); rejects other pending "
+            "offers on ticket_id__in group. Single-row: unchanged. Frontend: handleAcceptOffer clears "
+            "setAcceptingOfferId in finally; apiErrorMessage + Toast show DRF validation/error body."
         ),
         "iterations": [],
         "errors": [],
@@ -379,6 +583,21 @@ def main() -> int:
 
         it["ok"] = not it.get("error") and fin_ok and payout_match and bool(sold_slice)
         report["iterations"].append(it)
+
+    ts_group = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
+    grouped = run_grouped_two_ticket_negotiation_flow(
+        api_base,
+        seller,
+        buyer,
+        admin,
+        event_id,
+        event_name,
+        pdf_bytes,
+        ts_group,
+    )
+    report["grouped_listing_cycle"] = grouped
+    if not grouped.get("ok"):
+        report["errors"].append(grouped.get("error") or "grouped_listing_cycle failed")
 
     out = json.dumps(report, indent=2, ensure_ascii=False)
     try:

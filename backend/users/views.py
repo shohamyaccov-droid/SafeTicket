@@ -309,6 +309,56 @@ def _reservation_blocks_seller_accept_offer(ticket, offer) -> bool:
     return False
 
 
+def _group_reservation_blocks_seller_accept_offer(anchor_ticket, offer) -> bool:
+    """True if any row in the listing group has a conflicting active reservation vs offer.buyer."""
+    if not anchor_ticket.listing_group_id:
+        return _reservation_blocks_seller_accept_offer(anchor_ticket, offer)
+    for t in Ticket.objects.filter(
+        listing_group_id=anchor_ticket.listing_group_id,
+        seller_id=anchor_ticket.seller_id,
+    ):
+        if _reservation_blocks_seller_accept_offer(t, offer):
+            return True
+    return False
+
+
+def _group_available_units_for_offer_accept(anchor_ticket, offer) -> int:
+    """
+    For grouped listings: sum seats the offer buyer can still count toward this offer
+    (active rows + rows reserved by the same buyer).
+    """
+    if not anchor_ticket.listing_group_id:
+        return int(anchor_ticket.available_quantity or 0)
+    ob = offer.buyer_id
+    buyer_email = ''
+    if getattr(offer, 'buyer', None):
+        buyer_email = (getattr(offer.buyer, 'email', None) or '').strip().lower()
+    total = 0
+    for t in Ticket.objects.filter(
+        listing_group_id=anchor_ticket.listing_group_id,
+        seller_id=anchor_ticket.seller_id,
+    ).exclude(status__in=('sold', 'rejected', 'pending_payout', 'paid_out')):
+        if t.status == 'active':
+            total += int(t.available_quantity or 0)
+        elif t.status == 'reserved':
+            same = False
+            if t.reserved_by_id and ob is not None:
+                try:
+                    same = int(t.reserved_by_id) == int(ob)
+                except (TypeError, ValueError):
+                    same = False
+            if (
+                not same
+                and not t.reserved_by_id
+                and (t.reservation_email or '').strip()
+            ):
+                ge = (t.reservation_email or '').strip().lower()
+                same = bool(buyer_email and ge and buyer_email == ge)
+            if same:
+                total += int(t.available_quantity or 0)
+    return total
+
+
 class PdfFetchError(Exception):
     """All strategies to load PDF bytes from Cloudinary failed; carries per-strategy errors for diagnostics."""
 
@@ -3583,7 +3633,7 @@ class OfferViewSet(viewsets.ModelViewSet):
                     {'error': 'This listing is not yet verified.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            if _reservation_blocks_seller_accept_offer(ticket, offer):
+            if _group_reservation_blocks_seller_accept_offer(ticket, offer):
                 return Response(
                     {
                         'error': 'This listing is currently in another buyer\'s checkout. Try again shortly.',
@@ -3592,7 +3642,14 @@ class OfferViewSet(viewsets.ModelViewSet):
                 )
 
             needed_qty = int(offer.quantity or 1)
-            if ticket.available_quantity < needed_qty:
+            if ticket.listing_group_id:
+                avail = _group_available_units_for_offer_accept(ticket, offer)
+                if avail < needed_qty:
+                    return Response(
+                        {'error': 'Not enough tickets available to accept this offer.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            elif ticket.available_quantity < needed_qty:
                 return Response(
                     {'error': 'Not enough tickets available to accept this offer.'},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -3603,8 +3660,16 @@ class OfferViewSet(viewsets.ModelViewSet):
             offer.checkout_expires_at = timezone.now() + timedelta(hours=4)
             offer.save()
 
+            group_ticket_ids = [ticket.id]
+            if ticket.listing_group_id:
+                group_ticket_ids = list(
+                    Ticket.objects.filter(
+                        listing_group_id=ticket.listing_group_id,
+                        seller_id=ticket.seller_id,
+                    ).values_list('id', flat=True)
+                )
             Offer.objects.filter(
-                ticket_id=ticket.id,
+                ticket_id__in=group_ticket_ids,
                 status='pending',
             ).exclude(id=offer.id).update(status='rejected')
 

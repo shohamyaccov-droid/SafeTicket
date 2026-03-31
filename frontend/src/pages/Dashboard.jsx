@@ -59,6 +59,17 @@ function apiErrorMessage(err, fallback) {
   if (Array.isArray(d.non_field_errors) && d.non_field_errors.length) {
     return String(d.non_field_errors[0]);
   }
+  if (typeof d === 'object' && d !== null) {
+    for (const key of Object.keys(d)) {
+      const v = d[key];
+      if (Array.isArray(v) && v.length) {
+        const first = v[0];
+        if (typeof first === 'string') return first;
+        if (first != null && typeof first === 'object') return String(first);
+      }
+      if (typeof v === 'string') return v;
+    }
+  }
   return fallback;
 }
 
@@ -439,9 +450,10 @@ const Dashboard = () => {
         type: 'success'
       });
     } catch (err) {
+      setAcceptingOfferId(null);
       setToast({
         message: apiErrorMessage(err, 'שגיאה באישור ההצעה'),
-        type: 'error'
+        type: 'error',
       });
     } finally {
       setAcceptingOfferId(null);
@@ -1647,6 +1659,15 @@ const Dashboard = () => {
             fetchOffers({ silent: true });
             fetchDashboardData({ silent: true });
           }}
+        />
+      )}
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type || 'success'}
+          duration={toast.type === 'error' ? 8000 : toast.type === 'info' ? 5000 : 4000}
+          onClose={() => setToast(null)}
         />
       )}
     </div>
