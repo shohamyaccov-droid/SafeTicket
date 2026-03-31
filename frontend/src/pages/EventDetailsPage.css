@@ -470,15 +470,19 @@
   margin: 0 auto;
   align-items: start;
   direction: rtl;
+  width: 100%;
+  min-width: 0;
 }
 
-/* Sticky Map Container (Left side in RTL) - Mobile: full width */
+/* Sticky Map Container — default order map-first for single-column (mobile/tablet); desktop overrides below */
 .venue-map-sticky-container {
-  order: 2; /* Mobile: order 2 = appears second (below tickets) */
+  order: -1;
   width: 100%;
+  max-width: 100%;
   margin-bottom: var(--spacing-lg);
-  grid-column: 1 / -1; /* Mobile: span full width */
-  align-self: flex-start; /* flex child + sticky: keeps correct scroll box height */
+  grid-column: 1 / -1;
+  align-self: flex-start;
+  box-sizing: border-box;
 }
 
 /* Venue Map Card - Clean Professional Look */
@@ -524,12 +528,15 @@
   border-radius: 0;
 }
 
-/* Tickets List Container (Right side in RTL) - Mobile: full width */
+/* Tickets List Container — below map on single-column layouts */
 .tickets-list-container {
-  order: 1; /* Mobile: order 1 = appears first (above map) */
+  order: 1;
   width: 100%;
+  max-width: 100%;
   background: white;
-  grid-column: 1 / -1; /* Mobile: span full width */
+  grid-column: 1 / -1;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .tickets-grid {
@@ -1610,17 +1617,43 @@
 }
 
 @media (max-width: 991px) {
-  /* Mobile: Single column grid layout */
+  /* Single column: map above tickets (order -1 / 1), compact map so first ticket is visible on load */
   .tickets-split-container {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
-  
+
   .venue-map-sticky-container {
     grid-column: 1;
+    margin-bottom: var(--spacing-sm);
   }
-  
+
   .tickets-list-container {
     grid-column: 1;
+  }
+
+  .venue-map-card {
+    min-height: 0;
+  }
+
+  .venue-map-card-content {
+    min-height: 140px;
+    max-height: min(34vh, 260px);
+  }
+
+  /* Interactive Menora map — shorter on phones */
+  .venue-map-sticky-container .interactive-map-container {
+    min-height: 0 !important;
+    max-height: min(34vh, 260px) !important;
+    aspect-ratio: 16 / 11;
+  }
+
+  /* VenueMapPin fallback — drop tall min-height / padding aspect on small screens */
+  .venue-map-sticky-container .venue-map-wrapper {
+    min-height: 0 !important;
+    padding-bottom: 0 !important;
+    height: min(34vh, 240px);
+    max-height: min(34vh, 260px);
   }
 }
 
@@ -1628,8 +1661,31 @@
   .event-details-container {
     padding: var(--spacing-md) var(--spacing-sm);
     max-width: 100%;
+    overflow-x: clip;
   }
-  
+
+  .tickets-split-container {
+    gap: 12px;
+  }
+
+  .venue-map-card-header {
+    padding: 0.65rem 1rem;
+  }
+
+  .venue-map-card-content {
+    min-height: 120px;
+    max-height: min(32vh, 240px);
+  }
+
+  .venue-map-sticky-container .interactive-map-container {
+    max-height: min(32vh, 240px) !important;
+  }
+
+  .venue-map-sticky-container .venue-map-wrapper {
+    height: min(32vh, 220px);
+    max-height: min(32vh, 240px);
+  }
+
   .tickets-grid {
     grid-template-columns: 1fr;
     gap: var(--spacing-md);
