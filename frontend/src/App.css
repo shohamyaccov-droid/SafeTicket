@@ -18,7 +18,8 @@
 .App > main {
   flex: 1;
   padding-top: 0;
-  overflow-x: hidden;
+  /* clip avoids horizontal bleed without creating a scroll box (hidden breaks position:sticky in descendants) */
+  overflow-x: clip;
   width: 100%;
   max-width: 100%;
 }

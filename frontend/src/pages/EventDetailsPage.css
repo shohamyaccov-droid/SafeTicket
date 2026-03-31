@@ -30,7 +30,7 @@
 .event-hero-card {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: stretch;
   gap: 1.5rem;
   background: var(--bg-card);
   border-radius: 16px;
@@ -44,23 +44,23 @@
   flex: 0 0 40%;
   max-width: 40%;
   min-width: 0;
+  min-height: 0;
   background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px;
+  flex-direction: column;
+  align-self: stretch;
+  padding: 0;
   box-sizing: border-box;
 }
 
 .event-hero-image {
   width: 100%;
-  height: 100%;
+  flex: 1 1 auto;
   min-height: 220px;
-  max-height: 320px;
-  object-fit: contain;
+  object-fit: cover;
   object-position: center;
   display: block;
-  border-radius: 14px;
+  border-radius: 0;
 }
 
 .event-hero-body {
@@ -143,14 +143,11 @@
   }
 
   .event-hero-image {
+    flex: 0 0 auto;
     min-height: 200px;
-    max-height: 260px;
-    border-radius: 14px 14px 0 0;
+    max-height: 280px;
+    border-radius: 0;
     object-fit: cover;
-  }
-
-  .event-hero-media {
-    padding: 10px 10px 0;
   }
 
   .event-hero-body {
@@ -481,6 +478,7 @@
   width: 100%;
   margin-bottom: var(--spacing-lg);
   grid-column: 1 / -1; /* Mobile: span full width */
+  align-self: flex-start; /* flex child + sticky: keeps correct scroll box height */
 }
 
 /* Venue Map Card - Clean Professional Look */
@@ -560,7 +558,8 @@
     max-width: 49% !important;
     order: 2 !important; /* Force visual Left in RTL */
     position: sticky !important;
-    top: 100px !important;
+    top: 100px !important; /* below fixed header ~80–96px; tweak if navbar height changes */
+    z-index: 2;
   }
 
   .tickets-grid {

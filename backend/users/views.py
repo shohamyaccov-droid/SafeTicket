@@ -1894,8 +1894,9 @@ def confirm_order_payment(request, order_id):
 @permission_classes([AllowAny])
 def payment_simulation(request):
     """
-    Simulate payment processing (for development)
-    Accepts payment details and returns success/failure
+    Simulate payment processing (for development).
+    Accepts payment details and returns success/failure.
+    Pre-production: no PAN/Luhn validation here — the mock gateway always succeeds once amount checks pass.
     CRITICAL: Must handle listing_group_id like create_order does
     """
     ticket_id = request.data.get('ticket_id')
