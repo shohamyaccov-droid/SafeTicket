@@ -1143,9 +1143,9 @@ def user_activity(request):
         listings_serializer = ProfileListingSerializer(all_listings, many=True, context=l_ctx)
         
         for listing in listings_serializer.data:
-            # Include both 'active' and 'pending_verification' in active_listings
+            # Include both 'active' and 'pending_approval' in active_listings
             # This allows sellers to see their tickets awaiting verification
-            if listing.get('status') in ['active', 'pending_verification']:
+            if listing.get('status') in ['active', 'pending_approval']:
                 active_listings.append(listing)
             elif listing.get('status') in ['sold', 'pending_payout', 'paid_out']:
                 sold_listings.append(listing)
@@ -3672,7 +3672,7 @@ def admin_pending_tickets(request):
             status=status.HTTP_403_FORBIDDEN
         )
     
-    pending_tickets = Ticket.objects.filter(status='pending_verification').order_by('-created_at')
+    pending_tickets = Ticket.objects.filter(status='pending_approval').order_by('-created_at')
     serializer = TicketSerializer(pending_tickets, many=True, context={'request': request})
     
     return Response({
@@ -3698,15 +3698,16 @@ def admin_approve_ticket(request, ticket_id):
     try:
         ticket = Ticket.objects.get(id=ticket_id)
         
-        if ticket.status != 'pending_verification':
+        if ticket.status != 'pending_approval':
             return Response(
-                {'error': f'Ticket is not pending verification. Current status: {ticket.status}'},
+                {'error': f'Ticket is not pending approval. Current status: {ticket.status}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         # Approve the ticket: change status to 'active'
         ticket.status = 'active'
-        ticket.save()
+        ticket.verification_status = 'מאומת'
+        ticket.save(update_fields=['status', 'verification_status', 'updated_at'])
         
         serializer = TicketSerializer(ticket, context={'request': request})
         return Response({
@@ -3738,7 +3739,7 @@ def admin_reject_ticket(request, ticket_id):
     try:
         ticket = Ticket.objects.get(id=ticket_id)
         
-        allowed = ('pending_verification', 'active', 'reserved')
+        allowed = ('pending_approval', 'active', 'reserved')
         if ticket.status not in allowed:
             return Response(
                 {
@@ -3960,7 +3961,7 @@ class OfferViewSet(viewsets.ModelViewSet):
                     {'error': 'This listing is no longer available for acceptance.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            if ticket.status == 'pending_verification':
+            if ticket.status == 'pending_approval':
                 return Response(
                     {'error': 'This listing is not yet verified.'},
                     status=status.HTTP_400_BAD_REQUEST,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { adminAPI, ticketAPI } from '../services/api';
+import { adminAPI, ticketAPI, ensureCsrfToken } from '../services/api';
 import { formatPrice } from '../utils/priceFormat';
 import { toastError, toastSuccess } from '../utils/toast';
 import './AdminDashboard.css';
@@ -18,10 +18,15 @@ function StatCard({ label, value, sub, currency = false }) {
 
 export default function AdminDashboard() {
   const { user } = useAuth();
+  const [mainTab, setMainTab] = useState('overview');
   const [stats, setStats] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState(null);
+  const [receiptLoadingId, setReceiptLoadingId] = useState(null);
+  const [pendingTickets, setPendingTickets] = useState([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [pendingActionId, setPendingActionId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -32,6 +37,12 @@ export default function AdminDashboard() {
       ]);
       setStats(sRes.data);
       setTransactions(tRes.data.transactions || []);
+      try {
+        const pRes = await adminAPI.getPendingTickets();
+        setPendingTickets(pRes.data.tickets || []);
+      } catch {
+        setPendingTickets([]);
+      }
     } catch (err) {
       const msg =
         err?.response?.data?.error ||
@@ -44,9 +55,32 @@ export default function AdminDashboard() {
     }
   }, []);
 
+  const loadPending = useCallback(async () => {
+    setPendingLoading(true);
+    try {
+      const res = await adminAPI.getPendingTickets();
+      setPendingTickets(res.data.tickets || []);
+    } catch (err) {
+      const msg =
+        err?.response?.data?.error ||
+        err?.response?.data?.detail ||
+        err?.message ||
+        'שגיאה בטעינת כרטיסים ממתינים';
+      toastError(typeof msg === 'string' ? msg : 'שגיאה בטעינת כרטיסים ממתינים');
+    } finally {
+      setPendingLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (mainTab === 'pending') {
+      loadPending();
+    }
+  }, [mainTab, loadPending]);
 
   const handleCancel = async (orderId, status) => {
     if (status === 'cancelled') {
@@ -116,8 +150,22 @@ export default function AdminDashboard() {
             </p>
           </div>
           <div className="admin-dash-header-actions">
+            <button
+              type="button"
+              className={`admin-dash-tab ${mainTab === 'overview' ? 'admin-dash-tab--active' : ''}`}
+              onClick={() => setMainTab('overview')}
+            >
+              סיכומים ועסקאות
+            </button>
+            <button
+              type="button"
+              className={`admin-dash-tab ${mainTab === 'pending' ? 'admin-dash-tab--active' : ''}`}
+              onClick={() => setMainTab('pending')}
+            >
+              ממתין לאימות ({pendingTickets.length})
+            </button>
             <Link to="/admin/verification" className="admin-dash-link-secondary">
-              אימות כרטיסים
+              אימות (דף מלא)
             </Link>
             <Link to="/dashboard" className="admin-dash-link-secondary">
               האזור האישי
@@ -129,7 +177,115 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      {loading && !stats ? (
+      {mainTab === 'pending' ? (
+        <section className="admin-pending-section" aria-label="כרטיסים ממתינים לאימות">
+          <div className="admin-pending-toolbar">
+            <h2 className="admin-table-title">ממתין לאימות — אישור ידני (ישראל)</h2>
+            <button
+              type="button"
+              className="admin-dash-refresh"
+              onClick={() => loadPending()}
+              disabled={pendingLoading}
+            >
+              רענון רשימה
+            </button>
+          </div>
+          {pendingLoading ? (
+            <div className="admin-dash-loading">טוען כרטיסים…</div>
+          ) : (
+            <div className="admin-table-wrap">
+              <table className="admin-transactions-table admin-pending-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>אירוע</th>
+                    <th>מחיר פנים</th>
+                    <th>מחיר מבוקש</th>
+                    <th>קבלה</th>
+                    <th>פעולות</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingTickets.map((t) => (
+                    <tr key={t.id}>
+                      <td data-label="ID">{t.id}</td>
+                      <td data-label="אירוע" className="admin-td-clip">
+                        {t.event?.name || t.event_name || '—'}
+                      </td>
+                      <td data-label="פנים">₪{formatPrice(t.original_price)}</td>
+                      <td data-label="מבוקש">₪{formatPrice(t.asking_price)}</td>
+                      <td data-label="קבלה">
+                        {t.receipt_file_url ? (
+                          <button
+                            type="button"
+                            className="admin-receipt-link-btn"
+                            disabled={receiptLoadingId === t.id}
+                            onClick={() => downloadReceiptForTicket(t.id)}
+                          >
+                            {receiptLoadingId === t.id ? '…' : 'צפה בקבלה'}
+                          </button>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td data-label="פעולות">
+                        <div className="admin-pending-actions">
+                          <button
+                            type="button"
+                            className="admin-btn-approve-ticket"
+                            disabled={pendingActionId === t.id}
+                            onClick={async () => {
+                              setPendingActionId(t.id);
+                              try {
+                                await ensureCsrfToken();
+                                await adminAPI.approveTicket(t.id);
+                                toastSuccess('הכרטיס שוחרר לאתר');
+                                await loadPending();
+                                await load();
+                              } catch (err) {
+                                toastError(err?.response?.data?.error || 'אישור נכשל');
+                              } finally {
+                                setPendingActionId(null);
+                              }
+                            }}
+                          >
+                            שחרר לאתר
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-btn-reject-ticket"
+                            disabled={pendingActionId === t.id}
+                            onClick={async () => {
+                              if (!window.confirm('לדחות כרטיס זה?')) return;
+                              setPendingActionId(t.id);
+                              try {
+                                await ensureCsrfToken();
+                                await adminAPI.rejectTicket(t.id);
+                                toastSuccess('הכרטיס נדחה');
+                                await loadPending();
+                                await load();
+                              } catch (err) {
+                                toastError(err?.response?.data?.error || 'דחייה נכשלה');
+                              } finally {
+                                setPendingActionId(null);
+                              }
+                            }}
+                          >
+                            דחה כרטיס
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!pendingTickets.length ? (
+                <p className="admin-empty">אין כרטיסים במצב ממתין לאימות</p>
+              ) : null}
+            </div>
+          )}
+        </section>
+      ) : loading && !stats ? (
         <div className="admin-dash-loading">טוען נתונים…</div>
       ) : (
         <>

@@ -463,7 +463,8 @@
   border: 1px solid rgba(251, 191, 36, 0.3);
 }
 
-.status-pending-verification {
+.status-pending-verification,
+.status-pending_approval {
   background: rgba(251, 146, 60, 0.15);
   color: #ea580c;
   border: 1px solid rgba(251, 146, 60, 0.4);

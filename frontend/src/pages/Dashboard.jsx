@@ -1390,7 +1390,7 @@ const Dashboard = () => {
                                 )}
                               </span>
                               <span className={`status-badge status-${listing.status}`}>
-                                {listing.status === 'pending_verification'
+                                {listing.status === 'pending_approval'
                                   ? 'בבדיקה'
                                   : listing.status === 'active'
                                   ? 'פעיל'
@@ -1426,7 +1426,7 @@ const Dashboard = () => {
                                     ? 'Delete listing'
                                     : 'Edit price'
                                 }
-                                disabled={listing.status === 'pending_verification'}
+                                disabled={listing.status === 'pending_approval'}
                               >
                                 {['sold', 'pending_payout', 'paid_out'].includes(listing.status)
                                   ? '🗑️'
@@ -1438,7 +1438,7 @@ const Dashboard = () => {
                             {isExpanded && (
                               <div className="row-details">
                                 {/* Info message for pending verification */}
-                                {listing.status === 'pending_verification' && (
+                                {listing.status === 'pending_approval' && (
                                   <div className="pending-verification-info">
                                     <svg
                                       width="16"
@@ -1530,9 +1530,9 @@ const Dashboard = () => {
                                       <button
                                         onClick={() => handleEditPrice(listing)}
                                         className="secondary-button edit-button"
-                                        disabled={listing.status === 'pending_verification'}
+                                        disabled={listing.status === 'pending_approval'}
                                         title={
-                                          listing.status === 'pending_verification'
+                                          listing.status === 'pending_approval'
                                             ? 'לא ניתן לערוך מחיר בעת שהכרטיס בבדיקה'
                                             : 'ערוך מחיר'
                                         }

@@ -729,6 +729,18 @@ class TicketSerializer(serializers.ModelSerializer):
         return attrs
     
     def create(self, validated_data):
+        event = validated_data.get('event')
+        country = 'IL'
+        if event is not None:
+            country = (getattr(event, 'country', None) or 'IL').strip().upper()
+        if not country:
+            country = 'IL'
+        if country == 'IL':
+            validated_data['status'] = 'pending_approval'
+            validated_data['verification_status'] = 'ממתין לאישור'
+        else:
+            validated_data['status'] = 'active'
+            validated_data['verification_status'] = 'מאומת'
         return super().create(validated_data)
     
     def update(self, instance, validated_data):

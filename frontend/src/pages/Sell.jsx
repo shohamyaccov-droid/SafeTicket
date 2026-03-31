@@ -51,6 +51,7 @@ const Sell = () => {
   const [catalogRetryKey, setCatalogRetryKey] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [successWasIsrael, setSuccessWasIsrael] = useState(false);
   const [loading, setLoading] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [eventRequestOpen, setEventRequestOpen] = useState(false);
@@ -670,6 +671,7 @@ const Sell = () => {
     try {
       await ensureCsrfToken();
       await ticketAPI.createTicket(submitData);
+      setSuccessWasIsrael(ilEvent);
       setSuccess(true);
       // Show success message for 3 seconds before redirect
       setTimeout(() => {
@@ -724,7 +726,13 @@ const Sell = () => {
           <div className="success-icon-large">✓</div>
           <h2 className="success-title">Listing Created Successfully!</h2>
           <h3 className="success-subtitle-hebrew">הכרטיס הועלה בהצלחה!</h3>
-          <p className="success-text">הכרטיס שלך נשלח לאימות על ידי צוות TradeTix ויעלה לאוויר מיד לאחר האישור.</p>
+          {successWasIsrael ? (
+            <p className="success-text">
+              הכרטיס הועלה בהצלחה! הוא יפורסם באתר לאחר שצוות האתר יאמת את הקבלה (עד 24 שעות).
+            </p>
+          ) : (
+            <p className="success-text">הכרטיס פורסם באתר וזמין למכירה.</p>
+          )}
           <p className="success-redirect-text">מעבר לדף הבית...</p>
         </div>
       </div>
@@ -1350,8 +1358,7 @@ const Sell = () => {
                   className="checkbox-input"
                 />
                 <label htmlFor="il_legal_accepted" className="checkbox-label">
-                  אני מצהיר שהמחיר המבוקש אינו עולה על המחיר המקורי. ידוע לי שמכירה בספסרות היא עבירה פלילית
-                  והאחריות המלאה חלה עליי.
+                  אני מצהיר שהמחיר חוקי והעליתי קבלה תקינה. ידוע לי שהכרטיס יפורסם רק לאחר בדיקת מנהל.
                 </label>
               </div>
             </div>

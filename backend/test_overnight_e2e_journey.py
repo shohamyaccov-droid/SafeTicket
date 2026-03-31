@@ -68,10 +68,15 @@ class OvernightE2EJourneyTest(TestCase):
         )
         self.assertEqual(reg.status_code, 201, reg.content.decode())
 
-        # --- Create listing (pending_verification) ---
+        # --- Create listing (pending_approval for IL / per geo rules) ---
         csrf = self._csrf_token()
         pdf = SimpleUploadedFile(
             "overnight_e2e.pdf",
+            _minimal_pdf_bytes(),
+            content_type="application/pdf",
+        )
+        receipt = SimpleUploadedFile(
+            "overnight_receipt.pdf",
             _minimal_pdf_bytes(),
             content_type="application/pdf",
         )
@@ -81,17 +86,20 @@ class OvernightE2EJourneyTest(TestCase):
             data={
                 "event_id": str(self.event.id),
                 "original_price": "100",
+                "listing_price": "100",
+                "il_legal_declaration": "true",
                 "available_quantity": "1",
                 "pdf_files_count": "1",
                 "delivery_method": "instant",
                 "pdf_file_0": pdf,
+                "receipt_file": receipt,
             },
             HTTP_X_CSRFTOKEN=csrf,
         )
         self.assertEqual(create_resp.status_code, 201, create_resp.content.decode())
         ticket_id = create_resp.json()["id"]
         t0 = Ticket.objects.get(pk=ticket_id)
-        self.assertEqual(t0.status, "pending_verification")
+        self.assertEqual(t0.status, "pending_approval")
 
         # --- Admin approves → active (JWT cookies; API has no session auth) ---
         admin_client = Client(enforce_csrf_checks=True)

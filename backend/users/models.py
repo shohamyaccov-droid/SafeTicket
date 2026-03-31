@@ -187,7 +187,7 @@ class Ticket(models.Model):
     Ticket listing model for sellers to list their tickets
     """
     STATUS_CHOICES = [
-        ('pending_verification', 'Pending Verification'),
+        ('pending_approval', 'Pending Approval'),
         ('active', 'Active'),
         ('reserved', 'Reserved'),
         ('sold', 'Sold'),
@@ -343,7 +343,7 @@ class Ticket(models.Model):
     )
     
     # Status
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending_verification')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending_approval')
     
     # Reservation fields
     reserved_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp when ticket was reserved")
