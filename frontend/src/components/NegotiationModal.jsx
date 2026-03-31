@@ -197,10 +197,10 @@ const NegotiationModal = ({
                 <button
                   type="button"
                   className="accept-button"
-                  onClick={() => onAccept(latestPending.id)}
+                  onClick={() => onAccept(Number(latestPending.id))}
                   disabled={offerMutationBusy}
                 >
-                  {acceptingOfferId === latestPending.id ? 'מאשר…' : 'אישור'}
+                  {Number(acceptingOfferId) === Number(latestPending.id) ? 'מאשר…' : 'אישור'}
                 </button>
                 <button
                   type="button"

@@ -1054,7 +1054,7 @@ const EventDetailsPage = () => {
                         {user && isCurrentUserSellerOfTicket(user, firstTicket, group) ? (
                           <div className="your-listing-banner" role="status">
                             <span className="your-listing-icon" aria-hidden="true">📌</span>
-                            <span>זה המודעה שלך — לא ניתן לרכוש או להציע על הכרטיסים שלך</span>
+                            <span>זה המודעה שלך - לא ניתן לרכוש או להציע</span>
                           </div>
                         ) : (
                           <>

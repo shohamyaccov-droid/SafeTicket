@@ -244,11 +244,24 @@ const Home = () => {
       };
     }, [items, updateArrows, snapCarouselToHead]);
 
+    const scheduleArrowSync = (el) => {
+      if (!el) return;
+      let done = false;
+      const sync = () => {
+        if (done) return;
+        done = true;
+        updateArrows();
+      };
+      el.addEventListener('scrollend', sync, { once: true });
+      window.setTimeout(sync, 450);
+    };
+
     const goNext = () => {
       const el = scrollRef.current;
       if (!el) return;
       const step = Math.round(el.clientWidth * 0.72);
       el.scrollBy({ left: -step, behavior: 'smooth' });
+      scheduleArrowSync(el);
     };
 
     const goPrev = () => {
@@ -256,6 +269,7 @@ const Home = () => {
       if (!el) return;
       const step = Math.round(el.clientWidth * 0.72);
       el.scrollBy({ left: step, behavior: 'smooth' });
+      scheduleArrowSync(el);
     };
 
     if (!items?.length) return null;

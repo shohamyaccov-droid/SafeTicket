@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import os
 import sys
 import time
@@ -34,6 +33,7 @@ from qa_production_render_cycle import (
     _fetch_csrf_token,
     _csrf_headers,
     build_csrf_headers,
+    confirm_pending_order_payment,
     session_login,
     session_register_buyer,
     trigger_deploy,
@@ -44,7 +44,7 @@ from qa_production_render_cycle import (
 
 def session_register_seller(api_base: str, username: str, email: str, password: str) -> requests.Session | None:
     s = requests.Session()
-    s.headers.setdefault("User-Agent", "SafeTrade-MorningQA/1.0")
+    s.headers.setdefault("User-Agent", "TradeTix-MorningQA/1.0")
     csrf = _fetch_csrf_token(s, api_base)
     if not csrf:
         return None
@@ -99,7 +99,7 @@ def main() -> int:
             print(json.dumps(report, indent=2, ensure_ascii=False))
             return 1
         ev = r.json()
-        results = ev.get("results") or ev
+        results = ev if isinstance(ev, list) else (ev.get("results") or [])
         if not results:
             report["errors"].append("No events in DB — seed production first")
             print(json.dumps(report, indent=2, ensure_ascii=False))
@@ -322,8 +322,9 @@ def main() -> int:
         )
 
     ref_id = tid_a
-    unit = 100.0
-    expected_unit = math.ceil(unit * 1.10)
+    unit = 100  # face value in whole shekels (must match upload original_price)
+    # 10% fee rounded up — avoid float drift (math.ceil(100*1.1) wrongly becomes 111 in Python)
+    expected_unit = (unit * 11 + 9) // 10
     total_amount = expected_unit * 2
 
     r_res = buyer.post(
@@ -370,7 +371,21 @@ def main() -> int:
         report["errors"].append(f"order: {r_ord.status_code} {r_ord.text[:400]}")
         print(json.dumps(report, indent=2, ensure_ascii=False))
         return 1
-    report["steps"].append({"name": "checkout", "ok": True, "order_id": r_ord.json().get("id")})
+    ord_body = r_ord.json()
+    cf_status, cf_body = confirm_pending_order_payment(buyer, api_base, ord_body)
+    cf_ok = cf_status == 200 and isinstance(cf_body, dict) and cf_body.get("status") == "paid"
+    report["steps"].append(
+        {
+            "name": "checkout + confirm_payment",
+            "ok": cf_ok,
+            "order_id": ord_body.get("id"),
+            "confirm_http": cf_status,
+        }
+    )
+    if not cf_ok:
+        report["errors"].append(f"confirm-payment: HTTP {cf_status} {str(cf_body)[:500]}")
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return 1
 
     # Profile / orders (My Tickets API)
     r_prof = buyer.get(f"{api_base}/users/profile/", timeout=60)

@@ -48,6 +48,20 @@ function mergeOffersListWithPrevious(incoming, previous) {
   });
 }
 
+/** DRF often returns PermissionDenied/validation as `detail` (string or list). */
+function apiErrorMessage(err, fallback) {
+  const d = err?.response?.data;
+  if (d == null) return fallback;
+  if (typeof d === 'string') return d;
+  if (typeof d.error === 'string') return d.error;
+  if (typeof d.detail === 'string') return d.detail;
+  if (Array.isArray(d.detail) && d.detail.length) return String(d.detail[0]);
+  if (Array.isArray(d.non_field_errors) && d.non_field_errors.length) {
+    return String(d.non_field_errors[0]);
+  }
+  return fallback;
+}
+
 function offerTicketGroupKey(offer) {
   const t = offer?.ticket;
   if (t != null && typeof t === 'object' && t.id != null) return t.id;
@@ -425,9 +439,8 @@ const Dashboard = () => {
         type: 'success'
       });
     } catch (err) {
-      const errorMsg = err.response?.data?.error || 'שגיאה באישור ההצעה';
       setToast({
-        message: errorMsg,
+        message: apiErrorMessage(err, 'שגיאה באישור ההצעה'),
         type: 'error'
       });
     } finally {
@@ -453,8 +466,7 @@ const Dashboard = () => {
       setToast({ message: 'ההצעה נדחתה', type: 'info' });
       await fetchOffers({ silent: true });
     } catch (err) {
-      const errorMsg = err.response?.data?.error || 'שגיאה בדחיית ההצעה';
-      setToast({ message: errorMsg, type: 'error' });
+      setToast({ message: apiErrorMessage(err, 'שגיאה בדחיית ההצעה'), type: 'error' });
     } finally {
       setRejectingOfferId(null);
     }
@@ -474,7 +486,10 @@ const Dashboard = () => {
       setCounterAmount('');
       await fetchOffers({ silent: true });
     } catch (err) {
-      const errorMsg = err.response?.data?.error || err.response?.data?.amount?.[0] || 'שגיאה בשליחת הצעת הנגד';
+      const errorMsg =
+        apiErrorMessage(err, null) ||
+        err.response?.data?.amount?.[0] ||
+        'שגיאה בשליחת הצעת הנגד';
       setToast({ message: errorMsg, type: 'error' });
     } finally {
       setAcceptingOfferId(null);

@@ -11,7 +11,7 @@ const AuthContext = createContext(null);
 function broadcastAuthEvent(type) {
   try {
     if (typeof BroadcastChannel === 'undefined') return;
-    const ch = new BroadcastChannel('safeticket-auth');
+    const ch = new BroadcastChannel('tradetix-auth');
     ch.postMessage({ type });
     ch.close();
   } catch {
@@ -59,7 +59,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const ch =
       typeof BroadcastChannel !== 'undefined'
-        ? new BroadcastChannel('safeticket-auth')
+        ? new BroadcastChannel('tradetix-auth')
         : null;
     const onMessage = (ev) => {
       const t = ev?.data?.type;

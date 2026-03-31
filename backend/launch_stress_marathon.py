@@ -47,7 +47,7 @@ def _one_page_pdf_bytes() -> bytes:
 
 def session_register_seller(api_base: str, username: str, email: str, password: str) -> requests.Session | None:
     s = requests.Session()
-    s.headers.setdefault("User-Agent", "SafeTrade-Marathon/1.0")
+    s.headers.setdefault("User-Agent", "TradeTix-Marathon/1.0")
     csrf = _fetch_csrf_token(s, api_base)
     if not csrf:
         return None
@@ -469,7 +469,7 @@ def main() -> int:
         else:
             r_ev = requests.get(f"{api_base}/users/events/?format=json", timeout=60)
             ev = r_ev.json()
-            results = ev.get("results") or ev
+            results = ev if isinstance(ev, list) else (ev.get("results") or [])
             event_id = results[0]["id"] if results else None
             if not event_id:
                 report["errors"].append("no event for conflict tests")

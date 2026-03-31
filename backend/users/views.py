@@ -3518,7 +3518,7 @@ class OfferViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
 
             recipient = self._get_offer_recipient(offer)
-            if recipient != request.user:
+            if recipient is None or request.user.pk != recipient.pk:
                 raise PermissionDenied("Only the recipient of this offer can accept it.")
 
             if offer.status != 'pending':
@@ -3552,12 +3552,15 @@ class OfferViewSet(viewsets.ModelViewSet):
             if ticket.status == 'reserved' and ticket.reserved_at:
                 cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
                 if ticket.reserved_at >= cutoff:
-                    return Response(
-                        {
-                            'error': 'This listing is currently in another buyer\'s checkout. Try again shortly.',
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+                    rb = ticket.reserved_by_id
+                    ob = offer.buyer_id
+                    if rb and ob and rb != ob:
+                        return Response(
+                            {
+                                'error': 'This listing is currently in another buyer\'s checkout. Try again shortly.',
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
 
             needed_qty = int(offer.quantity or 1)
             if ticket.available_quantity < needed_qty:
@@ -3576,6 +3579,20 @@ class OfferViewSet(viewsets.ModelViewSet):
                 status='pending',
             ).exclude(id=offer.id).update(status='rejected')
 
+            # Non-bundled listing: hold stock for the accepted buyer during checkout window
+            if not ticket.listing_group_id:
+                hold_fields = []
+                if ticket.status == 'active':
+                    ticket.status = 'reserved'
+                    ticket.reserved_by = offer.buyer
+                    ticket.reserved_at = timezone.now()
+                    hold_fields = ['status', 'reserved_by', 'reserved_at', 'updated_at']
+                elif ticket.status == 'reserved' and ticket.reserved_by_id == offer.buyer_id:
+                    ticket.reserved_at = timezone.now()
+                    hold_fields = ['reserved_at', 'updated_at']
+                if hold_fields:
+                    ticket.save(update_fields=hold_fields)
+
         offer.refresh_from_db()
         serializer = self.get_serializer(offer)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -3587,7 +3604,7 @@ class OfferViewSet(viewsets.ModelViewSet):
         
         # Only the recipient can reject (prevents self-rejection abuse)
         recipient = self._get_offer_recipient(offer)
-        if recipient != request.user:
+        if recipient is None or request.user.pk != recipient.pk:
             raise PermissionDenied("Only the recipient of this offer can reject it.")
         
         if offer.status != 'pending':

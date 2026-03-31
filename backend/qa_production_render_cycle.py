@@ -62,10 +62,33 @@ def build_csrf_headers(session: requests.Session, api_base: str) -> dict:
     return _csrf_headers(session, api_base, tok)
 
 
+def confirm_pending_order_payment(
+    session: requests.Session, api_base: str, create_order_body: dict
+) -> tuple[int, object]:
+    """
+    Finalize POST /users/orders/ (pending_payment) using mock PSP ack + payment_confirm_token.
+    Required for buyer PDF download and profile orders (paid/completed only).
+    """
+    oid = create_order_body.get("id")
+    tok = (create_order_body.get("payment_confirm_token") or "").strip()
+    if oid is None or not tok:
+        return 0, {"error": "missing order id or payment_confirm_token in create-order response"}
+    r = session.post(
+        f"{api_base.rstrip('/')}/users/orders/{int(oid)}/confirm-payment/",
+        json={"mock_payment_ack": True, "payment_confirm_token": tok},
+        headers=build_csrf_headers(session, api_base),
+        timeout=120,
+    )
+    try:
+        return r.status_code, r.json()
+    except Exception:
+        return r.status_code, r.text[:2000] if r.text else None
+
+
 def session_login(api_base: str, username: str, password: str) -> tuple[requests.Session | None, str | None]:
     """Returns (session, error_detail). On failure session is None."""
     s = requests.Session()
-    s.headers.setdefault("User-Agent", "SafeTrade-QA/1.0")
+    s.headers.setdefault("User-Agent", "TradeTix-QA/1.0")
     csrf = _fetch_csrf_token(s, api_base)
     if not csrf:
         return None, "csrf_fetch_failed"
@@ -86,7 +109,7 @@ def session_login(api_base: str, username: str, password: str) -> tuple[requests
 
 def session_register_buyer(api_base: str, username: str, email: str, password: str) -> requests.Session | None:
     s = requests.Session()
-    s.headers.setdefault("User-Agent", "SafeTrade-QA/1.0")
+    s.headers.setdefault("User-Agent", "TradeTix-QA/1.0")
     csrf = _fetch_csrf_token(s, api_base)
     if not csrf:
         return None
@@ -96,6 +119,30 @@ def session_register_buyer(api_base: str, username: str, email: str, password: s
         "password": password,
         "password2": password,
         "role": "buyer",
+    }
+    r = s.post(
+        f"{api_base}/users/register/",
+        json=payload,
+        headers=_csrf_headers(s, api_base, csrf),
+        timeout=60,
+    )
+    if r.status_code not in (200, 201):
+        return None
+    return s
+
+
+def session_register_seller(api_base: str, username: str, email: str, password: str) -> requests.Session | None:
+    s = requests.Session()
+    s.headers.setdefault("User-Agent", "TradeTix-QA/1.0")
+    csrf = _fetch_csrf_token(s, api_base)
+    if not csrf:
+        return None
+    payload = {
+        "username": username,
+        "email": email,
+        "password": password,
+        "password2": password,
+        "role": "seller",
     }
     r = s.post(
         f"{api_base}/users/register/",
@@ -169,7 +216,7 @@ def main() -> int:
             print(json.dumps(report, indent=2))
             return 1
         ev = r.json()
-        results = ev.get("results") or ev
+        results = ev if isinstance(ev, list) else (ev.get("results") or [])
         if not results:
             report["errors"].append("No events in DB — seed production first")
             print(json.dumps(report, indent=2))
@@ -326,7 +373,23 @@ def main() -> int:
         report["errors"].append(f"order: {r_ord.status_code} {r_ord.text[:400]}")
         print(json.dumps(report, indent=2))
         return 1
-    report["steps"].append({"name": "checkout (simulate + order)", "ok": True, "order_id": r_ord.json().get("id")})
+    ord_body = r_ord.json()
+    cf_status, cf_body = confirm_pending_order_payment(buyer, api_base, ord_body)
+    cf_ok = cf_status == 200 and isinstance(cf_body, dict) and cf_body.get("status") == "paid"
+    report["steps"].append(
+        {
+            "name": "checkout (simulate + order + confirm)",
+            "ok": cf_ok,
+            "order_id": ord_body.get("id"),
+            "confirm_http": cf_status,
+        }
+    )
+    if not cf_ok:
+        report["errors"].append(
+            f"confirm-payment: HTTP {cf_status} {cf_body!s}"[:800]
+        )
+        print(json.dumps(report, indent=2))
+        return 1
 
     # Verify sold
     r_chk = seller.get(f"{api_base}/users/tickets/{tid_a}/", timeout=60)

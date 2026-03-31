@@ -18,8 +18,11 @@ export function resetCsrfTokenCache() {
  */
 let bearerAccessToken = null;
 let bearerRefreshToken = null;
-const BEARER_ACCESS_KEY = 'safeticket_jwt_access';
-const BEARER_REFRESH_KEY = 'safeticket_jwt_refresh';
+const LEGACY_ACCESS_KEY = 'safeticket_jwt_access';
+const LEGACY_REFRESH_KEY = 'safeticket_jwt_refresh';
+/** TradeTix branding — migrated once from safeticket_* keys so users stay logged in. */
+const BEARER_ACCESS_KEY = 'tradetix_jwt_access';
+const BEARER_REFRESH_KEY = 'tradetix_jwt_refresh';
 
 function _readLs(key) {
   try {
@@ -64,9 +67,12 @@ function hydrateRefreshFromStorage() {
   let s = _readLs(BEARER_REFRESH_KEY);
   if (!s) {
     try {
-      const legacy = sessionStorage.getItem('safeticket_bearer_refresh');
+      const legacy =
+        sessionStorage.getItem('tradetix_bearer_refresh') ||
+        sessionStorage.getItem('safeticket_bearer_refresh');
       if (legacy) {
         _writeLs(BEARER_REFRESH_KEY, legacy);
+        sessionStorage.removeItem('tradetix_bearer_refresh');
         sessionStorage.removeItem('safeticket_bearer_refresh');
         s = legacy;
       }
@@ -486,7 +492,8 @@ export const offerAPI = {
   getSentOffers: () => api.get('/users/offers/sent/'),
   acceptOffer: async (offerId) => {
     await ensureCsrfToken();
-    return api.post(`/users/offers/${offerId}/accept/`);
+    const id = encodeURIComponent(String(offerId));
+    return api.post(`/users/offers/${id}/accept/`);
   },
   rejectOffer: async (offerId) => {
     await ensureCsrfToken();

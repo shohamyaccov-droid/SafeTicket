@@ -180,6 +180,48 @@ class PremiumOfferE2ETest(TestCase):
             },
         }
     )
+    def test_seller_can_accept_when_buyer_holds_checkout_reservation(self):
+        """
+        Regression: buyer may reserve (buy-now click) after placing an offer.
+        Seller must still be able to accept — only *other* buyers' reservations block accept.
+        """
+        response = self.buyer_client.post(
+            '/api/users/offers/',
+            data=json.dumps({'ticket': self.ticket.id, 'amount': '170.00'}),
+            content_type='application/json',
+            **self.buyer_headers,
+        )
+        self.assertEqual(response.status_code, 201, response.content.decode())
+        offer_id = response.json()['id']
+
+        r = self.buyer_client.post(
+            f'/api/users/tickets/{self.ticket.id}/reserve/',
+            data='{}',
+            content_type='application/json',
+            **self.buyer_headers,
+        )
+        self.assertIn(r.status_code, (200, 201), r.content.decode())
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.reserved_by_id, self.buyer.id)
+
+        response = self.seller_client.post(
+            f'/api/users/offers/{offer_id}/accept/',
+            data='{}',
+            content_type='application/json',
+            **self.seller_headers,
+        )
+        self.assertEqual(response.status_code, 200, response.content.decode())
+        self.assertEqual(response.json().get('status'), 'accepted')
+
+    @override_settings(
+        REST_FRAMEWORK={
+            **settings.REST_FRAMEWORK,
+            'DEFAULT_THROTTLE_RATES': {
+                **settings.REST_FRAMEWORK.get('DEFAULT_THROTTLE_RATES', {}),
+                'offers': '1000/min',
+            },
+        }
+    )
     def test_purchase_completed_true_after_paid_order(self):
         """Completed purchase (paid order + related_offer) → API exposes purchase_completed for UI lock."""
         response = self.buyer_client.post(
