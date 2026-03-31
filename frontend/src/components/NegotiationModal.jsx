@@ -17,7 +17,8 @@ const NegotiationModal = ({
   onReject,
   onCounter,
   acceptingOfferId,
-  offerMutationBusy = false,
+  rejectingOfferId,
+  counteringOfferId,
   offerExpirationTimers,
   countdownTimers,
   onCompletePurchase,
@@ -74,6 +75,14 @@ const NegotiationModal = ({
     if (isSeller) return round === 1;
     return round === 0 || round === 2;
   };
+
+  const pendingId = latestPending != null ? Number(latestPending.id) : null;
+  const acceptInFlightForThisOffer =
+    pendingId != null && acceptingOfferId != null && Number(acceptingOfferId) === pendingId;
+  const rejectInFlightForThisOffer =
+    pendingId != null && rejectingOfferId != null && Number(rejectingOfferId) === pendingId;
+  const counterInFlightForThisOffer =
+    pendingId != null && counteringOfferId != null && Number(counteringOfferId) === pendingId;
 
   return (
     <div className="negotiation-modal-overlay" onClick={onClose}>
@@ -197,16 +206,21 @@ const NegotiationModal = ({
                 <button
                   type="button"
                   className="accept-button"
+                  data-e2e="negotiation-accept-offer"
                   onClick={() => onAccept(Number(latestPending.id))}
-                  disabled={offerMutationBusy}
+                  disabled={acceptInFlightForThisOffer || rejectInFlightForThisOffer}
                 >
-                  {Number(acceptingOfferId) === Number(latestPending.id) ? 'מאשר…' : 'אישור'}
+                  {acceptInFlightForThisOffer ? 'Confirming…' : 'אישור'}
                 </button>
                 <button
                   type="button"
                   className="reject-button"
                   onClick={() => onReject(latestPending.id)}
-                  disabled={offerMutationBusy}
+                  disabled={
+                    acceptInFlightForThisOffer ||
+                    rejectInFlightForThisOffer ||
+                    counterInFlightForThisOffer
+                  }
                 >
                   דחייה
                 </button>
@@ -238,10 +252,17 @@ const NegotiationModal = ({
                       <button
                         type="button"
                         className="primary-button"
+                        data-e2e="negotiation-send-counter"
                         onClick={handleCounter}
-                        disabled={!counterAmount || offerMutationBusy || responsesLeft <= 0}
+                        disabled={
+                          !counterAmount ||
+                          responsesLeft <= 0 ||
+                          counterInFlightForThisOffer ||
+                          acceptInFlightForThisOffer ||
+                          rejectInFlightForThisOffer
+                        }
                       >
-                        שלח הצעת נגד
+                        {counterInFlightForThisOffer ? 'שולח…' : 'שלח הצעת נגד'}
                       </button>
                     </>
                   )}

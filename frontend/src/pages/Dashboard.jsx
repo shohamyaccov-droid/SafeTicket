@@ -408,9 +408,9 @@ const Dashboard = () => {
 
   const handleAcceptOffer = async (offerId) => {
     const oid = Number(offerId);
-    setAcceptingOfferId(offerId);
+    setAcceptingOfferId(oid);
     try {
-      const res = await offerAPI.acceptOffer(offerId);
+      const res = await offerAPI.acceptOffer(oid);
       const updated = res.data;
       if (updated?.id) {
         setOffersReceived((prev) =>
@@ -453,7 +453,7 @@ const Dashboard = () => {
   };
 
   const handleRejectOffer = async (offerId) => {
-    if (rejectingOfferId != null || acceptingOfferId != null) {
+    if (rejectingOfferId != null || acceptingOfferId != null || counteringOfferId != null) {
       return;
     }
     setRejectingOfferId(offerId);
@@ -478,11 +478,11 @@ const Dashboard = () => {
       setToast({ message: 'נא להזין סכום תקין', type: 'error' });
       return;
     }
-    setAcceptingOfferId(offerId);
+    const cid = Number(offerId);
+    setCounteringOfferId(cid);
     try {
-      const res = await offerAPI.counterOffer(offerId, { amount: numAmount });
+      const res = await offerAPI.counterOffer(cid, { amount: numAmount });
       setToast({ message: 'הצעת הנגד נשלחה בהצלחה', type: 'success' });
-      setCounteringOfferId(null);
       setCounterAmount('');
       await fetchOffers({ silent: true });
     } catch (err) {
@@ -492,7 +492,7 @@ const Dashboard = () => {
         'שגיאה בשליחת הצעת הנגד';
       setToast({ message: errorMsg, type: 'error' });
     } finally {
-      setAcceptingOfferId(null);
+      setCounteringOfferId(null);
     }
   };
 
@@ -1619,7 +1619,8 @@ const Dashboard = () => {
             setNegotiationModalGroup(null);
           }}
           acceptingOfferId={acceptingOfferId}
-          offerMutationBusy={acceptingOfferId != null || rejectingOfferId != null}
+          rejectingOfferId={rejectingOfferId}
+          counteringOfferId={counteringOfferId}
           offerExpirationTimers={offerExpirationTimers}
           countdownTimers={countdownTimers}
           onCompletePurchase={(offer) => { const g = negotiationModalGroup; setNegotiationModalGroup(null); handleCompletePurchase(offer, g); }}

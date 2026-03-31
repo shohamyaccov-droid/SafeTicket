@@ -87,9 +87,8 @@ def main() -> int:
         "api_base": api_base,
         "users": {"seller": "Seller_B", "buyer": "Buyer_A"},
         "fix_summary": (
-            "Offer accept: _reservation_blocks_seller_accept_offer uses int(pk) match; "
-            "guest carts (reservation_email) match offer.buyer.email; select_related buyer; "
-            "hold refresh uses same rules."
+            "Backend: reservation block uses int(pk) + reservation_email vs offer.buyer.email. "
+            "Frontend: Accept shows Confirming… only for accept-in-flight; counter uses שולח… via counteringOfferId."
         ),
         "iterations": [],
         "errors": [],
