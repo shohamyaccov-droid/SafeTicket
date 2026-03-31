@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Twin-user negotiation stress QA: Seller_Test + Buyer_Test, offer → accept → checkout.
+Twin-user negotiation stress QA: Seller_B + Buyer_A, offer → accept → checkout.
 
 Requires QA_PASSWORD (admin approve) and API_BASE (default production).
 Optional: TWIN_USER_PASSWORD for Seller_Test / Buyer_Test (default below).
@@ -85,11 +85,11 @@ def main() -> int:
         "script": "twin_user_negotiation_stress_qa",
         "ts_utc": datetime.now(timezone.utc).isoformat(),
         "api_base": api_base,
-        "users": {"seller": "Seller_Test", "buyer": "Buyer_Test"},
+        "users": {"seller": "Seller_B", "buyer": "Buyer_A"},
         "fix_summary": (
-            "Offer accept: allow reservation when reserved_by is the offer buyer (pk match); "
-            "recipient check uses user pk; optional reserve-for-buyer on accept for non-group listings; "
-            "frontend maps DRF detail + coerces offer id."
+            "Offer accept: _reservation_blocks_seller_accept_offer uses int(pk) match; "
+            "guest carts (reservation_email) match offer.buyer.email; select_related buyer; "
+            "hold refresh uses same rules."
         ),
         "iterations": [],
         "errors": [],
@@ -124,22 +124,22 @@ def main() -> int:
 
     seller, s_err = _ensure_user_session(
         api_base,
-        "Seller_Test",
-        "seller_test@tradetix.qa.invalid",
+        "Seller_B",
+        "seller_b@tradetix.qa.invalid",
         twin_pw,
         role="seller",
     )
     buyer, b_err = _ensure_user_session(
         api_base,
-        "Buyer_Test",
-        "buyer_test@tradetix.qa.invalid",
+        "Buyer_A",
+        "buyer_a@tradetix.qa.invalid",
         twin_pw,
         role="buyer",
     )
     if not seller:
-        report["errors"].append(f"Seller_Test session: {s_err}")
+        report["errors"].append(f"Seller_B session: {s_err}")
     if not buyer:
-        report["errors"].append(f"Buyer_Test session: {b_err}")
+        report["errors"].append(f"Buyer_A session: {b_err}")
     if not seller or not buyer:
         print(json.dumps(report, indent=2, ensure_ascii=False))
         return 1

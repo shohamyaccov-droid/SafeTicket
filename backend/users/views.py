@@ -277,6 +277,38 @@ def _sync_expired_cart_reservation(ticket):
         )
 
 
+def _reservation_blocks_seller_accept_offer(ticket, offer) -> bool:
+    """
+    True if an active cart reservation should block the seller from accepting this offer.
+    Never block when the holder is the same human as offer.buyer (by user pk or guest email).
+    """
+    if ticket.status != 'reserved' or not ticket.reserved_at:
+        return False
+    cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
+    if ticket.reserved_at < cutoff:
+        return False
+    rb = ticket.reserved_by_id
+    ob = offer.buyer_id
+    if rb is not None and ob is not None:
+        try:
+            return int(rb) != int(ob)
+        except (TypeError, ValueError):
+            return True
+    guest_email = (ticket.reservation_email or '').strip().lower()
+    if rb is None and guest_email:
+        buyer_email = ''
+        if getattr(offer, 'buyer_id', None):
+            try:
+                buyer_email = (getattr(offer.buyer, 'email', None) or '').strip().lower()
+            except Exception:
+                buyer_email = ''
+        if buyer_email and buyer_email == guest_email:
+            return False
+        if buyer_email and buyer_email != guest_email:
+            return True
+    return False
+
+
 class PdfFetchError(Exception):
     """All strategies to load PDF bytes from Cloudinary failed; carries per-strategy errors for diagnostics."""
 
@@ -3511,7 +3543,9 @@ class OfferViewSet(viewsets.ModelViewSet):
         from datetime import timedelta
 
         with transaction.atomic():
-            offer = Offer.objects.select_for_update().select_related('ticket', 'ticket__seller').filter(
+            offer = Offer.objects.select_for_update().select_related(
+                'ticket', 'ticket__seller', 'buyer'
+            ).filter(
                 pk=pk
             ).first()
             if not offer:
@@ -3549,18 +3583,13 @@ class OfferViewSet(viewsets.ModelViewSet):
                     {'error': 'This listing is not yet verified.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            if ticket.status == 'reserved' and ticket.reserved_at:
-                cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
-                if ticket.reserved_at >= cutoff:
-                    rb = ticket.reserved_by_id
-                    ob = offer.buyer_id
-                    if rb and ob and rb != ob:
-                        return Response(
-                            {
-                                'error': 'This listing is currently in another buyer\'s checkout. Try again shortly.',
-                            },
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
+            if _reservation_blocks_seller_accept_offer(ticket, offer):
+                return Response(
+                    {
+                        'error': 'This listing is currently in another buyer\'s checkout. Try again shortly.',
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             needed_qty = int(offer.quantity or 1)
             if ticket.available_quantity < needed_qty:
@@ -3587,9 +3616,23 @@ class OfferViewSet(viewsets.ModelViewSet):
                     ticket.reserved_by = offer.buyer
                     ticket.reserved_at = timezone.now()
                     hold_fields = ['status', 'reserved_by', 'reserved_at', 'updated_at']
-                elif ticket.status == 'reserved' and ticket.reserved_by_id == offer.buyer_id:
-                    ticket.reserved_at = timezone.now()
-                    hold_fields = ['reserved_at', 'updated_at']
+                elif ticket.status == 'reserved':
+                    try:
+                        same = int(ticket.reserved_by_id or 0) == int(offer.buyer_id or 0)
+                    except (TypeError, ValueError):
+                        same = False
+                    if (
+                        not same
+                        and not ticket.reserved_by_id
+                        and (ticket.reservation_email or '').strip()
+                        and getattr(offer, 'buyer', None)
+                    ):
+                        be = (getattr(offer.buyer, 'email', None) or '').strip().lower()
+                        ge = (ticket.reservation_email or '').strip().lower()
+                        same = bool(be and ge and be == ge)
+                    if same:
+                        ticket.reserved_at = timezone.now()
+                        hold_fields = ['reserved_at', 'updated_at']
                 if hold_fields:
                     ticket.save(update_fields=hold_fields)
 
