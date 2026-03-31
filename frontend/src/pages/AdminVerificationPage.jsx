@@ -103,6 +103,28 @@ const AdminVerificationPage = () => {
     }
   };
 
+  const handleDownloadReceipt = async (ticketId) => {
+    try {
+      const response = await ticketAPI.downloadReceipt(ticketId);
+      const ctype = response.headers?.['content-type'] || '';
+      const blob = new Blob([response.data], {
+        type: ctype.includes('/') ? ctype : 'application/octet-stream',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `receipt_ticket_${ticketId}`;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => window.URL.revokeObjectURL(url), 500);
+    } catch (err) {
+      toastError('שגיאה בהורדת הוכחת הקנייה. אנא נסה שוב.');
+    }
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'TBA';
     try {
@@ -187,9 +209,20 @@ const AdminVerificationPage = () => {
                     <span className="detail-value">{venue}</span>
                   </div>
                   <div className="detail-row">
-                    <span className="detail-label">💰 מחיר:</span>
-                    <span className="detail-value price-value">₪{parseFloat(ticket.original_price || ticket.asking_price || 0).toFixed(2)}</span>
+                    <span className="detail-label">💰 מחיר פנים:</span>
+                    <span className="detail-value price-value">
+                      ₪{parseFloat(ticket.original_price || 0).toFixed(2)}
+                    </span>
                   </div>
+                  {ticket.asking_price != null &&
+                    String(ticket.asking_price) !== String(ticket.original_price) && (
+                      <div className="detail-row">
+                        <span className="detail-label">🏷️ מחיר מבוקש:</span>
+                        <span className="detail-value price-value">
+                          ₪{parseFloat(ticket.asking_price || 0).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                   <div className="detail-row">
                     <span className="detail-label">👤 מוכר:</span>
                     <span className="detail-value">{ticket.seller_username || 'לא זמין'}</span>
@@ -209,6 +242,17 @@ const AdminVerificationPage = () => {
                 </div>
 
                 <div className="ticket-actions">
+                  {ticket.receipt_file_url ? (
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadReceipt(ticket.id)}
+                      className="preview-button receipt-button"
+                      disabled={isProcessing}
+                      title="הורדת הוכחת קנייה / קבלה"
+                    >
+                      הורדת קבלה
+                    </button>
+                  ) : null}
                   <button
                     onClick={() => handlePreviewPDF(ticket.id)}
                     className="preview-button"

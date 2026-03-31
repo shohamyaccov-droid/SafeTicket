@@ -449,6 +449,9 @@ export const ticketAPI = {
     }
     return api.get(`/users/tickets/${id}/download_pdf/`, config);
   },
+  /** Proof of purchase — staff/seller only (same auth as backend download_receipt). */
+  downloadReceipt: (id) =>
+    api.get(`/users/tickets/${id}/download_receipt/`, { responseType: 'blob' }),
   reserveTicket: (id, email = null) => {
     const data = email ? { email } : {};
     return api.post(`/users/tickets/${id}/reserve/`, data);

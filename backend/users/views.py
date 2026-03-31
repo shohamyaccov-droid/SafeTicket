@@ -2586,11 +2586,20 @@ class TicketViewSet(viewsets.ModelViewSet):
                     'seat_number': ''
                 })
         
-        # Create base data dict (without pdf_file)
+        # Create base data dict (without pdf_file / receipt bytes — receipt injected per row below)
         base_data = {}
+        _skip_data_keys = {'pdf_files_count', 'receipt_file', 'il_legal_declaration'}
         for key, value in request.data.items():
-            if not key.startswith('pdf_file') and key != 'pdf_files_count':
-                base_data[key] = value
+            if key.startswith('pdf_file') or key in _skip_data_keys:
+                continue
+            base_data[key] = value
+
+        receipt_upload = request.FILES.get('receipt_file')
+        receipt_dup = None
+        if receipt_upload:
+            receipt_upload.seek(0)
+            receipt_dup = (receipt_upload.read(), getattr(receipt_upload, 'name', 'receipt') or 'receipt')
+            receipt_upload.seek(0)
 
         # Generate listing_group_id for tickets created together
         listing_group_id = str(uuid.uuid4())
@@ -2617,6 +2626,9 @@ class TicketViewSet(viewsets.ModelViewSet):
                 ticket_data['pdf_file'] = content_file
                 ticket_data['available_quantity'] = 1
                 ticket_data['listing_group_id'] = listing_group_id
+                if receipt_dup:
+                    from django.core.files.base import ContentFile
+                    ticket_data['receipt_file'] = ContentFile(receipt_dup[0], name=receipt_dup[1])
 
                 if i < len(seat_data_list):
                     ticket_data['row_number'] = seat_data_list[i]['row_number']
@@ -2669,6 +2681,9 @@ class TicketViewSet(viewsets.ModelViewSet):
                 ticket_data['pdf_file'] = pdf_file
                 ticket_data['available_quantity'] = 1
                 ticket_data['listing_group_id'] = listing_group_id
+                if receipt_dup:
+                    from django.core.files.base import ContentFile
+                    ticket_data['receipt_file'] = ContentFile(receipt_dup[0], name=receipt_dup[1])
 
                 if i < len(seat_data_list):
                     ticket_data['row_number'] = seat_data_list[i]['row_number']
@@ -2825,6 +2840,55 @@ class TicketViewSet(viewsets.ModelViewSet):
             return Response(
                 {'error': err_msg},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['get'])
+    def download_receipt(self, request, pk=None):
+        """
+        Proof-of-purchase file: seller, staff, or superuser only (not buyers).
+        """
+        ticket = get_object_or_404(Ticket, pk=pk)
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        allowed = (
+            ticket.seller_id == request.user.id
+            or getattr(request.user, 'is_staff', False)
+            or getattr(request.user, 'is_superuser', False)
+        )
+        if not allowed:
+            return Response(
+                {'error': 'You do not have permission to download this receipt.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not ticket.receipt_file:
+            return Response(
+                {'error': 'Receipt file not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        import mimetypes
+        import os
+
+        try:
+            ticket.receipt_file.open('rb')
+            try:
+                content = ticket.receipt_file.read()
+            finally:
+                ticket.receipt_file.close()
+            filename = os.path.basename(ticket.receipt_file.name or 'receipt')
+            ctype = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+            safe_ascii = ''.join(c if ord(c) < 128 and c not in '"\\' else '_' for c in filename) or f'receipt_{ticket.id}'
+            from django.http import HttpResponse
+            response = HttpResponse(content, content_type=ctype)
+            response['Content-Disposition'] = f'attachment; filename="{safe_ascii}"'
+            return response
+        except Exception as e:
+            logger.exception('download_receipt failed for ticket %s', ticket.pk)
+            return Response(
+                {'error': str(e) if settings.DEBUG else 'Could not retrieve receipt file.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
     
     @action(detail=True, methods=['post'])
@@ -3435,6 +3499,25 @@ def admin_transactions(request):
             event_nm = o.ticket.event.name
 
         amount = o.total_paid_by_buyer if o.total_paid_by_buyer is not None else o.total_amount
+        tix_ids_tr = []
+        if o.ticket_ids:
+            tix_ids_tr.extend([int(x) for x in o.ticket_ids if x is not None])
+        if o.ticket_id:
+            tix_ids_tr.append(int(o.ticket_id))
+        tix_ids_tr = sorted(set(tix_ids_tr))
+        receipt_links = []
+        for tid in tix_ids_tr:
+            rt = Ticket.objects.filter(pk=tid).only('id', 'receipt_file').first()
+            if rt and rt.receipt_file:
+                receipt_links.append(
+                    {
+                        'ticket_id': rt.id,
+                        'url': request.build_absolute_uri(
+                            f'/api/users/tickets/{rt.id}/download_receipt/'
+                        ),
+                    }
+                )
+
         rows.append(
             {
                 'id': o.id,
@@ -3446,6 +3529,7 @@ def admin_transactions(request):
                 'status': o.status,
                 'payout_status': o.payout_status,
                 'created_at': o.created_at.isoformat() if o.created_at else None,
+                'receipts': receipt_links,
             }
         )
 

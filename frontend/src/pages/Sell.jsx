@@ -32,6 +32,9 @@ const Sell = () => {
     singleMultiPagePdf: null, // Single file mode: 1 PDF with N pages for auto-split
     is_together: true, // Default to true (seats together)
     start_seat: '', // For auto-generating seat numbers
+    listing_price: '', // Buyer-facing price (IL: capped at face value / original_price)
+    receipt_file: null,
+    il_legal_accepted: false,
     // Master Architecture fields
     ticket_type: 'pdf',
     split_type: 'כל כמות',
@@ -55,6 +58,12 @@ const Sell = () => {
   const [eventRequestDetails, setEventRequestDetails] = useState('');
   const [eventRequestSubmitting, setEventRequestSubmitting] = useState(false);
   const [eventRequestFeedback, setEventRequestFeedback] = useState(null);
+
+  const isIsraelEvent = (ev) => {
+    if (!ev) return true;
+    const c = String(ev.country ?? 'IL').trim().toUpperCase();
+    return c === '' || c === 'IL';
+  };
 
   const WHATSAPP_SUPPORT_PHONE = '972500000000';
   const missingEventWhatsAppHref = `https://wa.me/${WHATSAPP_SUPPORT_PHONE}?text=${encodeURIComponent(
@@ -310,6 +319,9 @@ const Sell = () => {
         event_name: '',
         selectedEvent: null,
         section: '',
+        listing_price: '',
+        receipt_file: null,
+        il_legal_accepted: false,
       });
       return;
     }
@@ -324,6 +336,9 @@ const Sell = () => {
         event_name: displayName,
         selectedEvent: selectedEvent,
         section: '',
+        listing_price: '',
+        receipt_file: null,
+        il_legal_accepted: false,
       });
     }
   };
@@ -392,6 +407,20 @@ const Sell = () => {
         });
         setError('');
       }
+    } else if (name === 'receipt_file') {
+      if (files && files.length > 0) {
+        const file = files[0];
+        const ok =
+          file.type === 'application/pdf' ||
+          file.type.startsWith('image/') ||
+          /\.(pdf|jpg|jpeg|png|webp)$/i.test(file.name);
+        if (!ok) {
+          setError('הוכחת קנייה: נא להעלות PDF או תמונה (JPG, PNG).');
+          return;
+        }
+        setFormData((prev) => ({ ...prev, receipt_file: file }));
+        setError('');
+      }
     } else if (name && name.startsWith('seat_number_pkg_')) {
       const index = parseInt(name.replace('seat_number_pkg_', ''), 10);
       if (!isNaN(index)) {
@@ -409,10 +438,33 @@ const Sell = () => {
         [name]: value,
       });
     } else if (type === 'checkbox') {
-      // Ensure boolean value for is_together
+      if (name === 'il_legal_accepted') {
+        setFormData({ ...formData, il_legal_accepted: Boolean(checked) });
+      } else {
+        setFormData({
+          ...formData,
+          [name]: Boolean(checked),
+        });
+      }
+    } else if (name === 'listing_price' && isIsraelEvent(formData.selectedEvent)) {
+      const face = parseFloat(formData.original_price) || 0;
+      let next = value;
+      const num = parseFloat(String(next));
+      if (face > 0 && Number.isFinite(num) && num > face) {
+        next = String(Math.round(face));
+      }
+      setFormData({ ...formData, listing_price: next });
+    } else if (name === 'original_price' && isIsraelEvent(formData.selectedEvent)) {
+      const face = parseFloat(value) || 0;
+      const curAsk = parseFloat(formData.listing_price);
+      let nextListing = formData.listing_price;
+      if (face > 0 && !Number.isNaN(curAsk) && curAsk > face) {
+        nextListing = String(Math.round(face));
+      }
       setFormData({
         ...formData,
-        [name]: Boolean(checked),
+        original_price: value,
+        listing_price: nextListing,
       });
     } else {
       setFormData({
@@ -441,6 +493,36 @@ const Sell = () => {
       setError('אנא בחר אירוע מהרשימה.');
       setLoading(false);
       return;
+    }
+
+    const ilEvent = isIsraelEvent(formData.selectedEvent);
+    if (ilEvent) {
+      if (formData.listing_price === '' || formData.listing_price == null) {
+        setError('נא להזין מחיר מבוקש (מכירה) — עד מחיר הפנים.');
+        setLoading(false);
+        return;
+      }
+      if (!formData.receipt_file) {
+        setError('לאירוע בישראל נדרשת הוכחת קנייה / קבלה (PDF או תמונה).');
+        setLoading(false);
+        return;
+      }
+      if (!formData.il_legal_accepted) {
+        setError('יש לאשר את ההצהרה המשפטית למכירה בישראל.');
+        setLoading(false);
+        return;
+      }
+      const faceVal = parseFloat(formData.original_price);
+      const askVal = parseFloat(
+        formData.listing_price !== '' && formData.listing_price != null
+          ? formData.listing_price
+          : formData.original_price
+      );
+      if (Number.isFinite(faceVal) && Number.isFinite(askVal) && askVal > faceVal) {
+        setError('מחיר המכירה אינו יכול לעלות על מחיר הפנים (אירוע בישראל).');
+        setLoading(false);
+        return;
+      }
     }
     
     // Validate ticket packages - every seat must have row, seat, and unique PDF
@@ -523,7 +605,6 @@ const Sell = () => {
     }
 
     // Create FormData for file upload
-    // Note: asking_price is automatically set to original_price on the backend per Israeli law
     const submitData = new FormData();
     submitData.append('event_id', formData.event_id);
     // Legacy fields for backward compatibility (if needed)
@@ -534,6 +615,17 @@ const Sell = () => {
     submitData.append('section', formData.section || '');
     submitData.append('row', formData.row || '');
     submitData.append('original_price', formData.original_price);
+    const askForApi =
+      ilEvent && formData.listing_price !== '' && formData.listing_price != null
+        ? String(Math.max(0, Math.round(parseFloat(String(formData.listing_price)) || 0)))
+        : String(Math.max(0, Math.round(parseFloat(String(formData.original_price)) || 0)));
+    submitData.append('listing_price', askForApi);
+    if (formData.receipt_file) {
+      submitData.append('receipt_file', formData.receipt_file);
+    }
+    if (ilEvent) {
+      submitData.append('il_legal_declaration', 'true');
+    }
     submitData.append('available_quantity', formData.available_quantity || 1);
     submitData.append('is_together', formData.is_together);
     // Master Architecture fields
@@ -638,6 +730,15 @@ const Sell = () => {
       </div>
     );
   }
+
+  const ilSelected = isIsraelEvent(formData.selectedEvent);
+  const faceValueNum = parseFloat(String(formData.original_price || ''));
+  const faceMaxForInput =
+    Number.isFinite(faceValueNum) && faceValueNum >= 0 ? Math.round(faceValueNum) : undefined;
+  const feeBasis =
+    ilSelected && formData.listing_price !== '' && formData.listing_price != null
+      ? parseFloat(String(formData.listing_price)) || 0
+      : parseFloat(String(formData.original_price || 0)) || 0;
 
   return (
     <div className="sell-container">
@@ -1128,35 +1229,133 @@ const Sell = () => {
             </div>
           )}
 
-          <div className="form-group">
-            <label htmlFor="original_price">מחיר (מחיר פנים) *</label>
-            <input
-              type="number"
-              id="original_price"
-              name="original_price"
-              value={formData.original_price}
-              onChange={handleChange}
-              required
-              min="0"
-              step="0.01"
-              placeholder="₪"
-            />
-            <small>זהו מחיר הפנים של הכרטיס ומחיר המכירה הסופי (חוק הגנת הצרכן הישראלי)</small>
-            
-            {/* 5% Seller Fee Calculator */}
-            {formData?.original_price && parseFloat(formData?.original_price || 0) > 0 && (
+          <div className="form-group sell-pricing-block">
+            {ilSelected ? (
+              <>
+                <div className="form-row">
+                  <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                    <label htmlFor="original_price">מחיר פנים (ערך נקוב) *</label>
+                    <input
+                      type="number"
+                      id="original_price"
+                      name="original_price"
+                      value={formData.original_price}
+                      onChange={handleChange}
+                      required
+                      min="0"
+                      step="1"
+                      placeholder="₪"
+                    />
+                  </div>
+                  <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                    <label htmlFor="listing_price">
+                      מחיר מבוקש (מכירה) *
+                    </label>
+                    <input
+                      type="number"
+                      id="listing_price"
+                      name="listing_price"
+                      value={formData.listing_price}
+                      onChange={handleChange}
+                      required
+                      min="0"
+                      max={faceMaxForInput}
+                      step="1"
+                      placeholder="עד מחיר הפנים"
+                    />
+                  </div>
+                </div>
+                <small className="sell-il-pricing-hint">
+                  באירועים בישראל מחיר המכירה אינו יכול לעלות על מחיר הפנים (ציות לאיסור ספסרות).
+                </small>
+              </>
+            ) : (
+              <>
+                <label htmlFor="original_price">מחיר (מחיר פנים / מחיר המכירה) *</label>
+                <input
+                  type="number"
+                  id="original_price"
+                  name="original_price"
+                  value={formData.original_price}
+                  onChange={handleChange}
+                  required
+                  min="0"
+                  step="0.01"
+                  placeholder="₪"
+                />
+                <small>מחיר הרשימה — בשווקים מחוץ לישראל אין הגבלה זהה; הוכחת קנייה אופציונלית.</small>
+              </>
+            )}
+
+            {feeBasis > 0 ? (
               <div className="price-breakdown-container">
                 <div className="price-breakdown-row fee-row">
                   <span>עמלת מכירה (5%):</span>
-                  <span dir="ltr">- ₪{(parseFloat(formData?.original_price || 0) * 0.05).toFixed(2)}</span>
+                  <span dir="ltr">- ₪{(feeBasis * 0.05).toFixed(2)}</span>
                 </div>
                 <div className="price-breakdown-row net-row">
-                  <strong>הסכום שתקבלו:</strong>
-                  <strong dir="ltr">₪{(parseFloat(formData?.original_price || 0) * 0.95).toFixed(2)}</strong>
+                  <strong>הסכום שתקבלו (בערך):</strong>
+                  <strong dir="ltr">₪{(feeBasis * 0.95).toFixed(2)}</strong>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
+
+          <div
+            className={`form-group sell-receipt-zone${ilSelected ? ' sell-receipt-zone--required' : ''}`}
+          >
+            <label htmlFor="receipt_file">
+              הוכחת קנייה / קבלה
+              {ilSelected ? (
+                <span className="req-asterisk" aria-hidden="true">
+                  {' '}
+                  *
+                </span>
+              ) : null}
+            </label>
+            <div className="file-dropzone-box sell-receipt-dropzone">
+              <input
+                type="file"
+                id="receipt_file"
+                name="receipt_file"
+                onChange={handleChange}
+                accept=".pdf,application/pdf,image/jpeg,image/png,image/webp"
+              />
+              {formData.receipt_file ? (
+                <span className="uploaded-file-name">✓ {formData.receipt_file.name}</span>
+              ) : (
+                <span className="dropzone-placeholder">
+                  {ilSelected
+                    ? 'גררו קובץ או לחצו לבחירה (PDF או תמונה)'
+                    : 'אופציונלי — PDF או תמונה'}
+                </span>
+              )}
+            </div>
+            <small className="sell-receipt-hint">
+              {ilSelected
+                ? 'חובה לאירועים בישראל. קבלה, אישור הזמנה או צילום מסך מהמפיץ.'
+                : 'מומלץ להעלות כדי לאץ׳ את האימות; לא חובה מחוץ לישראל.'}
+            </small>
+          </div>
+
+          {ilSelected ? (
+            <div className="form-group checkbox-group sell-il-legal">
+              <div className="checkbox-wrapper">
+                <input
+                  type="checkbox"
+                  id="il_legal_accepted"
+                  name="il_legal_accepted"
+                  checked={formData.il_legal_accepted}
+                  onChange={handleChange}
+                  className="checkbox-input"
+                />
+                <label htmlFor="il_legal_accepted" className="checkbox-label">
+                  אני מצהיר שהמחיר המבוקש אינו עולה על המחיר המקורי. ידוע לי שמכירה בספסרות היא עבירה פלילית
+                  והאחריות המלאה חלה עליי.
+                </label>
+              </div>
+            </div>
+          ) : null}
 
           <div className="terms-checkbox-container">
             <input

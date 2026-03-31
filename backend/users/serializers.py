@@ -102,6 +102,19 @@ def user_can_access_ticket_pdf(user, ticket) -> bool:
     return False
 
 
+def user_can_access_ticket_receipt(user, ticket) -> bool:
+    """Proof of purchase: seller, superuser, or staff (not public / not buyers)."""
+    if not user or not user.is_authenticated:
+        return False
+    if getattr(user, 'is_superuser', False):
+        return True
+    if getattr(user, 'is_staff', False):
+        return True
+    if ticket.seller_id == user.id:
+        return True
+    return False
+
+
 def cloudinary_unsigned_https_image_url(fieldfile):
     """
     Unsigned https:// delivery URL from FieldFile.name (public_id).
@@ -465,7 +478,7 @@ class EventSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
         fields = (
-            'id', 'artist', 'artist_id', 'name', 'date', 'venue', 'city', 'image', 'image_url',
+            'id', 'artist', 'artist_id', 'name', 'date', 'venue', 'city', 'country', 'image', 'image_url',
             'tickets_count', 'view_count', 'category', 'home_team', 'away_team', 'tournament',
             'created_at', 'updated_at'
         )
@@ -492,7 +505,8 @@ class EventListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
         fields = (
-            'id', 'artist', 'artist_detail', 'artist_name', 'name', 'date', 'venue', 'city', 'image_url',
+            'id', 'artist', 'artist_detail', 'artist_name', 'name', 'date', 'venue', 'city', 'country',
+            'image_url',
             'tickets_count', 'view_count',
             'category', 'home_team', 'away_team', 'tournament'
         )
@@ -523,9 +537,21 @@ class TicketSerializer(serializers.ModelSerializer):
     seller_username = serializers.CharField(source='seller.username', read_only=True)
     seller_is_verified = serializers.BooleanField(source='seller.is_verified_seller', read_only=True)
     pdf_file_url = serializers.SerializerMethodField()
+    receipt_file_url = serializers.SerializerMethodField()
     original_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
-    asking_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True, 
-                                           help_text="Always equals original_price per Israeli law")
+    listing_price = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        write_only=True,
+        help_text='Listing / buyer price; for IL must be <= original_price (face value)',
+    )
+    asking_price = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+        help_text='Buyer-facing price (equals face for IL cap; may differ abroad)',
+    )
     delivery_method = serializers.ChoiceField(choices=Ticket.DELIVERY_CHOICES, default='instant', required=False)
     # Event data
     event = EventSerializer(read_only=True)
@@ -557,15 +583,19 @@ class TicketSerializer(serializers.ModelSerializer):
             'id', 'seller', 'seller_username', 'seller_is_verified', 'event', 'event_id',
             'event_name', 'event_date', 'venue', 'seat_row', 'section', 'row', 'seat_numbers',
             'row_number', 'seat_number', 'listing_group_id',
-            'original_price', 'asking_price', 'delivery_method',
-            'is_together', 'available_quantity', 'pdf_file', 'pdf_file_url', 'has_pdf_file', 'status',
+            'original_price', 'listing_price', 'asking_price', 'delivery_method',
+            'is_together', 'available_quantity', 'pdf_file', 'pdf_file_url', 'receipt_file', 'receipt_file_url',
+            'has_pdf_file', 'status',
             'ticket_type', 'split_type', 'is_obstructed_view', 'verification_status',
             'reserved_at', 'reserved_by', 'reservation_email', 'created_at', 'updated_at'
         )
-        read_only_fields = ('id', 'seller', 'status', 'created_at', 'updated_at', 'asking_price', 
-                           'reserved_at', 'reserved_by', 'reservation_email', 'event_name', 'event_date', 'venue')
+        read_only_fields = (
+            'id', 'seller', 'status', 'created_at', 'updated_at', 'asking_price',
+            'reserved_at', 'reserved_by', 'reservation_email', 'event_name', 'event_date', 'venue',
+        )
         extra_kwargs = {
             'pdf_file': {'write_only': True, 'required': True, 'allow_empty_file': False},
+            'receipt_file': {'write_only': True, 'required': False, 'allow_empty_file': False},
         }
     
     def get_event_name(self, obj):
@@ -594,6 +624,17 @@ class TicketSerializer(serializers.ModelSerializer):
         if request:
             return request.build_absolute_uri(f'/api/users/tickets/{obj.id}/download_pdf/')
         return f'/api/users/tickets/{obj.id}/download_pdf/'
+
+    def get_receipt_file_url(self, obj):
+        if not obj.receipt_file:
+            return None
+        request = self.context.get('request')
+        user = request.user if request and request.user.is_authenticated else None
+        if not user_can_access_ticket_receipt(user, obj):
+            return None
+        if request:
+            return request.build_absolute_uri(f'/api/users/tickets/{obj.id}/download_receipt/')
+        return f'/api/users/tickets/{obj.id}/download_receipt/'
     
     def validate_pdf_file(self, value):
         if not value:
@@ -602,43 +643,80 @@ class TicketSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('קובץ PDF ריק / PDF file is empty.')
         return value
 
+    def validate_receipt_file(self, value):
+        if not value:
+            return value
+        if getattr(value, 'size', None) is not None and int(value.size) < 1:
+            raise serializers.ValidationError('קובץ הוכחת קנייה ריק.')
+        if getattr(value, 'size', None) is not None and int(value.size) > 15 * 1024 * 1024:
+            raise serializers.ValidationError('קובץ הוכחת קנייה גדול מדי (מקס׳ 15MB).')
+        return value
+
     def validate(self, attrs):
-        # Israeli Consumer Protection Law (Section 19A): asking_price must equal original_price
-        # Remove asking_price from attrs if present (it's read-only)
         attrs.pop('asking_price', None)
-        
-        # Ensure original_price is set and properly formatted
+        listing_price = attrs.pop('listing_price', None)
+
         original_price = attrs.get('original_price')
         if original_price is None:
             raise serializers.ValidationError({
                 'original_price': 'Original price (face value) is required.'
             })
-        
-        # Whole shekels only (clean UI: 222 not 221.99)
+
         from decimal import Decimal
         if isinstance(original_price, (int, float, str, Decimal)):
             attrs['original_price'] = round_shekel_price(original_price)
-        
-        # Handle event_date timezone - ensure it's interpreted in Israel timezone
-        # Django will automatically handle timezone conversion based on TIME_ZONE setting
-        # We just need to ensure the datetime is properly formatted
+        original_price = attrs['original_price']
+
+        event = attrs.get('event')
+        country = 'IL'
+        if event is not None:
+            country = (getattr(event, 'country', None) or 'IL').strip().upper()
+        if not country:
+            country = 'IL'
+
+        if listing_price is not None:
+            listing_price = round_shekel_price(listing_price)
+        else:
+            listing_price = original_price
+
+        request = self.context.get('request')
+        legal_raw = None
+        if request is not None:
+            legal_raw = request.data.get('il_legal_declaration')
+        legal_ok = legal_raw in (True, 'true', 'True', '1', 'on', 'yes')
+
+        if country == 'IL':
+            receipt = attrs.get('receipt_file')
+            if not receipt:
+                raise serializers.ValidationError({
+                    'receipt_file': 'העלאת הוכחת קנייה / קבלה נדרשת לאירועים בישראל.'
+                })
+            if not legal_ok:
+                raise serializers.ValidationError({
+                    'il_legal_declaration': 'יש לאשר את ההצהרה המשפטית למכירה בישראל.'
+                })
+            if listing_price > original_price:
+                raise serializers.ValidationError({
+                    'listing_price': 'מחיר המכירה אינו יכול לעלות על מחיר הפנים (חוק ישראל).',
+                    'original_price': 'מחיר הפנים חייב להיות גבוה או שווה למחיר המכירה.',
+                })
+            attrs['asking_price'] = listing_price
+        else:
+            attrs['asking_price'] = listing_price
+
         event_date = attrs.get('event_date')
         if event_date and isinstance(event_date, str):
             from datetime import datetime
             from zoneinfo import ZoneInfo
-            
+
             try:
-                # Parse the datetime string
                 if 'T' in event_date:
-                    # ISO format: YYYY-MM-DDTHH:MM:SS
                     parts = event_date.split('T')
                     if len(parts) == 2 and '+' not in event_date and 'Z' not in event_date:
-                        # Naive datetime - make it timezone-aware in Israel timezone
                         naive_dt = datetime.fromisoformat(event_date)
                         israel_tz = ZoneInfo('Asia/Jerusalem')
                         attrs['event_date'] = naive_dt.replace(tzinfo=israel_tz)
             except (ValueError, AttributeError, ImportError):
-                # If zoneinfo not available (Python < 3.9), use pytz fallback
                 try:
                     import pytz
                     if 'T' in event_date and '+' not in event_date and 'Z' not in event_date:
@@ -646,20 +724,20 @@ class TicketSerializer(serializers.ModelSerializer):
                         israel_tz = pytz.timezone('Asia/Jerusalem')
                         attrs['event_date'] = israel_tz.localize(naive_dt)
                 except (ImportError, ValueError, AttributeError):
-                    pass  # Let Django handle it
-        
-        # asking_price will be set automatically in model.save() to equal original_price
+                    pass
+
         return attrs
     
     def create(self, validated_data):
-        # Ensure asking_price is set to original_price before creation
-        validated_data['asking_price'] = validated_data.get('original_price')
         return super().create(validated_data)
     
     def update(self, instance, validated_data):
-        # Ensure asking_price is set to original_price before update
-        if 'original_price' in validated_data:
-            validated_data['asking_price'] = validated_data['original_price']
+        validated_data.pop('listing_price', None)
+        if 'original_price' in validated_data and 'asking_price' not in validated_data:
+            oe = instance.event
+            country = (getattr(oe, 'country', None) or 'IL').strip().upper() if oe else 'IL'
+            if country == 'IL':
+                validated_data['asking_price'] = validated_data['original_price']
         return super().update(instance, validated_data)
 
     def to_representation(self, instance):

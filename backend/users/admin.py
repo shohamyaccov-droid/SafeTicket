@@ -96,6 +96,7 @@ class TicketAdmin(admin.ModelAdmin):
         'original_price',
         'status',
         'pdf_staff_link',
+        'receipt_staff_link',
         'reservation_info',
         'created_at',
     ]
@@ -112,14 +113,14 @@ class TicketAdmin(admin.ModelAdmin):
             'fields': ('event', 'seller', 'event_name', 'event_date', 'venue')
         }),
         ('Ticket Details', {
-            'fields': ('ticket_type', 'verification_status', 'pdf_file', 'delivery_method')
+            'fields': ('ticket_type', 'verification_status', 'pdf_file', 'receipt_file', 'delivery_method')
         }),
         ('Seating Information', {
             'fields': ('section', 'row', 'seat_numbers', 'row_number', 'seat_number', 'seat_row', 'is_obstructed_view', 'is_together')
         }),
         ('Pricing', {
             'fields': ('original_price', 'asking_price'),
-            'description': 'Asking price is automatically set to match original_price per Israeli Consumer Protection Law.'
+            'description': 'For IL events, asking_price must not exceed face value (original_price). Proof of purchase is stored in receipt_file.'
         }),
         ('Quantity & Split Options', {
             'fields': ('available_quantity', 'split_type')
@@ -253,6 +254,25 @@ class TicketAdmin(admin.ModelAdmin):
             return _admin_pdf_safe_fallback()
 
     pdf_staff_link.short_description = 'PDF (סטאף)'
+
+    def receipt_staff_link(self, obj):
+        try:
+            rf = getattr(obj, 'receipt_file', None)
+            if not rf or not str(getattr(rf, 'name', None) or '').strip():
+                return mark_safe('<span style="color:#64748b;">—</span>')
+            try:
+                url = rf.url
+            except Exception:
+                return _admin_pdf_safe_fallback()
+            return format_html(
+                '<a href="{}" target="_blank" rel="noopener noreferrer">קבלה</a>',
+                url,
+            )
+        except Exception:
+            _admin_log.exception('TicketAdmin.receipt_staff_link failed pk=%s', getattr(obj, 'pk', None))
+            return _admin_pdf_safe_fallback()
+
+    receipt_staff_link.short_description = 'הוכחת קנייה'
 
     def pdf_file_display(self, obj):
         try:
@@ -444,8 +464,11 @@ class ArtistAdmin(admin.ModelAdmin):
 
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
-    list_display = ['name', 'artist', 'category', 'home_team', 'away_team', 'status', 'date', 'venue', 'city', 'created_at']
-    list_filter = ['artist', 'category', 'status', 'venue', 'city', 'age_restriction', 'date', 'created_at']
+    list_display = [
+        'name', 'artist', 'category', 'home_team', 'away_team', 'status', 'date',
+        'venue', 'city', 'country', 'created_at',
+    ]
+    list_filter = ['artist', 'category', 'status', 'venue', 'city', 'country', 'age_restriction', 'date', 'created_at']
     search_fields = ['name', 'venue', 'city', 'artist__name', 'home_team', 'away_team', 'tournament']
     readonly_fields = ['created_at', 'updated_at', 'view_count', 'image_delivery_preview']
     fieldsets = (
@@ -453,7 +476,7 @@ class EventAdmin(admin.ModelAdmin):
             'fields': ('artist', 'name', 'category', 'status')
         }),
         ('Location & Timing', {
-            'fields': ('venue', 'city', 'date', 'doors_open')
+            'fields': ('venue', 'city', 'country', 'date', 'doors_open')
         }),
         ('Event Details', {
             'fields': ('age_restriction', 'image', 'image_delivery_preview', 'view_count')

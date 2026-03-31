@@ -154,6 +154,13 @@ class Event(models.Model):
     away_team = models.CharField(max_length=255, blank=True, null=True, help_text="Away team name (for sports events)")
     tournament = models.CharField(max_length=255, blank=True, null=True, help_text="Tournament/League name (e.g., Champions League, Premier League)")
     
+    # Geo / regulatory jurisdiction (ISO 3166-1 alpha-2; default Israel for existing catalog)
+    country = models.CharField(
+        max_length=2,
+        default='IL',
+        help_text='Event jurisdiction for pricing and proof-of-purchase rules (e.g. IL, US, GB)',
+    )
+    
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -228,16 +235,37 @@ class Ticket(models.Model):
     asking_price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Price (always equals original_price per Israeli law)")
     
     def save(self, *args, **kwargs):
-        # Enforce Israeli law: asking_price must always equal original_price
-        # Whole shekels only (clean UI: 222 not 221.99)
+        # Whole shekels; IL: asking cannot exceed face value; non-IL: asking may exceed (global market).
         from decimal import Decimal, ROUND_HALF_UP
         if self.original_price is not None:
             if isinstance(self.original_price, (int, float, str, Decimal)):
                 self.original_price = Decimal(str(self.original_price)).quantize(
                     Decimal('1'), rounding=ROUND_HALF_UP
                 )
-            # Set asking_price to exactly match original_price (no deductions)
+        if self.asking_price is not None:
+            if isinstance(self.asking_price, (int, float, str, Decimal)):
+                self.asking_price = Decimal(str(self.asking_price)).quantize(
+                    Decimal('1'), rounding=ROUND_HALF_UP
+                )
+        country = 'IL'
+        if self.event_id:
+            try:
+                ev = getattr(self, 'event', None)
+                if ev is not None and getattr(ev, 'pk', None) == self.event_id and getattr(ev, 'country', None):
+                    country = (ev.country or 'IL').upper()
+                else:
+                    country = (
+                        Event.objects.filter(pk=self.event_id).values_list('country', flat=True).first() or 'IL'
+                    )
+                    country = (country or 'IL').upper()
+            except Exception:
+                country = 'IL'
+        if self.asking_price is None and self.original_price is not None:
             self.asking_price = self.original_price
+        # IL anti-scalping: never persist asking above face (serializer should already enforce).
+        elif country == 'IL' and self.original_price is not None and self.asking_price is not None:
+            if self.asking_price > self.original_price:
+                self.asking_price = self.original_price
         super().save(*args, **kwargs)
     
     # PDF file (raw storage on Cloudinary — see _ticket_pdf_storage / settings.STORAGES)
@@ -245,6 +273,13 @@ class Ticket(models.Model):
         upload_to='tickets/pdfs/',
         storage=_ticket_pdf_storage(),
         help_text="Upload the PDF ticket file (can contain multiple tickets)",
+    )
+    
+    receipt_file = models.FileField(
+        upload_to='tickets/receipts/',
+        blank=True,
+        null=True,
+        help_text='Proof of purchase / receipt (mandatory for Israeli events)',
     )
     
     # Seating information

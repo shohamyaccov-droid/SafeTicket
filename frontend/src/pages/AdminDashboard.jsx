@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { adminAPI } from '../services/api';
+import { adminAPI, ticketAPI } from '../services/api';
 import { formatPrice } from '../utils/priceFormat';
 import { toastError, toastSuccess } from '../utils/toast';
 import './AdminDashboard.css';
@@ -71,6 +71,32 @@ export default function AdminDashboard() {
       toastError(typeof msg === 'string' ? msg : 'ביטול נכשל');
     } finally {
       setCancellingId(null);
+    }
+  };
+
+  const downloadReceiptForTicket = async (ticketId) => {
+    const id = Number(ticketId);
+    if (!id) return;
+    setReceiptLoadingId(id);
+    try {
+      const response = await ticketAPI.downloadReceipt(id);
+      const ctype = response.headers?.['content-type'] || '';
+      const blob = new Blob([response.data], {
+        type: ctype.includes('/') ? ctype : 'application/octet-stream',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `receipt_ticket_${id}`;
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => window.URL.revokeObjectURL(url), 500);
+    } catch (err) {
+      toastError('הורדת הקבלה נכשלה. נסו שוב או פתחו דרך אימות כרטיסים.');
+    } finally {
+      setReceiptLoadingId(null);
     }
   };
 
@@ -169,6 +195,7 @@ export default function AdminDashboard() {
                     <th>מחיר</th>
                     <th>סטטוס</th>
                     <th>תאריך</th>
+                    <th>קבלות</th>
                     <th>פעולות</th>
                   </tr>
                 </thead>
@@ -179,7 +206,7 @@ export default function AdminDashboard() {
                       <td data-label="קונה" className="admin-td-clip">
                         {row.buyer}
                       </td>
-                      <td data-label="מוכל">{row.seller}</td>
+                      <td data-label="מוכר">{row.seller}</td>
                       <td data-label="אירוע" className="admin-td-clip">
                         {row.event_name}
                       </td>
@@ -197,6 +224,25 @@ export default function AdminDashboard() {
                               timeStyle: 'short',
                             })
                           : '—'}
+                      </td>
+                      <td data-label="קבלות" className="admin-td-clip">
+                        {!row.receipts || row.receipts.length === 0 ? (
+                          '—'
+                        ) : (
+                          <span className="admin-receipt-links">
+                            {row.receipts.map((r) => (
+                              <button
+                                key={r.ticket_id}
+                                type="button"
+                                className="admin-receipt-link-btn"
+                                disabled={receiptLoadingId === r.ticket_id}
+                                onClick={() => downloadReceiptForTicket(r.ticket_id)}
+                              >
+                                {receiptLoadingId === r.ticket_id ? '…' : `קבלה #${r.ticket_id}`}
+                              </button>
+                            ))}
+                          </span>
+                        )}
                       </td>
                       <td data-label="פעולות">
                         <button

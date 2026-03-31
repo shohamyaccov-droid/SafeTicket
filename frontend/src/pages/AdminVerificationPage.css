@@ -187,6 +187,18 @@
   cursor: not-allowed;
 }
 
+.preview-button.receipt-button {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #065f46;
+  font-weight: 600;
+}
+
+.preview-button.receipt-button:hover:not(:disabled) {
+  background: #d1fae5;
+  border-color: #34d399;
+}
+
 .action-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;

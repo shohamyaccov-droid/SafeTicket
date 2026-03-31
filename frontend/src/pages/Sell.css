@@ -1124,3 +1124,27 @@
   }
 }
 
+/* IL compliance: receipt + legal */
+.req-asterisk {
+  color: #b91c1c;
+  font-weight: 800;
+}
+.sell-receipt-zone--required label {
+  font-weight: 600;
+}
+.sell-receipt-dropzone {
+  border-color: rgba(185, 28, 28, 0.35);
+}
+.sell-il-legal .checkbox-label {
+  line-height: 1.45;
+  font-size: 0.92rem;
+}
+.sell-il-pricing-hint,
+.sell-receipt-hint {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
