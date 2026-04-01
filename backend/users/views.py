@@ -3082,8 +3082,35 @@ class EventViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         # Lazy cart abandonment cleanup when browsing events
         release_abandoned_carts()
-        # Only show upcoming events (past events are hidden from marketplace feed)
         now = timezone.now()
+        qp = self.request.query_params
+
+        # Sell / admin catalog: no ticket-stock annotation, no hidden joins — only date + optional artist/city/search.
+        # (Avoids rare SQL edge cases; serializer still computes tickets_count per row when needed.)
+        if self.action == 'list':
+            for_sell_raw = str(qp.get('for_sell', '')).lower()
+            for_sell = for_sell_raw in ('1', 'true', 'yes', 'on')
+            if for_sell:
+                qs = (
+                    Event.objects.filter(date__gte=now)
+                    .select_related('artist')
+                    .order_by('date', 'name')
+                )
+                artist_raw = qp.get('artist')
+                if artist_raw not in (None, ''):
+                    try:
+                        aid = int(str(artist_raw).strip())
+                    except (TypeError, ValueError):
+                        return Event.objects.none()
+                    qs = qs.filter(artist_id=aid)
+                city = qp.get('city')
+                if city:
+                    qs = qs.filter(city__icontains=city)
+                search = qp.get('search')
+                if search:
+                    qs = qs.filter(name__icontains=search)
+                return qs
+
         queryset = (
             Event.objects.filter(date__gte=now)
             .select_related('artist')
@@ -3095,29 +3122,26 @@ class EventViewSet(viewsets.ModelViewSet):
             )
             .order_by('date', 'name')
         )
-        # Marketplace list: hide events with no listable inventory.
-        # Sell page needs upcoming events even with zero listings so sellers can create the first ticket (?for_sell=1).
+        # Marketplace list only: hide events with no listable inventory (detail/retrieve unchanged).
         if self.action == 'list':
-            for_sell_raw = str(self.request.query_params.get('for_sell', '')).lower()
-            for_sell = for_sell_raw in ('1', 'true', 'yes', 'on')
-            if not for_sell:
-                queryset = queryset.filter(_active_tickets_total__gt=0)
-        
-        # Optional: Filter by artist if provided
-        artist_id = self.request.query_params.get('artist', None)
-        if artist_id:
-            queryset = queryset.filter(artist_id=artist_id)
-        
-        # Optional: Filter by city if provided
-        city = self.request.query_params.get('city', None)
+            queryset = queryset.filter(_active_tickets_total__gt=0)
+
+        artist_id = qp.get('artist')
+        if artist_id not in (None, ''):
+            try:
+                aid = int(str(artist_id).strip())
+            except (TypeError, ValueError):
+                return Event.objects.none()
+            queryset = queryset.filter(artist_id=aid)
+
+        city = qp.get('city')
         if city:
             queryset = queryset.filter(city__icontains=city)
-        
-        # Optional: Search by name if provided
-        search = self.request.query_params.get('search', None)
+
+        search = qp.get('search')
         if search:
             queryset = queryset.filter(name__icontains=search)
-        
+
         return queryset
     
     def retrieve(self, request, *args, **kwargs):
