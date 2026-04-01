@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ticketAPI, eventAPI, artistAPI, eventRequestAPI, ensureCsrfToken } from '../services/api';
@@ -10,6 +10,17 @@ import { toastError } from '../utils/toast';
 import './Sell.css';
 
 const SELL_PAGE_BUILD_TAG = import.meta.env.VITE_BUILD_ID || 'local-dev';
+
+/** Event list API uses `artist` (PK), `artist_detail`, or nested shapes — normalize for matching. */
+function getEventArtistId(event) {
+  if (!event) return '';
+  const raw =
+    event.artist_detail?.id ??
+    event.artist?.id ??
+    (typeof event.artist === 'number' || typeof event.artist === 'string' ? event.artist : null) ??
+    event.artist_id;
+  return raw != null && raw !== '' ? String(raw) : '';
+}
 
 const Sell = () => {
   // ALL HOOKS MUST BE CALLED FIRST - BEFORE ANY EARLY RETURNS
@@ -44,6 +55,9 @@ const Sell = () => {
   const [selectedArtistId, setSelectedArtistId] = useState('');
   const [artists, setArtists] = useState([]);
   const [events, setEvents] = useState([]);
+  /** Concert + artist: server-scoped GET ?for_sell=1&artist=… (null = not loaded / N/A). */
+  const [concertArtistEvents, setConcertArtistEvents] = useState(null);
+  const [concertEventsLoading, setConcertEventsLoading] = useState(false);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [artistsLoading, setArtistsLoading] = useState(true);
   const [catalogError, setCatalogError] = useState(null);
@@ -143,6 +157,62 @@ const Sell = () => {
     console.log('Frontend Version (Sell):', SELL_PAGE_BUILD_TAG);
   }, []);
 
+  // Concerts: refetch events for the selected artist with for_sell=1&artist= (proves API + avoids stale client-only filter).
+  useEffect(() => {
+    if (selectedCategory !== 'concert' || !selectedArtistId) {
+      setConcertArtistEvents(null);
+      setConcertEventsLoading(false);
+      return undefined;
+    }
+    const { signal, clear, abort } = createListFetchAbort();
+    let cancelled = false;
+    setConcertEventsLoading(true);
+    setConcertArtistEvents(null);
+    (async () => {
+      try {
+        const evRes = await eventAPI.getEvents({
+          signal,
+          params: { for_sell: 1, artist: selectedArtistId },
+        });
+        let eventsData = [];
+        if (evRes.data) {
+          if (Array.isArray(evRes.data)) eventsData = evRes.data;
+          else if (evRes.data.results && Array.isArray(evRes.data.results)) eventsData = evRes.data.results;
+        }
+        const now = new Date();
+        const upcomingEvents = eventsData
+          .filter((event) => {
+            if (!event.date) return false;
+            return new Date(event.date) >= now;
+          })
+          .sort((a, b) => new Date(a.date) - new Date(b.date));
+        if (!cancelled) {
+          setConcertArtistEvents(upcomingEvents);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          const code = err?.code;
+          const aborted =
+            code === 'ERR_CANCELED' || err?.name === 'CanceledError' || String(err?.message || '').toLowerCase().includes('canceled');
+          setConcertArtistEvents([]);
+          if (!aborted) {
+            toastError('לא ניתן לטעון אירועים לאמן שנבחר. נסו שוב.');
+          }
+        }
+      } finally {
+        clear();
+        if (!cancelled) {
+          setConcertEventsLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      abort();
+      clear();
+    };
+  }, [selectedCategory, selectedArtistId, catalogRetryKey]);
+
   // Helper function to get event display name (handles sports events)
   const getEventDisplayName = (event) => {
     // For sports events with teams, show team matchup
@@ -154,38 +224,63 @@ const Sell = () => {
     return event.name || `Event #${event.id}`;
   };
 
-  // Filter events based on category and artist selection
-  const filteredEvents = events.filter(event => {
-    const cat = (event.category || '').toLowerCase();
+  /** Pool used when resolving event_id → full object (must match dropdown source). */
+  const eventCatalog = useMemo(() => {
+    if (selectedCategory === 'concert' && concertArtistEvents !== null) {
+      return concertArtistEvents;
+    }
+    return events;
+  }, [selectedCategory, concertArtistEvents, events]);
 
+  // Filter events based on category and artist selection (no tickets_count filter — empty-inventory events are allowed for Sell)
+  const filteredEvents = useMemo(() => {
     if (selectedCategory === 'concert') {
-      if (!selectedArtistId) return false;
-      const isConcert = cat === 'concert' || cat === 'הופעות' || cat === 'הופעה';
-
-      const eventArtistId = String(event.artist?.id || event.artist_id || event.artist || '');
-      const matchesId = eventArtistId === String(selectedArtistId);
-
-      const selectedArtistName = artists.find(a => String(a.id) === String(selectedArtistId))?.name;
-      const matchesName = selectedArtistName && (event.artist_name === selectedArtistName || event.artist?.name === selectedArtistName);
-
-      return isConcert && (matchesId || matchesName);
+      if (!selectedArtistId) return [];
+      if (concertEventsLoading) return [];
+      const source = concertArtistEvents !== null ? concertArtistEvents : events;
+      return source.filter((event) => {
+        const cat = (event.category || '').toLowerCase();
+        const isConcert = cat === 'concert' || cat === 'הופעות' || cat === 'הופעה';
+        if (!isConcert) return false;
+        if (concertArtistEvents !== null) return true;
+        const eventArtistId = getEventArtistId(event);
+        const matchesId = eventArtistId === String(selectedArtistId);
+        const selectedArtistName = artists.find((a) => String(a.id) === String(selectedArtistId))?.name;
+        const matchesName =
+          selectedArtistName &&
+          (event.artist_name === selectedArtistName ||
+            event.artist?.name === selectedArtistName ||
+            event.artist_detail?.name === selectedArtistName);
+        return matchesId || matchesName;
+      });
     }
 
-    if (selectedCategory === 'sport') {
-      return cat === 'sport' || cat === 'משחקי ספורט' || cat === 'ספורט';
-    }
-    if (selectedCategory === 'theater') {
-      return cat === 'theater' || cat === 'הצגות תיאטרון' || cat === 'הצגה';
-    }
-    if (selectedCategory === 'festival') {
-      return cat === 'festival' || cat === 'פסטיבלים' || cat === 'פסטיבל';
-    }
-    if (selectedCategory === 'standup') {
-      return cat === 'standup' || cat === 'סטנדאפ';
-    }
+    return events.filter((event) => {
+      const cat = (event.category || '').toLowerCase();
 
-    return false;
-  });
+      if (selectedCategory === 'sport') {
+        return cat === 'sport' || cat === 'משחקי ספורט' || cat === 'ספורט';
+      }
+      if (selectedCategory === 'theater') {
+        return cat === 'theater' || cat === 'הצגות תיאטרון' || cat === 'הצגה';
+      }
+      if (selectedCategory === 'festival') {
+        return cat === 'festival' || cat === 'פסטיבלים' || cat === 'פסטיבל';
+      }
+      if (selectedCategory === 'standup') {
+        return cat === 'standup' || cat === 'סטנדאפ';
+      }
+
+      return false;
+    });
+  }, [
+    events,
+    concertArtistEvents,
+    concertEventsLoading,
+    selectedCategory,
+    selectedArtistId,
+    artists,
+  ]);
 
   const submitEventRequest = async (e) => {
     e.preventDefault();
@@ -333,8 +428,8 @@ const Sell = () => {
       return;
     }
     
-    // Safely find event by ID (handle both string and number comparisons)
-    const selectedEvent = events.find(ev => String(ev.id) === String(eventId));
+    // Must use same pool as the dropdown (server-scoped concerts vs global events list)
+    const selectedEvent = eventCatalog.find((ev) => String(ev.id) === String(eventId));
     if (selectedEvent) {
       const displayName = getEventDisplayName(selectedEvent);
       setFormData({
@@ -830,7 +925,8 @@ const Sell = () => {
               {/* Step 3: Event Selection */}
               <div className="form-group">
                 <label htmlFor="event_select">בחר אירוע *</label>
-                {eventsLoading ? (
+                {eventsLoading ||
+                (selectedCategory === 'concert' && selectedArtistId && concertEventsLoading) ? (
                   <SellFormSkeleton />
                 ) : (
                   <select
@@ -841,7 +937,7 @@ const Sell = () => {
                     className="premium-select"
                     required
                     disabled={
-                      selectedCategory === 'concert' && !selectedArtistId
+                      selectedCategory === 'concert' && (!selectedArtistId || concertEventsLoading)
                     }
                   >
                     <option value="">-- בחר אירוע --</option>
