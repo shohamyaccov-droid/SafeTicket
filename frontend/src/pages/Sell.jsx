@@ -34,7 +34,6 @@ const Sell = () => {
     start_seat: '', // For auto-generating seat numbers
     listing_price: '', // Buyer-facing price (IL: capped at face value / original_price)
     receipt_file: null,
-    il_legal_accepted: false,
     // Master Architecture fields
     ticket_type: 'pdf',
     split_type: 'כל כמות',
@@ -53,13 +52,18 @@ const Sell = () => {
   const [success, setSuccess] = useState(false);
   const [successWasIsrael, setSuccessWasIsrael] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  /** Single mandatory compliance checkbox — label depends on event.country (venue), not artist. */
+  const [sellerListingTermsAccepted, setSellerListingTermsAccepted] = useState(false);
   const [eventRequestOpen, setEventRequestOpen] = useState(false);
   const [eventRequestHint, setEventRequestHint] = useState('');
   const [eventRequestDetails, setEventRequestDetails] = useState('');
   const [eventRequestSubmitting, setEventRequestSubmitting] = useState(false);
   const [eventRequestFeedback, setEventRequestFeedback] = useState(null);
 
+  /**
+   * IL rules (receipt + price cap + pending approval) use ONLY the event venue country code,
+   * never the artist nationality. Taylor Swift in Tel Aviv → IL; Israeli act in NYC → US.
+   */
   const isIsraelEvent = (ev) => {
     if (!ev) return true;
     const c = String(ev.country ?? 'IL').trim().toUpperCase();
@@ -297,6 +301,7 @@ const Sell = () => {
       selectedEvent: null,
       section: '',
     });
+    setSellerListingTermsAccepted(false);
   };
 
   const handleArtistChange = (e) => {
@@ -309,6 +314,7 @@ const Sell = () => {
       selectedEvent: null,
       section: '',
     });
+    setSellerListingTermsAccepted(false);
   };
 
   const handleEventChange = (e) => {
@@ -322,8 +328,8 @@ const Sell = () => {
         section: '',
         listing_price: '',
         receipt_file: null,
-        il_legal_accepted: false,
       });
+      setSellerListingTermsAccepted(false);
       return;
     }
     
@@ -339,8 +345,8 @@ const Sell = () => {
         section: '',
         listing_price: '',
         receipt_file: null,
-        il_legal_accepted: false,
       });
+      setSellerListingTermsAccepted(false);
     }
   };
 
@@ -439,14 +445,10 @@ const Sell = () => {
         [name]: value,
       });
     } else if (type === 'checkbox') {
-      if (name === 'il_legal_accepted') {
-        setFormData({ ...formData, il_legal_accepted: Boolean(checked) });
-      } else {
-        setFormData({
-          ...formData,
-          [name]: Boolean(checked),
-        });
-      }
+      setFormData({
+        ...formData,
+        [name]: Boolean(checked),
+      });
     } else if (name === 'listing_price' && isIsraelEvent(formData.selectedEvent)) {
       const face = parseFloat(formData.original_price) || 0;
       let next = value;
@@ -482,9 +484,8 @@ const Sell = () => {
     setSuccess(false);
     setLoading(true);
 
-    // Validate terms acceptance
-    if (!acceptedTerms) {
-      setError('יש לאשר את תנאי השימוש ומדיניות התשלום כדי להמשיך');
+    if (!sellerListingTermsAccepted) {
+      setError('יש לאשר את תנאי ההצהרה כדי להמשיך');
       setLoading(false);
       return;
     }
@@ -505,11 +506,6 @@ const Sell = () => {
       }
       if (!formData.receipt_file) {
         setError('לאירוע בישראל נדרשת הוכחת קנייה / קבלה (PDF או תמונה).');
-        setLoading(false);
-        return;
-      }
-      if (!formData.il_legal_accepted) {
-        setError('יש לאשר את ההצהרה המשפטית למכירה בישראל.');
         setLoading(false);
         return;
       }
@@ -1346,35 +1342,20 @@ const Sell = () => {
             </small>
           </div>
 
-          {ilSelected ? (
-            <div className="form-group checkbox-group sell-il-legal">
-              <div className="checkbox-wrapper">
-                <input
-                  type="checkbox"
-                  id="il_legal_accepted"
-                  name="il_legal_accepted"
-                  checked={formData.il_legal_accepted}
-                  onChange={handleChange}
-                  className="checkbox-input"
-                />
-                <label htmlFor="il_legal_accepted" className="checkbox-label">
-                  אני מצהיר שהמחיר חוקי והעליתי קבלה תקינה. ידוע לי שהכרטיס יפורסם רק לאחר בדיקת מנהל.
-                </label>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="terms-checkbox-container">
+          <div className="terms-checkbox-container sell-single-compliance">
             <input
               type="checkbox"
-              id="acceptedTerms"
-              name="acceptedTerms"
-              checked={acceptedTerms}
-              onChange={(e) => setAcceptedTerms(e.target.checked)}
+              id="sellerListingTerms"
+              name="sellerListingTerms"
+              checked={sellerListingTermsAccepted}
+              onChange={(e) => setSellerListingTermsAccepted(e.target.checked)}
               className="terms-checkbox-input"
+              required
             />
-            <label htmlFor="acceptedTerms" className="terms-checkbox-label">
-              אני מסכים/ה לתנאי השימוש של TradeTix ומאשר/ת שהתשלום בגין המכירה יועבר אליי כ-24 שעות לאחר קיום האירוע, על מנת להבטיח קנייה בטוחה ואת אמינות הכרטיסים.
+            <label htmlFor="sellerListingTerms" className="terms-checkbox-label">
+              {ilSelected
+                ? 'אני מסכים/ה לתנאי השימוש של TradeTix ומצהיר/ה שהמחיר חוקי (לא עולה על המחיר המקורי) ושהעליתי קבלה תקינה. ידוע לי שהכרטיס יפורסם לאחר אישור הנהלה, ושהתשלום יועבר אליי כ-24 שעות לאחר קיום האירוע.'
+                : 'אני מסכים/ה לתנאי השימוש של TradeTix ומאשר/ת שהתשלום בגין המכירה יועבר אליי כ-24 שעות לאחר קיום האירוע, על מנת להבטיח קנייה בטוחה ואת אמינות הכרטיסים.'}
             </label>
           </div>
 

@@ -7,7 +7,7 @@
 }
 
 .event-header {
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 .back-button {
@@ -31,9 +31,9 @@
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  gap: 1.5rem;
+  gap: 0.85rem;
   background: var(--bg-card);
-  border-radius: 16px;
+  border-radius: 12px;
   overflow: hidden;
   box-shadow: var(--shadow-md);
   border: 1px solid var(--border-light, #e5e7eb);
@@ -56,7 +56,8 @@
 .event-hero-image {
   width: 100%;
   flex: 1 1 auto;
-  min-height: 220px;
+  min-height: 140px;
+  max-height: 200px;
   object-fit: cover;
   object-position: center;
   display: block;
@@ -66,37 +67,38 @@
 .event-hero-body {
   flex: 1;
   min-width: 0;
-  padding: 1.35rem 1.5rem 1.5rem 1.25rem;
+  padding: 0.65rem 1rem 0.75rem 0.9rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.65rem;
+  gap: 0.3rem;
   text-align: right;
   direction: rtl;
 }
 
 .event-hero-title {
-  font-size: clamp(1.5rem, 2.5vw, 2.15rem);
+  font-size: clamp(1.1rem, 2vw, 1.45rem);
   font-weight: 800;
   color: var(--text-primary);
   margin: 0;
-  line-height: 1.25;
+  line-height: 1.18;
   letter-spacing: -0.02em;
 }
 
 .event-hero-artist {
-  font-size: 1.2rem;
+  font-size: 0.98rem;
   font-weight: 700;
   color: var(--primary-blue, #0045af);
   margin: 0;
+  line-height: 1.25;
 }
 
 .event-hero-matchup {
-  font-size: 1.05rem;
+  font-size: 0.92rem;
   font-weight: 600;
   color: var(--text-secondary);
   margin: 0;
-  line-height: 1.4;
+  line-height: 1.32;
 }
 
 .event-hero-vs {
@@ -113,17 +115,17 @@
 .event-hero-meta {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  margin-top: 0.35rem;
+  gap: 0.2rem;
+  margin-top: 0.15rem;
 }
 
 .event-hero-date,
 .event-hero-location {
-  font-size: 1.08rem;
+  font-size: 0.88rem;
   font-weight: 600;
   color: var(--text-secondary);
   margin: 0;
-  line-height: 1.45;
+  line-height: 1.35;
 }
 
 @media (max-width: 768px) {
@@ -151,21 +153,27 @@
   }
 
   .event-hero-body {
-    padding: 1.1rem 1rem 1.25rem;
+    padding: 0.5rem 0.85rem 0.65rem;
     justify-content: flex-start;
+    gap: 0.25rem;
   }
 
   .event-hero-title {
-    font-size: 1.35rem;
+    font-size: 1.12rem;
   }
 
   .event-hero-artist {
-    font-size: 1.05rem;
+    font-size: 0.92rem;
   }
 
   .event-hero-date,
   .event-hero-location {
-    font-size: 1rem;
+    font-size: 0.85rem;
+  }
+
+  .event-hero-image {
+    min-height: 120px;
+    max-height: 180px;
   }
 }
 

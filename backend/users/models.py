@@ -247,6 +247,7 @@ class Ticket(models.Model):
                 self.asking_price = Decimal(str(self.asking_price)).quantize(
                     Decimal('1'), rounding=ROUND_HALF_UP
                 )
+        # Jurisdiction from linked Event.venue country only (not artist).
         country = 'IL'
         if self.event_id:
             try:

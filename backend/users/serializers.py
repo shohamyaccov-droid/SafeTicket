@@ -667,6 +667,7 @@ class TicketSerializer(serializers.ModelSerializer):
             attrs['original_price'] = round_shekel_price(original_price)
         original_price = attrs['original_price']
 
+        # Geo-pricing / receipt rules: Event.venue country ONLY (not artist nationality).
         event = attrs.get('event')
         country = 'IL'
         if event is not None:
@@ -693,7 +694,7 @@ class TicketSerializer(serializers.ModelSerializer):
                 })
             if not legal_ok:
                 raise serializers.ValidationError({
-                    'il_legal_declaration': 'יש לאשר את ההצהרה המשפטית למכירה בישראל.'
+                    'il_legal_declaration': 'יש לאשר את תנאי ההצהרה (כולל קבלה ומחיר חוקי).'
                 })
             if listing_price > original_price:
                 raise serializers.ValidationError({
@@ -729,6 +730,7 @@ class TicketSerializer(serializers.ModelSerializer):
         return attrs
     
     def create(self, validated_data):
+        # Status queue uses Event.country only (venue jurisdiction).
         event = validated_data.get('event')
         country = 'IL'
         if event is not None:
