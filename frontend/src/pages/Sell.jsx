@@ -87,7 +87,7 @@ const Sell = () => {
       try {
         const [artRes, evRes] = await Promise.all([
           artistAPI.getArtists({ signal }),
-          eventAPI.getEvents({ signal }),
+          eventAPI.getEvents({ signal, params: { for_sell: 1 } }),
         ]);
         let artistsData = [];
         if (artRes.data) {

@@ -3095,9 +3095,13 @@ class EventViewSet(viewsets.ModelViewSet):
             )
             .order_by('date', 'name')
         )
-        # Marketplace list: never surface events with no listable inventory
+        # Marketplace list: hide events with no listable inventory.
+        # Sell page needs upcoming events even with zero listings so sellers can create the first ticket (?for_sell=1).
         if self.action == 'list':
-            queryset = queryset.filter(_active_tickets_total__gt=0)
+            for_sell_raw = str(self.request.query_params.get('for_sell', '')).lower()
+            for_sell = for_sell_raw in ('1', 'true', 'yes', 'on')
+            if not for_sell:
+                queryset = queryset.filter(_active_tickets_total__gt=0)
         
         # Optional: Filter by artist if provided
         artist_id = self.request.query_params.get('artist', None)

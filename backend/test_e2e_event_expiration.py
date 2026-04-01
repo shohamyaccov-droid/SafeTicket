@@ -81,6 +81,40 @@ class E2EEventExpirationTest(TestCase):
         self.assertIn(self.future_event.id, ids, 'Future event must be in feed')
         self.assertNotIn(self.past_event.id, ids, 'Past event must NOT be in feed')
 
+    def test_1b_for_sell_lists_events_without_inventory(self):
+        """
+        Default GET hides events with no active listings; Sell flow uses for_sell=1.
+        """
+        artist = Artist.objects.create(name='Catalog Only Artist')
+        no_ticket_event = Event.objects.create(
+            artist=artist,
+            name='Future Show — No Listings Yet',
+            date=timezone.now() + timedelta(days=14),
+            venue='מנורה מבטחים',
+            city='Nashville',
+        )
+        r_default = self.client.get('/api/users/events/')
+        self.assertEqual(r_default.status_code, 200)
+        data = r_default.json()
+        results = data.get('results', data) if isinstance(data, dict) else data
+        ids = [e['id'] for e in results]
+        self.assertNotIn(
+            no_ticket_event.id,
+            ids,
+            'Marketplace feed must not surface zero-inventory events',
+        )
+
+        r_sell = self.client.get('/api/users/events/', {'for_sell': '1'})
+        self.assertEqual(r_sell.status_code, 200)
+        data2 = r_sell.json()
+        results_sell = data2.get('results', data2) if isinstance(data2, dict) else data2
+        ids_sell = [e['id'] for e in results_sell]
+        self.assertIn(
+            no_ticket_event.id,
+            ids_sell,
+            'Sell catalog must include upcoming events with no tickets yet',
+        )
+
     def test_2_purchase_block_past_event(self):
         """
         simulate_payment on ticket for past event fails with 400.
