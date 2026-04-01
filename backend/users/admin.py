@@ -451,6 +451,10 @@ class ArtistAdmin(admin.ModelAdmin):
         }),
     )
 
+    @admin.display(description='Country', ordering='country')
+    def country_display(self, obj):
+        return obj.get_country_display() if obj else '—'
+
     def image_delivery_preview(self, obj):
         return _admin_image_preview_html(getattr(obj, 'image', None))
 
@@ -466,7 +470,7 @@ class ArtistAdmin(admin.ModelAdmin):
 class EventAdmin(admin.ModelAdmin):
     list_display = [
         'name', 'artist', 'category', 'home_team', 'away_team', 'status', 'date',
-        'venue', 'city', 'country', 'created_at',
+        'venue', 'city', 'country_display', 'created_at',
     ]
     list_filter = ['artist', 'category', 'status', 'venue', 'city', 'country', 'age_restriction', 'date', 'created_at']
     search_fields = ['name', 'venue', 'city', 'artist__name', 'home_team', 'away_team', 'tournament']
@@ -491,6 +495,10 @@ class EventAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+    @admin.display(description='Country', ordering='country')
+    def country_display(self, obj):
+        return obj.get_country_display() if obj else '—'
 
     def image_delivery_preview(self, obj):
         return _admin_image_preview_html(getattr(obj, 'image', None))

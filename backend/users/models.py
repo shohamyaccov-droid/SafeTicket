@@ -154,11 +154,24 @@ class Event(models.Model):
     away_team = models.CharField(max_length=255, blank=True, null=True, help_text="Away team name (for sports events)")
     tournament = models.CharField(max_length=255, blank=True, null=True, help_text="Tournament/League name (e.g., Champions League, Premier League)")
     
-    # Geo / regulatory jurisdiction (ISO 3166-1 alpha-2; default Israel for existing catalog)
+    # Geo / regulatory jurisdiction — stored as ISO 3166-1 alpha-2; admin shows full names.
+    COUNTRY_CHOICES = [
+        ('IL', 'Israel'),
+        ('US', 'United States'),
+        ('GB', 'United Kingdom'),
+        ('ES', 'Spain'),
+        ('FR', 'France'),
+        ('DE', 'Germany'),
+        ('IT', 'Italy'),
+        ('GR', 'Greece'),
+        ('CY', 'Cyprus'),
+        ('AE', 'United Arab Emirates'),
+    ]
     country = models.CharField(
         max_length=2,
+        choices=COUNTRY_CHOICES,
         default='IL',
-        help_text='Event jurisdiction for pricing and proof-of-purchase rules (e.g. IL, US, GB)',
+        help_text='Event location country (anti-scalping rules use this field, not city).',
     )
     
     # Timestamps
