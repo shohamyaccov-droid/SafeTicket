@@ -1293,7 +1293,7 @@ const Sell = () => {
               <>
                 <div className="form-row">
                   <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                    <label htmlFor="original_price">מחיר פנים (ערך נקוב) *</label>
+                    <label htmlFor="original_price">מחיר פנים (המחיר המקורי) *</label>
                     <input
                       type="number"
                       id="original_price"
@@ -1330,7 +1330,7 @@ const Sell = () => {
               </>
             ) : (
               <>
-                <label htmlFor="original_price">מחיר (מחיר פנים / מחיר המכירה) *</label>
+                <label htmlFor="original_price">מחיר הכרטיס *</label>
                 <input
                   type="number"
                   id="original_price"
@@ -1342,7 +1342,6 @@ const Sell = () => {
                   step="0.01"
                   placeholder="₪"
                 />
-                <small>מחיר הרשימה — בשווקים מחוץ לישראל אין הגבלה זהה; הוכחת קנייה אופציונלית.</small>
               </>
             )}
 
@@ -1360,42 +1359,34 @@ const Sell = () => {
             ) : null}
           </div>
 
-          <div
-            className={`form-group sell-receipt-zone${ilSelected ? ' sell-receipt-zone--required' : ''}`}
-          >
-            <label htmlFor="receipt_file">
-              הוכחת קנייה / קבלה
-              {ilSelected ? (
+          {ilSelected ? (
+            <div className="form-group sell-receipt-zone sell-receipt-zone--required">
+              <label htmlFor="receipt_file">
+                הוכחת קנייה / קבלה
                 <span className="req-asterisk" aria-hidden="true">
                   {' '}
                   *
                 </span>
-              ) : null}
-            </label>
-            <div className="file-dropzone-box sell-receipt-dropzone">
-              <input
-                type="file"
-                id="receipt_file"
-                name="receipt_file"
-                onChange={handleChange}
-                accept=".pdf,application/pdf,image/jpeg,image/png,image/webp"
-              />
-              {formData.receipt_file ? (
-                <span className="uploaded-file-name">✓ {formData.receipt_file.name}</span>
-              ) : (
-                <span className="dropzone-placeholder">
-                  {ilSelected
-                    ? 'גררו קובץ או לחצו לבחירה (PDF או תמונה)'
-                    : 'אופציונלי — PDF או תמונה'}
-                </span>
-              )}
+              </label>
+              <div className="file-dropzone-box sell-receipt-dropzone">
+                <input
+                  type="file"
+                  id="receipt_file"
+                  name="receipt_file"
+                  onChange={handleChange}
+                  accept=".pdf,application/pdf,image/jpeg,image/png,image/webp"
+                />
+                {formData.receipt_file ? (
+                  <span className="uploaded-file-name">✓ {formData.receipt_file.name}</span>
+                ) : (
+                  <span className="dropzone-placeholder">גררו קובץ או לחצו לבחירה (PDF או תמונה)</span>
+                )}
+              </div>
+              <small className="sell-receipt-hint">
+                חובה לאירועים בישראל. קבלה, אישור הזמנה או צילום מסך מהמפיץ.
+              </small>
             </div>
-            <small className="sell-receipt-hint">
-              {ilSelected
-                ? 'חובה לאירועים בישראל. קבלה, אישור הזמנה או צילום מסך מהמפיץ.'
-                : 'מומלץ להעלות כדי לאץ׳ את האימות; לא חובה מחוץ לישראל.'}
-            </small>
-          </div>
+          ) : null}
 
           <div className="terms-checkbox-container sell-single-compliance">
             <input
