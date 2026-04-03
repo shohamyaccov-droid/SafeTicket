@@ -1,5 +1,8 @@
 """
-Signals for ticket alerts
+Signals for ticket alerts.
+
+Marketplace offer/order emails are not sent via signals: see users.notifications
+(dispatch from OfferViewSet and confirm_order_payment) to control timing vs DB transactions.
 """
 from django.db.models.signals import post_save
 from django.dispatch import receiver

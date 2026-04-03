@@ -1,0 +1,14 @@
+{{ site_name }} — Your tickets sold (order #{{ order_id }})
+
+A buyer completed payment for {{ event_name }}.
+
+Quantity: {{ quantity }}
+Total paid by buyer (incl. fees): {{ buyer_paid_display }} ({{ currency_code }})
+
+Funds are held in escrow per platform rules until payout eligibility.
+
+{% if dashboard_url %}Dashboard:
+{{ dashboard_url }}
+{% endif %}
+
+— {{ site_name }}

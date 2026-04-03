@@ -1,0 +1,14 @@
+{{ site_name }} — Your offer was accepted
+
+Your offer for {{ event_name }} was accepted.
+
+Agreed negotiated amount (listing currency): {{ amount_display }} ({{ currency_code }})
+
+{% if checkout_expires_at %}Complete payment before: {{ checkout_expires_at }}
+{% endif %}
+
+{% if dashboard_url %}Open your dashboard to pay:
+{{ dashboard_url }}
+{% endif %}
+
+— {{ site_name }}

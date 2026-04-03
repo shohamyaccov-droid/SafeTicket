@@ -1,0 +1,11 @@
+{{ site_name }} — New offer on your listing
+
+{{ counterparty_name }} submitted an offer for {{ event_name }}.
+
+Offer amount: {{ amount_display }} ({{ currency_code }})
+
+{% if dashboard_url %}Open your dashboard to respond:
+{{ dashboard_url }}
+{% endif %}
+
+— {{ site_name }}

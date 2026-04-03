@@ -1,0 +1,12 @@
+{{ site_name }} — Counter-offer received
+
+You have a new counter-offer for {{ event_name }} ({{ role_hint }}).
+
+Amount: {{ amount_display }} ({{ currency_code }})
+Quantity: {{ quantity }}
+
+{% if dashboard_url %}Open your dashboard:
+{{ dashboard_url }}
+{% endif %}
+
+— {{ site_name }}

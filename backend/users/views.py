@@ -1900,6 +1900,13 @@ def confirm_order_payment(request, order_id):
         except Exception:
             logger.exception('confirm_order_payment: receipt email failed')
 
+    try:
+        from .notifications import notify_seller_ticket_sold_escrow
+
+        notify_seller_ticket_sold_escrow(order)
+    except Exception:
+        logger.exception('confirm_order_payment: seller escrow notification failed')
+
     order.refresh_from_db()
     return Response(OrderSerializer(order, context={'request': request}).data)
 
@@ -3946,19 +3953,10 @@ class OfferViewSet(viewsets.ModelViewSet):
             expires_at=expires_at,
             status='pending'
         )
-        # Notify the other party (seller receives offer from buyer)
         try:
-            from .utils.emails import send_offer_notification
-            recipient = offer.ticket.seller
-            if recipient and recipient.email:
-                send_offer_notification(
-                    recipient.email,
-                    {
-                        'event_name': offer.ticket.event_name or (offer.ticket.event.name if offer.ticket.event else 'Unknown'),
-                        'amount': offer.amount,
-                        'buyer_username': buyer.username,
-                    }
-                )
+            from .notifications import notify_new_offer
+
+            notify_new_offer(offer)
         except Exception as e:
             import logging
             logging.getLogger(__name__).exception(f'Failed to send offer notification: {e}')
@@ -4095,6 +4093,13 @@ class OfferViewSet(viewsets.ModelViewSet):
                     ticket.save(update_fields=hold_fields)
 
         offer.refresh_from_db()
+        try:
+            from .notifications import notify_offer_accepted
+
+            notify_offer_accepted(offer)
+        except Exception:
+            logger.exception('accept offer: buyer notification email failed')
+
         serializer = self.get_serializer(offer)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
@@ -4207,6 +4212,13 @@ class OfferViewSet(viewsets.ModelViewSet):
                 status='pending',
                 expires_at=expires_at,
             )
+
+        try:
+            from .notifications import notify_counter_offer
+
+            notify_counter_offer(new_offer, offer)
+        except Exception:
+            logger.exception('counter offer: notification email failed')
 
         serializer = self.get_serializer(new_offer)
         return Response(serializer.data, status=status.HTTP_201_CREATED)

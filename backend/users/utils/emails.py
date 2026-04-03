@@ -63,11 +63,17 @@ def _build_download_link_rows(order):
 
 
 def _receipt_subject_body_html(order, recipient_is_guest: bool):
+    from ..notifications import format_money_for_email
+
     raw_event = getattr(order, 'event_name', None) or (
         order.ticket.event.name if getattr(order, 'ticket', None) and order.ticket.event else 'הזמנתך'
     )
     event_name = html.escape(str(raw_event))
-    total = html.escape(str(getattr(order, 'total_amount', '')))
+    cur = (getattr(order, 'currency', None) or 'ILS').strip().upper()
+    paid = order.total_paid_by_buyer if order.total_paid_by_buyer is not None else order.total_amount
+    total_disp = format_money_for_email(paid, cur)
+    total_html = html.escape(total_disp)
+    cur_html = html.escape(cur)
     qty = int(getattr(order, 'quantity', 1) or 1)
     order_id = getattr(order, 'id', '')
     frontend = (getattr(settings, 'FRONTEND_ORIGIN', '') or '').strip().rstrip('/')
@@ -108,7 +114,8 @@ def _receipt_subject_body_html(order, recipient_is_guest: bool):
   <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:15px;" dir="rtl">
     <tr><td style="padding:6px 0;color:#64748b;">אירוע</td><td style="padding:6px 0;font-weight:600;">{event_name}</td></tr>
     <tr><td style="padding:6px 0;color:#64748b;">כמות כרטיסים</td><td style="padding:6px 0;">{qty}</td></tr>
-    <tr><td style="padding:6px 0;color:#64748b;">סכום כולל</td><td style="padding:6px 0;">₪{total}</td></tr>
+    <tr><td style="padding:6px 0;color:#64748b;">מטבע</td><td style="padding:6px 0;">{cur_html}</td></tr>
+    <tr><td style="padding:6px 0;color:#64748b;">סכום כולל (לקוח)</td><td style="padding:6px 0;">{total_html}</td></tr>
     <tr><td style="padding:6px 0;color:#64748b;">מספר הזמנה</td><td style="padding:6px 0;">#{html.escape(str(order_id))}</td></tr>
   </table>
   <h2 style="font-size:16px;margin:24px 0 8px;color:#0f172a;">כרטיסים (קובץ PDF)</h2>
@@ -123,7 +130,8 @@ def _receipt_subject_body_html(order, recipient_is_guest: bool):
         '',
         f'אירוע: {raw_event}',
         f'כמות: {qty}',
-        f'סכום כולל: ₪{order.total_amount}',
+        f'מטבע: {cur}',
+        f'סכום כולל (לקוח): {total_disp}',
         f'מספר הזמנה: #{order_id}',
         '',
         'צורפו קבצי PDF למייל (אם קיימים).',
@@ -170,16 +178,17 @@ If you did not register for TradeTix, please ignore this email.
 
 def send_offer_notification(recipient_email, offer_details):
     """
-    Notify the recipient when an offer is made on their listing.
-    offer_details: dict with keys like event_name, amount, buyer_username, etc.
+    Legacy entry point — prefer users.notifications.notify_new_offer(offer).
+    Kept for backwards compatibility; does not load an Offer instance here.
     """
+    logger.warning('send_offer_notification(dict) is deprecated; use notify_new_offer(offer)')
     event_name = offer_details.get('event_name', 'Unknown Event')
     amount = offer_details.get('amount', 'N/A')
     buyer_username = offer_details.get('buyer_username', 'A buyer')
     subject = f'TradeTix - New offer on {event_name}'
     body = f'''Hello,
 
-{buyer_username} has made an offer of ₪{amount} on your listing for {event_name}.
+{buyer_username} has made an offer on your listing for {event_name} (amount: {amount}).
 
 Log in to TradeTix to accept or reject the offer.
 

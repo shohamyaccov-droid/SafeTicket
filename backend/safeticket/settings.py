@@ -401,18 +401,37 @@ else:
 JWT_ACCESS_COOKIE_NAME = 'access_token'
 JWT_REFRESH_COOKIE_NAME = 'refresh_token'
 
-# Email settings
-# Development: console backend (prints to stdout). Tests: use locmem to capture outbox.
-EMAIL_BACKEND = os.environ.get(
-    'EMAIL_BACKEND',
-    'django.core.mail.backends.console.EmailBackend'
-)
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+# Email — SMTP when host + credentials are set; otherwise console (local dev).
+# Render / production: set all of EMAIL_HOST, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, DEFAULT_FROM_EMAIL.
+# Examples:
+#   Resend SMTP: EMAIL_HOST=smtp.resend.com  EMAIL_PORT=587  EMAIL_USE_TLS=true
+#                EMAIL_HOST_USER=resend  EMAIL_HOST_PASSWORD=<api_key>
+#                DEFAULT_FROM_EMAIL="TradeTix <onboarding@yourdomain.com>" (verified sender)
+#   SendGrid: EMAIL_HOST=smtp.sendgrid.net  EMAIL_PORT=587  EMAIL_USE_TLS=true
+#             EMAIL_HOST_USER=apikey  EMAIL_HOST_PASSWORD=<api_key>
+# Port 465: set EMAIL_USE_SSL=true and EMAIL_USE_TLS=false
+# Override backend explicitly: EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+_email_host = (os.environ.get('EMAIL_HOST') or '').strip()
+_email_user = (os.environ.get('EMAIL_HOST_USER') or '').strip()
+_email_password = (os.environ.get('EMAIL_HOST_PASSWORD') or '').strip()
+_email_backend_override = (os.environ.get('EMAIL_BACKEND') or '').strip()
+if _email_backend_override:
+    EMAIL_BACKEND = _email_backend_override
+elif _email_host and _email_user and _email_password:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+EMAIL_HOST = _email_host or 'localhost'
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
-EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'true').lower() == 'true'
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@safeticket.local')
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'true').lower() in ('1', 'true', 'yes')
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'false').lower() in ('1', 'true', 'yes')
+EMAIL_HOST_USER = _email_user
+EMAIL_HOST_PASSWORD = _email_password
+DEFAULT_FROM_EMAIL = (os.environ.get('DEFAULT_FROM_EMAIL') or 'noreply@tradetix.local').strip()
+SERVER_EMAIL = (os.environ.get('SERVER_EMAIL') or DEFAULT_FROM_EMAIL).strip()
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '30'))
+
 # Public origins for buyer receipt emails (no trailing slash). On Render set both explicitly.
 API_PUBLIC_ORIGIN = os.environ.get('API_PUBLIC_ORIGIN', 'http://127.0.0.1:8000').rstrip('/')
 FRONTEND_ORIGIN = (
@@ -420,7 +439,7 @@ FRONTEND_ORIGIN = (
     if _FRONTEND_FROM_ENV
     else ('http://localhost:3000' if DEBUG else _RENDER_WEB_ORIGIN)
 ).rstrip('/')
-# Production SMTP: set EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend plus EMAIL_HOST_*
+# Transactional templates: users/templates/emails/*.html (+ .txt); sent via users.notifications.
 
 # Cache for OTP storage (10 min TTL)
 CACHES = {
