@@ -53,8 +53,6 @@ def _send_notification(
     template_basename: str,
     to_email: str,
     context: dict,
-    *,
-    fail_silently: bool = True,
 ) -> None:
     if not (to_email or '').strip():
         logger.info('notifications: skip send — empty recipient for %s', template_basename)
@@ -74,7 +72,8 @@ def _send_notification(
             to=[to_email.strip()],
         )
         msg.attach_alternative(html_body, 'text/html')
-        msg.send(fail_silently=fail_silently)
+        # Never let SMTP / verification issues break marketplace flows.
+        msg.send(fail_silently=True)
         logger.info('notifications: sent %s to %s', template_basename, to_email)
     except Exception:
         logger.exception('notifications: failed %s to %s', template_basename, to_email)

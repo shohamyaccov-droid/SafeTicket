@@ -2,7 +2,19 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.db.models import Sum, Q
-from .models import User, Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage, EventRequest
+from .models import (
+    User,
+    Order,
+    Ticket,
+    Event,
+    Artist,
+    TicketAlert,
+    Offer,
+    ContactMessage,
+    EventRequest,
+    Venue,
+    VenueSection,
+)
 from .currency import (
     iso4217_for_country,
     currency_symbol,
@@ -19,7 +31,12 @@ def build_profile_orders_serialization_context(request, orders_queryset):
     """
     orders = list(
         orders_queryset.select_related(
-            'ticket', 'ticket__event', 'ticket__event__artist', 'related_offer'
+            'ticket',
+            'ticket__event',
+            'ticket__event__artist',
+            'ticket__event__venue_place',
+            'ticket__venue_section',
+            'related_offer',
         )
     )
     ticket_ids = set()
@@ -36,7 +53,7 @@ def build_profile_orders_serialization_context(request, orders_queryset):
         profile_tickets_by_id = {
             t.id: t
             for t in Ticket.objects.filter(id__in=ticket_ids).select_related(
-                'event', 'event__artist'
+                'event', 'event__artist', 'venue_section'
             )
         }
     return {
@@ -480,6 +497,22 @@ class ArtistCardSerializer(serializers.ModelSerializer):
         return first_resolved_image_url_for_artist(self.context.get('request'), obj)
 
 
+class VenueSectionBriefSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VenueSection
+        fields = ('id', 'name')
+        read_only_fields = fields
+
+
+class VenueDetailSerializer(serializers.ModelSerializer):
+    sections = VenueSectionBriefSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Venue
+        fields = ('id', 'name', 'city', 'sections')
+        read_only_fields = fields
+
+
 class EventSerializer(serializers.ModelSerializer):
     """Serializer for Event model"""
     image_url = serializers.SerializerMethodField()
@@ -488,17 +521,21 @@ class EventSerializer(serializers.ModelSerializer):
     currency_symbol = serializers.SerializerMethodField()
     artist = ArtistSerializer(read_only=True)
     artist_id = serializers.PrimaryKeyRelatedField(queryset=Artist.objects.all(), source='artist', write_only=True, required=False, allow_null=True)
-    
+    venue_detail = VenueDetailSerializer(source='venue_place', read_only=True)
+
     class Meta:
         model = Event
         fields = (
-            'id', 'artist', 'artist_id', 'name', 'date', 'ends_at', 'venue', 'city', 'country',
+            'id', 'artist', 'artist_id', 'name', 'date', 'ends_at', 'venue', 'venue_detail', 'city', 'country',
             'currency', 'currency_symbol',
             'image', 'image_url',
             'tickets_count', 'view_count', 'category', 'home_team', 'away_team', 'tournament',
             'created_at', 'updated_at'
         )
-        read_only_fields = ('id', 'created_at', 'updated_at', 'tickets_count', 'view_count', 'currency', 'currency_symbol')
+        read_only_fields = (
+            'id', 'created_at', 'updated_at', 'tickets_count', 'view_count', 'currency', 'currency_symbol',
+            'venue_detail',
+        )
     
     def get_currency(self, obj):
         return iso4217_for_country(getattr(obj, 'country', None))
@@ -525,14 +562,15 @@ class EventListSerializer(serializers.ModelSerializer):
     currency_symbol = serializers.SerializerMethodField()
     artist_name = serializers.CharField(source='artist.name', read_only=True)
     artist_detail = ArtistCardSerializer(source='artist', read_only=True)
+    venue_detail = VenueDetailSerializer(source='venue_place', read_only=True)
 
     class Meta:
         model = Event
         fields = (
-            'id', 'artist', 'artist_detail', 'artist_name', 'name', 'date', 'venue', 'city', 'country',
+            'id', 'artist', 'artist_detail', 'artist_name', 'name', 'date', 'venue', 'venue_detail', 'city', 'country',
             'currency', 'currency_symbol',
             'image_url',
-            'tickets_count', 'view_count',
+            'tickets_count',
             'category', 'home_team', 'away_team', 'tournament'
         )
         read_only_fields = fields
@@ -592,8 +630,13 @@ class TicketSerializer(serializers.ModelSerializer):
     event_date = serializers.SerializerMethodField()
     venue = serializers.SerializerMethodField()
     
-    # Ensure new fields allow null/empty values for backward compatibility with defaults
-    section = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
+    section = serializers.SerializerMethodField()
+    venue_section = serializers.PrimaryKeyRelatedField(
+        queryset=VenueSection.objects.select_related('venue'),
+        required=False,
+        allow_null=True,
+    )
+    custom_section_text = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
     row = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
     seat_numbers = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
     row_number = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
@@ -613,7 +656,8 @@ class TicketSerializer(serializers.ModelSerializer):
         model = Ticket
         fields = (
             'id', 'seller', 'seller_username', 'seller_is_verified', 'event', 'event_id',
-            'event_name', 'event_date', 'venue', 'seat_row', 'section', 'row', 'seat_numbers',
+            'event_name', 'event_date', 'venue', 'seat_row', 'section', 'venue_section', 'custom_section_text',
+            'row', 'seat_numbers',
             'row_number', 'seat_number', 'listing_group_id',
             'original_price', 'listing_price', 'asking_price', 'currency', 'delivery_method',
             'is_together', 'available_quantity', 'pdf_file', 'pdf_file_url', 'receipt_file', 'receipt_file_url',
@@ -624,6 +668,7 @@ class TicketSerializer(serializers.ModelSerializer):
         read_only_fields = (
             'id', 'seller', 'status', 'created_at', 'updated_at', 'asking_price', 'currency',
             'reserved_at', 'reserved_by', 'reservation_email', 'event_name', 'event_date', 'venue',
+            'section',
         )
         extra_kwargs = {
             'pdf_file': {'write_only': True, 'required': True, 'allow_empty_file': False},
@@ -638,6 +683,9 @@ class TicketSerializer(serializers.ModelSerializer):
     
     def get_venue(self, obj):
         return obj.event.venue if obj.event else (obj.venue or '')
+
+    def get_section(self, obj):
+        return obj.get_section_display()
     
     def get_has_pdf_file(self, obj):
         return bool(obj.pdf_file)
@@ -764,6 +812,32 @@ class TicketSerializer(serializers.ModelSerializer):
                 except (ImportError, ValueError, AttributeError):
                     pass
 
+        event = attrs.get('event')
+        initial = getattr(self, 'initial_data', None)
+        raw_section = initial.get('section') if isinstance(initial, dict) else None
+
+        if raw_section not in (None, ''):
+            rs = str(raw_section).strip()
+            if rs and attrs.get('venue_section') is None:
+                if rs.isdigit() and event and getattr(event, 'venue_place_id', None):
+                    try:
+                        attrs['venue_section'] = VenueSection.objects.get(
+                            pk=int(rs), venue_id=event.venue_place_id,
+                        )
+                    except VenueSection.DoesNotExist:
+                        if not (attrs.get('custom_section_text') or '').strip():
+                            attrs['custom_section_text'] = rs
+                elif not (attrs.get('custom_section_text') or '').strip():
+                    attrs['custom_section_text'] = rs
+
+        vs = attrs.get('venue_section')
+        if vs is not None and event is not None:
+            vplace = getattr(event, 'venue_place_id', None)
+            if not vplace or vs.venue_id != event.venue_place_id:
+                raise serializers.ValidationError({
+                    'venue_section': 'This section does not belong to the selected event venue.'
+                })
+
         return attrs
     
     def create(self, validated_data):
@@ -816,6 +890,7 @@ class TicketListSerializer(serializers.ModelSerializer):
     event_name = serializers.SerializerMethodField()
     event_date = serializers.SerializerMethodField()
     venue = serializers.SerializerMethodField()
+    section = serializers.SerializerMethodField()
     
     class Meta:
         model = Ticket
@@ -843,6 +918,9 @@ class TicketListSerializer(serializers.ModelSerializer):
     
     def get_venue(self, obj):
         return obj.event.venue if obj.event else (obj.venue or '')
+
+    def get_section(self, obj):
+        return obj.get_section_display()
     
     def get_has_pdf_file(self, obj):
         return bool(obj.pdf_file)
@@ -911,7 +989,7 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
                 'venue': obj.ticket.event.venue if obj.ticket.event else (obj.ticket.venue or ''),
                 'city': obj.ticket.event.city if obj.ticket.event else '',
                 'seat_row': getattr(obj.ticket, 'seat_row', None),
-                'section': getattr(obj.ticket, 'section', None) or '',
+                'section': obj.ticket.get_section_display() if obj.ticket else '',
                 'row': getattr(obj.ticket, 'row', None) or '',
                 'seat_numbers': getattr(obj.ticket, 'seat_numbers', None) or '',
                 'original_listing_price': str(obj.ticket.asking_price),
@@ -986,6 +1064,7 @@ class ProfileListingSerializer(serializers.ModelSerializer):
     event_name_display = serializers.SerializerMethodField()
     event_date_display = serializers.SerializerMethodField()
     venue_display = serializers.SerializerMethodField()
+    section = serializers.SerializerMethodField()
     expected_payout = serializers.SerializerMethodField()
     order_count = serializers.SerializerMethodField()
     escrow_payout_status = serializers.SerializerMethodField()
@@ -1036,6 +1115,9 @@ class ProfileListingSerializer(serializers.ModelSerializer):
     
     def get_venue_display(self, obj):
         return obj.event.venue if obj.event else (obj.venue or '')
+
+    def get_section(self, obj):
+        return obj.get_section_display()
     
     def get_expected_payout(self, obj):
         """Sold listing: seller net from order row when present, else listing asking_price."""

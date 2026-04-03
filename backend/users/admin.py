@@ -8,7 +8,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
-from .models import User, Order, Ticket, Event, Artist, Offer, ContactMessage, EventRequest
+from .models import User, Order, Ticket, Event, Artist, Offer, ContactMessage, EventRequest, Venue, VenueSection
 from .admin_pdf_url import get_ticket_pdf_admin_url
 
 _admin_log = logging.getLogger(__name__)
@@ -101,7 +101,7 @@ class TicketAdmin(admin.ModelAdmin):
         'created_at',
     ]
     list_filter = ['verification_status', 'ticket_type', 'status', 'split_type', 'is_obstructed_view', 'created_at', 'event_date']
-    search_fields = ['event_name', 'seller__username', 'venue', 'section', 'row']
+    search_fields = ['event_name', 'seller__username', 'venue', 'section_legacy', 'custom_section_text', 'row']
     readonly_fields = ['created_at', 'updated_at', 'asking_price']
     actions = [
         'approve_and_activate_selected',
@@ -116,7 +116,18 @@ class TicketAdmin(admin.ModelAdmin):
             'fields': ('ticket_type', 'verification_status', 'pdf_file', 'receipt_file', 'delivery_method')
         }),
         ('Seating Information', {
-            'fields': ('section', 'row', 'seat_numbers', 'row_number', 'seat_number', 'seat_row', 'is_obstructed_view', 'is_together')
+            'fields': (
+                'venue_section',
+                'custom_section_text',
+                'section_legacy',
+                'row',
+                'seat_numbers',
+                'row_number',
+                'seat_number',
+                'seat_row',
+                'is_obstructed_view',
+                'is_together',
+            )
         }),
         ('Pricing', {
             'fields': ('original_price', 'asking_price'),
@@ -137,7 +148,7 @@ class TicketAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         try:
-            return qs.select_related('seller', 'event', 'reserved_by')
+            return qs.select_related('seller', 'event', 'event__venue_place', 'venue_section', 'reserved_by')
         except Exception as exc:
             _admin_log.warning('TicketAdmin.get_queryset select_related failed: %s', exc)
             return qs
@@ -466,6 +477,18 @@ class ArtistAdmin(admin.ModelAdmin):
     cover_image_delivery_preview.short_description = 'Cover preview (delivery check)'
 
 
+class VenueSectionInline(admin.TabularInline):
+    model = VenueSection
+    extra = 1
+
+
+@admin.register(Venue)
+class VenueAdmin(admin.ModelAdmin):
+    list_display = ['name', 'city', 'created_at']
+    search_fields = ['name', 'city']
+    inlines = [VenueSectionInline]
+
+
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     list_display = [
@@ -480,7 +503,7 @@ class EventAdmin(admin.ModelAdmin):
             'fields': ('artist', 'name', 'category', 'status')
         }),
         ('Location & Timing', {
-            'fields': ('venue', 'city', 'country', 'date', 'ends_at', 'doors_open')
+            'fields': ('venue', 'venue_place', 'city', 'country', 'date', 'ends_at', 'doors_open')
         }),
         ('Event Details', {
             'fields': ('age_restriction', 'image', 'image_delivery_preview', 'view_count')

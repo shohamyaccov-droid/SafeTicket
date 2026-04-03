@@ -180,7 +180,7 @@ from .serializers import (
     build_profile_orders_serialization_context,
     build_listing_primary_order_map,
 )
-from .models import Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage, EventRequest
+from .models import Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage, EventRequest, VenueSection
 from .pricing import (
     buyer_charge_from_base_amount,
     compute_order_price_breakdown,
@@ -1247,7 +1247,7 @@ def order_receipt(request, order_id):
         'quantity': order.quantity,
         'event_name': order.event_name or (order.ticket.event.name if order.ticket and order.ticket.event else 'Unknown Event'),
         'ticket_details': {
-            'section': order.ticket.section if order.ticket else None,
+            'section': order.ticket.get_section_display() if order.ticket else None,
             'row': order.ticket.row if order.ticket else None,
             'venue': order.ticket.event.venue if order.ticket and order.ticket.event else (order.ticket.venue if order.ticket else None),
         } if order.ticket else {},
@@ -2430,7 +2430,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         queryset = (
             Ticket.objects.filter(status='active')
             .filter(upcoming_filter)
-            .select_related('event', 'seller')
+            .select_related('event', 'event__venue_place', 'seller', 'venue_section')
         )
         
         # Log the count for verification
@@ -2443,7 +2443,7 @@ class TicketViewSet(viewsets.ModelViewSet):
             user_tickets = (
                 Ticket.objects.filter(seller=self.request.user)
                 .filter(upcoming_filter)
-                .select_related('event', 'seller')
+                .select_related('event', 'event__venue_place', 'seller', 'venue_section')
             )
             queryset = queryset | user_tickets
         
@@ -3122,7 +3122,13 @@ class EventViewSet(viewsets.ModelViewSet):
             if for_sell:
                 qs = (
                     Event.objects.filter(date__gte=now)
-                    .select_related('artist')
+                    .select_related('artist', 'venue_place')
+                    .prefetch_related(
+                        Prefetch(
+                            'venue_place__sections',
+                            queryset=VenueSection.objects.order_by('name'),
+                        ),
+                    )
                     .order_by('date', 'name')
                 )
                 artist_raw = qp.get('artist')
@@ -3142,7 +3148,13 @@ class EventViewSet(viewsets.ModelViewSet):
 
         queryset = (
             Event.objects.filter(date__gte=now)
-            .select_related('artist')
+            .select_related('artist', 'venue_place')
+            .prefetch_related(
+                Prefetch(
+                    'venue_place__sections',
+                    queryset=VenueSection.objects.order_by('name'),
+                ),
+            )
             .annotate(
                 _active_tickets_total=Coalesce(
                     Sum('tickets__available_quantity', filter=Q(tickets__status='active')),
@@ -3204,7 +3216,7 @@ class EventViewSet(viewsets.ModelViewSet):
             event=event,
             status='active',
             available_quantity__gt=0,
-        ).select_related('event', 'seller')
+        ).select_related('event', 'event__venue_place', 'seller', 'venue_section')
         
         # Filtering
         min_price = request.query_params.get('min_price')

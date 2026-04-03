@@ -465,7 +465,7 @@ export const ticketAPI = {
 export const eventAPI = {
   /** Pass axios config (params, signal, timeout, etc.) */
   getEvents: (config = {}) => api.get('/users/events/', config),
-  getEvent: (id) => api.get(`/users/events/${id}/`),
+  getEvent: (id, config = {}) => api.get(`/users/events/${id}/`, config),
   getEventTickets: (id, params = {}) => api.get(`/users/events/${id}/tickets/`, { params }),
   createEvent: (data) => api.post('/users/events/', data),
   updateEvent: (id, data) => api.put(`/users/events/${id}/`, data),

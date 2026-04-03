@@ -57,7 +57,7 @@ class NegotiationE2ETest(TestCase):
             pdf_file=pdf_file,
             status='active',
             available_quantity=1,
-            section='A',
+            section_legacy='A',
             row='10',
             seat_numbers='1-1',
             is_together=True

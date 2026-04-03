@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ticketAPI, eventAPI, artistAPI, eventRequestAPI, ensureCsrfToken } from '../services/api';
-import { getVenueSectionOptions } from '../utils/venueMaps';
 import { createListFetchAbort } from '../utils/listFetch';
 import SellFormSkeleton from '../components/skeletons/SellFormSkeleton';
 import BecomeSellerModal from '../components/BecomeSellerModal';
@@ -63,6 +62,8 @@ const Sell = () => {
   const [eventRequestDetails, setEventRequestDetails] = useState('');
   const [eventRequestSubmitting, setEventRequestSubmitting] = useState(false);
   const [eventRequestFeedback, setEventRequestFeedback] = useState(null);
+  /** Full event from GET /events/:id/ — includes venue_detail.sections for seating UI. */
+  const [eventDetail, setEventDetail] = useState(null);
 
   /**
    * IL rules (receipt + price cap + pending approval) use ONLY the event venue country code,
@@ -200,6 +201,38 @@ const Sell = () => {
       clear();
     };
   }, [selectedCategory, selectedArtistId, catalogRetryKey]);
+
+  useEffect(() => {
+    const id = formData.event_id;
+    if (!id) {
+      setEventDetail(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const { signal, clear, abort } = createListFetchAbort();
+    (async () => {
+      try {
+        const res = await eventAPI.getEvent(id, { signal });
+        if (!cancelled && res.data) {
+          setEventDetail(res.data);
+        }
+      } catch (err) {
+        const code = err?.code;
+        const aborted =
+          code === 'ERR_CANCELED' || err?.name === 'CanceledError' || String(err?.message || '').toLowerCase().includes('canceled');
+        if (!cancelled && !aborted) {
+          setEventDetail(null);
+        }
+      } finally {
+        clear();
+      }
+    })();
+    return () => {
+      cancelled = true;
+      abort();
+      clear();
+    };
+  }, [formData.event_id]);
 
   // Helper function to get event display name (handles sports events)
   const getEventDisplayName = (event) => {
@@ -672,7 +705,15 @@ const Sell = () => {
       submitData.append('event_name', formData.event_name);
     }
     submitData.append('seat_row', formData.seat_row || ''); // Legacy field
-    submitData.append('section', formData.section || '');
+    const vd = eventDetail?.venue_detail;
+    const structured = vd?.sections;
+    const hasStructured = Array.isArray(structured) && structured.length > 0;
+    const secVal = (formData.section || '').trim();
+    if (hasStructured && secVal) {
+      submitData.append('venue_section', secVal);
+    } else if (secVal) {
+      submitData.append('custom_section_text', secVal);
+    }
     submitData.append('row', formData.row || '');
     submitData.append('original_price', formData.original_price);
     const askForApi =
@@ -1004,9 +1045,9 @@ const Sell = () => {
               <div className="form-group">
                 <label htmlFor="section">גוש (אופציונלי)</label>
                 {(() => {
-                  const venueName = formData.selectedEvent?.venue || '';
-                  const sectionOptions = getVenueSectionOptions(venueName);
-                  if (sectionOptions && sectionOptions.length > 0) {
+                  const structured = eventDetail?.venue_detail?.sections;
+                  const useDropdown = Array.isArray(structured) && structured.length > 0;
+                  if (useDropdown) {
                     return (
                       <select
                         id="section"
@@ -1015,10 +1056,10 @@ const Sell = () => {
                         onChange={handleChange}
                         className="section-dropdown"
                       >
-                        <option value="">בחר גוש</option>
-                        {sectionOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
+                        <option value="">בחר גוש / אזור</option>
+                        {structured.map((s) => (
+                          <option key={s.id} value={String(s.id)}>
+                            {s.name}
                           </option>
                         ))}
                       </select>

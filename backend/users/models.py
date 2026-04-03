@@ -59,6 +59,46 @@ class Artist(models.Model):
         ]
 
 
+class Venue(models.Model):
+    """Structured venue record for seating maps and relational sections."""
+
+    name = models.CharField(max_length=255)
+    city = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.name}, {self.city}'
+
+    class Meta:
+        ordering = ['name', 'city']
+        constraints = [
+            models.UniqueConstraint(fields=['name', 'city'], name='users_venue_unique_name_city'),
+        ]
+
+
+class VenueSection(models.Model):
+    """A seating / gate / block label belonging to one Venue."""
+
+    venue = models.ForeignKey(
+        Venue,
+        on_delete=models.CASCADE,
+        related_name='sections',
+    )
+    name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.name} ({self.venue})'
+
+    class Meta:
+        ordering = ['venue', 'name']
+        constraints = [
+            models.UniqueConstraint(fields=['venue', 'name'], name='users_venuesection_unique_venue_name'),
+        ]
+
+
 def _ticket_pdf_storage():
     """
     Ticket PDFs must upload as resource_type=raw on Cloudinary.
@@ -100,6 +140,14 @@ class Event(models.Model):
         choices=VENUE_CHOICES,
         default='מנורה מבטחים',
         help_text="Venue name"
+    )
+    venue_place = models.ForeignKey(
+        'Venue',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='events',
+        help_text='Optional structured venue (seating sections); leave empty for legacy/text-only events.',
     )
     city = models.CharField(max_length=100, help_text="City where event takes place")
     image = models.ImageField(upload_to='events/images/', blank=True, null=True, help_text="Event image/photo")
@@ -236,8 +284,27 @@ class Ticket(models.Model):
     venue = models.CharField(max_length=255, blank=True, null=True, help_text="Legacy field - use event.venue instead")
     seat_row = models.CharField(max_length=100, blank=True, null=True, help_text="Optional seat/row information (legacy field)")
     
-    # Detailed seating information
-    section = models.CharField(max_length=100, blank=True, null=True, help_text="Section/Block/Gate (e.g., Gate 11)")
+    # Detailed seating information — section_legacy holds migrated/free-text history; prefer venue_section / custom_section_text.
+    section_legacy = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text='Legacy section label (e.g. Gate 11); kept for migrated rows and display fallback.',
+    )
+    venue_section = models.ForeignKey(
+        'VenueSection',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tickets',
+        help_text='Structured section when the event venue defines sections',
+    )
+    custom_section_text = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text='User-entered section when no structured sections exist',
+    )
     row = models.CharField(max_length=50, blank=True, null=True, help_text="Row number (e.g., Row 12)")
     seat_numbers = models.CharField(max_length=200, blank=True, null=True, help_text="Seat numbers (e.g., 12-15). Not shown to buyers before purchase.")
     
@@ -252,6 +319,23 @@ class Ticket(models.Model):
     original_price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Face value of the ticket (final price)")
     asking_price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Price (always equals original_price per Israeli law)")
     
+    def get_section_display(self):
+        """Buyer-facing section label (structured name, custom text, or legacy)."""
+        vid = getattr(self, 'venue_section_id', None)
+        if vid:
+            vs = getattr(self, 'venue_section', None)
+            if vs is not None:
+                return (vs.name or '').strip()
+            try:
+                vs = VenueSection.objects.filter(pk=vid).values_list('name', flat=True).first()
+                return (vs or '').strip()
+            except Exception:
+                pass
+        txt = (self.custom_section_text or '').strip()
+        if txt:
+            return txt
+        return (self.section_legacy or '').strip()
+
     def save(self, *args, **kwargs):
         # Quantize per listing currency (ILS: whole units; global: 0.01).
         from decimal import Decimal
@@ -290,6 +374,14 @@ class Ticket(models.Model):
                     country = (country or 'IL').upper()
             except Exception:
                 country = 'IL'
+        if self.venue_section_id:
+            vs = getattr(self, 'venue_section', None)
+            if vs is None:
+                vs = VenueSection.objects.filter(pk=self.venue_section_id).first()
+            if vs is not None:
+                self.section_legacy = (vs.name or '')[:100]
+        elif (self.custom_section_text or '').strip():
+            self.section_legacy = (self.custom_section_text or '')[:100]
         if self.asking_price is None and self.original_price is not None:
             self.asking_price = self.original_price
         # IL anti-scalping: never persist asking above face (serializer should already enforce).
