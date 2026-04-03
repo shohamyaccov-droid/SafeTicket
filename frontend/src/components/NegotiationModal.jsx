@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { formatPrice, buyerChargeFromBase } from '../utils/priceFormat';
+import {
+  buyerChargeFromBase,
+  formatOfferAmount,
+  formatAmountForCurrency,
+  currencySymbol,
+} from '../utils/priceFormat';
 import './NegotiationModal.css';
 
 /**
@@ -56,6 +61,14 @@ const NegotiationModal = ({
   const sortedOffers = [...offers].sort(
     (a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0)
   );
+
+  const listingCurrency =
+    latestPending?.currency ||
+    acceptedOfferRow?.currency ||
+    sortedOffers[0]?.currency ||
+    ticketDetails?.currency ||
+    'ILS';
+  const curSym = currencySymbol(listingCurrency);
 
   useEffect(() => {
     if (bodyRef.current) {
@@ -127,7 +140,7 @@ const NegotiationModal = ({
                 className={`negotiation-bubble ${mine ? 'bubble-mine' : 'bubble-theirs'}`}
               >
                 <div className="bubble-content">
-                  <span className="bubble-amount">₪{formatPrice(Math.round(parseFloat(offer.amount) || 0))}</span>
+                  <span className="bubble-amount">{curSym}{formatOfferAmount(offer, listingCurrency)}</span>
                   {offer.quantity > 1 && (
                     <span className="bubble-qty">× {offer.quantity} כרטיסים</span>
                   )}
@@ -246,7 +259,7 @@ const NegotiationModal = ({
                       {/* PRIVACY: Only show fee preview to BUYER (isSeller=false) */}
                       {!isSeller && parseFloat(counterAmount) > 0 && (
                         <span className="counter-total-preview">
-                          סה"כ לתשלום כולל עמלה (10%): ₪{buyerChargeFromBase(parseFloat(counterAmount)).totalAmount.toFixed(2)}
+                          סה"כ לתשלום כולל עמלה (10%): {curSym}{formatAmountForCurrency(buyerChargeFromBase(parseFloat(counterAmount)).totalAmount, listingCurrency)}
                         </span>
                       )}
                       <button

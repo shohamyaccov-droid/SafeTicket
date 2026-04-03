@@ -1,9 +1,9 @@
 """
 Order pricing: buyer pays base (seller bundle) + 10% service fee.
-All amounts use Decimal quantized to 0.01 ILS (agorot); no Math.ceil drift.
+Amounts use Decimal quantized to 0.01 in the listing currency (ILS: whole-shekel offers
+still stored as integers in many paths; fee/total use 0.01 quantization).
 
-Formula: fee = round(base * 0.10, 2), total = round(base + fee, 2) — equivalent to
-charging 10% on the base subtotal in one pass.
+Formula: fee = round(base * 0.10, 2), total = round(base + fee, 2).
 """
 from __future__ import annotations
 
@@ -104,18 +104,20 @@ def compute_order_price_breakdown(
 
 def compute_payout_eligible_date(ticket: 'Ticket'):
     """
-    Escrow: seller funds unlock 24 hours after event start (event date/time in DB).
+    Escrow: seller funds unlock 24 hours after event ends when `event.ends_at` is set;
+    otherwise 24 hours after `event.date` (legacy / start time).
     """
-    event_dt = None
+    ref_dt = None
     try:
         if ticket.event_id and ticket.event:
-            event_dt = ticket.event.date
+            ev = ticket.event
+            ref_dt = getattr(ev, 'ends_at', None) or ev.date
     except Exception:
-        event_dt = None
-    if event_dt is None:
-        event_dt = ticket.event_date
-    if event_dt is None:
+        ref_dt = None
+    if ref_dt is None:
+        ref_dt = ticket.event_date
+    if ref_dt is None:
         return None
-    if timezone.is_naive(event_dt):
-        event_dt = timezone.make_aware(event_dt, timezone.get_current_timezone())
-    return event_dt + timedelta(hours=24)
+    if timezone.is_naive(ref_dt):
+        ref_dt = timezone.make_aware(ref_dt, timezone.get_current_timezone())
+    return ref_dt + timedelta(hours=24)

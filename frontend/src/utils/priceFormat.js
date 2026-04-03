@@ -1,10 +1,103 @@
 /**
- * Money: align with backend `buyer_charge_from_base_amount` — base + 10% fee, each rounded to 0.01 ILS.
- * Implemented via integer agorot to avoid float drift.
+ * Money: buyer total = base + 10% fee, quantized like backend (agorot/cents).
+ * Currency follows Event.country → ISO 4217 (same mapping as backend users/currency.py).
  */
 
+/** @param {string|null|undefined} countryCode */
+export function iso4217FromCountry(countryCode) {
+  const c = String(countryCode ?? 'IL').trim().toUpperCase();
+  const code = c || 'IL';
+  if (code === 'IL') return 'ILS';
+  if (code === 'US') return 'USD';
+  if (code === 'GB') return 'GBP';
+  if (['DE', 'FR', 'ES', 'IT', 'GR', 'CY'].includes(code)) return 'EUR';
+  if (code === 'AE') return 'USD';
+  return 'ILS';
+}
+
+/** @param {string|null|undefined} iso */
+export function currencySymbol(iso) {
+  const u = String(iso || 'ILS').toUpperCase();
+  const map = { ILS: '₪', USD: '$', GBP: '£', EUR: '€' };
+  return map[u] || u;
+}
+
 /**
- * @param {number|string} baseInput - Seller-facing base (per unit or bundle) in ILS
+ * Ticket / nested event from API — prefer explicit `currency`, else event.country.
+ * @param {Record<string, unknown>|null|undefined} ticket
+ */
+export function resolveTicketCurrency(ticket) {
+  if (!ticket || typeof ticket !== 'object') return 'ILS';
+  const cur = ticket.currency;
+  if (cur && typeof cur === 'string') return cur.toUpperCase();
+  const ev = ticket.event;
+  if (ev && typeof ev === 'object') {
+    if (ev.currency && typeof ev.currency === 'string') return String(ev.currency).toUpperCase();
+    if (ev.country) return iso4217FromCountry(ev.country);
+  }
+  return 'ILS';
+}
+
+/**
+ * @param {number|string} price
+ * @param {string} [iso='ILS']
+ */
+export function formatAmountForCurrency(price, iso = 'ILS') {
+  const u = String(iso || 'ILS').toUpperCase();
+  const numPrice = typeof price === 'string' ? parseFloat(price) : Number(price);
+  if (!Number.isFinite(numPrice)) return u === 'ILS' ? '0' : '0.00';
+
+  const rounded = Math.round(numPrice * 100) / 100;
+  if (u === 'ILS') {
+    if (Number.isInteger(rounded) || Math.abs(rounded - Math.round(rounded)) < 1e-9) {
+      return String(Math.round(rounded));
+    }
+    return rounded.toFixed(2);
+  }
+  if (Number.isInteger(rounded) || Math.abs(rounded - Math.round(rounded)) < 1e-9) {
+    return String(Math.round(rounded));
+  }
+  return rounded.toFixed(2);
+}
+
+/** Symbol + amount (no separate ISO code — use alongside labels when needed). */
+export function formatMoney(amount, iso = 'ILS') {
+  return `${currencySymbol(iso)}${formatAmountForCurrency(amount, iso)}`;
+}
+
+/**
+ * Raw listing base from API fields (before display formatting).
+ * @param {Record<string, unknown>|null|undefined} ticket
+ */
+export function getTicketBaseNumeric(ticket) {
+  if (!ticket) return 0;
+  const raw = ticket.asking_price ?? ticket.original_price ?? ticket.price ?? 0;
+  const n = parseFloat(String(raw));
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * @param {Record<string, unknown>|null|undefined} ticket
+ */
+export function getTicketPrice(ticket) {
+  if (!ticket) return '0';
+  const cur = resolveTicketCurrency(ticket);
+  return formatAmountForCurrency(getTicketBaseNumeric(ticket), cur);
+}
+
+/**
+ * Negotiation / offer row from API (amount + currency).
+ * @param {Record<string, unknown>|null|undefined} offer
+ * @param {string} [fallbackCurrency='ILS']
+ */
+export function formatOfferAmount(offer, fallbackCurrency = 'ILS') {
+  const cur = (offer && typeof offer.currency === 'string' && offer.currency) || fallbackCurrency;
+  const n = parseFloat(String(offer?.amount ?? 0));
+  return formatAmountForCurrency(Number.isFinite(n) ? n : 0, cur);
+}
+
+/**
+ * @param {number|string} baseInput - Seller-facing base (per unit or bundle) in listing currency
  * @returns {{ baseAmount: number, serviceFee: number, totalAmount: number }}
  */
 export function buyerChargeFromBase(baseInput) {
@@ -24,7 +117,8 @@ export function buyerChargeFromBase(baseInput) {
 }
 
 /**
- * Format price for display: whole shekels without decimals; otherwise 2 decimals.
+ * Format numeric price for display: whole units when integer-like; else 2 decimals.
+ * @deprecated Prefer formatAmountForCurrency(price, resolveTicketCurrency(ticket)) for locale-aware display.
  */
 export const formatPrice = (price) => {
   if (price === null || price === undefined || price === '') {
@@ -72,19 +166,6 @@ export const getTotalWithFee = (basePrice, quantity) => {
   const baseSubtotal = Math.round(unit * qty * 100) / 100;
   const { totalAmount } = buyerChargeFromBase(baseSubtotal);
   return totalAmount;
-};
-
-/**
- * Face value for a ticket listing (whole shekels for display).
- */
-export const getTicketPrice = (ticket) => {
-  if (!ticket) return '0';
-
-  const price = ticket.asking_price ?? ticket.original_price ?? ticket.price ?? '0';
-  const priceStr = typeof price === 'string' ? price : String(price);
-  const num = parseFloat(priceStr);
-  if (isNaN(num)) return '0';
-  return String(Math.round(num));
 };
 
 export const calculateBaseAmount = (unitPrice, quantity) => {

@@ -2,7 +2,12 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authAPI, ticketAPI } from '../services/api';
-import { getTicketPrice, formatPrice } from '../utils/priceFormat';
+import {
+  currencySymbol,
+  formatAmountForCurrency,
+  resolveTicketCurrency,
+  getTicketBaseNumeric,
+} from '../utils/priceFormat';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { toastError } from '../utils/toast';
 import './Profile.css';
@@ -260,6 +265,8 @@ const Profile = () => {
                     try {
                       if (!order) return;
                       const ticket = order?.ticket_details || {};
+                      const orderCur = String(order?.currency || 'ILS').toUpperCase();
+                      const orderSym = currencySymbol(orderCur);
                       safeOrders.push(
                         <div key={order?.id || Math.random()} className="purchase-card ticket-card">
                           <div className="event-details">
@@ -284,7 +291,8 @@ const Profile = () => {
                           <p><strong>תאריך:</strong> {ticket?.event_date ? formatDate(ticket?.event_date) : formatDate(order?.created_at)}</p>
                           <p className="price-info">
                             <span className="asking-price">
-                              {formatPrice((order?.total_paid_by_buyer ?? order?.total_amount) || 0)} <span className="currency">₪</span>
+                              {orderSym}{formatAmountForCurrency((order?.total_paid_by_buyer ?? order?.total_amount) || 0, orderCur)}{' '}
+                              <span className="currency">{orderCur}</span>
                             </span>
                           </p>
                           {order?.pdf_download_url && order?.status !== 'cancelled' && (
@@ -326,6 +334,8 @@ const Profile = () => {
                   listings.forEach((listing) => {
                     try {
                       if (!listing) return;
+                      const listCur = String(listing?.currency || resolveTicketCurrency(listing) || 'ILS').toUpperCase();
+                      const listSym = currencySymbol(listCur);
                       safeListings.push(
                         <div key={listing?.id || Math.random()} className="listing-card ticket-card">
                           <div className="event-details">
@@ -350,7 +360,8 @@ const Profile = () => {
                           <p><strong>תאריך:</strong> {formatDate(listing?.event_date)}</p>
                           <p className="price-info">
                             <span className="asking-price">
-                              {getTicketPrice(listing)} <span className="currency">₪</span>
+                              {listSym}{formatAmountForCurrency(getTicketBaseNumeric(listing), listCur)}{' '}
+                              <span className="currency">{listCur}</span>
                             </span>
                           </p>
                           <p className="listing-date"><strong>הוצע למכירה:</strong> {formatDate(listing?.created_at)}</p>

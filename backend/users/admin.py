@@ -480,7 +480,7 @@ class EventAdmin(admin.ModelAdmin):
             'fields': ('artist', 'name', 'category', 'status')
         }),
         ('Location & Timing', {
-            'fields': ('venue', 'city', 'country', 'date', 'doors_open')
+            'fields': ('venue', 'city', 'country', 'date', 'ends_at', 'doors_open')
         }),
         ('Event Details', {
             'fields': ('age_restriction', 'image', 'image_delivery_preview', 'view_count')
@@ -508,7 +508,7 @@ class EventAdmin(admin.ModelAdmin):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ['id', 'user', 'guest_email', 'status', 'total_amount', 'event_name', 'created_at']
+    list_display = ['id', 'user', 'guest_email', 'status', 'total_amount', 'currency', 'event_name', 'created_at']
     list_filter = ['status', 'created_at']
     search_fields = ['user__username', 'guest_email', 'event_name']
     readonly_fields = ['created_at', 'updated_at', 'payment_confirm_token']
@@ -516,7 +516,7 @@ class OrderAdmin(admin.ModelAdmin):
 
 @admin.register(Offer)
 class OfferAdmin(admin.ModelAdmin):
-    list_display = ['id', 'buyer', 'ticket', 'amount', 'status', 'expires_at', 'accepted_at', 'created_at']
+    list_display = ['id', 'buyer', 'ticket', 'amount', 'currency', 'status', 'expires_at', 'accepted_at', 'created_at']
     list_filter = ['status', 'created_at', 'expires_at']
     search_fields = ['buyer__username', 'ticket__event_name', 'ticket__seller__username']
     readonly_fields = ['created_at', 'updated_at', 'expires_at', 'accepted_at', 'checkout_expires_at']

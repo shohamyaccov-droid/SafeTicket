@@ -7,6 +7,7 @@ import { createListFetchAbort } from '../utils/listFetch';
 import SellFormSkeleton from '../components/skeletons/SellFormSkeleton';
 import BecomeSellerModal from '../components/BecomeSellerModal';
 import { toastError } from '../utils/toast';
+import { iso4217FromCountry, currencySymbol, formatAmountForCurrency } from '../utils/priceFormat';
 import './Sell.css';
 
 const SELL_PAGE_BUILD_TAG = import.meta.env.VITE_BUILD_ID || 'local-dev';
@@ -279,6 +280,14 @@ const Sell = () => {
       }));
     }
   }, [formData.available_quantity]);
+
+  const sellCurrency = useMemo(() => {
+    const ev = formData.selectedEvent;
+    if (!ev) return 'ILS';
+    if (ev.currency) return String(ev.currency).toUpperCase();
+    return iso4217FromCountry(ev.country);
+  }, [formData.selectedEvent]);
+  const sellSym = currencySymbol(sellCurrency);
 
   // NOW ALL EARLY RETURNS CAN HAPPEN AFTER ALL HOOKS
   // Wait for auth to finish loading
@@ -1303,7 +1312,7 @@ const Sell = () => {
                       required
                       min="0"
                       step="1"
-                      placeholder="₪"
+                      placeholder={sellSym}
                     />
                   </div>
                   <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
@@ -1340,7 +1349,7 @@ const Sell = () => {
                   required
                   min="0"
                   step="0.01"
-                  placeholder="₪"
+                  placeholder={sellSym}
                 />
               </>
             )}
@@ -1349,11 +1358,11 @@ const Sell = () => {
               <div className="price-breakdown-container">
                 <div className="price-breakdown-row fee-row">
                   <span>עמלת מכירה (5%):</span>
-                  <span dir="ltr">- ₪{(feeBasis * 0.05).toFixed(2)}</span>
+                  <span dir="ltr">- {sellSym}{formatAmountForCurrency(feeBasis * 0.05, sellCurrency)}</span>
                 </div>
                 <div className="price-breakdown-row net-row">
                   <strong>הסכום שתקבלו (בערך):</strong>
-                  <strong dir="ltr">₪{(feeBasis * 0.95).toFixed(2)}</strong>
+                  <strong dir="ltr">{sellSym}{formatAmountForCurrency(feeBasis * 0.95, sellCurrency)}</strong>
                 </div>
               </div>
             ) : null}

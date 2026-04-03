@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ticketAPI } from '../services/api';
-import { getTicketPrice } from '../utils/priceFormat';
+import { currencySymbol, formatAmountForCurrency, resolveTicketCurrency } from '../utils/priceFormat';
 import BuyerListingPrice from '../components/BuyerListingPrice';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { createListFetchAbort } from '../utils/listFetch';
@@ -320,7 +320,17 @@ const EventGroupPage = () => {
                             {ticket.original_price && (
                               <div className="ticket-detail-row">
                                 <span className="ticket-label">מחיר מקורי:</span>
-                                <span className="ticket-value">₪{getTicketPrice({ original_price: ticket.original_price })}</span>
+                                <span className="ticket-value">
+                                  {(() => {
+                                    const fc = resolveTicketCurrency(ticket);
+                                    return (
+                                      <>
+                                        {currencySymbol(fc)}
+                                        {formatAmountForCurrency(ticket.original_price, fc)}
+                                      </>
+                                    );
+                                  })()}
+                                </span>
                               </div>
                             )}
                             {ticket.available_quantity && (

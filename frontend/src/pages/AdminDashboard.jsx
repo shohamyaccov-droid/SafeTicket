@@ -2,9 +2,57 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { adminAPI, ticketAPI, ensureCsrfToken } from '../services/api';
-import { formatPrice } from '../utils/priceFormat';
+import { currencySymbol, formatAmountForCurrency, resolveTicketCurrency } from '../utils/priceFormat';
 import { toastError, toastSuccess } from '../utils/toast';
 import './AdminDashboard.css';
+
+/** Platform totals split by order currency (no FX conversion). */
+function AdminCurrencyBreakdown({ title, period }) {
+  const bc = period?.by_currency || {};
+  const keys = Object.keys(bc).sort();
+  return (
+    <div className="admin-currency-breakdown">
+      <h3 className="admin-stats-heading admin-bucket-heading">{title}</h3>
+      <p className="admin-bucket-note">סכומים לפי מטבע ההזמנה בלבד — לא משלבים מטבעות שונים בשורה אחת.</p>
+      <div className="admin-table-wrap">
+        <table className="admin-transactions-table admin-buckets-table">
+          <thead>
+            <tr>
+              <th>מטבע</th>
+              <th>הכנסות (לקוחות)</th>
+              <th>עמלות פלטפורמה</th>
+              <th>כרטיסים</th>
+            </tr>
+          </thead>
+          <tbody>
+            {keys.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="admin-empty-cell">
+                  אין נתונים לתקופה זו
+                </td>
+              </tr>
+            ) : (
+              keys.map((k) => (
+                <tr key={k}>
+                  <td data-label="מטבע">{k}</td>
+                  <td data-label="הכנסות" dir="ltr">
+                    {currencySymbol(k)}
+                    {formatAmountForCurrency(bc[k].revenue, k)}
+                  </td>
+                  <td data-label="עמלות" dir="ltr">
+                    {currencySymbol(k)}
+                    {formatAmountForCurrency(bc[k].platform_fees, k)}
+                  </td>
+                  <td data-label="כרטיסים">{bc[k].tickets_sold ?? '—'}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 function StatCard({ label, value, sub, currency = false }) {
   return (
@@ -212,8 +260,28 @@ export default function AdminDashboard() {
                       <td data-label="אירוע" className="admin-td-clip">
                         {t.event?.name || t.event_name || '—'}
                       </td>
-                      <td data-label="פנים">₪{formatPrice(t.original_price)}</td>
-                      <td data-label="מבוקש">₪{formatPrice(t.asking_price)}</td>
+                      <td data-label="פנים">
+                        {(() => {
+                          const c = resolveTicketCurrency(t);
+                          return (
+                            <>
+                              {currencySymbol(c)}
+                              {formatAmountForCurrency(t.original_price, c)}
+                            </>
+                          );
+                        })()}
+                      </td>
+                      <td data-label="מבוקש">
+                        {(() => {
+                          const c = resolveTicketCurrency(t);
+                          return (
+                            <>
+                              {currencySymbol(c)}
+                              {formatAmountForCurrency(t.asking_price, c)}
+                            </>
+                          );
+                        })()}
+                      </td>
                       <td data-label="קבלה">
                         {t.receipt_file_url ? (
                           <button
@@ -298,19 +366,8 @@ export default function AdminDashboard() {
                   value={today?.tickets_sold ?? '—'}
                   sub="סה״כ יחידות בהזמנות ששולמו"
                 />
-                <StatCard
-                  label="הכנסות (לקוחות)"
-                  value={today?.revenue_ils != null ? formatPrice(today.revenue_ils) : '—'}
-                  sub="סכום שנגבה מקונים"
-                />
-                <StatCard
-                  label="עמלות פלטפורמה"
-                  value={
-                    today?.platform_fees_ils != null ? formatPrice(today.platform_fees_ils) : '—'
-                  }
-                  sub="דמי שירות (עמלה)"
-                />
               </div>
+              <AdminCurrencyBreakdown title="הכנסות ועמלות לפי מטבע — היום" period={today} />
             </div>
             <div className="admin-stats-section admin-stats-section--accent">
               <h2 className="admin-stats-heading">מאז ומתמיד</h2>
@@ -320,21 +377,8 @@ export default function AdminDashboard() {
                   value={all?.tickets_sold ?? '—'}
                   sub="הזמנות בסטטוס שולם / הושלם"
                 />
-                <StatCard
-                  label="הכנסות (לקוחות)"
-                  value={all?.revenue_ils != null ? formatPrice(all.revenue_ils) : '—'}
-                  sub="סה״כ מחזור"
-                  currency
-                />
-                <StatCard
-                  label="עמלות פלטפורמה"
-                  value={
-                    all?.platform_fees_ils != null ? formatPrice(all.platform_fees_ils) : '—'
-                  }
-                  sub="סה״כ עמלות"
-                  currency
-                />
               </div>
+              <AdminCurrencyBreakdown title="הכנסות ועמלות לפי מטבע — מאז ומתמיד" period={all} />
             </div>
           </section>
 
@@ -348,7 +392,7 @@ export default function AdminDashboard() {
                     <th>קונה</th>
                     <th>מוכר</th>
                     <th>אירוע</th>
-                    <th>מחיר</th>
+                    <th>סכום (מטבע הזמנה)</th>
                     <th>סטטוס</th>
                     <th>תאריך</th>
                     <th>קבלות</th>
@@ -366,7 +410,18 @@ export default function AdminDashboard() {
                       <td data-label="אירוע" className="admin-td-clip">
                         {row.event_name}
                       </td>
-                      <td data-label="מחיר">₪{formatPrice(row.price_ils)}</td>
+                      <td data-label="מחיר">
+                        {(() => {
+                          const rc = String(row.currency || 'ILS').toUpperCase();
+                          const raw = row.amount ?? row.price_ils ?? '0';
+                          return (
+                            <span dir="ltr">
+                              {currencySymbol(rc)}
+                              {formatAmountForCurrency(raw, rc)} <small className="admin-cur-code">{rc}</small>
+                            </span>
+                          );
+                        })()}
+                      </td>
                       <td data-label="סטטוס">
                         <span className={`admin-status admin-status--${row.status}`}>{row.status}</span>
                         {row.payout_status ? (

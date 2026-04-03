@@ -3,7 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ticketAPI } from '../services/api';
 import CheckoutModal from '../components/CheckoutModal';
-import { getTicketPrice, getTotalWithFee, formatPrice } from '../utils/priceFormat';
+import {
+  getTicketPrice,
+  getTotalWithFee,
+  getTicketBaseNumeric,
+  resolveTicketCurrency,
+  currencySymbol,
+  formatAmountForCurrency,
+} from '../utils/priceFormat';
 import BuyerListingPrice from '../components/BuyerListingPrice';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { toastError } from '../utils/toast';
@@ -126,10 +133,10 @@ const TicketSelectionPage = () => {
 
   // Calculate total price (updates dynamically)
   const calculateEstimatedTotalWithFee = () => {
-    if (!ticket) return '0';
-    const base = parseFloat(getTicketPrice(ticket));
-    if (Number.isNaN(base) || base <= 0) return '0';
-    return String(getTotalWithFee(base, quantity));
+    if (!ticket) return 0;
+    const base = getTicketBaseNumeric(ticket);
+    if (Number.isNaN(base) || base <= 0) return 0;
+    return getTotalWithFee(base, quantity);
   };
 
   // Calculate percentage of tickets left (for social proof)
@@ -170,6 +177,8 @@ const TicketSelectionPage = () => {
   const isTogether = ticket?.is_together ?? true;
   const exceedsAvailable = quantity > maxQuantity;
   const isValidQuantity = quantity > 0 && quantity <= maxQuantity;
+  const selCur = resolveTicketCurrency(ticket);
+  const selSym = currencySymbol(selCur);
 
   return (
     <div className="ticket-selection-container">
@@ -307,7 +316,7 @@ const TicketSelectionPage = () => {
             <div className="price-row total-row">
               <span className="price-label">סה״כ משוער לתשלום:</span>
               <span className="price-value total-price">
-                ₪{formatPrice(calculateEstimatedTotalWithFee())}
+                {selSym}{formatAmountForCurrency(calculateEstimatedTotalWithFee(), selCur)}
               </span>
             </div>
             <p className="price-summary-note">הסכום כולל עמלת שירות (10%) — יופיע בפירוט מלא בקופה לפני התשלום.</p>

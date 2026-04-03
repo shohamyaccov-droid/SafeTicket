@@ -2,7 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authAPI, ticketAPI, orderAPI, offerAPI } from '../services/api';
-import { formatPrice } from '../utils/priceFormat';
+import {
+  formatPrice,
+  currencySymbol,
+  formatAmountForCurrency,
+  resolveTicketCurrency,
+} from '../utils/priceFormat';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { getOfferExpirationDisplay, getResponsesLeft } from '../utils/offerTimer';
 import CheckoutModal from '../components/CheckoutModal';
@@ -545,7 +550,12 @@ const Dashboard = () => {
         setDashboardData({
           purchases: [],
           listings: { active: [], sold: [] },
-          summary: { total_purchases: 0, active_listings_count: 0, sold_listings_count: 0, total_expected_payout: 0 }
+          summary: {
+            total_purchases: 0,
+            active_listings_count: 0,
+            sold_listings_count: 0,
+            expected_payout_by_currency: {},
+          }
         });
       }
     } finally {
@@ -577,6 +587,10 @@ const Dashboard = () => {
   const handleViewReceipt = async (orderId) => {
     try {
       const response = await orderAPI.getReceipt(orderId);
+      const d = response.data || {};
+      const rc = String(d.currency || 'ILS').toUpperCase();
+      const rsym = currencySymbol(rc);
+      const fmt = (v) => (v != null && v !== '' ? `${rsym}${formatAmountForCurrency(v, rc)}` : '—');
       // For now, open receipt in new window with JSON data
       // In production, you might want to generate a PDF
       const receiptWindow = window.open('', '_blank');
@@ -585,15 +599,16 @@ const Dashboard = () => {
           <head><title>קבלה - הזמנה ${orderId}</title></head>
           <body style="font-family: Arial; padding: 20px; direction: rtl;">
             <h1>קבלה</h1>
-            <p><strong>מספר הזמנה:</strong> ${response.data.order_id}</p>
-            <p><strong>תאריך:</strong> ${new Date(response.data.order_date).toLocaleDateString('he-IL')}</p>
-            <p><strong>סטטוס:</strong> ${response.data.status}</p>
-            <p><strong>סה״כ שולם (לקונה):</strong> ₪${response.data.total_paid_by_buyer ?? response.data.total_amount}</p>
-            <p><strong>מחיר מוסכם (בסיס):</strong> ${response.data.final_negotiated_price != null ? '₪' + response.data.final_negotiated_price : '—'}</p>
-            <p><strong>עמלת שירות:</strong> ${response.data.buyer_service_fee != null ? '₪' + response.data.buyer_service_fee : '—'}</p>
-            <p><strong>נטו למוכר:</strong> ${response.data.net_seller_revenue != null ? '₪' + response.data.net_seller_revenue : '—'}</p>
-            <p><strong>כמות:</strong> ${response.data.quantity}</p>
-            <p><strong>אירוע:</strong> ${response.data.event_name}</p>
+            <p><strong>מטבע:</strong> ${rc}</p>
+            <p><strong>מספר הזמנה:</strong> ${d.order_id}</p>
+            <p><strong>תאריך:</strong> ${new Date(d.order_date).toLocaleDateString('he-IL')}</p>
+            <p><strong>סטטוס:</strong> ${d.status}</p>
+            <p><strong>סה״כ שולם (לקונה):</strong> ${fmt(d.total_paid_by_buyer ?? d.total_amount)}</p>
+            <p><strong>מחיר מוסכם (בסיס):</strong> ${d.final_negotiated_price != null ? fmt(d.final_negotiated_price) : '—'}</p>
+            <p><strong>עמלת שירות:</strong> ${d.buyer_service_fee != null ? fmt(d.buyer_service_fee) : '—'}</p>
+            <p><strong>נטו למוכר:</strong> ${d.net_seller_revenue != null ? fmt(d.net_seller_revenue) : '—'}</p>
+            <p><strong>כמות:</strong> ${d.quantity}</p>
+            <p><strong>אירוע:</strong> ${d.event_name}</p>
             <button onclick="window.print()">הדפס</button>
           </body>
         </html>
@@ -900,6 +915,8 @@ const Dashboard = () => {
               <div className="dashboard-list-container" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {purchases.map((purchase) => {
                   const ticket = purchase.ticket_details || {};
+                  const payCur = String(purchase.currency || 'ILS').toUpperCase();
+                  const paySym = currencySymbol(payCur);
                   const timeline = purchase.status_timeline || { steps: [] };
                   const isExpanded = expandedPurchaseId === purchase.id;
                   const tickets = purchase.tickets || [];
@@ -937,7 +954,7 @@ const Dashboard = () => {
                           </div>
                         </div>
                         <span className="row-quantity">{purchase.quantity || 1} כרטיסים</span>
-                        <span className="row-price">₪{formatPrice(purchase.total_paid_by_buyer ?? purchase.total_amount)}</span>
+                        <span className="row-price">{paySym}{formatAmountForCurrency(purchase.total_paid_by_buyer ?? purchase.total_amount, payCur)}</span>
                         <span className={`status-badge status-${purchase.status}`}>
                           {purchase.status === 'paid'
                             ? 'שולם'
@@ -999,20 +1016,20 @@ const Dashboard = () => {
                             </div>
                             <div className="detail-row">
                               <span className="detail-label">💰 סה״כ שולמת (כולל עמלה):</span>
-                              <span className="detail-value price-value">₪{formatPrice(purchase.total_paid_by_buyer ?? purchase.total_amount)}</span>
+                              <span className="detail-value price-value">{paySym}{formatAmountForCurrency(purchase.total_paid_by_buyer ?? purchase.total_amount, payCur)}</span>
                             </div>
                             {(purchase.final_negotiated_price != null || purchase.buyer_service_fee != null) && (
                               <>
                                 {purchase.final_negotiated_price != null && (
                                   <div className="detail-row">
                                     <span className="detail-label">מחיר מוסכם (בסיס למוכר):</span>
-                                    <span className="detail-value">₪{formatPrice(purchase.final_negotiated_price)}</span>
+                                    <span className="detail-value">{paySym}{formatAmountForCurrency(purchase.final_negotiated_price, payCur)}</span>
                                   </div>
                                 )}
                                 {purchase.buyer_service_fee != null && Number(purchase.buyer_service_fee) > 0 && (
                                   <div className="detail-row">
                                     <span className="detail-label">עמלת שירות:</span>
-                                    <span className="detail-value">₪{formatPrice(purchase.buyer_service_fee)}</span>
+                                    <span className="detail-value">{paySym}{formatAmountForCurrency(purchase.buyer_service_fee, payCur)}</span>
                                   </div>
                                 )}
                               </>
@@ -1176,6 +1193,10 @@ const Dashboard = () => {
                         receivedByTicket.map((group) => {
                           const pendingCount = group.offers.filter((o) => o.status === 'pending').length;
                           const latestOffer = group.offers[0];
+                          const offerCur = String(
+                            latestOffer?.currency || resolveTicketCurrency(group.ticketDetails) || 'ILS'
+                          ).toUpperCase();
+                          const offerSym = currencySymbol(offerCur);
                           const latestPending = group.offers.find((o) => o.status === 'pending');
                           const hasActionRequired = group.offers.some((o) => o.status === 'pending' && ((o.offer_round_count ?? 0) % 2 === 0));
                           return (
@@ -1203,7 +1224,7 @@ const Dashboard = () => {
                                     <div className="row-subtitle" style={{ fontSize: '0.8rem' }}>{new Date(group.ticketDetails.event_date).toLocaleDateString('he-IL')}</div>
                                   )}
                                   <div className="row-subtitle" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                                    הצעה מ-{latestOffer?.buyer_username} • ₪{formatPrice(Math.round(parseFloat(latestOffer?.amount) || 0))}
+                                    הצעה מ-{latestOffer?.buyer_username} • {offerSym}{formatAmountForCurrency(parseFloat(latestOffer?.amount) || 0, offerCur)}
                                     {pendingCount > 0 && <span className="offer-pending-badge"> • {pendingCount} ממתין</span>}
                                     {latestPending && (
                                       <span className="offer-timer-badge" title="תוקף ההצעה">
@@ -1227,6 +1248,10 @@ const Dashboard = () => {
                         sentByTicket.map((group) => {
                           const pendingCount = group.offers.filter((o) => o.status === 'pending').length;
                           const latestOffer = group.offers[0];
+                          const sentOfferCur = String(
+                            latestOffer?.currency || resolveTicketCurrency(group.ticketDetails) || 'ILS'
+                          ).toUpperCase();
+                          const sentOfferSym = currencySymbol(sentOfferCur);
                           const latestPending = group.offers.find((o) => o.status === 'pending');
                           const acceptedOffer = group.offers.find((o) => o.status === 'accepted');
                           const hasActionRequired = group.offers.some((o) => o.status === 'pending' && ((o.offer_round_count ?? 0) === 1));
@@ -1256,7 +1281,7 @@ const Dashboard = () => {
                                     <div className="row-subtitle" style={{ fontSize: '0.8rem' }}>{new Date(group.ticketDetails.event_date).toLocaleDateString('he-IL')}</div>
                                   )}
                                   <div className="row-subtitle" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                                    הצעתך: ₪{formatPrice(Math.round(parseFloat(latestOffer?.amount) || 0))}
+                                    הצעתך: {sentOfferSym}{formatAmountForCurrency(parseFloat(latestOffer?.amount) || 0, sentOfferCur)}
                                     {pendingCount > 0 && <span className="offer-pending-badge"> • {pendingCount} ממתין</span>}
                                     {latestPending && (
                                       <span className="offer-timer-badge" title="תוקף ההצעה">
@@ -1331,8 +1356,19 @@ const Dashboard = () => {
                         <div className="payout-card enterprise-card">
                           <h3>סיכום תשלומים</h3>
                           <div className="payout-amount">
-                            <span className="payout-label">סה"כ צפוי לתשלום:</span>
-                            <span className="payout-value">₪{formatPrice(summary.total_expected_payout || 0)}</span>
+                            <span className="payout-label">סה&quot;כ צפוי לתשלום (לפי מטבע — ללא המרה):</span>
+                            <div className="payout-value payout-value--multi">
+                              {Object.keys(summary.expected_payout_by_currency || {}).length === 0 ? (
+                                <span>—</span>
+                              ) : (
+                                Object.entries(summary.expected_payout_by_currency).map(([c, amt]) => (
+                                  <div key={c} dir="ltr" className="payout-currency-row">
+                                    <strong>{c}</strong>{' '}
+                                    {currencySymbol(c)}{formatAmountForCurrency(amt, c)}
+                                  </div>
+                                ))
+                              )}
+                            </div>
                           </div>
                           <p className="payout-note">הכספים נשמרים בנאמנות (Escrow) ואינם משוחררים למוכר מיד עם המכירה. שחרור תמלוגים — בדרך כלל 24 שעות לאחר מועד תחילת האירוע, בכפוף לסטטוס העסקה.</p>
                         </div>
@@ -1341,6 +1377,8 @@ const Dashboard = () => {
                     <div className="dashboard-list-container" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {[...(listings.active || []), ...(listings.sold || [])].map((listing) => {
                         const isExpanded = expandedListingId === listing.id;
+                        const listCur = String(listing.currency || resolveTicketCurrency(listing) || 'ILS').toUpperCase();
+                        const listSym = currencySymbol(listCur);
 
                         return (
                           <div key={listing.id} className={`listing-card enterprise-card dashboard-compact-card ${listing.status === 'sold' ? 'sold' : ''}`} style={{ width: '100%', display: 'block', marginBottom: '8px', boxSizing: 'border-box' }}>
@@ -1383,10 +1421,12 @@ const Dashboard = () => {
                               </div>
                               <span className="row-quantity">{listing.available_quantity || 1} כרטיסים</span>
                               <span className="row-price">
-                                ₪{formatPrice(
+                                {listSym}
+                                {formatAmountForCurrency(
                                   ['sold', 'pending_payout', 'paid_out'].includes(listing.status) && listing.expected_payout != null
                                     ? listing.expected_payout
-                                    : (listing.asking_price || listing.original_price)
+                                    : (listing.asking_price || listing.original_price),
+                                  listCur
                                 )}
                               </span>
                               <span className={`status-badge status-${listing.status}`}>
@@ -1504,15 +1544,15 @@ const Dashboard = () => {
                                     ) : ['sold', 'pending_payout', 'paid_out'].includes(listing.status) ? (
                                       <div className="detail-value" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                         <span className="price-value">
-                                          נטו למוכר: ₪{formatPrice(listing.expected_payout ?? listing.asking_price)}
+                                          נטו למוכר: {listSym}{formatAmountForCurrency(listing.expected_payout ?? listing.asking_price, listCur)}
                                         </span>
                                         <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                                          מחיר מודעה מקורי: ₪{formatPrice(listing.asking_price || listing.original_price)}
+                                          מחיר מודעה מקורי: {listSym}{formatAmountForCurrency(listing.asking_price || listing.original_price, listCur)}
                                         </span>
                                       </div>
                                     ) : (
                                       <span className="detail-value price-value">
-                                        ₪{formatPrice(listing.asking_price || listing.original_price)}
+                                        {listSym}{formatAmountForCurrency(listing.asking_price || listing.original_price, listCur)}
                                       </span>
                                     )}
                                   </div>

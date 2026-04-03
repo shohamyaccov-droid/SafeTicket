@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { adminAPI, ticketAPI } from '../services/api';
 import { translateSectionDisplay } from '../utils/venueMaps';
+import { currencySymbol, formatAmountForCurrency, resolveTicketCurrency } from '../utils/priceFormat';
 import { toastError, toastSuccess } from '../utils/toast';
 import './AdminVerificationPage.css';
 
@@ -211,7 +212,7 @@ const AdminVerificationPage = () => {
                   <div className="detail-row">
                     <span className="detail-label">💰 מחיר פנים:</span>
                     <span className="detail-value price-value">
-                      ₪{parseFloat(ticket.original_price || 0).toFixed(2)}
+                      {tSym}{formatAmountForCurrency(ticket.original_price || 0, tCur)}
                     </span>
                   </div>
                   {ticket.asking_price != null &&
@@ -219,7 +220,7 @@ const AdminVerificationPage = () => {
                       <div className="detail-row">
                         <span className="detail-label">🏷️ מחיר מבוקש:</span>
                         <span className="detail-value price-value">
-                          ₪{parseFloat(ticket.asking_price || 0).toFixed(2)}
+                          {tSym}{formatAmountForCurrency(ticket.asking_price || 0, tCur)}
                         </span>
                       </div>
                     )}

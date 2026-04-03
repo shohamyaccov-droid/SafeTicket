@@ -1,7 +1,14 @@
 import { useState, useCallback } from 'react';
+import { currencySymbol, formatAmountForCurrency } from '../utils/priceFormat';
 import './InteractiveMenoraMap.css';
 
-const InteractiveMenoraMap = ({ activeSection, onSectionClick, sectionPrices = {}, lowestPrices = {} }) => {
+const InteractiveMenoraMap = ({
+  activeSection,
+  onSectionClick,
+  sectionPrices = {},
+  lowestPrices = {},
+  currencyIso = 'ILS',
+}) => {
   const [zoomLevel, setZoomLevel] = useState(1);
 
   const handleZoomIn = useCallback(() => {
@@ -334,7 +341,8 @@ const InteractiveMenoraMap = ({ activeSection, onSectionClick, sectionPrices = {
                       pointerEvents="none"
                       className="price-tag-text"
                     >
-                      ₪{price}
+                      {currencySymbol(currencyIso)}
+                      {formatAmountForCurrency(price, currencyIso)}
                     </text>
                     {/* Downward-pointing arrow (speech bubble pin) */}
                     <polygon

@@ -3,6 +3,13 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.db.models import Sum, Q
 from .models import User, Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage, EventRequest
+from .currency import (
+    iso4217_for_country,
+    currency_symbol,
+    money_amount_for_api,
+    iso4217_for_ticket_listing,
+    quantize_money_decimal,
+)
 
 
 def build_profile_orders_serialization_context(request, orders_queryset):
@@ -346,15 +353,20 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = (
             'id', 'user', 'ticket', 'ticket_info', 'tickets', 'ticket_ids', 'guest_email', 'guest_phone', 'status',
-            'total_amount', 'quantity', 'event_name', 'created_at',
+            'total_amount', 'currency', 'quantity', 'event_name', 'created_at',
             'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'total_paid_by_buyer', 'net_seller_revenue',
             'payout_status', 'payout_eligible_date',
         )
         read_only_fields = (
-            'id', 'created_at', 'status', 'ticket_info', 'tickets', 'ticket_ids',
+            'id', 'created_at', 'status', 'ticket_info', 'tickets', 'ticket_ids', 'currency',
             'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'total_paid_by_buyer', 'net_seller_revenue',
             'payout_status', 'payout_eligible_date',
         )
+    
+    def create(self, validated_data):
+        ticket = validated_data.get('ticket')
+        validated_data['currency'] = iso4217_for_ticket_listing(ticket) if ticket else 'ILS'
+        return super().create(validated_data)
     
     def get_tickets(self, obj):
         """Return array of tickets with id and pdf_file_url for multi-ticket downloads"""
@@ -472,17 +484,27 @@ class EventSerializer(serializers.ModelSerializer):
     """Serializer for Event model"""
     image_url = serializers.SerializerMethodField()
     tickets_count = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
+    currency_symbol = serializers.SerializerMethodField()
     artist = ArtistSerializer(read_only=True)
     artist_id = serializers.PrimaryKeyRelatedField(queryset=Artist.objects.all(), source='artist', write_only=True, required=False, allow_null=True)
     
     class Meta:
         model = Event
         fields = (
-            'id', 'artist', 'artist_id', 'name', 'date', 'venue', 'city', 'country', 'image', 'image_url',
+            'id', 'artist', 'artist_id', 'name', 'date', 'ends_at', 'venue', 'city', 'country',
+            'currency', 'currency_symbol',
+            'image', 'image_url',
             'tickets_count', 'view_count', 'category', 'home_team', 'away_team', 'tournament',
             'created_at', 'updated_at'
         )
-        read_only_fields = ('id', 'created_at', 'updated_at', 'tickets_count', 'view_count')
+        read_only_fields = ('id', 'created_at', 'updated_at', 'tickets_count', 'view_count', 'currency', 'currency_symbol')
+    
+    def get_currency(self, obj):
+        return iso4217_for_country(getattr(obj, 'country', None))
+    
+    def get_currency_symbol(self, obj):
+        return currency_symbol(iso4217_for_country(getattr(obj, 'country', None)))
     
     def get_image_url(self, obj):
         return first_resolved_image_url_for_event(self.context.get('request'), obj)
@@ -499,6 +521,8 @@ class EventListSerializer(serializers.ModelSerializer):
     """Simplified serializer for Event list view"""
     image_url = serializers.SerializerMethodField()
     tickets_count = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
+    currency_symbol = serializers.SerializerMethodField()
     artist_name = serializers.CharField(source='artist.name', read_only=True)
     artist_detail = ArtistCardSerializer(source='artist', read_only=True)
 
@@ -506,11 +530,18 @@ class EventListSerializer(serializers.ModelSerializer):
         model = Event
         fields = (
             'id', 'artist', 'artist_detail', 'artist_name', 'name', 'date', 'venue', 'city', 'country',
+            'currency', 'currency_symbol',
             'image_url',
             'tickets_count', 'view_count',
             'category', 'home_team', 'away_team', 'tournament'
         )
         read_only_fields = fields
+    
+    def get_currency(self, obj):
+        return iso4217_for_country(getattr(obj, 'country', None))
+    
+    def get_currency_symbol(self, obj):
+        return currency_symbol(iso4217_for_country(getattr(obj, 'country', None)))
     
     def get_image_url(self, obj):
         return first_resolved_image_url_for_event(self.context.get('request'), obj)
@@ -576,6 +607,7 @@ class TicketSerializer(serializers.ModelSerializer):
     is_obstructed_view = serializers.BooleanField(required=False, default=False)
     verification_status = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='ממתין לאישור', read_only=True)
     has_pdf_file = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
     
     class Meta:
         model = Ticket
@@ -583,14 +615,14 @@ class TicketSerializer(serializers.ModelSerializer):
             'id', 'seller', 'seller_username', 'seller_is_verified', 'event', 'event_id',
             'event_name', 'event_date', 'venue', 'seat_row', 'section', 'row', 'seat_numbers',
             'row_number', 'seat_number', 'listing_group_id',
-            'original_price', 'listing_price', 'asking_price', 'delivery_method',
+            'original_price', 'listing_price', 'asking_price', 'currency', 'delivery_method',
             'is_together', 'available_quantity', 'pdf_file', 'pdf_file_url', 'receipt_file', 'receipt_file_url',
             'has_pdf_file', 'status',
             'ticket_type', 'split_type', 'is_obstructed_view', 'verification_status',
             'reserved_at', 'reserved_by', 'reservation_email', 'created_at', 'updated_at'
         )
         read_only_fields = (
-            'id', 'seller', 'status', 'created_at', 'updated_at', 'asking_price',
+            'id', 'seller', 'status', 'created_at', 'updated_at', 'asking_price', 'currency',
             'reserved_at', 'reserved_by', 'reservation_email', 'event_name', 'event_date', 'venue',
         )
         extra_kwargs = {
@@ -609,6 +641,9 @@ class TicketSerializer(serializers.ModelSerializer):
     
     def get_has_pdf_file(self, obj):
         return bool(obj.pdf_file)
+    
+    def get_currency(self, obj):
+        return iso4217_for_ticket_listing(obj)
     
     def get_pdf_file_url(self, obj):
         """
@@ -663,9 +698,6 @@ class TicketSerializer(serializers.ModelSerializer):
             })
 
         from decimal import Decimal
-        if isinstance(original_price, (int, float, str, Decimal)):
-            attrs['original_price'] = round_shekel_price(original_price)
-        original_price = attrs['original_price']
 
         # Geo-pricing / receipt rules: Event.venue country ONLY (not artist nationality).
         event = attrs.get('event')
@@ -674,9 +706,14 @@ class TicketSerializer(serializers.ModelSerializer):
             country = (getattr(event, 'country', None) or 'IL').strip().upper()
         if not country:
             country = 'IL'
+        cur = iso4217_for_country(country)
+
+        if isinstance(original_price, (int, float, str, Decimal)):
+            attrs['original_price'] = quantize_money_decimal(original_price, cur)
+        original_price = attrs['original_price']
 
         if listing_price is not None:
-            listing_price = round_shekel_price(listing_price)
+            listing_price = quantize_money_decimal(listing_price, cur)
         else:
             listing_price = original_price
 
@@ -756,9 +793,10 @@ class TicketSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
+        cur = iso4217_for_ticket_listing(instance)
         for k in ('original_price', 'asking_price'):
             if k in ret and ret[k] is not None:
-                ret[k] = price_as_int_for_json(getattr(instance, k))
+                ret[k] = money_amount_for_api(getattr(instance, k), cur)
         return ret
 
 
@@ -773,6 +811,7 @@ class TicketListSerializer(serializers.ModelSerializer):
     split_type = serializers.CharField(required=False, allow_blank=True, allow_null=True, read_only=True)
     has_pdf_file = serializers.SerializerMethodField()
     is_reserved_slot = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
     # Event data
     event_name = serializers.SerializerMethodField()
     event_date = serializers.SerializerMethodField()
@@ -784,11 +823,14 @@ class TicketListSerializer(serializers.ModelSerializer):
             'id', 'seller', 'seller_username', 'seller_is_verified', 'event', 'event_name', 'event_date', 
             'venue', 'seat_row', 'section', 'row', 'seat_numbers',
             'row_number', 'seat_number', 'listing_group_id',
-            'original_price', 'asking_price', 'delivery_method',
+            'original_price', 'asking_price', 'currency', 'delivery_method',
             'is_together', 'available_quantity', 'split_type', 'status', 'has_pdf_file',
             'is_reserved_slot', 'created_at'
         )
         read_only_fields = fields
+
+    def get_currency(self, obj):
+        return iso4217_for_ticket_listing(obj)
 
     def get_is_reserved_slot(self, obj):
         return obj.status == 'reserved'
@@ -807,9 +849,10 @@ class TicketListSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
+        cur = iso4217_for_ticket_listing(instance)
         for k in ('original_price', 'asking_price'):
             if k in ret and ret[k] is not None:
-                ret[k] = price_as_int_for_json(getattr(instance, k))
+                ret[k] = money_amount_for_api(getattr(instance, k), cur)
         return ret
 
 
@@ -825,7 +868,7 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = (
-            'id', 'ticket', 'ticket_details', 'tickets', 'status', 'total_amount', 'quantity',
+            'id', 'ticket', 'ticket_details', 'tickets', 'status', 'total_amount', 'currency', 'quantity',
             'event_name', 'created_at', 'pdf_download_url', 'receipt_url',
             'event_image_url', 'status_timeline',
             'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'total_paid_by_buyer', 'net_seller_revenue',
@@ -947,6 +990,7 @@ class ProfileListingSerializer(serializers.ModelSerializer):
     order_count = serializers.SerializerMethodField()
     escrow_payout_status = serializers.SerializerMethodField()
     escrow_payout_eligible_date = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
     
     class Meta:
         model = Ticket
@@ -956,7 +1000,7 @@ class ProfileListingSerializer(serializers.ModelSerializer):
             'original_price', 'asking_price', 'is_together', 'available_quantity', 'status', 'created_at',
             'event_image_url', 'event_name_display', 'event_date_display', 'venue_display',
             'expected_payout', 'order_count',
-            'escrow_payout_status', 'escrow_payout_eligible_date',
+            'escrow_payout_status', 'escrow_payout_eligible_date', 'currency',
         )
         read_only_fields = fields
 
@@ -1013,10 +1057,17 @@ class ProfileListingSerializer(serializers.ModelSerializer):
         if not order or not order.payout_eligible_date:
             return None
         return order.payout_eligible_date.isoformat()
-    
+
     def get_order_count(self, obj):
         """Get number of orders for this ticket"""
         return len(list(obj.orders.all()))
+
+    def get_currency(self, obj):
+        if obj.status in ('sold', 'pending_payout', 'paid_out'):
+            order = self._primary_order_for_sold_ticket(obj)
+            if order and getattr(order, 'currency', None):
+                return str(order.currency).strip().upper()
+        return iso4217_for_ticket_listing(obj)
 
 
 class TicketAlertSerializer(serializers.ModelSerializer):
@@ -1044,14 +1095,14 @@ class OfferSerializer(serializers.ModelSerializer):
         model = Offer
         fields = (
             'id', 'buyer', 'buyer_username', 'ticket', 'ticket_details',
-            'amount', 'quantity', 'status', 'expires_at', 'accepted_at', 'checkout_expires_at',
+            'amount', 'currency', 'quantity', 'status', 'expires_at', 'accepted_at', 'checkout_expires_at',
             'offer_round_count', 'parent_offer', 'counter_offer',
             'is_expired', 'is_checkout_expired',
             'time_remaining', 'checkout_time_remaining',
             'purchase_completed', 'ticket_listing_status',
             'created_at', 'updated_at'
         )
-        read_only_fields = ('id', 'buyer', 'expires_at', 'accepted_at', 'checkout_expires_at', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'buyer', 'currency', 'expires_at', 'accepted_at', 'checkout_expires_at', 'created_at', 'updated_at')
     
     def get_purchase_completed(self, obj):
         v = getattr(obj, '_purchase_done', None)
@@ -1086,13 +1137,24 @@ class OfferSerializer(serializers.ModelSerializer):
             return max(0, int(remaining.total_seconds()))
         return None
 
-    def validate_amount(self, value):
-        return round_shekel_price(value)
+    def validate(self, attrs):
+        ticket = attrs.get('ticket')
+        if ticket is not None and 'amount' in attrs and attrs['amount'] is not None:
+            cur = iso4217_for_ticket_listing(ticket)
+            attrs['amount'] = quantize_money_decimal(attrs['amount'], cur)
+        return attrs
+
+    def create(self, validated_data):
+        ticket = validated_data['ticket']
+        validated_data['currency'] = iso4217_for_ticket_listing(ticket)
+        return super().create(validated_data)
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
+        cur = instance.currency or iso4217_for_ticket_listing(instance.ticket)
         if 'amount' in ret and ret['amount'] is not None:
-            ret['amount'] = price_as_int_for_json(instance.amount)
+            ret['amount'] = money_amount_for_api(instance.amount, cur)
+        ret['currency'] = cur
         return ret
 
 

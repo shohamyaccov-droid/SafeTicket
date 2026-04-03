@@ -7,7 +7,13 @@ import Toast from '../components/Toast';
 import VenueMapPin from '../components/VenueMapPin';
 import InteractiveMenoraMap from '../components/InteractiveMenoraMap';
 import { VENUE_MAPS, getVenueConfig, normalizeSection } from '../utils/venueMaps';
-import { getTicketPrice } from '../utils/priceFormat';
+import {
+  getTicketPrice,
+  iso4217FromCountry,
+  currencySymbol,
+  resolveTicketCurrency,
+  formatAmountForCurrency,
+} from '../utils/priceFormat';
 import BuyerListingPrice from '../components/BuyerListingPrice';
 import { getFullImageUrl } from '../utils/formatters';
 import { toastError } from '../utils/toast';
@@ -659,6 +665,12 @@ const EventDetailsPage = () => {
     }
   };
 
+  const listingCurrency = useMemo(() => {
+    if (!event) return 'ILS';
+    if (event.currency) return String(event.currency).toUpperCase();
+    return iso4217FromCountry(event.country);
+  }, [event]);
+  const listSym = currencySymbol(listingCurrency);
 
   if (loading) {
     return (
@@ -682,6 +694,9 @@ const EventDetailsPage = () => {
       </div>
     );
   }
+
+  const offerModalCur = selectedOfferTicket ? resolveTicketCurrency(selectedOfferTicket) : listingCurrency;
+  const offerModalSym = currencySymbol(offerModalCur);
 
   const artistId =
     typeof event.artist === 'object' ? event.artist?.id : event.artist_id || event.artist;
@@ -776,7 +791,7 @@ const EventDetailsPage = () => {
           
           {/* Price Range */}
           <div className="filter-group">
-            <label className="filter-label">טווח מחירים (₪)</label>
+            <label className="filter-label">טווח מחירים ({listSym} {listingCurrency})</label>
             <div className="price-range-inputs">
               <input
                 type="number"
@@ -907,6 +922,7 @@ const EventDetailsPage = () => {
                             onSectionClick={handleSectionClick || (() => {})}
                             sectionPrices={sectionPrices || {}}
                             lowestPrices={lowestPricesPerSection || {}}
+                            currencyIso={listingCurrency}
                           />
                         );
                       } catch {
@@ -1165,7 +1181,7 @@ const EventDetailsPage = () => {
                   <h2>הצע מחיר</h2>
                   <div className="offer-ticket-info">
                     <h3>{selectedOfferTicket.event_name || 'אירוע'}</h3>
-                    <p className="current-price">מחיר נוכחי: ₪{getTicketPrice(selectedOfferTicket)}</p>
+                    <p className="current-price">מחיר נוכחי: {offerModalSym}{getTicketPrice(selectedOfferTicket)}</p>
                     <p className="offer-fee-clarification" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem', lineHeight: 1.5 }}>
                       ההצעה היא לפני עמלת שירות (10% יתווספו בקופה).
                     </p>
@@ -1228,7 +1244,7 @@ const EventDetailsPage = () => {
                     onClick={() => handleQuickOffer(85)}
                   >
                     <span className="quick-offer-label">הצעה טובה</span>
-                    <span className="quick-offer-price">₪{(parseFloat(getTicketPrice(selectedOfferTicket)) * 0.85 * offerQuantity).toFixed(2)}</span>
+                    <span className="quick-offer-price">{offerModalSym}{formatAmountForCurrency(parseFloat(getTicketPrice(selectedOfferTicket)) * 0.85 * offerQuantity, offerModalCur)}</span>
                     <span className="quick-offer-percent">85%</span>
                   </button>
                   <button
@@ -1237,7 +1253,7 @@ const EventDetailsPage = () => {
                     onClick={() => handleQuickOffer(95)}
                   >
                     <span className="quick-offer-label">הצעה תחרותית</span>
-                    <span className="quick-offer-price">₪{(parseFloat(getTicketPrice(selectedOfferTicket)) * 0.95 * offerQuantity).toFixed(2)}</span>
+                    <span className="quick-offer-price">{offerModalSym}{formatAmountForCurrency(parseFloat(getTicketPrice(selectedOfferTicket)) * 0.95 * offerQuantity, offerModalCur)}</span>
                     <span className="quick-offer-percent">95%</span>
                   </button>
                   <button
@@ -1253,14 +1269,14 @@ const EventDetailsPage = () => {
                     }}
                   >
                     <span className="quick-offer-label">קנה עכשיו</span>
-                    <span className="quick-offer-price">₪{(parseFloat(getTicketPrice(selectedOfferTicket)) * offerQuantity).toFixed(2)}</span>
+                    <span className="quick-offer-price">{offerModalSym}{formatAmountForCurrency(parseFloat(getTicketPrice(selectedOfferTicket)) * offerQuantity, offerModalCur)}</span>
                     <span className="quick-offer-percent">100%</span>
                   </button>
                 </div>
 
                 <form onSubmit={handleSubmitOffer}>
                   <div className="form-group">
-                    <label htmlFor="offerAmount">או הצע מחיר משלך (₪) – סכום להצעה (ללא עמלות)</label>
+                    <label htmlFor="offerAmount">או הצע מחיר משלך ({offerModalSym} {offerModalCur}) – סכום להצעה (ללא עמלות)</label>
                     <input
                       type="number"
                       id="offerAmount"
@@ -1275,7 +1291,7 @@ const EventDetailsPage = () => {
                     />
                     {offerAmount && offerQuantity > 1 && (
                       <small style={{ display: 'block', marginTop: '0.5rem', color: '#64748b' }}>
-                        מחיר ליחידה: ₪{(parseFloat(offerAmount) / offerQuantity).toFixed(2)}
+                        מחיר ליחידה: {offerModalSym}{formatAmountForCurrency(parseFloat(offerAmount) / offerQuantity, offerModalCur)}
                       </small>
                     )}
                   </div>
@@ -1326,7 +1342,7 @@ const EventDetailsPage = () => {
                 </div>
                 <h2 className="success-title">ההצעה נשלחה בהצלחה!</h2>
                 <p className="success-message">
-                  ההצעה שלך בסך ₪{offerAmount} נשלחה למוכר. תקבל עדכון ברגע שהמוכר יגיב.
+                  ההצעה שלך בסך {offerModalSym}{formatAmountForCurrency(offerAmount, offerModalCur)} נשלחה למוכר. תקבל עדכון ברגע שהמוכר יגיב.
                 </p>
                 <button onClick={handleCloseMakeOffer} className="primary-button success-close-btn">
                   סגור

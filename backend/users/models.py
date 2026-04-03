@@ -173,6 +173,11 @@ class Event(models.Model):
         default='IL',
         help_text='Event location country (anti-scalping rules use this field, not city).',
     )
+    ends_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text='When the show ends (optional). Escrow payout uses ends_at + 24h when set; else date + 24h.',
+    )
     
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
@@ -248,18 +253,29 @@ class Ticket(models.Model):
     asking_price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Price (always equals original_price per Israeli law)")
     
     def save(self, *args, **kwargs):
-        # Whole shekels; IL: asking cannot exceed face value; non-IL: asking may exceed (global market).
-        from decimal import Decimal, ROUND_HALF_UP
+        # Quantize per listing currency (ILS: whole units; global: 0.01).
+        from decimal import Decimal
+        from .currency import quantize_money_decimal, iso4217_for_country
+        country = 'IL'
+        if self.event_id:
+            try:
+                ev = getattr(self, 'event', None)
+                if ev is not None and getattr(ev, 'pk', None) == self.event_id:
+                    country = (getattr(ev, 'country', None) or 'IL').strip().upper()
+                else:
+                    country = (
+                        Event.objects.filter(pk=self.event_id).values_list('country', flat=True).first() or 'IL'
+                    )
+                    country = (country or 'IL').upper()
+            except Exception:
+                country = 'IL'
+        cur = iso4217_for_country(country)
         if self.original_price is not None:
             if isinstance(self.original_price, (int, float, str, Decimal)):
-                self.original_price = Decimal(str(self.original_price)).quantize(
-                    Decimal('1'), rounding=ROUND_HALF_UP
-                )
+                self.original_price = quantize_money_decimal(self.original_price, cur)
         if self.asking_price is not None:
             if isinstance(self.asking_price, (int, float, str, Decimal)):
-                self.asking_price = Decimal(str(self.asking_price)).quantize(
-                    Decimal('1'), rounding=ROUND_HALF_UP
-                )
+                self.asking_price = quantize_money_decimal(self.asking_price, cur)
         # Jurisdiction from linked Event.venue country only (not artist).
         country = 'IL'
         if self.event_id:
@@ -424,6 +440,11 @@ class Order(models.Model):
     # Order details
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(
+        max_length=3,
+        default='ILS',
+        help_text='ISO 4217; matches Event.country at listing time',
+    )
     quantity = models.IntegerField(default=1, help_text="Number of tickets purchased in this order")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -599,6 +620,11 @@ class Offer(models.Model):
         decimal_places=2,
         help_text="The offer amount (bid price)"
     )
+    currency = models.CharField(
+        max_length=3,
+        default='ILS',
+        help_text='ISO 4217; locked to listing/event — no mixed-currency negotiation',
+    )
     offer_round_count = models.PositiveSmallIntegerField(
         default=0,
         help_text="0=initial buyer offer, 1=seller counter, 2=buyer counter (max)"
@@ -648,13 +674,14 @@ class Offer(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        from decimal import Decimal, ROUND_HALF_UP
+        from .currency import quantize_money_decimal
         if self.amount is not None:
-            self.amount = Decimal(str(self.amount)).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+            cur = getattr(self, 'currency', None) or 'ILS'
+            self.amount = quantize_money_decimal(self.amount, cur)
         super().save(*args, **kwargs)
     
     def __str__(self):
-        return f"Offer #{self.id}: {self.buyer.username} → {self.ticket.seller.username} - ₪{self.amount} ({self.status})"
+        return f"Offer #{self.id}: {self.buyer.username} → {self.ticket.seller.username} - {self.amount} {self.currency} ({self.status})"
     
     class Meta:
         ordering = ['-created_at']

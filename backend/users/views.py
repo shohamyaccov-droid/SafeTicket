@@ -32,6 +32,7 @@ from django.conf import settings as dj_settings
 from django.core.files.base import ContentFile
 import io
 import logging
+from collections import defaultdict
 import secrets
 import traceback
 import uuid
@@ -42,6 +43,8 @@ logger = logging.getLogger(__name__)
 
 def _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity):
     """Persist breakdown after order row exists (create_order / guest_checkout)."""
+    from users.currency import iso4217_for_ticket_listing
+
     breakdown = compute_order_price_breakdown(
         order.total_amount,
         negotiated_offer,
@@ -53,6 +56,9 @@ def _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity)
     order.total_paid_by_buyer = breakdown['total_paid_by_buyer']
     order.net_seller_revenue = breakdown['net_seller_revenue']
     order.related_offer = negotiated_offer if negotiated_offer else None
+    order.currency = iso4217_for_ticket_listing(ticket)
+    if negotiated_offer and getattr(negotiated_offer, 'currency', None):
+        order.currency = negotiated_offer.currency
     ped = compute_payout_eligible_date(ticket)
     order.payout_eligible_date = ped
     order.payout_status = 'locked'
@@ -65,6 +71,7 @@ def _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity)
             'total_paid_by_buyer',
             'net_seller_revenue',
             'related_offer',
+            'currency',
             'payout_eligible_date',
             'payout_status',
             'updated_at',
@@ -1150,6 +1157,16 @@ def user_activity(request):
             elif listing.get('status') in ['sold', 'pending_payout', 'paid_out']:
                 sold_listings.append(listing)
         
+        payout_by_currency = defaultdict(float)
+        for l in sold_listings:
+            cur = str(l.get('currency') or 'ILS').strip().upper()
+            ep = l.get('expected_payout')
+            if ep is not None and ep != '':
+                try:
+                    payout_by_currency[cur] += float(ep)
+                except (TypeError, ValueError):
+                    pass
+
         return Response({
             'purchases': purchases_serializer.data,
             'listings': {
@@ -1160,11 +1177,7 @@ def user_activity(request):
                 'total_purchases': len(purchases_serializer.data),
                 'active_listings_count': len(active_listings),
                 'sold_listings_count': len(sold_listings),
-                'total_expected_payout': sum(
-                    float(l.get('expected_payout', 0) or 0) 
-                    for l in sold_listings 
-                    if l.get('expected_payout')
-                ),
+                'expected_payout_by_currency': {k: round(v, 2) for k, v in payout_by_currency.items()},
             }
         })
     except Exception as e:
@@ -1175,7 +1188,7 @@ def user_activity(request):
                 'total_purchases': 0,
                 'active_listings_count': 0,
                 'sold_listings_count': 0,
-                'total_expected_payout': 0,
+                'expected_payout_by_currency': {},
             }
         }, status=status.HTTP_200_OK)
 
@@ -1230,6 +1243,7 @@ def order_receipt(request, order_id):
         'final_negotiated_price': str(order.final_negotiated_price) if order.final_negotiated_price is not None else None,
         'buyer_service_fee': str(order.buyer_service_fee) if order.buyer_service_fee is not None else None,
         'net_seller_revenue': str(order.net_seller_revenue) if order.net_seller_revenue is not None else None,
+        'currency': (order.currency or 'ILS').strip().upper(),
         'quantity': order.quantity,
         'event_name': order.event_name or (order.ticket.event.name if order.ticket and order.ticket.event else 'Unknown Event'),
         'ticket_details': {
@@ -2352,11 +2366,19 @@ def guest_checkout(request):
             total_amount = order_data.get('total_amount', ticket.asking_price)
             event_name = order_data.get('event_name', ticket.event_name)
 
+            from users.currency import iso4217_for_ticket_listing
+
+            order_cur = (
+                negotiated_offer.currency
+                if negotiated_offer and getattr(negotiated_offer, 'currency', None)
+                else iso4217_for_ticket_listing(ticket)
+            )
             order = Order.objects.create(
                 guest_email=order_data['guest_email'],
                 guest_phone=order_data['guest_phone'],
                 ticket=ticket,
                 total_amount=total_amount,
+                currency=order_cur,
                 quantity=order_quantity,
                 event_name=event_name,
                 status='pending_payment',
@@ -3455,22 +3477,29 @@ def admin_dashboard_stats(request):
     start_today = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
     paid_today = paid_qs.filter(created_at__gte=start_today)
 
-    def _pack(qs):
-        row = qs.aggregate(
+    def _metrics_by_currency(qs):
+        by_currency = {}
+        for row in qs.values('currency').annotate(
             revenue=Sum(Coalesce('total_paid_by_buyer', 'total_amount', zero)),
             fees=Sum(Coalesce('buyer_service_fee', zero)),
             tickets_sold=Sum('quantity'),
-        )
+        ):
+            cur = str(row['currency'] or 'ILS').strip().upper()
+            by_currency[cur] = {
+                'revenue': str(row['revenue'] or Decimal('0')),
+                'platform_fees': str(row['fees'] or Decimal('0')),
+                'tickets_sold': int(row['tickets_sold'] or 0),
+            }
+        total_tickets = qs.aggregate(t=Sum('quantity'))['t'] or 0
         return {
-            'tickets_sold': int(row['tickets_sold'] or 0),
-            'revenue_ils': str(row['revenue'] or Decimal('0')),
-            'platform_fees_ils': str(row['fees'] or Decimal('0')),
+            'tickets_sold': int(total_tickets),
+            'by_currency': by_currency,
         }
 
     return Response(
         {
-            'today': _pack(paid_today),
-            'all_time': _pack(paid_qs),
+            'today': _metrics_by_currency(paid_today),
+            'all_time': _metrics_by_currency(paid_qs),
         }
     )
 
@@ -3546,12 +3575,15 @@ def admin_transactions(request):
                     }
                 )
 
+        ocur = str(o.currency or 'ILS').strip().upper()
         rows.append(
             {
                 'id': o.id,
                 'buyer': buyer,
                 'seller': seller_name,
                 'event_name': event_nm or '—',
+                'amount': str(amount) if amount is not None else '0',
+                'currency': ocur,
                 'price_ils': str(amount) if amount is not None else '0',
                 'quantity': o.quantity,
                 'status': o.status,
@@ -4115,6 +4147,11 @@ class OfferViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        from users.currency import iso4217_for_ticket_listing, quantize_money_decimal
+
+        offer_cur = getattr(offer, 'currency', None) or iso4217_for_ticket_listing(offer.ticket)
+        counter_amount = quantize_money_decimal(counter_amount, offer_cur)
+
         # Expiration check
         if offer.expires_at and timezone.now() > offer.expires_at:
             offer.status = 'expired'
@@ -4163,6 +4200,7 @@ class OfferViewSet(viewsets.ModelViewSet):
                 buyer=offer.buyer,
                 ticket=offer.ticket,
                 amount=counter_amount,
+                currency=offer_cur,
                 quantity=offer.quantity,
                 offer_round_count=new_round,
                 parent_offer=offer,

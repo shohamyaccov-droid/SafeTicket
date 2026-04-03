@@ -1,8 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authAPI, orderAPI, paymentAPI, ticketAPI } from '../services/api';
-import { getTicketPrice, formatPrice, buyerChargeFromBase } from '../utils/priceFormat';
+import {
+  getTicketPrice,
+  formatPrice,
+  buyerChargeFromBase,
+  resolveTicketCurrency,
+  currencySymbol,
+  formatAmountForCurrency,
+  getTicketBaseNumeric,
+} from '../utils/priceFormat';
 import { toastError } from '../utils/toast';
 import './CheckoutModal.css';
 
@@ -143,9 +151,16 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     return seats.join(', ');
   })();
 
-  // List unit: whole shekels from API (matches Django Ticket.save / JSON int) — no float rounding drift
-  const listUnitFaceShekels = parseInt(String(getTicketPrice(ticket)), 10);
-  const listUnitFace = Number.isFinite(listUnitFaceShekels) ? listUnitFaceShekels : 0;
+  const checkoutCurrency = useMemo(() => {
+    if (orderData?.currency) return String(orderData.currency).toUpperCase();
+    if (acceptedOffer?.currency) return String(acceptedOffer.currency).toUpperCase();
+    return resolveTicketCurrency(ticket);
+  }, [orderData?.currency, acceptedOffer?.currency, ticket]);
+
+  const curSym = currencySymbol(checkoutCurrency);
+
+  // Listing unit base in event currency (ILS often integer in API; GBP/EUR allow decimals)
+  const listUnitFace = getTicketBaseNumeric(ticket);
   const offerBaseAmountStr = isNegotiatedPrice && acceptedOffer?.amount != null ? String(acceptedOffer.amount) : null;
   const negotiatedQty = lockedQuantity || initialQuantity || 1;
   const negotiatedBaseTotal = offerBaseAmountStr != null ? parseFloat(offerBaseAmountStr) : null;
@@ -811,6 +826,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     const resolvedOrderId = orderId ?? snap?.orderId;
     const resolvedOrderData = orderData ?? snap?.orderData;
     const resolvedPaid = paidAmounts ?? snap?.paidAmounts;
+    const payIso = String(
+      resolvedOrderData?.currency || acceptedOffer?.currency || resolveTicketCurrency(ticket)
+    ).toUpperCase();
+    const paySym = currencySymbol(payIso);
     return (
       <div className="success-overlay" onClick={handleClose}>
         <div className="success-celebration" onClick={(e) => e.stopPropagation()}>
@@ -830,7 +849,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               <div className="success-ticket-details">
                 <p><strong>מיקום:</strong> {ticket?.venue || 'לא צוין'}</p>
                 {isNegotiatedPrice && (
-                  <p><strong>מחיר מוסכם:</strong> <span style={{color: '#10b981', fontSize: '0.9em'}}>₪{resolvedPaid?.baseAmount || effectivePrice}</span></p>
+                  <p><strong>מחיר מוסכם:</strong> <span style={{color: '#10b981', fontSize: '0.9em'}}>{paySym}{formatAmountForCurrency(resolvedPaid?.baseAmount ?? effectivePrice, payIso)}</span></p>
                 )}
                 {quantity > 1 && (
                   <p><strong>כמות:</strong> {quantity}</p>
@@ -838,24 +857,24 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 {resolvedOrderData?.total_paid_by_buyer != null || resolvedOrderData?.final_negotiated_price != null ? (
                   <>
                     {resolvedOrderData?.final_negotiated_price != null && (
-                      <p><strong>מחיר מוסכם (למוכר):</strong> ₪{String(resolvedOrderData.final_negotiated_price)}</p>
+                      <p><strong>מחיר מוסכם (למוכר):</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.final_negotiated_price, payIso)}</p>
                     )}
                     {resolvedOrderData?.buyer_service_fee != null && Number(resolvedOrderData.buyer_service_fee) > 0 && (
-                      <p><strong>עמלת שירות:</strong> ₪{String(resolvedOrderData.buyer_service_fee)}</p>
+                      <p><strong>עמלת שירות:</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.buyer_service_fee, payIso)}</p>
                     )}
-                    <p><strong>סה״כ שולם (לקונה):</strong> ₪{String(resolvedOrderData.total_paid_by_buyer ?? resolvedOrderData.total_amount)}</p>
+                    <p><strong>סה״כ שולם (לקונה):</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.total_paid_by_buyer ?? resolvedOrderData.total_amount, payIso)}</p>
                   </>
                 ) : resolvedPaid ? (
                   <>
-                    <p><strong>מחיר כרטיסים:</strong> ₪{resolvedPaid.baseAmount}</p>
-                    <p><strong>עמלת שירות (10%):</strong> ₪{resolvedPaid.serviceFee}</p>
-                    <p><strong>סה"כ שולם:</strong> ₪{resolvedPaid.totalAmount}</p>
+                    <p><strong>מחיר כרטיסים:</strong> {paySym}{formatAmountForCurrency(resolvedPaid.baseAmount, payIso)}</p>
+                    <p><strong>עמלת שירות (10%):</strong> {paySym}{formatAmountForCurrency(resolvedPaid.serviceFee, payIso)}</p>
+                    <p><strong>סה"כ שולם:</strong> {paySym}{formatAmountForCurrency(resolvedPaid.totalAmount, payIso)}</p>
                   </>
                 ) : (
                   <>
-                    <p><strong>מחיר כרטיסים:</strong> ₪{(negotiatedBundleBreakdown || listBreakdown)?.baseAmount?.toFixed(2) ?? '—'}</p>
-                    <p><strong>עמלת שירות (10%):</strong> ₪{(negotiatedBundleBreakdown || listBreakdown)?.serviceFee?.toFixed(2) ?? '—'}</p>
-                    <p><strong>סה"כ שולם:</strong> ₪{(negotiatedBundleBreakdown || listBreakdown)?.totalAmount?.toFixed(2) ?? '—'}</p>
+                    <p><strong>מחיר כרטיסים:</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.baseAmount != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).baseAmount, payIso) : '—'}</p>
+                    <p><strong>עמלת שירות (10%):</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.serviceFee != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).serviceFee, payIso) : '—'}</p>
+                    <p><strong>סה"כ שולם:</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.totalAmount != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).totalAmount, payIso) : '—'}</p>
                   </>
                 )}
               </div>
@@ -1088,14 +1107,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   color: '#065f46',
                   fontSize: '0.9rem'
                 }}>
-                  ✓ מחיר מוסכם: ₪{offerBaseAmountStr ?? effectivePrice} סה"כ ל-{quantity} כרטיסים (במקום ₪{getTicketPrice(ticket)} ליחידה)
+                  ✓ מחיר מוסכם: {curSym}{formatAmountForCurrency(offerBaseAmountStr ?? effectivePrice, checkoutCurrency)} סה"כ ל-{quantity} כרטיסים (במקום {curSym}{getTicketPrice(ticket)} ליחידה)
                 </div>
               )}
               {isNegotiatedPrice ? (
                 <>
                   <div className="price-row">
                     <span>מחיר ליחידה:</span>
-                    <span>₪{negotiatedUnitBase != null ? negotiatedUnitBase.toFixed(2) : unitPriceForDisplay}</span>
+                    <span>{curSym}{negotiatedUnitBase != null ? formatAmountForCurrency(negotiatedUnitBase, checkoutCurrency) : formatAmountForCurrency(unitPriceForDisplay, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
                     <span>כמות:</span>
@@ -1109,22 +1128,22 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   )}
                   <div className="price-row">
                     <span>מחיר כרטיס</span>
-                    <span>₪{negotiatedBundleBreakdown ? negotiatedBundleBreakdown.baseAmount.toFixed(2) : '0.00'}</span>
+                    <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.baseAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
                     <span>עמלת שירות (10%)</span>
-                    <span>₪{negotiatedBundleBreakdown ? negotiatedBundleBreakdown.serviceFee.toFixed(2) : '0.00'}</span>
+                    <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.serviceFee, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row total-row">
                     <span>סך הכל לתשלום:</span>
-                    <span>₪{negotiatedBundleBreakdown ? negotiatedBundleBreakdown.totalAmount.toFixed(2) : '0.00'}</span>
+                    <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.totalAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="price-row">
                     <span>מחיר כרטיס</span>
-                    <span>₪{Number(standardReceiptBaseTotal).toFixed(2)}</span>
+                    <span>{curSym}{formatAmountForCurrency(standardReceiptBaseTotal, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
                     <span>כמות:</span>
@@ -1138,11 +1157,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   )}
                   <div className="price-row">
                     <span>עמלת שירות (10%)</span>
-                    <span>₪{Number(standardReceiptFeeTotal).toFixed(2)}</span>
+                    <span>{curSym}{formatAmountForCurrency(standardReceiptFeeTotal, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row total-row">
                     <span>סך הכל לתשלום:</span>
-                    <span>₪{Number(standardReceiptTotalPay).toFixed(2)}</span>
+                    <span>{curSym}{formatAmountForCurrency(standardReceiptTotalPay, checkoutCurrency)}</span>
                   </div>
                 </>
               )}
@@ -1351,14 +1370,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   color: '#065f46',
                   fontSize: '0.9rem'
                 }}>
-                  ✓ מחיר מוסכם: ₪{effectivePrice} סה"כ ל-{quantity} כרטיסים (במקום ₪{getTicketPrice(ticket)} ליחידה)
+                  ✓ מחיר מוסכם: {curSym}{formatAmountForCurrency(effectivePrice, checkoutCurrency)} סה"כ ל-{quantity} כרטיסים (במקום {curSym}{getTicketPrice(ticket)} ליחידה)
                 </div>
               )}
               {isNegotiatedPrice ? (
                 <>
                   <div className="price-row">
                     <span>מחיר ליחידה:</span>
-                    <span>₪{negotiatedUnitBase != null ? negotiatedUnitBase.toFixed(2) : unitPriceForDisplay}</span>
+                    <span>{curSym}{negotiatedUnitBase != null ? formatAmountForCurrency(negotiatedUnitBase, checkoutCurrency) : formatAmountForCurrency(unitPriceForDisplay, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
                     <span>כמות:</span>
@@ -1372,22 +1391,22 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   )}
                   <div className="price-row">
                     <span>מחיר כרטיס</span>
-                    <span>₪{negotiatedBundleBreakdown ? negotiatedBundleBreakdown.baseAmount.toFixed(2) : '0.00'}</span>
+                    <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.baseAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
                     <span>עמלת שירות (10%)</span>
-                    <span>₪{negotiatedBundleBreakdown ? negotiatedBundleBreakdown.serviceFee.toFixed(2) : '0.00'}</span>
+                    <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.serviceFee, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row total-row">
                     <span>סך הכל לתשלום:</span>
-                    <span>₪{negotiatedBundleBreakdown ? negotiatedBundleBreakdown.totalAmount.toFixed(2) : '0.00'}</span>
+                    <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.totalAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="price-row">
                     <span>מחיר כרטיס</span>
-                    <span>₪{Number(standardReceiptBaseTotal).toFixed(2)}</span>
+                    <span>{curSym}{formatAmountForCurrency(standardReceiptBaseTotal, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
                     <span>כמות:</span>
@@ -1401,11 +1420,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   )}
                   <div className="price-row">
                     <span>עמלת שירות (10%)</span>
-                    <span>₪{Number(standardReceiptFeeTotal).toFixed(2)}</span>
+                    <span>{curSym}{formatAmountForCurrency(standardReceiptFeeTotal, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row total-row">
                     <span>סך הכל לתשלום:</span>
-                    <span>₪{Number(standardReceiptTotalPay).toFixed(2)}</span>
+                    <span>{curSym}{formatAmountForCurrency(standardReceiptTotalPay, checkoutCurrency)}</span>
                   </div>
                 </>
               )}
