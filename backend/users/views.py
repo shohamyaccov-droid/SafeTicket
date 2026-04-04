@@ -2434,6 +2434,20 @@ def guest_checkout(request):
                             status=status.HTTP_400_BAD_REQUEST,
                         )
 
+            # SECURITY: Never trust client total for buy-now — must match server-computed checkout total.
+            if not negotiated_offer:
+                sent_total = decimal_money(order_data.get('total_amount', 0))
+                expected_total = expected_buy_now_total(ticket.asking_price, order_quantity)
+                if not payment_amounts_match(sent_total, expected_total):
+                    return Response(
+                        {
+                            'error': (
+                                f'Invalid total amount. Expected {expected_total}, got {sent_total}'
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
             total_amount = order_data.get('total_amount', ticket.asking_price)
             event_name = order_data.get('event_name', ticket.event_name)
 
@@ -2908,6 +2922,11 @@ class TicketViewSet(viewsets.ModelViewSet):
                     has_access = True
                     break
         
+        # Staff / superuser: support access for verified investigations (same as receipt rules pattern).
+        if not has_access and request.user.is_authenticated:
+            if getattr(request.user, 'is_staff', False) or getattr(request.user, 'is_superuser', False):
+                has_access = True
+
         if not has_access:
             return Response(
                 {'error': 'You do not have permission to download this ticket.'},
@@ -4114,11 +4133,19 @@ class OfferViewSet(viewsets.ModelViewSet):
         from datetime import timedelta
 
         with transaction.atomic():
-            offer = Offer.objects.select_for_update().select_related(
-                'ticket', 'ticket__seller', 'buyer'
-            ).filter(
-                pk=pk
-            ).first()
+            # BOLA: Only participants may target this offer ID (404 for outsiders — no existence leak).
+            try:
+                pk_int = int(pk)
+            except (TypeError, ValueError):
+                return Response({'error': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+            offer = (
+                self.get_queryset()
+                .select_for_update()
+                .select_related('ticket', 'ticket__seller', 'buyer')
+                .filter(pk=pk_int)
+                .first()
+            )
             if not offer:
                 return Response({'error': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
 
