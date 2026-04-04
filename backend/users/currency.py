@@ -1,6 +1,6 @@
 """
 Event.country → ISO 4217 currency for listings, offers, orders (no mixed-currency negotiation).
-Fee math stays: base + 10% each quantized to 0.01 in the listing currency.
+Fee math: buyer pays base + 10%; seller net is base − 5% (platform total 15% on the bundle).
 """
 from __future__ import annotations
 

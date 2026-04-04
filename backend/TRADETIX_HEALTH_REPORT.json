@@ -1,0 +1,54 @@
+{
+  "audit": "TradeTix Mega-Audit",
+  "ts_utc": "2026-03-31T12:59:28.731631+00:00",
+  "api_base": "https://safeticket-api.onrender.com/api",
+  "web_origin": "https://safeticket-web.onrender.com",
+  "connectivity": {
+    "frontend_to_api": true,
+    "events_endpoint_http": 200,
+    "sample_body_is_json": true
+  },
+  "cors_preflight": {
+    "options_http": 200,
+    "access_control_allow_origin": "https://safeticket-web.onrender.com",
+    "cors_ok": true
+  },
+  "database_proxy": {
+    "status": "healthy_if_events_200",
+    "note": "Render tradetix/safeticket-db attached to API; no direct SQL from this script."
+  },
+  "morning_launch_qa": {
+    "exit_code": 1,
+    "parsed": true,
+    "errors": [
+      "download 154: HTTP 403",
+      "download 155: HTTP 403"
+    ],
+    "pdf_integrity_ok": false,
+    "price_rounding": {
+      "asking_price": 100,
+      "original_price": 100,
+      "ok": true,
+      "prefer_int_json": true
+    },
+    "offer_visibility_probe": {
+      "ok": true,
+      "buyer_id": 71,
+      "ticket_id": 154,
+      "seller_id": 2,
+      "can_offer_logic": true
+    }
+  },
+  "ui_score": {
+    "carousel_rtl": "pass_code_review_scroll_sync",
+    "branding": "TradeTix",
+    "notes": [],
+    "overall_percent": 75
+  },
+  "bugs_fixed_this_run": [
+    "JWT localStorage keys migrated to tradetix_jwt_* with safeticket_* one-time migration",
+    "BroadcastChannel renamed to tradetix-auth for multi-tab sync",
+    "Home carousel: scrollend + timeout re-sync for arrow disabled state after smooth scroll",
+    "Your listing banner text aligned to spec"
+  ]
+}

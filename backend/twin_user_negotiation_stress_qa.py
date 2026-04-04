@@ -515,12 +515,13 @@ def main() -> int:
             bsf_f = float(bsf) if bsf is not None else None
         except (TypeError, ValueError):
             fnp_f = nsr_f = tpb_f = bsf_f = None
+        expected_nsr = float(offer_base) * 0.95
         fin_ok = (
             fnp_f is not None
             and nsr_f is not None
             and tpb_f is not None
             and abs(fnp_f - float(offer_base)) <= 0.02
-            and abs(nsr_f - float(offer_base)) <= 0.02
+            and abs(nsr_f - expected_nsr) <= 0.02
             and abs(tpb_f - float(total_float)) <= 0.05
         )
         it["financial_audit"] = {

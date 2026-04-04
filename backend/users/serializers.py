@@ -371,12 +371,14 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'user', 'ticket', 'ticket_info', 'tickets', 'ticket_ids', 'guest_email', 'guest_phone', 'status',
             'total_amount', 'currency', 'quantity', 'event_name', 'created_at',
-            'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'total_paid_by_buyer', 'net_seller_revenue',
+            'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'seller_service_fee',
+            'total_paid_by_buyer', 'net_seller_revenue',
             'payout_status', 'payout_eligible_date',
         )
         read_only_fields = (
             'id', 'created_at', 'status', 'ticket_info', 'tickets', 'ticket_ids', 'currency',
-            'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'total_paid_by_buyer', 'net_seller_revenue',
+            'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'seller_service_fee',
+            'total_paid_by_buyer', 'net_seller_revenue',
             'payout_status', 'payout_eligible_date',
         )
     
@@ -645,7 +647,9 @@ class TicketSerializer(serializers.ModelSerializer):
     available_quantity = serializers.IntegerField(required=False, default=1, min_value=1, max_value=10)
     
     # Master Architecture fields
-    ticket_type = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='כרטיס אלקטרוני / PDF')
+    ticket_type = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, default='כרטיס אלקטרוני (PDF או תמונה)'
+    )
     split_type = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='כל כמות')
     is_obstructed_view = serializers.BooleanField(required=False, default=False)
     verification_status = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='ממתין לאישור', read_only=True)
@@ -721,9 +725,9 @@ class TicketSerializer(serializers.ModelSerializer):
     
     def validate_pdf_file(self, value):
         if not value:
-            raise serializers.ValidationError('קובץ PDF נדרש / A PDF file is required.')
+            raise serializers.ValidationError('קובץ כרטיס נדרש (PDF או תמונה) / A ticket file is required.')
         if getattr(value, 'size', None) is not None and int(value.size) < 1:
-            raise serializers.ValidationError('קובץ PDF ריק / PDF file is empty.')
+            raise serializers.ValidationError('קובץ כרטיס ריק / Ticket file is empty.')
         return value
 
     def validate_receipt_file(self, value):
@@ -890,13 +894,15 @@ class TicketListSerializer(serializers.ModelSerializer):
     event_name = serializers.SerializerMethodField()
     event_date = serializers.SerializerMethodField()
     venue = serializers.SerializerMethodField()
+    event_city = serializers.SerializerMethodField()
+    event_country = serializers.SerializerMethodField()
     section = serializers.SerializerMethodField()
     
     class Meta:
         model = Ticket
         fields = (
             'id', 'seller', 'seller_username', 'seller_is_verified', 'event', 'event_name', 'event_date', 
-            'venue', 'seat_row', 'section', 'row', 'seat_numbers',
+            'venue', 'event_city', 'event_country', 'seat_row', 'section', 'row', 'seat_numbers',
             'row_number', 'seat_number', 'listing_group_id',
             'original_price', 'asking_price', 'currency', 'delivery_method',
             'is_together', 'available_quantity', 'split_type', 'status', 'has_pdf_file',
@@ -918,6 +924,12 @@ class TicketListSerializer(serializers.ModelSerializer):
     
     def get_venue(self, obj):
         return obj.event.venue if obj.event else (obj.venue or '')
+
+    def get_event_city(self, obj):
+        return (obj.event.city or '').strip() if obj.event else ''
+
+    def get_event_country(self, obj):
+        return (obj.event.country or '').strip() if obj.event else ''
 
     def get_section(self, obj):
         return obj.get_section_display()
@@ -949,7 +961,8 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
             'id', 'ticket', 'ticket_details', 'tickets', 'status', 'total_amount', 'currency', 'quantity',
             'event_name', 'created_at', 'pdf_download_url', 'receipt_url',
             'event_image_url', 'status_timeline',
-            'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'total_paid_by_buyer', 'net_seller_revenue',
+            'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'seller_service_fee',
+            'total_paid_by_buyer', 'net_seller_revenue',
             'payout_status', 'payout_eligible_date',
         )
         read_only_fields = fields
@@ -988,6 +1001,7 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
                 'event_date': obj.ticket.event.date if obj.ticket.event else obj.ticket.event_date,
                 'venue': obj.ticket.event.venue if obj.ticket.event else (obj.ticket.venue or ''),
                 'city': obj.ticket.event.city if obj.ticket.event else '',
+                'country': obj.ticket.event.country if obj.ticket.event else '',
                 'seat_row': getattr(obj.ticket, 'seat_row', None),
                 'section': obj.ticket.get_section_display() if obj.ticket else '',
                 'row': getattr(obj.ticket, 'row', None) or '',
@@ -1064,6 +1078,8 @@ class ProfileListingSerializer(serializers.ModelSerializer):
     event_name_display = serializers.SerializerMethodField()
     event_date_display = serializers.SerializerMethodField()
     venue_display = serializers.SerializerMethodField()
+    event_city = serializers.SerializerMethodField()
+    event_country = serializers.SerializerMethodField()
     section = serializers.SerializerMethodField()
     expected_payout = serializers.SerializerMethodField()
     order_count = serializers.SerializerMethodField()
@@ -1078,6 +1094,7 @@ class ProfileListingSerializer(serializers.ModelSerializer):
             'section', 'row', 'seat_numbers',
             'original_price', 'asking_price', 'is_together', 'available_quantity', 'status', 'created_at',
             'event_image_url', 'event_name_display', 'event_date_display', 'venue_display',
+            'event_city', 'event_country',
             'expected_payout', 'order_count',
             'escrow_payout_status', 'escrow_payout_eligible_date', 'currency',
         )
@@ -1115,6 +1132,12 @@ class ProfileListingSerializer(serializers.ModelSerializer):
     
     def get_venue_display(self, obj):
         return obj.event.venue if obj.event else (obj.venue or '')
+
+    def get_event_city(self, obj):
+        return (obj.event.city or '').strip() if obj.event else ''
+
+    def get_event_country(self, obj):
+        return (obj.event.country or '').strip() if obj.event else ''
 
     def get_section(self, obj):
         return obj.get_section_display()
@@ -1221,9 +1244,24 @@ class OfferSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         ticket = attrs.get('ticket')
-        if ticket is not None and 'amount' in attrs and attrs['amount'] is not None:
-            cur = iso4217_for_ticket_listing(ticket)
-            attrs['amount'] = quantize_money_decimal(attrs['amount'], cur)
+        if ticket is None and getattr(self, 'instance', None) is not None:
+            ticket = self.instance.ticket
+
+        if 'amount' in attrs and attrs['amount'] is not None:
+            from decimal import Decimal
+
+            try:
+                amt = Decimal(str(attrs['amount']))
+            except Exception:
+                raise serializers.ValidationError({'amount': 'Invalid offer amount.'})
+            if amt <= 0:
+                raise serializers.ValidationError({'amount': 'Offer amount must be greater than zero.'})
+
+            if ticket is not None:
+                cur = iso4217_for_ticket_listing(ticket)
+                attrs['amount'] = quantize_money_decimal(amt, cur)
+                if attrs['amount'] <= 0:
+                    raise serializers.ValidationError({'amount': 'Offer amount must be greater than zero.'})
         return attrs
 
     def create(self, validated_data):

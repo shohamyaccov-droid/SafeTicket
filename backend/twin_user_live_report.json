@@ -1,0 +1,383 @@
+{
+  "script": "twin_user_negotiation_stress_qa",
+  "ts_utc": "2026-03-31T14:45:49.549153+00:00",
+  "api_base": "https://safeticket-api.onrender.com/api",
+  "users": {
+    "seller": "Seller_B",
+    "buyer": "Buyer_A"
+  },
+  "fix_summary": "Grouped listings: OfferViewSet.accept uses _group_reservation_blocks_seller_accept_offer and _group_available_units_for_offer_accept (sum active + buyer-reserved rows); rejects other pending offers on ticket_id__in group. Single-row: unchanged. Frontend: handleAcceptOffer clears setAcceptingOfferId in finally; apiErrorMessage + Toast show DRF validation/error body.",
+  "iterations": [
+    {
+      "i": 0,
+      "label": "run_1_list300_offer250",
+      "list_asking": 300,
+      "offer_base": 250,
+      "steps": [
+        {
+          "upload": true,
+          "ticket_id": 187
+        },
+        {
+          "approved": true
+        },
+        {
+          "offer_created": true,
+          "offer_id": 74
+        },
+        {
+          "buyer_reserve_after_offer": true,
+          "reserve_http": 200
+        },
+        {
+          "accept": true,
+          "status": "accepted"
+        },
+        {
+          "payment_simulate": true
+        },
+        {
+          "order": true,
+          "confirm_http": 200,
+          "order_status": "paid"
+        }
+      ],
+      "ticket_id": 187,
+      "offer_id": 74,
+      "order_id_pending": 69,
+      "financial_audit": {
+        "negotiated_base_ils": 250,
+        "buyer_total_charged_expected": 275.0,
+        "order_total_amount": "275.00",
+        "final_negotiated_price": "250.00",
+        "buyer_service_fee": "25.00",
+        "total_paid_by_buyer": "275.00",
+        "net_seller_revenue": "250.00",
+        "financial_truth_pass": true,
+        "amounts_integer_like": true,
+        "pdf_upload_sha256": "b37a58fb510237b6b60b1e610deecd3eb013ff71836b831faf66958f83affbe3"
+      },
+      "seller_dashboard_audit": {
+        "http": 200,
+        "matching_sold_rows": [
+          {
+            "id": 187,
+            "status": "sold",
+            "asking_price": "300.00",
+            "expected_payout": 250.0,
+            "escrow_payout_status": "locked"
+          }
+        ],
+        "api_ticket_status": "sold",
+        "my_sales_ui_label_he": "שולם",
+        "my_sales_ui_label_en": "Paid",
+        "note": "API returns status=sold; Dashboard maps to שולם in מכירות שלי (see Dashboard.jsx)."
+      },
+      "payout_matches_offer_base": true,
+      "ok": true
+    },
+    {
+      "i": 1,
+      "label": "run_2_list350_offer290",
+      "list_asking": 350,
+      "offer_base": 290,
+      "steps": [
+        {
+          "upload": true,
+          "ticket_id": 188
+        },
+        {
+          "approved": true
+        },
+        {
+          "offer_created": true,
+          "offer_id": 75
+        },
+        {
+          "buyer_reserve_after_offer": true,
+          "reserve_http": 200
+        },
+        {
+          "accept": true,
+          "status": "accepted"
+        },
+        {
+          "payment_simulate": true
+        },
+        {
+          "order": true,
+          "confirm_http": 200,
+          "order_status": "paid"
+        }
+      ],
+      "ticket_id": 188,
+      "offer_id": 75,
+      "order_id_pending": 70,
+      "financial_audit": {
+        "negotiated_base_ils": 290,
+        "buyer_total_charged_expected": 319.0,
+        "order_total_amount": "319.00",
+        "final_negotiated_price": "290.00",
+        "buyer_service_fee": "29.00",
+        "total_paid_by_buyer": "319.00",
+        "net_seller_revenue": "290.00",
+        "financial_truth_pass": true,
+        "amounts_integer_like": true,
+        "pdf_upload_sha256": "b37a58fb510237b6b60b1e610deecd3eb013ff71836b831faf66958f83affbe3"
+      },
+      "seller_dashboard_audit": {
+        "http": 200,
+        "matching_sold_rows": [
+          {
+            "id": 188,
+            "status": "sold",
+            "asking_price": "350.00",
+            "expected_payout": 290.0,
+            "escrow_payout_status": "locked"
+          }
+        ],
+        "api_ticket_status": "sold",
+        "my_sales_ui_label_he": "שולם",
+        "my_sales_ui_label_en": "Paid",
+        "note": "API returns status=sold; Dashboard maps to שולם in מכירות שלי (see Dashboard.jsx)."
+      },
+      "payout_matches_offer_base": true,
+      "ok": true
+    },
+    {
+      "i": 2,
+      "label": "run_3_list400_offer340",
+      "list_asking": 400,
+      "offer_base": 340,
+      "steps": [
+        {
+          "upload": true,
+          "ticket_id": 189
+        },
+        {
+          "approved": true
+        },
+        {
+          "offer_created": true,
+          "offer_id": 76
+        },
+        {
+          "buyer_reserve_after_offer": true,
+          "reserve_http": 200
+        },
+        {
+          "accept": true,
+          "status": "accepted"
+        },
+        {
+          "payment_simulate": true
+        },
+        {
+          "order": true,
+          "confirm_http": 200,
+          "order_status": "paid"
+        }
+      ],
+      "ticket_id": 189,
+      "offer_id": 76,
+      "order_id_pending": 71,
+      "financial_audit": {
+        "negotiated_base_ils": 340,
+        "buyer_total_charged_expected": 374.0,
+        "order_total_amount": "374.00",
+        "final_negotiated_price": "340.00",
+        "buyer_service_fee": "34.00",
+        "total_paid_by_buyer": "374.00",
+        "net_seller_revenue": "340.00",
+        "financial_truth_pass": true,
+        "amounts_integer_like": true,
+        "pdf_upload_sha256": "b37a58fb510237b6b60b1e610deecd3eb013ff71836b831faf66958f83affbe3"
+      },
+      "seller_dashboard_audit": {
+        "http": 200,
+        "matching_sold_rows": [
+          {
+            "id": 189,
+            "status": "sold",
+            "asking_price": "400.00",
+            "expected_payout": 340.0,
+            "escrow_payout_status": "locked"
+          }
+        ],
+        "api_ticket_status": "sold",
+        "my_sales_ui_label_he": "שולם",
+        "my_sales_ui_label_en": "Paid",
+        "note": "API returns status=sold; Dashboard maps to שולם in מכירות שלי (see Dashboard.jsx)."
+      },
+      "payout_matches_offer_base": true,
+      "ok": true
+    },
+    {
+      "i": 3,
+      "label": "run_4_list275_offer220",
+      "list_asking": 275,
+      "offer_base": 220,
+      "steps": [
+        {
+          "upload": true,
+          "ticket_id": 190
+        },
+        {
+          "approved": true
+        },
+        {
+          "offer_created": true,
+          "offer_id": 77
+        },
+        {
+          "buyer_reserve_after_offer": true,
+          "reserve_http": 200
+        },
+        {
+          "accept": true,
+          "status": "accepted"
+        },
+        {
+          "payment_simulate": true
+        },
+        {
+          "order": true,
+          "confirm_http": 200,
+          "order_status": "paid"
+        }
+      ],
+      "ticket_id": 190,
+      "offer_id": 77,
+      "order_id_pending": 72,
+      "financial_audit": {
+        "negotiated_base_ils": 220,
+        "buyer_total_charged_expected": 242.0,
+        "order_total_amount": "242.00",
+        "final_negotiated_price": "220.00",
+        "buyer_service_fee": "22.00",
+        "total_paid_by_buyer": "242.00",
+        "net_seller_revenue": "220.00",
+        "financial_truth_pass": true,
+        "amounts_integer_like": true,
+        "pdf_upload_sha256": "b37a58fb510237b6b60b1e610deecd3eb013ff71836b831faf66958f83affbe3"
+      },
+      "seller_dashboard_audit": {
+        "http": 200,
+        "matching_sold_rows": [
+          {
+            "id": 190,
+            "status": "sold",
+            "asking_price": "275.00",
+            "expected_payout": 220.0,
+            "escrow_payout_status": "locked"
+          }
+        ],
+        "api_ticket_status": "sold",
+        "my_sales_ui_label_he": "שולם",
+        "my_sales_ui_label_en": "Paid",
+        "note": "API returns status=sold; Dashboard maps to שולם in מכירות שלי (see Dashboard.jsx)."
+      },
+      "payout_matches_offer_base": true,
+      "ok": true
+    },
+    {
+      "i": 4,
+      "label": "run_5_list500_offer420",
+      "list_asking": 500,
+      "offer_base": 420,
+      "steps": [
+        {
+          "upload": true,
+          "ticket_id": 191
+        },
+        {
+          "approved": true
+        },
+        {
+          "offer_created": true,
+          "offer_id": 78
+        },
+        {
+          "buyer_reserve_after_offer": true,
+          "reserve_http": 200
+        },
+        {
+          "accept": true,
+          "status": "accepted"
+        },
+        {
+          "payment_simulate": true
+        },
+        {
+          "order": true,
+          "confirm_http": 200,
+          "order_status": "paid"
+        }
+      ],
+      "ticket_id": 191,
+      "offer_id": 78,
+      "order_id_pending": 73,
+      "financial_audit": {
+        "negotiated_base_ils": 420,
+        "buyer_total_charged_expected": 462.0,
+        "order_total_amount": "462.00",
+        "final_negotiated_price": "420.00",
+        "buyer_service_fee": "42.00",
+        "total_paid_by_buyer": "462.00",
+        "net_seller_revenue": "420.00",
+        "financial_truth_pass": true,
+        "amounts_integer_like": true,
+        "pdf_upload_sha256": "b37a58fb510237b6b60b1e610deecd3eb013ff71836b831faf66958f83affbe3"
+      },
+      "seller_dashboard_audit": {
+        "http": 200,
+        "matching_sold_rows": [
+          {
+            "id": 191,
+            "status": "sold",
+            "asking_price": "500.00",
+            "expected_payout": 420.0,
+            "escrow_payout_status": "locked"
+          }
+        ],
+        "api_ticket_status": "sold",
+        "my_sales_ui_label_he": "שולם",
+        "my_sales_ui_label_en": "Paid",
+        "note": "API returns status=sold; Dashboard maps to שולם in מכירות שלי (see Dashboard.jsx)."
+      },
+      "payout_matches_offer_base": true,
+      "ok": true
+    }
+  ],
+  "errors": [
+    "group_accept: 400 {\"error\":\"Not enough tickets available to accept this offer.\"}"
+  ],
+  "grouped_listing_cycle": {
+    "ok": false,
+    "label": "grouped_2_tickets_list300_offer250_bundle",
+    "steps": [
+      {
+        "upload": true,
+        "first_ticket_id": 192,
+        "listing_group_id": "edb8887e-c1c6-4c59-9e46-0306b8b3966c"
+      },
+      {
+        "admin_approve_x2": true
+      },
+      {
+        "offer_qty2": true,
+        "offer_id": 79
+      },
+      {
+        "reserve_first_row": true,
+        "http": 200
+      }
+    ],
+    "ticket_ids": [
+      192,
+      193
+    ],
+    "offer_id": 79,
+    "error": "group_accept: 400 {\"error\":\"Not enough tickets available to accept this offer.\"}"
+  }
+}

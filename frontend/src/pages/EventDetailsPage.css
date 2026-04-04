@@ -1656,23 +1656,73 @@
   }
 
   .venue-map-card-content {
-    min-height: 140px;
-    max-height: min(34vh, 260px);
+    padding: 0.65rem;
+    box-sizing: border-box;
+    min-height: max(220px, min(34vh, 280px));
+    max-height: min(42vh, 320px);
+    display: flex;
+    flex-direction: column;
   }
 
-  /* Interactive Menora map — shorter on phones */
+  /* Interactive Menora map — room to read full court/stage */
   .venue-map-sticky-container .interactive-map-container {
-    min-height: 0 !important;
-    max-height: min(34vh, 260px) !important;
-    aspect-ratio: 16 / 11;
+    flex: 1;
+    min-height: 220px !important;
+    max-height: min(40vh, 300px) !important;
+    aspect-ratio: unset !important;
+    padding: 0.45rem;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
   }
 
-  /* VenueMapPin fallback — drop tall min-height / padding aspect on small screens */
+  .venue-map-sticky-container .svg-map-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .venue-map-sticky-container .interactive-stadium-svg {
+    width: auto !important;
+    height: auto !important;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  /* VenueMapPin — pin overlay stays %-based on a fixed frame; map uses contain */
   .venue-map-sticky-container .venue-map-wrapper {
-    min-height: 0 !important;
-    padding-bottom: 0 !important;
-    height: min(34vh, 240px);
-    max-height: min(34vh, 260px);
+    position: relative !important;
+    min-height: 220px !important;
+    height: min(38vh, 280px) !important;
+    max-height: min(40vh, 300px) !important;
+    padding: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    box-sizing: border-box;
+  }
+
+  .venue-map-sticky-container .venue-map-image {
+    position: absolute !important;
+    inset: 0.5rem;
+    width: calc(100% - 1rem) !important;
+    height: calc(100% - 1rem) !important;
+    object-fit: contain;
+    object-position: center;
+  }
+
+  .venue-map-sticky-container .venue-map-wrapper > .stadium-svg {
+    position: absolute !important;
+    inset: 0.5rem;
+    width: calc(100% - 1rem) !important;
+    height: calc(100% - 1rem) !important;
+    object-fit: contain;
+    object-position: center;
   }
 }
 
@@ -1726,22 +1776,74 @@
 
   .venue-map-card-content {
     flex: 1;
-    min-height: 28vh;
-    height: clamp(28vh, 35vh, 40vh);
-    max-height: 40vh;
+    padding: 0.65rem;
+    box-sizing: border-box;
+    min-height: max(220px, 30vh);
+    height: clamp(max(220px, 28vh), 36vh, 44vh);
+    max-height: min(44vh, 340px);
+    display: flex;
+    flex-direction: column;
   }
 
   .venue-map-sticky-container .interactive-map-container {
-    height: 100% !important;
-    min-height: 26vh !important;
-    max-height: 40vh !important;
+    flex: 1;
+    min-height: 220px !important;
+    max-height: none !important;
     aspect-ratio: unset !important;
+    height: auto !important;
+    padding: 0.5rem;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
   }
 
   .venue-map-sticky-container .venue-map-wrapper {
-    height: 100% !important;
-    min-height: 26vh !important;
-    max-height: 40vh !important;
+    position: relative !important;
+    flex: 1;
+    min-height: 220px !important;
+    height: clamp(220px, 36vh, 300px) !important;
+    max-height: min(40vh, 320px) !important;
+    padding: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    box-sizing: border-box;
+  }
+
+  .venue-map-sticky-container .svg-map-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    min-height: 200px;
+  }
+
+  .venue-map-sticky-container .interactive-stadium-svg {
+    width: auto !important;
+    height: auto !important;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  .venue-map-sticky-container .venue-map-image {
+    position: absolute !important;
+    inset: 0.5rem;
+    width: calc(100% - 1rem) !important;
+    height: calc(100% - 1rem) !important;
+    object-fit: contain;
+    object-position: center;
+  }
+
+  .venue-map-sticky-container .venue-map-wrapper > .stadium-svg {
+    position: absolute !important;
+    inset: 0.5rem;
+    width: calc(100% - 1rem) !important;
+    height: calc(100% - 1rem) !important;
+    object-fit: contain;
+    object-position: center;
   }
 
   .tickets-list-container {

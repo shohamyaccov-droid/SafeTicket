@@ -4,7 +4,7 @@ QA Marathon: Full offer flow price integrity (Shoham scenario).
 Seller lists 100 NIS -> Buyer offers 80 -> Seller accepts -> Buyer checks out.
 
 Asserts Order + serializers + buyer dashboard JSON show:
-  final_negotiated_price=80, buyer fee, total_paid_by_buyer=ceil(80*1.10)=88, net_seller_revenue=88.
+  final_negotiated_price=80, buyer fee 8, seller fee 4, total_paid_by_buyer=88, net_seller_revenue=76 (95% of base).
 
 Run from backend directory (no server required):
     python qa_price_integrity.py
@@ -41,7 +41,9 @@ User = get_user_model()
 LISTING_PRICE = 100
 OFFER_BASE = 80
 EXPECTED_TOTAL = float(math.ceil(OFFER_BASE * 1.10))  # 88
-EXPECTED_FEE = EXPECTED_TOTAL - OFFER_BASE
+EXPECTED_BUYER_FEE = EXPECTED_TOTAL - OFFER_BASE
+EXPECTED_SELLER_FEE = float(OFFER_BASE * 0.05)
+EXPECTED_NET_SELLER = float(OFFER_BASE * 0.95)
 
 
 def _pdf_bytes():
@@ -153,16 +155,30 @@ def main() -> int:
     )
     assert r_ord.status_code == 201, (r_ord.status_code, r_ord.content)
     body = r_ord.json()
+    order_id = body['id']
+    pay_tok = body.get('payment_confirm_token')
+    assert pay_tok, 'Order should expose payment_confirm_token while pending_payment'
 
-    # 5) Assert API response
+    r_cf = buyer_cli.post(
+        f'/api/users/orders/{order_id}/confirm-payment/',
+        {
+            'mock_payment_ack': True,
+            'payment_confirm_token': pay_tok,
+        },
+        format='json',
+        **_host_kw(),
+    )
+    assert r_cf.status_code == 200, (r_cf.status_code, r_cf.content)
+    body = r_cf.json()
+
+    # 5) Assert API response (pricing fields set at payment confirm)
     assert abs(float(body['total_amount']) - EXPECTED_TOTAL) < 0.02
     assert abs(float(body['total_paid_by_buyer']) - EXPECTED_TOTAL) < 0.02
     assert abs(float(body['final_negotiated_price']) - OFFER_BASE) < 0.02
-    assert abs(float(body['buyer_service_fee']) - EXPECTED_FEE) < 0.02
-    assert abs(float(body['net_seller_revenue']) - OFFER_BASE) < 0.02
+    assert abs(float(body['buyer_service_fee']) - EXPECTED_BUYER_FEE) < 0.02
+    assert abs(float(body['seller_service_fee']) - EXPECTED_SELLER_FEE) < 0.02
+    assert abs(float(body['net_seller_revenue']) - EXPECTED_NET_SELLER) < 0.02
     assert body.get('related_offer') == offer_id
-
-    order_id = body['id']
 
     # 6) DB row
     o = Order.objects.get(id=order_id)
@@ -193,7 +209,11 @@ def main() -> int:
     print(f'Listing price: {LISTING_PRICE} NIS')
     print(f'Offer (negotiated base): {OFFER_BASE} NIS')
     print(f'Expected buyer total (ceil base×1.10): {EXPECTED_TOTAL} NIS')
-    print(f'Order {order_id}: total_paid_by_buyer={mine.get("total_paid_by_buyer")}, fee={mine.get("buyer_service_fee")}')
+    print(
+        f'Order {order_id}: total_paid_by_buyer={mine.get("total_paid_by_buyer")}, '
+        f'buyer_fee={mine.get("buyer_service_fee")}, seller_fee={mine.get("seller_service_fee")}, '
+        f'net_seller={mine.get("net_seller_revenue")}'
+    )
     print('\nPASS: qa_price_integrity — negotiated price, fee, and totals are consistent across Order, serializers, and dashboard.')
     return 0
 

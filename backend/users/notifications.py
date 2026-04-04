@@ -6,6 +6,7 @@ and correct transaction boundaries (OfferViewSet, confirm_order_payment).
 from __future__ import annotations
 
 import logging
+import threading
 from decimal import Decimal
 
 from django.conf import settings
@@ -48,6 +49,25 @@ def _event_name_from_ticket(ticket) -> str:
     return (ticket.event_name or '').strip() or 'Unknown event'
 
 
+def _send_smtp_in_background(msg: EmailMultiAlternatives, template_basename: str, to_email: str) -> None:
+    """Run SMTP in a worker thread; never raise to the HTTP layer."""
+    try:
+        msg.send(fail_silently=True)
+        logger.info('notifications: sent %s to %s', template_basename, to_email)
+    except Exception as exc:
+        logger.error(
+            'notifications: SMTP failed for %s to %s: %s',
+            template_basename,
+            to_email,
+            _safe_err(exc),
+            exc_info=True,
+        )
+
+
+def _safe_err(exc: BaseException) -> str:
+    return (str(exc) or repr(exc))[:500]
+
+
 def _send_notification(
     subject: str,
     template_basename: str,
@@ -72,11 +92,22 @@ def _send_notification(
             to=[to_email.strip()],
         )
         msg.attach_alternative(html_body, 'text/html')
-        # Never let SMTP / verification issues break marketplace flows.
-        msg.send(fail_silently=True)
-        logger.info('notifications: sent %s to %s', template_basename, to_email)
-    except Exception:
-        logger.exception('notifications: failed %s to %s', template_basename, to_email)
+    except Exception as exc:
+        logger.error(
+            'notifications: build failed for %s to %s: %s',
+            template_basename,
+            to_email,
+            _safe_err(exc),
+            exc_info=True,
+        )
+        return
+
+    thread = threading.Thread(
+        target=_send_smtp_in_background,
+        args=(msg, template_basename, to_email.strip()),
+        daemon=True,
+    )
+    thread.start()
 
 
 def notify_new_offer(offer) -> None:

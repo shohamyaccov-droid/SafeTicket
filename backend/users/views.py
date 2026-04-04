@@ -34,6 +34,7 @@ import io
 import logging
 from collections import defaultdict
 import secrets
+import threading
 import traceback
 import uuid
 from pypdf import PdfReader, PdfWriter
@@ -53,6 +54,7 @@ def _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity)
     )
     order.final_negotiated_price = breakdown['final_negotiated_price']
     order.buyer_service_fee = breakdown['buyer_service_fee']
+    order.seller_service_fee = breakdown['seller_service_fee']
     order.total_paid_by_buyer = breakdown['total_paid_by_buyer']
     order.net_seller_revenue = breakdown['net_seller_revenue']
     order.related_offer = negotiated_offer if negotiated_offer else None
@@ -68,6 +70,7 @@ def _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity)
         update_fields=[
             'final_negotiated_price',
             'buyer_service_fee',
+            'seller_service_fee',
             'total_paid_by_buyer',
             'net_seller_revenue',
             'related_offer',
@@ -135,10 +138,10 @@ def _ticket_pdf_persisted(ticket) -> bool:
                 try:
                     pf.open('rb')
                     try:
-                        magic = pf.read(5)
+                        magic = pf.read(12)
                     finally:
                         pf.close()
-                    if magic.startswith(b'%PDF'):
+                    if _ticket_attachment_magic_bytes_ok(magic):
                         return True
                 except Exception:
                     logger.warning('pdf persistence verify read failed pk=%s', ticket.pk, exc_info=True)
@@ -418,14 +421,14 @@ def _download_ticket_pdf_bytes(ticket):
         r.raise_for_status()
         return r.content
 
-    def _try_pdf_bytes(label, url):
-        """Fetch URL; require PDF magic so HTML/JSON error pages do not count as success."""
+    def _try_ticket_attachment_bytes(label, url):
+        """Fetch URL; require PDF/JPEG/PNG magic so HTML/JSON error pages do not count as success."""
         body = _http_get_bytes(label, url)
         if body is None:
             return None
         body = body.lstrip(b'\xef\xbb\xbf \t\r\n')
-        if not body.startswith(b'%PDF'):
-            raise ValueError(f'{label}: response_not_pdf')
+        if not _ticket_attachment_magic_bytes_ok(body[:12]):
+            raise ValueError(f'{label}: response_not_ticket_file')
         return body
 
     # 0a) Signed Admin download URL → api.cloudinary.com (works when res.cloudinary.com delivery returns 401)
@@ -434,7 +437,7 @@ def _download_ticket_pdf_bytes(ticket):
             ext = (_os.path.splitext(pid)[1].lstrip('.') or 'pdf').lower()
             try:
                 api_dl = private_download_url(pid, ext, resource_type='raw', type='upload')
-                return _try_pdf_bytes('private_download_api', api_dl)
+                return _try_ticket_attachment_bytes('private_download_api', api_dl)
             except Exception as e:
                 errors.append(('private_download_api', str(e)[:400]))
 
@@ -511,7 +514,7 @@ def _download_ticket_pdf_bytes(ticket):
 
             for label, url in url_jobs:
                 try:
-                    return _try_pdf_bytes(label, url)
+                    return _try_ticket_attachment_bytes(label, url)
                 except Exception as e:
                     errors.append((label, str(e)[:400]))
             break
@@ -519,7 +522,7 @@ def _download_ticket_pdf_bytes(ticket):
     # 1) Public delivery URL (CloudinaryResource / FileField.url)
     try:
         url = ticket.pdf_file.url
-        return _try_pdf_bytes('public', url)
+        return _try_ticket_attachment_bytes('public', url)
     except Exception as e:
         errors.append(('public_url', str(e)[:400]))
 
@@ -532,7 +535,7 @@ def _download_ticket_pdf_bytes(ticket):
             sign_url=False,
             secure=True,
         )
-        return _try_pdf_bytes('unsigned', url)
+        return _try_ticket_attachment_bytes('unsigned', url)
     except Exception as e:
         errors.append(('unsigned', str(e)[:400]))
 
@@ -545,7 +548,7 @@ def _download_ticket_pdf_bytes(ticket):
             sign_url=True,
             secure=True,
         )
-        return _try_pdf_bytes('signed', url)
+        return _try_ticket_attachment_bytes('signed', url)
     except Exception as e:
         errors.append(('signed', str(e)[:400]))
 
@@ -554,8 +557,8 @@ def _download_ticket_pdf_bytes(ticket):
         ticket.pdf_file.open('rb')
         try:
             raw = ticket.pdf_file.read()
-            if raw and not raw.startswith(b'%PDF'):
-                raise ValueError('storage_open: not_pdf')
+            if raw and not _ticket_attachment_magic_bytes_ok(raw[:12]):
+                raise ValueError('storage_open: not_ticket_file')
             return raw
         finally:
             ticket.pdf_file.close()
@@ -578,22 +581,65 @@ def _pdf_magic_bytes_ok(uploaded_file) -> bool:
     return bool(head.startswith(b'%PDF'))
 
 
-def _upload_mime_allowed(uploaded_file, relax: bool) -> bool:
+def _ticket_attachment_magic_bytes_ok(head: bytes) -> bool:
+    """True if head looks like a PDF, JPEG, or PNG (ticket upload)."""
+    if not head:
+        return False
+    if head.startswith(b'%PDF'):
+        return True
+    if head.startswith(b'\xff\xd8\xff'):
+        return True
+    if len(head) >= 8 and head.startswith(b'\x89PNG\r\n\x1a\n'):
+        return True
+    return False
+
+
+def _upload_is_ticket_attachment(uploaded_file, relax: bool) -> bool:
     """
-    Strict: application/pdf only (+ magic bytes %PDF).
-    Relaxed (testing): also allow common browser fallbacks for real PDFs (octet-stream, empty).
-    Reject obvious non-PDF MIME families (images, HTML, etc.) even if magic bytes were spoofed.
+    Allow real PDFs plus JPEG/PNG images (e.g. QR screenshots). Validates magic bytes.
+    Strict: block obvious junk MIME families; require type aligned with magic when possible.
     """
     ct = (getattr(uploaded_file, 'content_type', '') or '').strip().lower()
     if ct and not relax:
-        blocked_prefixes = ('image/', 'text/', 'video/', 'audio/', 'multipart/')
+        blocked_prefixes = ('text/', 'video/', 'audio/', 'multipart/')
         if any(ct.startswith(p) for p in blocked_prefixes):
             return False
-    if ct == 'application/pdf':
-        return _pdf_magic_bytes_ok(uploaded_file)
-    if relax and ct in ('application/octet-stream', 'binary/octet-stream', 'application/x-download', ''):
-        return _pdf_magic_bytes_ok(uploaded_file)
+    uploaded_file.seek(0)
+    head = uploaded_file.read(12)
+    uploaded_file.seek(0)
+    if not _ticket_attachment_magic_bytes_ok(head):
+        return False
+    is_pdf = head.startswith(b'%PDF')
+    is_jpeg = head.startswith(b'\xff\xd8\xff')
+    is_png = len(head) >= 8 and head.startswith(b'\x89PNG\r\n\x1a\n')
+    if relax:
+        return is_pdf or is_jpeg or is_png
+    if is_pdf:
+        return ct in (
+            'application/pdf',
+            'application/x-pdf',
+            '',
+            'application/octet-stream',
+            'binary/octet-stream',
+            'application/x-download',
+        )
+    if is_jpeg:
+        return ct in ('image/jpeg', 'image/jpg', '', 'application/octet-stream', 'binary/octet-stream')
+    if is_png:
+        return ct in ('image/png', '', 'application/octet-stream', 'binary/octet-stream')
     return False
+
+
+def _upload_mime_allowed(uploaded_file, relax: bool) -> bool:
+    """Backward-compatible name: ticket uploads may be PDF or image."""
+    return _upload_is_ticket_attachment(uploaded_file, relax)
+
+
+def _uploaded_file_head_is_pdf(uploaded_file) -> bool:
+    uploaded_file.seek(0)
+    head = uploaded_file.read(5)
+    uploaded_file.seek(0)
+    return head.startswith(b'%PDF')
 
 
 def _pdf_reader_for_upload(uploaded_file, relax: bool) -> PdfReader:
@@ -1242,6 +1288,7 @@ def order_receipt(request, order_id):
         'total_paid_by_buyer': str(order.total_paid_by_buyer) if order.total_paid_by_buyer is not None else str(order.total_amount),
         'final_negotiated_price': str(order.final_negotiated_price) if order.final_negotiated_price is not None else None,
         'buyer_service_fee': str(order.buyer_service_fee) if order.buyer_service_fee is not None else None,
+        'seller_service_fee': str(order.seller_service_fee) if order.seller_service_fee is not None else None,
         'net_seller_revenue': str(order.net_seller_revenue) if order.net_seller_revenue is not None else None,
         'currency': (order.currency or 'ILS').strip().upper(),
         'quantity': order.quantity,
@@ -1434,7 +1481,7 @@ def create_order(request):
                     return Response(
                         {
                             'error': (
-                                f'Amount mismatch. Expected {expected_total:.2f} (base + 10% fee), '
+                                f'Amount mismatch. Expected {expected_total:.2f} (negotiated base + 10% buyer fee), '
                                 f'got {received_total}'
                             )
                         },
@@ -1892,13 +1939,30 @@ def confirm_order_payment(request, order_id):
         )
 
     recipient = (order.user.email if order.user_id else order.guest_email) or ''
-    if recipient:
+    order_pk = order.pk
+    recipient_copy = recipient
+
+    def _send_order_receipt_background():
+        from django.db import close_old_connections
+
+        close_old_connections()
         try:
+            from .models import Order
             from .utils.emails import send_receipt_with_pdf
 
-            send_receipt_with_pdf(recipient, order)
+            ord_row = Order.objects.filter(pk=order_pk).first()
+            if ord_row and recipient_copy:
+                send_receipt_with_pdf(recipient_copy, ord_row)
         except Exception:
-            logger.exception('confirm_order_payment: receipt email failed')
+            logger.exception('confirm_order_payment: receipt email failed (background)')
+        finally:
+            close_old_connections()
+
+    def _start_receipt_email_thread():
+        threading.Thread(target=_send_order_receipt_background, daemon=True).start()
+
+    if recipient_copy:
+        transaction.on_commit(_start_receipt_email_thread)
 
     try:
         from .notifications import notify_seller_ticket_sold_escrow
@@ -2477,8 +2541,18 @@ class TicketViewSet(viewsets.ModelViewSet):
         available_quantity = int(request.data.get('available_quantity', 1))
         relax_pdf = getattr(settings, 'RELAX_PDF_UPLOAD_VALIDATION', False)
 
-        # AUTO-SPLIT MODE: 1 multi-page PDF for N tickets
+        # AUTO-SPLIT MODE: 1 multi-page PDF for N tickets (images cannot be split)
         is_auto_split_mode = len(pdf_files) == 1 and available_quantity > 1
+        if is_auto_split_mode and not _uploaded_file_head_is_pdf(pdf_files[0]):
+            return Response(
+                {
+                    'error': (
+                        'למספר כרטיסים נדרש קובץ PDF עם עמוד נפרד לכל כרטיס, או העלה קובץ נפרד '
+                        '(PDF או תמונה) לכל כרטיס.'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if is_auto_split_mode:
             single_pdf = pdf_files[0]
             try:
@@ -2511,7 +2585,7 @@ class TicketViewSet(viewsets.ModelViewSet):
 
         if not pdf_files:
             return Response(
-                {'error': 'At least one PDF file is required.'},
+                {'error': 'At least one ticket file (PDF or image) is required.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -2546,16 +2620,22 @@ class TicketViewSet(viewsets.ModelViewSet):
                 return Response(
                     {
                         'error': (
-                            f'סוג קובץ לא חוקי או חתימת PDF חסרה (נדרש קובץ PDF אמיתי). התקבל: {content_type or "לא ידוע"}'
+                            f'סוג קובץ לא חוקי (נדרש PDF, JPG או PNG תקף). התקבל: {content_type or "לא ידוע"}'
                         )
                     },
                     status=status.HTTP_400_BAD_REQUEST
                 )
             # Extension
             name = getattr(pdf_file, 'name', '') or ''
-            if not name.lower().endswith('.pdf'):
+            lower = name.lower()
+            allowed_ext = ('.pdf', '.jpg', '.jpeg', '.png')
+            if not any(lower.endswith(ext) for ext in allowed_ext):
                 return Response(
-                    {'error': f'שם הקובץ חייב להסתיים ב-.pdf. התקבל: {name or "ללא שם"}'},
+                    {
+                        'error': (
+                            f'סיומת לא נתמכת. השתמש ב-.pdf, .jpg, .jpeg או .png. התקבל: {name or "ללא שם"}'
+                        )
+                    },
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
@@ -2563,7 +2643,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         pdf_filenames = [f.name for f in pdf_files]
         if len(pdf_filenames) != len(set(pdf_filenames)):
             return Response(
-                {'error': 'Each ticket must have a unique PDF file. Duplicate files are not allowed.'},
+                {'error': 'Each ticket must have a unique file. Duplicate files are not allowed.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -2581,8 +2661,13 @@ class TicketViewSet(viewsets.ModelViewSet):
                 
                 if not row_number or not seat_number:
                     return Response(
-                        {'error': f'כל כרטיס חייב לכלול שורה, כיסא וקובץ PDF ייחודי. חסרים נתונים עבור כרטיס {i + 1}.'},
-                        status=status.HTTP_400_BAD_REQUEST
+                        {
+                            'error': (
+                                f'כל כרטיס חייב לכלול שורה, כיסא וקובץ כרטיס ייחודי. '
+                                f'חסרים נתונים עבור כרטיס {i + 1}.'
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
                     )
                 
                 seat_data_list.append({
@@ -2853,8 +2938,23 @@ class TicketViewSet(viewsets.ModelViewSet):
             # ASCII-only filename for Content-Disposition (avoid Latin-1 encoding errors)
             safe_ascii = ''.join(c if ord(c) < 128 and c not in '"\\' else '_' for c in safe_filename) or f'ticket_{ticket.id}.pdf'
 
+            import mimetypes
+
             from django.http import HttpResponse
-            response = HttpResponse(content, content_type='application/pdf')
+
+            guessed, _ = mimetypes.guess_type(safe_ascii)
+            ct = guessed
+            if not ct:
+                sample = (content or b'')[:12]
+                if sample.startswith(b'%PDF'):
+                    ct = 'application/pdf'
+                elif sample.startswith(b'\xff\xd8\xff'):
+                    ct = 'image/jpeg'
+                elif len(sample) >= 8 and sample.startswith(b'\x89PNG\r\n\x1a\n'):
+                    ct = 'image/png'
+                else:
+                    ct = 'application/octet-stream'
+            response = HttpResponse(content, content_type=ct)
             response['Content-Disposition'] = f'attachment; filename="{safe_ascii}"'
             return response
         except PdfFetchError as e:
@@ -3483,6 +3583,8 @@ def _admin_staff_or_superuser(request):
 def admin_dashboard_stats(request):
     """
     Aggregated platform metrics for admin control panel.
+    Platform fees = buyer_service_fee (10%) + seller_service_fee (5%) per order, in listing currency.
+    totals_ils_* uses FX_RATES_TO_ILS (see settings / env FX_USD_ILS, etc.).
     """
     if not _admin_staff_or_superuser(request):
         return Response(
@@ -3490,8 +3592,14 @@ def admin_dashboard_stats(request):
             status=status.HTTP_403_FORBIDDEN,
         )
 
+    from users.exchange_rates import platform_fx_rates_for_api, rollup_fees_and_revenue_ils
+
     dec = DecimalField(max_digits=14, decimal_places=2)
-    zero = Value(0, output_field=dec)
+    zero = Value(Decimal('0'), dec)
+    buyer_part = Coalesce(F('buyer_service_fee'), zero)
+    seller_part = Coalesce(F('seller_service_fee'), zero)
+    fee_expr = buyer_part + seller_part
+    rev_expr = Coalesce(F('total_paid_by_buyer'), F('total_amount'), zero)
     paid_qs = Order.objects.filter(status__in=['paid', 'completed'])
     start_today = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
     paid_today = paid_qs.filter(created_at__gte=start_today)
@@ -3499,8 +3607,8 @@ def admin_dashboard_stats(request):
     def _metrics_by_currency(qs):
         by_currency = {}
         for row in qs.values('currency').annotate(
-            revenue=Sum(Coalesce('total_paid_by_buyer', 'total_amount', zero)),
-            fees=Sum(Coalesce('buyer_service_fee', zero)),
+            revenue=Sum(rev_expr, output_field=dec),
+            fees=Sum(fee_expr, output_field=dec),
             tickets_sold=Sum('quantity'),
         ):
             cur = str(row['currency'] or 'ILS').strip().upper()
@@ -3510,10 +3618,13 @@ def admin_dashboard_stats(request):
                 'tickets_sold': int(row['tickets_sold'] or 0),
             }
         total_tickets = qs.aggregate(t=Sum('quantity'))['t'] or 0
-        return {
+        out = {
             'tickets_sold': int(total_tickets),
             'by_currency': by_currency,
+            'totals_ils': rollup_fees_and_revenue_ils(by_currency),
+            'fx_rates_to_ils': platform_fx_rates_for_api(),
         }
+        return out
 
     return Response(
         {
@@ -3917,61 +4028,76 @@ class OfferViewSet(viewsets.ModelViewSet):
         from django.utils import timezone
         from datetime import timedelta
         from rest_framework.exceptions import ValidationError
-        
+
         ticket = serializer.validated_data['ticket']
         buyer = self.request.user
-        
-        # CRITICAL SECURITY: Prevent sellers from making offers on their own tickets
-        if ticket.seller == buyer:
-            raise ValidationError(
-                {'ticket': ['You cannot make an offer on your own ticket.']},
-                code='invalid'
+        ticket_pk = ticket.pk
+
+        with transaction.atomic():
+            ticket_locked = Ticket.objects.select_for_update().select_related('event').get(pk=ticket_pk)
+            recent_cutoff = timezone.now() - timedelta(seconds=5)
+            if Offer.objects.filter(
+                buyer=buyer,
+                ticket_id=ticket_pk,
+                offer_round_count=0,
+                created_at__gte=recent_cutoff,
+            ).exists():
+                raise ValidationError(
+                    {
+                        'non_field_errors': [
+                            'ההצעה נשלחה זה עתה. המתן רגע לפני ניסיון נוסף.',
+                        ]
+                    },
+                    code='duplicate_offer',
+                )
+
+            if ticket_locked.seller_id == buyer.id:
+                raise ValidationError(
+                    {'ticket': ['You cannot make an offer on your own ticket.']},
+                    code='invalid',
+                )
+
+            listing_group_id = getattr(ticket_locked, 'listing_group_id', None) or ''
+            old_pending = Offer.objects.filter(
+                buyer=buyer,
+                status='pending',
+                offer_round_count=0,
             )
-        
-        # INVENTORY LEAK FIX: Cancel any existing pending offers by this buyer for the same listing
-        # before creating the new offer. This releases reserved tickets back to inventory.
-        listing_group_id = getattr(ticket, 'listing_group_id', None) or ''
-        old_pending = Offer.objects.filter(
-            buyer=buyer,
-            status='pending',
-            offer_round_count=0  # Only initial offers (not counter-offers in a chain)
-        )
-        if listing_group_id:
-            old_pending = old_pending.filter(ticket__listing_group_id=listing_group_id)
-        else:
-            old_pending = old_pending.filter(ticket_id=ticket.id)
-        updated = old_pending.update(status='rejected')
-        if updated:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.info(f'Offer leak fix: cancelled {updated} pending offer(s) for buyer {buyer.id} on listing {listing_group_id or ticket.id}')
-        
-        # Check if ticket is active
-        if ticket.status != 'active':
-            raise PermissionDenied("This ticket is not available for offers.")
-        
-        # Block offers on past events
-        if _is_event_past(ticket):
-            raise ValidationError(
-                {'ticket': ['This event has already passed.']},
-                code='invalid'
+            if listing_group_id:
+                old_pending = old_pending.filter(ticket__listing_group_id=listing_group_id)
+            else:
+                old_pending = old_pending.filter(ticket_id=ticket_locked.id)
+            updated = old_pending.update(status='rejected')
+            if updated:
+                logger.info(
+                    'Offer leak fix: cancelled %s pending offer(s) for buyer %s on listing %s',
+                    updated,
+                    buyer.id,
+                    listing_group_id or ticket_locked.id,
+                )
+
+            if ticket_locked.status != 'active':
+                raise PermissionDenied('This ticket is not available for offers.')
+
+            if _is_event_past(ticket_locked):
+                raise ValidationError(
+                    {'ticket': ['This event has already passed.']},
+                    code='invalid',
+                )
+
+            expires_at = timezone.now() + timedelta(hours=48)
+            offer = serializer.save(
+                buyer=buyer,
+                expires_at=expires_at,
+                status='pending',
             )
-        
-        # Set expiration to 48 hours from now
-        expires_at = timezone.now() + timedelta(hours=48)
-        
-        offer = serializer.save(
-            buyer=buyer,
-            expires_at=expires_at,
-            status='pending'
-        )
+
         try:
             from .notifications import notify_new_offer
 
             notify_new_offer(offer)
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).exception(f'Failed to send offer notification: {e}')
+            logger.exception('Failed to send offer notification: %s', e)
     
     def _get_offer_recipient(self, offer):
         """Return the user who can accept/reject this offer (the recipient, not the creator)."""

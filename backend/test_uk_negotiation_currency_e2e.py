@@ -154,8 +154,14 @@ class UkNegotiationCurrencyE2ETest(TestCase):
         order = Order.objects.get(pk=order_id)
         self.assertEqual(order.currency, 'GBP')
         self.assertEqual(order.buyer_service_fee, Decimal('48.00'))
+        self.assertEqual(order.seller_service_fee, Decimal('24.00'))
+        self.assertEqual(order.final_negotiated_price, Decimal('480.00'))
+        self.assertEqual(order.net_seller_revenue, Decimal('456.00'))
         self.assertEqual(order.total_paid_by_buyer, Decimal('528.00'))
-        line(f'[D2] Paid: currency={order.currency} fee={order.buyer_service_fee} total={order.total_paid_by_buyer}')
+        line(
+            f'[D2] Paid: currency={order.currency} buyer_fee={order.buyer_service_fee} '
+            f'seller_fee={order.seller_service_fee} net_to_seller={order.net_seller_revenue} total={order.total_paid_by_buyer}'
+        )
 
         # Step E — Escrow: 24h after ends_at
         expected_eligible = self.ends + timedelta(hours=24)

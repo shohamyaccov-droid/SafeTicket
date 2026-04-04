@@ -1,9 +1,10 @@
 """
-Order pricing: buyer pays base (seller bundle) + 10% service fee.
-Amounts use Decimal quantized to 0.01 in the listing currency (ILS: whole-shekel offers
-still stored as integers in many paths; fee/total use 0.01 quantization).
+Order pricing: 10% buyer service fee + 5% seller service fee (15% platform on negotiated/list base).
 
-Formula: fee = round(base * 0.10, 2), total = round(base + fee, 2).
+Buyer pays: round(base * 1.10, 2) (buyer_service_fee = 10% of base).
+Seller receives: round(base * 0.95, 2) after 5% seller-side fee (seller_service_fee = 5% of base).
+
+Amounts use Decimal quantized to 0.01 in the listing currency.
 """
 from __future__ import annotations
 
@@ -26,6 +27,14 @@ def decimal_money(x: Any) -> Decimal:
     if isinstance(x, Decimal):
         return x.quantize(QUANT, rounding=ROUND_HALF_UP)
     return Decimal(str(x)).quantize(QUANT, rounding=ROUND_HALF_UP)
+
+
+def seller_fee_from_base_amount(base: Any) -> Decimal:
+    """5% platform fee withheld from the seller (on negotiated / list subtotal)."""
+    b = decimal_money(base)
+    if b <= 0:
+        return Decimal('0.00')
+    return (b * Decimal('0.05')).quantize(QUANT, rounding=ROUND_HALF_UP)
 
 
 def buyer_charge_from_base_amount(base: Any) -> tuple[Decimal, Decimal, Decimal]:
@@ -86,19 +95,21 @@ def compute_order_price_breakdown(
 
     if negotiated_offer is not None:
         final_neg = decimal_money(negotiated_offer.amount)
-        fee = total_paid_dec - final_neg
-        net = final_neg
+        buyer_fee = total_paid_dec - final_neg
     else:
         base_unit = decimal_money(ticket.asking_price)
         final_neg = (base_unit * Decimal(qty)).quantize(QUANT, rounding=ROUND_HALF_UP)
-        fee = total_paid_dec - final_neg
-        net = final_neg
+        buyer_fee = total_paid_dec - final_neg
+
+    seller_fee = seller_fee_from_base_amount(final_neg)
+    net_to_seller = (final_neg - seller_fee).quantize(QUANT, rounding=ROUND_HALF_UP)
 
     return {
         'final_negotiated_price': final_neg,
-        'buyer_service_fee': fee,
+        'buyer_service_fee': buyer_fee,
+        'seller_service_fee': seller_fee,
         'total_paid_by_buyer': total_paid_dec,
-        'net_seller_revenue': net,
+        'net_seller_revenue': net_to_seller,
     }
 
 

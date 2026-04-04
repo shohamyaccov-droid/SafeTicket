@@ -11,6 +11,22 @@ import './Sell.css';
 
 const SELL_PAGE_BUILD_TAG = import.meta.env.VITE_BUILD_ID || 'local-dev';
 
+/** PDF or image (JPEG/PNG) — matches backend ticket upload */
+const TICKET_FILE_INPUT_ACCEPT =
+  '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
+
+function isPdfFile(file) {
+  if (!file) return false;
+  return file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+}
+
+function isTicketAttachmentFile(file) {
+  if (!file) return false;
+  if (isPdfFile(file)) return true;
+  if (file.type === 'image/jpeg' || file.type === 'image/jpg' || file.type === 'image/png') return true;
+  return /\.(jpe?g|png)$/i.test(file.name || '');
+}
+
 const Sell = () => {
   // ALL HOOKS MUST BE CALLED FIRST - BEFORE ANY EARLY RETURNS
   const { user, loading: authLoading, refreshProfile } = useAuth();
@@ -450,24 +466,21 @@ const Sell = () => {
     const { name, value, files, type, checked } = e.target;
     
     if (name === 'pdf_files') {
-      // Handle multiple PDF file uploads - one per ticket
+      // Handle multiple ticket file uploads - one per ticket
       if (files && files.length > 0) {
         const fileArray = Array.from(files);
         
-        // Validate all files are PDFs
-        const invalidFiles = fileArray.filter(file => 
-          file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')
-        );
+        const invalidFiles = fileArray.filter((file) => !isTicketAttachmentFile(file));
         
         if (invalidFiles.length > 0) {
-          setError('רק קבצי PDF מותרים. אנא בחר קבצי PDF בלבד.');
+          setError('נא לבחור קבצי PDF או תמונה (JPG, PNG) בלבד.');
           return;
         }
         
         // Validate number of files matches quantity
         const requiredCount = formData.available_quantity || 1;
         if (fileArray.length !== requiredCount) {
-          setError(`נדרשים בדיוק ${requiredCount} קבצי PDF (אחד לכל כרטיס). העלית ${fileArray.length} קבצים.`);
+          setError(`נדרשים בדיוק ${requiredCount} קבצים (אחד לכל כרטיס). העלית ${fileArray.length} קבצים.`);
           return;
         }
         
@@ -478,11 +491,18 @@ const Sell = () => {
         setError(''); // Clear any previous errors
       }
     } else if (name === 'single_multi_page_pdf') {
-      // Handle single multi-page PDF for auto-split (uploadMethod === 'single_file')
+      // Single file: multi-page PDF auto-split when quantity > 1; otherwise PDF or image OK
       if (files && files.length > 0) {
         const file = files[0];
-        if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-          setError('רק קבצי PDF מותרים. אנא בחר קובץ PDF בלבד.');
+        const qty = formData.available_quantity || 1;
+        if (!isTicketAttachmentFile(file)) {
+          setError('נא לבחור קובץ PDF או תמונה (JPG, PNG).');
+          return;
+        }
+        if (qty > 1 && !isPdfFile(file)) {
+          setError(
+            'למספר כרטיסים יש להעלות קובץ PDF עם עמוד לכל כרטיס, או לבחור "קובץ נפרד לכל כרטיס" והעלאת PDF/תמונה לכל אחד.'
+          );
           return;
         }
         setFormData(prev => ({
@@ -497,8 +517,8 @@ const Sell = () => {
       const index = parseInt(name.replace('pdf_file_package_', ''), 10);
       if (!isNaN(index) && files && files.length > 0) {
         const file = files[0];
-        if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-          setError('רק קבצי PDF מותרים. אנא בחר קובץ PDF בלבד.');
+        if (!isTicketAttachmentFile(file)) {
+          setError('נא לבחור קובץ PDF או תמונה (JPG, PNG).');
           return;
         }
         // Always use functional updates so ticket_packages is never copied from a stale closure.
@@ -645,28 +665,39 @@ const Sell = () => {
           setLoading(false);
           return;
         }
+        if (requiredCount > 1 && formData.singleMultiPagePdf && !isPdfFile(formData.singleMultiPagePdf)) {
+          setError(
+            'למספר כרטיסים ניתן להשתמש רק בקובץ PDF מרובה עמודים במצב קובץ יחיד, או לעבור לקובץ נפרד לכל כרטיס (PDF/תמונה).'
+          );
+          setLoading(false);
+          return;
+        }
       } else if (useSeparateFiles) {
         const incompletePackages = formData.ticket_packages.some((pkg) => !pkg || !pkg.seat_number || !pkg.pdf_file);
         if (incompletePackages) {
-          setError('כל כרטיס חייב לכלול כיסא וקובץ PDF ייחודי. אנא השלם את כל הפרטים.');
+          setError('כל כרטיס חייב לכלול כיסא וקובץ כרטיס (PDF או תמונה) ייחודי. אנא השלם את כל הפרטים.');
           setLoading(false);
           return;
         }
         const pdfFiles = formData.ticket_packages.map((p) => p?.pdf_file).filter(Boolean);
         const uniquePdfs = new Set(pdfFiles.map((f) => f.name));
         if (uniquePdfs.size !== pdfFiles.length) {
-          setError('כל כרטיס חייב להיות עם קובץ PDF ייחודי. לא ניתן להשתמש באותו קובץ פעמיים.');
+          setError('כל כרטיס חייב להיות עם קובץ ייחודי. לא ניתן להשתמש באותו קובץ פעמיים.');
           setLoading(false);
           return;
         }
-        const invalidFiles = pdfFiles.filter((f) => f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf'));
+        const invalidFiles = pdfFiles.filter((f) => !isTicketAttachmentFile(f));
         if (invalidFiles.length > 0) {
-          setError('רק קבצי PDF מותרים. אנא העלה קבצי PDF בלבד.');
+          setError('נא להעלות לכל כרטיס קובץ PDF או תמונה (JPG, PNG).');
           setLoading(false);
           return;
         }
       } else {
-        setError(uploadMethod === 'single_file' ? 'אנא העלה קובץ PDF אחד המכיל את כל הכרטיסים.' : 'אנא העלה קובץ PDF לכל כרטיס.');
+        setError(
+          uploadMethod === 'single_file'
+            ? 'אנא העלה קובץ PDF אחד המכיל את כל הכרטיסים.'
+            : 'אנא העלה קובץ (PDF או תמונה) לכל כרטיס.'
+        );
         setLoading(false);
         return;
       }
@@ -674,24 +705,24 @@ const Sell = () => {
       // Single ticket (quantity === 1)
       if (useSeparateFiles) {
         if (!formData.ticket_packages?.[0]?.pdf_file) {
-          setError('אנא העלה קובץ PDF של הכרטיס.');
+          setError('אנא העלה קובץ כרטיס (PDF או תמונה).');
           setLoading(false);
           return;
         }
         const pdfFile = formData.ticket_packages[0].pdf_file;
-        if (pdfFile.type !== 'application/pdf' && !pdfFile.name.toLowerCase().endsWith('.pdf')) {
-          setError('רק קבצי PDF מותרים. אנא העלה קובץ PDF בלבד.');
+        if (!isTicketAttachmentFile(pdfFile)) {
+          setError('נא להעלות קובץ PDF או תמונה (JPG, PNG).');
           setLoading(false);
           return;
         }
       } else if (useSingleFile) {
         if (!formData.singleMultiPagePdf) {
-          setError('אנא העלה קובץ PDF של הכרטיס.');
+          setError('אנא העלה קובץ כרטיס (PDF או תמונה).');
           setLoading(false);
           return;
         }
       } else {
-        setError('אנא העלה קובץ PDF של הכרטיס.');
+        setError('אנא העלה קובץ כרטיס (PDF או תמונה).');
         setLoading(false);
         return;
       }
@@ -730,8 +761,7 @@ const Sell = () => {
     submitData.append('available_quantity', formData.available_quantity || 1);
     submitData.append('is_together', formData.is_together);
     // Master Architecture fields
-    // Lock ticket_type to PDF on the backend for security
-    submitData.append('ticket_type', 'כרטיס אלקטרוני / PDF');
+    submitData.append('ticket_type', 'כרטיס אלקטרוני (PDF או תמונה)');
     submitData.append('split_type', formData.split_type || 'כל כמות');
     // Multipart: send explicit boolean strings (avoid FormData coercing booleans oddly).
     submitData.append('is_obstructed_view', formData.is_obstructed_view ? 'true' : 'false');
@@ -743,7 +773,7 @@ const Sell = () => {
       // Single PDF auto-split: backend receives pdf_file_0, pdf_files_count=1
       const pdf0 = formData.singleMultiPagePdf;
       if (!(pdf0 instanceof File) && !(pdf0 instanceof Blob)) {
-        setError('שגיאה פנימית: קובץ PDF חסר. נסו לבחור את הקובץ שוב.');
+        setError('שגיאה פנימית: קובץ כרטיס חסר. נסו לבחור את הקובץ שוב.');
         setLoading(false);
         return;
       }
@@ -1140,9 +1170,9 @@ const Sell = () => {
             )}
           </div>
 
-          {/* PDF Upload Toggle */}
+          {/* Ticket file upload mode */}
           <div className="form-group pdf-upload-toggle-section">
-            <label>אופן העלאת קבצי PDF</label>
+            <label>אופן העלאת קבצי הכרטיס</label>
             <div className="upload-method-options">
               <label className={`upload-method-option ${uploadMethod === 'single_file' ? 'selected' : ''}`}>
                 <input
@@ -1177,8 +1207,8 @@ const Sell = () => {
                   }}
                 />
                 <div className="option-content">
-                  <span className="option-title">קובץ PDF נפרד לכל כרטיס</span>
-                  <span className="option-desc">העלה קובץ ייחודי לכל כרטיס בתוך הכרטיס שלו</span>
+                  <span className="option-title">קובץ נפרד לכל כרטיס (PDF או תמונה)</span>
+                  <span className="option-desc">העלה קובץ ייחודי (PDF, JPG, PNG) לכל כרטיס</span>
                 </div>
               </label>
             </div>
@@ -1187,14 +1217,14 @@ const Sell = () => {
           {/* Single file dropzone (Option A) */}
           {uploadMethod === 'single_file' && (
             <div className="form-group single-pdf-dropzone">
-              <label htmlFor="single_multi_page_pdf">קובץ PDF *</label>
+              <label htmlFor="single_multi_page_pdf">קובץ כרטיס (PDF או תמונה) *</label>
               <div className="file-dropzone-box">
                 <input
                   type="file"
                   id="single_multi_page_pdf"
                   name="single_multi_page_pdf"
                   onChange={handleChange}
-                  accept=".pdf"
+                  accept={TICKET_FILE_INPUT_ACCEPT}
                 />
                 {formData.singleMultiPagePdf ? (
                   <span className="uploaded-file-name">✓ {formData.singleMultiPagePdf.name}</span>
@@ -1202,12 +1232,12 @@ const Sell = () => {
                   <span className="dropzone-placeholder">
                     {formData.available_quantity > 1
                       ? `העלה קובץ PDF עם ${formData.available_quantity} עמודים (עמוד לכל כרטיס)`
-                      : 'העלה קובץ PDF של הכרטיס'}
+                      : 'העלה קובץ PDF או תמונה (JPG, PNG) של הכרטיס'}
                   </span>
                 )}
               </div>
               {formData.available_quantity > 1 && (
-                <small>המערכת תפצל את הקובץ אוטומטית – כל עמוד יהפוך לכרטיס נפרד</small>
+                <small>המערכת תפצל רק קובצי PDF מרובי עמודים – כל עמוד יהפוך לכרטיס נפרד</small>
               )}
             </div>
           )}
@@ -1222,7 +1252,7 @@ const Sell = () => {
                   <div className="package-header">
                     <h4>כרטיס {index + 1}</h4>
                     {uploadMethod === 'separate_files' && packageData.pdf_file && (
-                      <span className="package-status">✓ PDF הועלה</span>
+                      <span className="package-status">✓ קובץ הועלה</span>
                     )}
                   </div>
                   <div className="package-content">
@@ -1242,13 +1272,13 @@ const Sell = () => {
                     </div>
                     {uploadMethod === 'separate_files' && (
                       <div className="form-group">
-                        <label htmlFor={`pdf_file_package_${index}`}>קובץ PDF *</label>
+                        <label htmlFor={`pdf_file_package_${index}`}>קובץ כרטיס (PDF או תמונה) *</label>
                         <input
                           type="file"
                           id={`pdf_file_package_${index}`}
                           name={`pdf_file_package_${index}`}
                           onChange={handleChange}
-                          accept=".pdf"
+                          accept={TICKET_FILE_INPUT_ACCEPT}
                           required={uploadMethod === 'separate_files'}
                         />
                         {packageData.pdf_file && (
@@ -1276,7 +1306,7 @@ const Sell = () => {
                   disabled
                   required
                 >
-                  <option value="pdf">כרטיס אלקטרוני / PDF</option>
+                  <option value="pdf">כרטיס אלקטרוני (PDF או תמונה)</option>
                 </select>
               </div>
 

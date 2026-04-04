@@ -1,0 +1,149 @@
+{
+  "script": "twin_user_negotiation_stress_qa",
+  "ts_utc": "2026-03-31T13:32:55.627779+00:00",
+  "api_base": "https://safeticket-api.onrender.com/api",
+  "users": {
+    "seller": "Seller_Test",
+    "buyer": "Buyer_Test"
+  },
+  "fix_summary": "Offer accept: allow reservation when reserved_by is the offer buyer (pk match); recipient check uses user pk; optional reserve-for-buyer on accept for non-group listings; frontend maps DRF detail + coerces offer id.",
+  "iterations": [
+    {
+      "i": 0,
+      "label": "run_1_list300_offer250",
+      "list_asking": 300,
+      "offer_base": 250,
+      "steps": [
+        {
+          "upload": true,
+          "ticket_id": 167
+        },
+        {
+          "approved": true
+        },
+        {
+          "offer_created": true,
+          "offer_id": 47
+        },
+        {
+          "buyer_reserve_after_offer": true,
+          "reserve_http": 200
+        }
+      ],
+      "ticket_id": 167,
+      "offer_id": 47,
+      "error": "accept: 400 {\"error\":\"This listing is currently in another buyer's checkout. Try again shortly.\"}"
+    },
+    {
+      "i": 1,
+      "label": "run_2_list350_offer290",
+      "list_asking": 350,
+      "offer_base": 290,
+      "steps": [
+        {
+          "upload": true,
+          "ticket_id": 168
+        },
+        {
+          "approved": true
+        },
+        {
+          "offer_created": true,
+          "offer_id": 48
+        },
+        {
+          "buyer_reserve_after_offer": true,
+          "reserve_http": 200
+        }
+      ],
+      "ticket_id": 168,
+      "offer_id": 48,
+      "error": "accept: 400 {\"error\":\"This listing is currently in another buyer's checkout. Try again shortly.\"}"
+    },
+    {
+      "i": 2,
+      "label": "run_3_list400_offer340",
+      "list_asking": 400,
+      "offer_base": 340,
+      "steps": [
+        {
+          "upload": true,
+          "ticket_id": 169
+        },
+        {
+          "approved": true
+        },
+        {
+          "offer_created": true,
+          "offer_id": 49
+        },
+        {
+          "buyer_reserve_after_offer": true,
+          "reserve_http": 200
+        }
+      ],
+      "ticket_id": 169,
+      "offer_id": 49,
+      "error": "accept: 400 {\"error\":\"This listing is currently in another buyer's checkout. Try again shortly.\"}"
+    },
+    {
+      "i": 3,
+      "label": "run_4_list275_offer220",
+      "list_asking": 275,
+      "offer_base": 220,
+      "steps": [
+        {
+          "upload": true,
+          "ticket_id": 170
+        },
+        {
+          "approved": true
+        },
+        {
+          "offer_created": true,
+          "offer_id": 50
+        },
+        {
+          "buyer_reserve_after_offer": true,
+          "reserve_http": 200
+        }
+      ],
+      "ticket_id": 170,
+      "offer_id": 50,
+      "error": "accept: 400 {\"error\":\"This listing is currently in another buyer's checkout. Try again shortly.\"}"
+    },
+    {
+      "i": 4,
+      "label": "run_5_list500_offer420",
+      "list_asking": 500,
+      "offer_base": 420,
+      "steps": [
+        {
+          "upload": true,
+          "ticket_id": 171
+        },
+        {
+          "approved": true
+        },
+        {
+          "offer_created": true,
+          "offer_id": 51
+        },
+        {
+          "buyer_reserve_after_offer": true,
+          "reserve_http": 200
+        }
+      ],
+      "ticket_id": 171,
+      "offer_id": 51,
+      "error": "accept: 400 {\"error\":\"This listing is currently in another buyer's checkout. Try again shortly.\"}"
+    }
+  ],
+  "errors": [
+    "accept: 400 {\"error\":\"This listing is currently in another buyer's checkout. Try again shortly.\"}",
+    "accept: 400 {\"error\":\"This listing is currently in another buyer's checkout. Try again shortly.\"}",
+    "accept: 400 {\"error\":\"This listing is currently in another buyer's checkout. Try again shortly.\"}",
+    "accept: 400 {\"error\":\"This listing is currently in another buyer's checkout. Try again shortly.\"}",
+    "accept: 400 {\"error\":\"This listing is currently in another buyer's checkout. Try again shortly.\"}"
+  ]
+}
