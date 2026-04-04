@@ -6,6 +6,7 @@ import { getFullImageUrl } from '../utils/formatters';
 import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import { toastError } from '../utils/toast';
+import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import './ArtistEventsPage.css';
 
 const ArtistEventsPage = () => {
@@ -106,25 +107,6 @@ const ArtistEventsPage = () => {
     setSelectedEvent(null);
   };
 
-  // Format date for display
-  const formatDate = (dateString) => {
-    if (!dateString) return 'תאריך לא צוין';
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return 'תאריך לא צוין';
-      
-      return new Intl.DateTimeFormat('he-IL', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      }).format(date);
-    } catch (error) {
-      return 'תאריך לא צוין';
-    }
-  };
-
   if (loading) {
     return (
       <div className="artist-events-container artist-events-container--loading">
@@ -186,7 +168,7 @@ const ArtistEventsPage = () => {
               const hasTickets = (event.tickets_count || 0) > 0;
               return (
                 <div key={event.id} className="event-row">
-                  <div className="event-date">{formatDate(event.date)}</div>
+                  <div className="event-date">{formatEventDateTimeWithLocality(event.date, event)}</div>
                   <div className="event-venue">{event.venue || 'מיקום לא צוין'}</div>
                   <div className="event-city">{event.city || ''}</div>
                   <div className="event-action">

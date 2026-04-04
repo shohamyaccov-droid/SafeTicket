@@ -10,6 +10,7 @@ import {
 } from '../utils/priceFormat';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { getOfferExpirationDisplay, getResponsesLeft } from '../utils/offerTimer';
+import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import CheckoutModal from '../components/CheckoutModal';
 import NegotiationModal from '../components/NegotiationModal';
 import Toast from '../components/Toast';
@@ -605,7 +606,8 @@ const Dashboard = () => {
             <p><strong>סטטוס:</strong> ${d.status}</p>
             <p><strong>סה״כ שולם (לקונה):</strong> ${fmt(d.total_paid_by_buyer ?? d.total_amount)}</p>
             <p><strong>מחיר מוסכם (בסיס):</strong> ${d.final_negotiated_price != null ? fmt(d.final_negotiated_price) : '—'}</p>
-            <p><strong>עמלת שירות:</strong> ${d.buyer_service_fee != null ? fmt(d.buyer_service_fee) : '—'}</p>
+            <p><strong>עמלת שירות (לקוח):</strong> ${d.buyer_service_fee != null ? fmt(d.buyer_service_fee) : '—'}</p>
+            <p><strong>עמלת פלטפורמה (מוכר, 5%):</strong> ${d.seller_service_fee != null ? fmt(d.seller_service_fee) : '—'}</p>
             <p><strong>נטו למוכר:</strong> ${d.net_seller_revenue != null ? fmt(d.net_seller_revenue) : '—'}</p>
             <p><strong>כמות:</strong> ${d.quantity}</p>
             <p><strong>אירוע:</strong> ${d.event_name}</p>
@@ -950,7 +952,7 @@ const Dashboard = () => {
                           </div>
                           <div className="row-subtitle">
                             <span role="img" aria-label="calendar">📅</span>{' '}
-                            {formatDate(ticket.event_date)}
+                            {formatEventDateTimeWithLocality(ticket.event_date, ticket)}
                           </div>
                         </div>
                         <span className="row-quantity">{purchase.quantity || 1} כרטיסים</span>
@@ -1004,7 +1006,7 @@ const Dashboard = () => {
                           <div className="order-details">
                             <div className="detail-row">
                               <span className="detail-label">📅 תאריך אירוע:</span>
-                              <span className="detail-value">{formatDate(ticket.event_date)}</span>
+                              <span className="detail-value">{formatEventDateTimeWithLocality(ticket.event_date, ticket)}</span>
                             </div>
                             <div className="detail-row">
                               <span className="detail-label">📍 מיקום:</span>
@@ -1221,7 +1223,9 @@ const Dashboard = () => {
                                     {group.ticketDetails?.event_name || 'אירוע'}
                                   </div>
                                   {group.ticketDetails?.event_date && (
-                                    <div className="row-subtitle" style={{ fontSize: '0.8rem' }}>{new Date(group.ticketDetails.event_date).toLocaleDateString('he-IL')}</div>
+                                    <div className="row-subtitle" style={{ fontSize: '0.8rem' }}>
+                                      {formatEventDateTimeWithLocality(group.ticketDetails.event_date, group.ticketDetails)}
+                                    </div>
                                   )}
                                   <div className="row-subtitle" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
                                     הצעה מ-{latestOffer?.buyer_username} • {offerSym}{formatAmountForCurrency(parseFloat(latestOffer?.amount) || 0, offerCur)}
@@ -1278,7 +1282,9 @@ const Dashboard = () => {
                                     {group.ticketDetails?.event_name || 'אירוע'}
                                   </div>
                                   {group.ticketDetails?.event_date && (
-                                    <div className="row-subtitle" style={{ fontSize: '0.8rem' }}>{new Date(group.ticketDetails.event_date).toLocaleDateString('he-IL')}</div>
+                                    <div className="row-subtitle" style={{ fontSize: '0.8rem' }}>
+                                      {formatEventDateTimeWithLocality(group.ticketDetails.event_date, group.ticketDetails)}
+                                    </div>
                                   )}
                                   <div className="row-subtitle" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
                                     הצעתך: {sentOfferSym}{formatAmountForCurrency(parseFloat(latestOffer?.amount) || 0, sentOfferCur)}
@@ -1406,7 +1412,10 @@ const Dashboard = () => {
                                 </div>
                                 <div className="row-subtitle">
                                   <span role="img" aria-label="calendar">📅</span>{' '}
-                                  {formatDate(listing.event_date_display || listing.event_date)}
+                                  {formatEventDateTimeWithLocality(
+                                    listing.event_date_display || listing.event_date,
+                                    listing
+                                  )}
                                 </div>
                                 {['sold', 'pending_payout', 'paid_out'].includes(listing.status) && listing.escrow_payout_status && (
                                   <div className="escrow-seller-note" style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.35rem', lineHeight: 1.45 }}>
@@ -1503,7 +1512,10 @@ const Dashboard = () => {
                                   <div className="detail-row">
                                     <span className="detail-label">📅 תאריך אירוע:</span>
                                     <span className="detail-value">
-                                      {formatDate(listing.event_date_display || listing.event_date)}
+                                      {formatEventDateTimeWithLocality(
+                                    listing.event_date_display || listing.event_date,
+                                    listing
+                                  )}
                                     </span>
                                   </div>
                                   <div className="detail-row">

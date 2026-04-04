@@ -1551,10 +1551,12 @@
 @media (max-width: 768px) {
   .dashboard-container {
     padding: var(--spacing-md) var(--spacing-sm);
+    padding-bottom: calc(var(--spacing-xl) + env(safe-area-inset-bottom, 0px));
   }
 
   .dashboard-header h1 {
-    font-size: 2rem;
+    font-size: 1.65rem;
+    line-height: 1.2;
   }
 
   .dashboard-tabs {
@@ -1714,6 +1716,48 @@
 
   .step-connector {
     display: none;
+  }
+
+  /* Personal area — tap targets + verification copy that wraps on narrow screens */
+  .dashboard-compact-row {
+    min-height: 52px;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+  }
+
+  .dashboard-compact-row .row-text {
+    min-width: 0;
+  }
+
+  .row-action-button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0.35rem 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .enterprise-card.dashboard-compact-card {
+    border-radius: 12px;
+  }
+
+  .pending-verification-info {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: flex-start;
+    line-height: 1.45;
+  }
+
+  .pending-verification-info svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .section-title {
+    font-size: 1.35rem;
   }
 }
 

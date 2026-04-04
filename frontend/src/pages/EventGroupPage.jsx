@@ -7,6 +7,7 @@ import { translateSectionDisplay } from '../utils/venueMaps';
 import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import { toastError } from '../utils/toast';
+import { formatEventLocalTimeLine } from '../utils/eventLocalTime';
 import './EventGroupPage.css';
 
 const EventGroupPage = () => {
@@ -123,23 +124,6 @@ const EventGroupPage = () => {
     }
   };
 
-  // Format time for event info
-  const formatTime = (dateString) => {
-    if (!dateString) return '';
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return '';
-      
-      return new Intl.DateTimeFormat('he-IL', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      }).format(date);
-    } catch (error) {
-      return '';
-    }
-  };
-
   // Calculate urgency badges
   const getUrgencyBadges = (eventTickets) => {
     const badges = [];
@@ -222,7 +206,7 @@ const EventGroupPage = () => {
             {tickets.map((eventGroup, index) => {
               const firstTicket = eventGroup.tickets[0];
               const dateBlock = formatDateBlock(firstTicket.event_date);
-              const eventTime = formatTime(firstTicket.event_date);
+              const eventTime = formatEventLocalTimeLine(firstTicket.event_date, firstTicket);
               const city = extractCity(firstTicket.venue);
               const badges = getUrgencyBadges(eventGroup.tickets);
               const isExpanded = expandedDateIndex === index;

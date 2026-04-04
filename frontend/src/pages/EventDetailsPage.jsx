@@ -17,6 +17,7 @@ import {
 import BuyerListingPrice from '../components/BuyerListingPrice';
 import { getFullImageUrl } from '../utils/formatters';
 import { toastError } from '../utils/toast';
+import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import './EventDetailsPage.css';
 
 /** Seller id from API may be a numeric PK or nested object — compare robustly to current user. */
@@ -622,7 +623,13 @@ const EventDetailsPage = () => {
       });
       setOfferSubmitted(true);
     } catch (error) {
-      const errorMsg = error.response?.data?.error || error.response?.data?.detail || 'שגיאה בשליחת ההצעה';
+      const d = error.response?.data;
+      const errorMsg =
+        (Array.isArray(d?.non_field_errors) && d.non_field_errors[0]) ||
+        d?.error ||
+        d?.detail ||
+        (typeof d === 'string' ? d : null) ||
+        'שגיאה בשליחת ההצעה';
       setToast({ message: errorMsg, type: 'error' });
     } finally {
       setOfferSubmitting(false);
@@ -644,25 +651,6 @@ const EventDetailsPage = () => {
 
   const handleSortChange = (e) => {
     setSortBy(e.target.value);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'TBA';
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return 'TBA';
-      
-      return new Intl.DateTimeFormat('he-IL', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      }).format(date);
-    } catch (error) {
-      return 'TBA';
-    }
   };
 
   const listingCurrency = useMemo(() => {
@@ -752,7 +740,7 @@ const EventDetailsPage = () => {
               </p>
             ) : null}
             <div className="event-hero-meta">
-              <p className="event-hero-date">📅 {formatDate(event.date)}</p>
+              <p className="event-hero-date">📅 {formatEventDateTimeWithLocality(event.date, event)}</p>
               <p className="event-hero-location">
                 📍 {event.venue}
                 {event.city ? `, ${event.city}` : ''}
@@ -762,105 +750,107 @@ const EventDetailsPage = () => {
         </div>
       </div>
 
-      {/* Filters and Sort Bar */}
-      <div className="filters-sort-bar">
-        {/* Mobile Filter Toggle Button */}
-        <button 
-          className="mobile-filter-toggle"
-          onClick={() => setFiltersOpen(!filtersOpen)}
-          aria-expanded={filtersOpen}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M3 6H21M7 12H17M10 18H14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
-          <span>סינון ומיון</span>
-          <svg 
-            className={`filter-arrow ${filtersOpen ? 'open' : ''}`}
-            width="16" 
-            height="16" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            xmlns="http://www.w3.org/2000/svg"
+      {/* Tickets Section - Split Screen Layout (filters live here so mobile sticky map stacks below sticky filter bar) */}
+      <div className="tickets-section">
+        {/* Filters and Sort Bar */}
+        <div className="filters-sort-bar event-details-filters-sort-bar">
+          {/* Mobile Filter Toggle Button */}
+          <button
+            type="button"
+            className="mobile-filter-toggle"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            aria-expanded={filtersOpen}
           >
-            <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
-        
-        <div className={`filters-section ${filtersOpen ? 'mobile-open' : ''}`}>
-          <h3 className="filters-title">סינון:</h3>
-          
-          {/* Price Range */}
-          <div className="filter-group">
-            <label className="filter-label">טווח מחירים ({listSym} {listingCurrency})</label>
-            <div className="price-range-inputs">
-              <input
-                type="number"
-                className="price-input"
-                placeholder="מ-"
-                value={filters.minPrice}
-                onChange={(e) => handleFilterChange('minPrice', e.target.value)}
-                min={priceRange.min}
-                max={priceRange.max}
-              />
-              <span className="price-separator">-</span>
-              <input
-                type="number"
-                className="price-input"
-                placeholder="עד"
-                value={filters.maxPrice}
-                onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
-                min={priceRange.min}
-                max={priceRange.max}
-              />
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 6H21M7 12H17M10 18H14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            <span>סינון ומיון</span>
+            <svg
+              className={`filter-arrow ${filtersOpen ? 'open' : ''}`}
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+
+          <div className={`filters-section ${filtersOpen ? 'mobile-open' : ''}`}>
+            <h3 className="filters-title">סינון:</h3>
+
+            {/* Price Range */}
+            <div className="filter-group">
+              <label className="filter-label">טווח מחירים ({listSym} {listingCurrency})</label>
+              <div className="price-range-inputs">
+                <input
+                  type="number"
+                  className="price-input"
+                  placeholder="מ-"
+                  value={filters.minPrice}
+                  onChange={(e) => handleFilterChange('minPrice', e.target.value)}
+                  min={priceRange.min}
+                  max={priceRange.max}
+                />
+                <span className="price-separator">-</span>
+                <input
+                  type="number"
+                  className="price-input"
+                  placeholder="עד"
+                  value={filters.maxPrice}
+                  onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
+                  min={priceRange.min}
+                  max={priceRange.max}
+                />
+              </div>
             </div>
+
+            {/* Quantity Filter */}
+            <div className="filter-group">
+              <label className="filter-label">כמות מינימלית</label>
+              <select
+                className="filter-select"
+                value={filters.minQuantity}
+                onChange={(e) => handleFilterChange('minQuantity', e.target.value)}
+              >
+                <option value="">כל הכמויות</option>
+                <option value="1">1+ כרטיסים</option>
+                <option value="2">2+ כרטיסים</option>
+                <option value="4">4+ כרטיסים</option>
+                <option value="6">6+ כרטיסים</option>
+              </select>
+            </div>
+
+            {/* Clear Filters Button */}
+            {(filters.minPrice || filters.maxPrice || filters.minQuantity) && (
+              <button
+                type="button"
+                className="clear-filters-btn"
+                onClick={() => setFilters({ minPrice: '', maxPrice: '', minQuantity: '' })}
+              >
+                נקה סינון
+              </button>
+            )}
           </div>
 
-          {/* Quantity Filter */}
-          <div className="filter-group">
-            <label className="filter-label">כמות מינימלית</label>
+          {/* Sort By */}
+          <div className={`sort-section ${filtersOpen ? 'mobile-open' : ''}`}>
+            <label className="sort-label">מיין לפי:</label>
             <select
-              className="filter-select"
-              value={filters.minQuantity}
-              onChange={(e) => handleFilterChange('minQuantity', e.target.value)}
+              className="sort-select"
+              value={sortBy}
+              onChange={handleSortChange}
             >
-              <option value="">כל הכמויות</option>
-              <option value="1">1+ כרטיסים</option>
-              <option value="2">2+ כרטיסים</option>
-              <option value="4">4+ כרטיסים</option>
-              <option value="6">6+ כרטיסים</option>
+              <option value="price_asc">מחיר: נמוך לגבוה</option>
+              <option value="price_desc">מחיר: גבוה לנמוך</option>
+              <option value="best_seats">מושבים הטובים ביותר</option>
+              <option value="quantity_desc">הכי הרבה כרטיסים</option>
+              <option value="newest">הכי חדש</option>
             </select>
           </div>
-
-          {/* Clear Filters Button */}
-          {(filters.minPrice || filters.maxPrice || filters.minQuantity) && (
-            <button
-              className="clear-filters-btn"
-              onClick={() => setFilters({ minPrice: '', maxPrice: '', minQuantity: '' })}
-            >
-              נקה סינון
-            </button>
-          )}
         </div>
 
-        {/* Sort By */}
-        <div className={`sort-section ${filtersOpen ? 'mobile-open' : ''}`}>
-          <label className="sort-label">מיין לפי:</label>
-          <select
-            className="sort-select"
-            value={sortBy}
-            onChange={handleSortChange}
-          >
-            <option value="price_asc">מחיר: נמוך לגבוה</option>
-            <option value="price_desc">מחיר: גבוה לנמוך</option>
-            <option value="best_seats">מושבים הטובים ביותר</option>
-            <option value="quantity_desc">הכי הרבה כרטיסים</option>
-            <option value="newest">הכי חדש</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Tickets Section - Split Screen Layout */}
-      <div className="tickets-section">
         <div className="section-title-row">
           <h2 className="section-title">כרטיסים זמינים ({ticketGroups.length})</h2>
           <div className="live-refresh-controls">
@@ -1181,6 +1171,11 @@ const EventDetailsPage = () => {
                   <h2>הצע מחיר</h2>
                   <div className="offer-ticket-info">
                     <h3>{selectedOfferTicket.event_name || 'אירוע'}</h3>
+                    {selectedOfferTicket.event_date ? (
+                      <p className="offer-modal-datetime" style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0' }}>
+                        {formatEventDateTimeWithLocality(selectedOfferTicket.event_date, selectedOfferTicket)}
+                      </p>
+                    ) : null}
                     <p className="current-price">מחיר נוכחי: {offerModalSym}{getTicketPrice(selectedOfferTicket)}</p>
                     <p className="offer-fee-clarification" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem', lineHeight: 1.5 }}>
                       ההצעה היא לפני עמלת שירות (10% יתווספו בקופה).

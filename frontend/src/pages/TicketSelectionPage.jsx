@@ -13,6 +13,7 @@ import {
 } from '../utils/priceFormat';
 import BuyerListingPrice from '../components/BuyerListingPrice';
 import { translateSectionDisplay } from '../utils/venueMaps';
+import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import { toastError } from '../utils/toast';
 import './TicketSelectionPage.css';
 
@@ -111,26 +112,6 @@ const TicketSelectionPage = () => {
     }
   };
 
-  // Format date for display
-  const formatDate = (dateString) => {
-    if (!dateString) return 'TBA';
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return 'TBA';
-      
-      return new Intl.DateTimeFormat('he-IL', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      }).format(date);
-    } catch (error) {
-      return 'TBA';
-    }
-  };
-
   // Calculate total price (updates dynamically)
   const calculateEstimatedTotalWithFee = () => {
     if (!ticket) return 0;
@@ -208,7 +189,7 @@ const TicketSelectionPage = () => {
           <div className="event-info-card">
             <div className="info-row">
               <span className="info-label">תאריך:</span>
-              <span className="info-value">{formatDate(ticket.event_date)}</span>
+              <span className="info-value">{formatEventDateTimeWithLocality(ticket.event_date, ticket)}</span>
             </div>
             <div className="info-row">
               <span className="info-label">מיקום:</span>

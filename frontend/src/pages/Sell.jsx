@@ -70,7 +70,7 @@ const Sell = () => {
    * never the artist nationality. Taylor Swift in Tel Aviv → IL; Israeli act in NYC → US.
    */
   const isIsraelEvent = (ev) => {
-    if (!ev) return true;
+    if (!ev) return false;
     const c = String(ev.country ?? 'IL').trim().toUpperCase();
     return c === '' || c === 'IL';
   };

@@ -403,7 +403,18 @@
 }
 
 .tickets-section {
-  margin-top: var(--spacing-xl);
+  margin-top: var(--spacing-md);
+}
+
+/* Filters moved inside tickets-section — spacing before title row on desktop */
+.tickets-section > .event-details-filters-sort-bar {
+  margin-bottom: var(--spacing-sm);
+}
+
+@media (min-width: 769px) {
+  .tickets-section {
+    margin-top: var(--spacing-xl);
+  }
 }
 
 .section-title-row {
@@ -1672,26 +1683,75 @@
     overflow-x: clip;
   }
 
+  /* Sticky filter/sort bar — stays reachable while scrolling the ticket list */
+  .tickets-section > .event-details-filters-sort-bar {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 900;
+    margin-bottom: 0.35rem;
+    background: var(--bg-card, #ffffff);
+    border-radius: var(--radius-md);
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+  }
+
+  /* Sticky seating map — pinned under the filter bar (~68px collapsed row) */
+  .venue-map-sticky-container {
+    position: sticky;
+    top: calc(env(safe-area-inset-top, 0px) + 4.25rem);
+    z-index: 850;
+    margin-bottom: 0.35rem;
+    background: var(--bg-primary, #f8fafc);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .venue-map-sticky-container .venue-map-card {
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  }
+
   .tickets-split-container {
     gap: 12px;
+    /* Let the ticket list use the remaining viewport as users scroll the document */
+    min-height: 0;
   }
 
   .venue-map-card-header {
-    padding: 0.65rem 1rem;
+    padding: 0.5rem 0.85rem;
+    flex-shrink: 0;
+  }
+
+  .venue-map-card {
+    min-height: 0;
+    max-height: none;
   }
 
   .venue-map-card-content {
-    min-height: 120px;
-    max-height: min(32vh, 240px);
+    flex: 1;
+    min-height: 28vh;
+    height: clamp(28vh, 35vh, 40vh);
+    max-height: 40vh;
   }
 
   .venue-map-sticky-container .interactive-map-container {
-    max-height: min(32vh, 240px) !important;
+    height: 100% !important;
+    min-height: 26vh !important;
+    max-height: 40vh !important;
+    aspect-ratio: unset !important;
   }
 
   .venue-map-sticky-container .venue-map-wrapper {
-    height: min(32vh, 220px);
-    max-height: min(32vh, 240px);
+    height: 100% !important;
+    min-height: 26vh !important;
+    max-height: 40vh !important;
+  }
+
+  .tickets-list-container {
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* When "סינון ומיון" is expanded, reserve more space so the map clears the panel */
+  .tickets-section:has(.filters-section.mobile-open) .venue-map-sticky-container,
+  .tickets-section:has(.sort-section.mobile-open) .venue-map-sticky-container {
+    top: calc(env(safe-area-inset-top, 0px) + min(42vh, 11rem));
   }
 
   .tickets-grid {

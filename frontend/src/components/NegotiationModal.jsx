@@ -5,6 +5,7 @@ import {
   formatAmountForCurrency,
   currencySymbol,
 } from '../utils/priceFormat';
+import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import './NegotiationModal.css';
 
 /**
@@ -114,12 +115,7 @@ const NegotiationModal = ({
               <h2 className="negotiation-header-title">{ticketDetails?.event_name || 'אירוע'}</h2>
               {ticketDetails?.event_date && (
                 <p className="negotiation-header-date">
-                  {new Date(ticketDetails.event_date).toLocaleDateString('he-IL', {
-                    weekday: 'short',
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
+                  {formatEventDateTimeWithLocality(ticketDetails.event_date, ticketDetails)}
                 </p>
               )}
               <p className="negotiation-header-sub">

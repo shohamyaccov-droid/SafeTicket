@@ -382,11 +382,13 @@
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .profile-container {
-    padding: var(--spacing-lg) var(--spacing-md);
+    padding: var(--spacing-md) var(--spacing-sm);
+    padding-bottom: calc(var(--spacing-xl) + env(safe-area-inset-bottom, 0px));
   }
 
   .profile-header h1 {
-    font-size: 1.5rem;
+    font-size: 1.4rem;
+    line-height: 1.25;
   }
 
   .user-info-card {
@@ -395,23 +397,38 @@
 
   .profile-tabs {
     flex-wrap: wrap;
+    gap: 6px;
   }
 
   .tab-button {
     padding: 0.75rem 1rem;
-    font-size: 0.875rem;
+    font-size: 0.9rem;
+    min-height: 48px;
+    flex: 1 1 auto;
   }
 
   .items-grid {
     grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+
+  .ticket-card {
+    padding: 1rem;
   }
 
   .card-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 0.35rem;
   }
 
   .status-badge {
     align-self: flex-start;
+  }
+
+  .buy-button {
+    min-height: 48px;
+    width: 100%;
+    max-width: 100%;
   }
 }

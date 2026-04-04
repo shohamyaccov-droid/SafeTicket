@@ -189,6 +189,8 @@ const AdminVerificationPage = () => {
         <div className="pending-tickets-grid">
           {pendingTickets.map((ticket) => {
             const isProcessing = processing.has(ticket.id);
+            const tCur = resolveTicketCurrency(ticket);
+            const tSym = currencySymbol(tCur);
             const eventName = ticket.event?.name || ticket.event_name || 'אירוע ללא שם';
             const eventDate = ticket.event?.date || ticket.event_date;
             const venue = ticket.event?.venue || ticket.venue || 'לא צוין';

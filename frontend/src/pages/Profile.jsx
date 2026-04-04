@@ -10,6 +10,7 @@ import {
 } from '../utils/priceFormat';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { toastError } from '../utils/toast';
+import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import './Profile.css';
 
 const Profile = () => {
@@ -288,7 +289,12 @@ const Profile = () => {
                               {getStatusLabel(order?.status)}
                             </span>
                           </div>
-                          <p><strong>תאריך:</strong> {ticket?.event_date ? formatDate(ticket?.event_date) : formatDate(order?.created_at)}</p>
+                          <p>
+                            <strong>תאריך:</strong>{' '}
+                            {ticket?.event_date
+                              ? formatEventDateTimeWithLocality(ticket.event_date, ticket)
+                              : formatDate(order?.created_at)}
+                          </p>
                           <p className="price-info">
                             <span className="asking-price">
                               {orderSym}{formatAmountForCurrency((order?.total_paid_by_buyer ?? order?.total_amount) || 0, orderCur)}{' '}
@@ -357,7 +363,13 @@ const Profile = () => {
                               {getStatusLabel(listing?.status)}
                             </span>
                           </div>
-                          <p><strong>תאריך:</strong> {formatDate(listing?.event_date)}</p>
+                          <p>
+                            <strong>תאריך:</strong>{' '}
+                            {formatEventDateTimeWithLocality(
+                              listing?.event_date_display || listing?.event_date,
+                              listing
+                            )}
+                          </p>
                           <p className="price-info">
                             <span className="asking-price">
                               {listSym}{formatAmountForCurrency(getTicketBaseNumeric(listing), listCur)}{' '}
