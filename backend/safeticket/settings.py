@@ -398,6 +398,22 @@ else:
     CORS_ALLOWED_ORIGINS = _merge_unique_origins(CORS_ALLOWED_ORIGINS, _fe_trust)
     CSRF_TRUSTED_ORIGINS = _merge_unique_origins(CSRF_TRUSTED_ORIGINS, _fe_trust)
 
+# Render.com sets RENDER / RENDER_EXTERNAL_URL. Always merge the known SPA + API origins so a mis-set
+# DEBUG flag or partial env cannot strip CSRF/CORS trust for the production hostname pair.
+if (os.environ.get('RENDER', '') or os.environ.get('RENDER_EXTERNAL_URL', '')).strip():
+    CSRF_TRUSTED_ORIGINS = _merge_unique_origins(
+        CSRF_TRUSTED_ORIGINS,
+        _RENDER_WEB_ORIGIN,
+        _RENDER_API_ORIGIN,
+        *([_FRONTEND_FROM_ENV] if _FRONTEND_FROM_ENV else []),
+    )
+    CORS_ALLOWED_ORIGINS = _merge_unique_origins(
+        CORS_ALLOWED_ORIGINS,
+        _RENDER_WEB_ORIGIN,
+        _RENDER_API_ORIGIN,
+        *([_FRONTEND_FROM_ENV] if _FRONTEND_FROM_ENV else []),
+    )
+
 # JWT HttpOnly cookie names
 JWT_ACCESS_COOKIE_NAME = 'access_token'
 JWT_REFRESH_COOKIE_NAME = 'refresh_token'

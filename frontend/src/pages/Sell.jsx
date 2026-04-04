@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ticketAPI, eventAPI, artistAPI, eventRequestAPI, ensureCsrfToken } from '../services/api';
+import { ticketAPI, eventAPI, artistAPI, eventRequestAPI } from '../services/api';
 import { createListFetchAbort } from '../utils/listFetch';
 import SellFormSkeleton from '../components/skeletons/SellFormSkeleton';
 import BecomeSellerModal from '../components/BecomeSellerModal';
@@ -638,7 +638,7 @@ const Sell = () => {
       }
     }
     
-    // Validate ticket packages - every seat must have row, seat, and unique PDF
+    // Validate ticket packages — seating + files (hybrid: structured section id or free-text גוש)
     const requiredCount = formData.available_quantity || 1;
     
     // Ensure ticket_packages array is initialized
@@ -647,24 +647,32 @@ const Sell = () => {
       setLoading(false);
       return;
     }
+
+    const secValStrict = (formData.section || '').trim();
+    if (!secValStrict) {
+      setError('נא לבחור או להזין גוש (אזור).');
+      setLoading(false);
+      return;
+    }
+    if (!(formData.row || '').trim()) {
+      setError('נא להזין שורה.');
+      setLoading(false);
+      return;
+    }
+    const incompleteSeats = formData.ticket_packages.some(
+      (pkg) => !pkg || !(pkg.seat_number || '').trim()
+    );
+    if (incompleteSeats) {
+      setError('נא להזין מספר כיסא לכל כרטיס.');
+      setLoading(false);
+      return;
+    }
     
     const useSingleFile = uploadMethod === 'single_file' && formData.singleMultiPagePdf && requiredCount >= 1;
     const useSeparateFiles = uploadMethod === 'separate_files';
 
     if (requiredCount > 1) {
-      // Global row required for multi-ticket
-      if (!formData.row || !formData.row.trim()) {
-        setError('אנא הזן שורה (פרטי ישיבה למעלה).');
-        setLoading(false);
-        return;
-      }
       if (useSingleFile) {
-        const incompleteSeats = formData.ticket_packages.some((pkg) => !pkg || !pkg.seat_number);
-        if (incompleteSeats) {
-          setError('כל כרטיס חייב לכלול מספר כיסא. אנא השלם את כל הפרטים.');
-          setLoading(false);
-          return;
-        }
         if (requiredCount > 1 && formData.singleMultiPagePdf && !isPdfFile(formData.singleMultiPagePdf)) {
           setError(
             'למספר כרטיסים ניתן להשתמש רק בקובץ PDF מרובה עמודים במצב קובץ יחיד, או לעבור לקובץ נפרד לכל כרטיס (PDF/תמונה).'
@@ -673,9 +681,9 @@ const Sell = () => {
           return;
         }
       } else if (useSeparateFiles) {
-        const incompletePackages = formData.ticket_packages.some((pkg) => !pkg || !pkg.seat_number || !pkg.pdf_file);
+        const incompletePackages = formData.ticket_packages.some((pkg) => !pkg || !pkg.pdf_file);
         if (incompletePackages) {
-          setError('כל כרטיס חייב לכלול כיסא וקובץ כרטיס (PDF או תמונה) ייחודי. אנא השלם את כל הפרטים.');
+          setError('כל כרטיס חייב לכלול קובץ כרטיס (PDF או תמונה) ייחודי. אנא השלם את כל הפרטים.');
           setLoading(false);
           return;
         }
@@ -799,7 +807,6 @@ const Sell = () => {
     }
 
     try {
-      await ensureCsrfToken();
       await ticketAPI.createTicket(submitData);
       setSuccessWasIsrael(ilEvent);
       setSuccess(true);
@@ -1069,11 +1076,11 @@ const Sell = () => {
           <div className="seating-and-seats-compact">
             <h3 className="seating-section-title">פרטי ישיבה ומושבים</h3>
             <small className="section-hint">
-              גוש ושורה משותפים לכל הכרטיסים. מספר כיסא לכל כרטיס מוזן למטה; אפשר למלא רצף מושבים אוטומטית כשמוכרים יותר מכרטיס אחד.
+              גוש, שורה ומספר כיסא נדרשים לכל רשימה. גוש ושורה משותפים לכל הכרטיסים; כיסא לכל כרטיס למטה. ניתן למלא רצף מושבים אוטומטית כשמוכרים יותר מכרטיס אחד.
             </small>
             <div className="form-row seating-row-compact">
               <div className="form-group">
-                <label htmlFor="section">גוש (אופציונלי)</label>
+                <label htmlFor="section">גוש *</label>
                 {(() => {
                   const structured = eventDetail?.venue_detail?.sections;
                   const useDropdown = Array.isArray(structured) && structured.length > 0;
@@ -1085,6 +1092,7 @@ const Sell = () => {
                         value={formData.section}
                         onChange={handleChange}
                         className="section-dropdown"
+                        required
                       >
                         <option value="">בחר גוש / אזור</option>
                         {structured.map((s) => (
@@ -1103,12 +1111,13 @@ const Sell = () => {
                       value={formData.section}
                       onChange={handleChange}
                       placeholder="לדוגמה: שער 11"
+                      required
                     />
                   );
                 })()}
               </div>
               <div className="form-group">
-                <label htmlFor="row">{formData.available_quantity > 1 ? 'שורה *' : 'שורה (אופציונלי)'}</label>
+                <label htmlFor="row">שורה *</label>
                 <input
                   type="text"
                   id="row"
@@ -1116,6 +1125,7 @@ const Sell = () => {
                   value={formData.row}
                   onChange={handleChange}
                   placeholder="לדוגמה: 5"
+                  required
                 />
               </div>
             </div>
@@ -1266,8 +1276,8 @@ const Sell = () => {
                         name={`seat_number_pkg_${index}`}
                         value={packageData.seat_number || ''}
                         onChange={handleChange}
-                        required={formData.available_quantity > 1}
-                        placeholder={formData.available_quantity === 1 ? 'אופציונלי' : 'לדוגמה: 12'}
+                        required
+                        placeholder="לדוגמה: 12"
                       />
                     </div>
                     {uploadMethod === 'separate_files' && (

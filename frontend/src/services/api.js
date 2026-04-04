@@ -304,7 +304,12 @@ export async function ensureCsrfToken() {
   try {
     await authAPI.getCsrf();
   } catch {
-    // Same-site dev may still work via csrftoken cookie in interceptor
+    // Retry once (transient network / cold start on Render)
+    try {
+      await authAPI.getCsrf();
+    } catch {
+      /* same-site dev may still work via csrftoken cookie on document */
+    }
   }
 }
 
@@ -327,6 +332,10 @@ export const orderAPI = {
  */
 async function postTicketMultipart(formData) {
   await ensureCsrfToken();
+  if (!getCsrfTokenForRequest()) {
+    resetCsrfTokenCache();
+    await authAPI.getCsrf();
+  }
   const base = API_URL.replace(/\/+$/, '');
   const ticketUrl = `${base}/users/tickets/`;
   const refreshUrl = `${base}/users/token/refresh/`;
@@ -367,6 +376,30 @@ async function postTicketMultipart(formData) {
   };
 
   let res = await postOnce();
+  if (res.status === 403) {
+    const t403 = await res.clone().text();
+    const looksCsrf =
+      /csrf/i.test(t403) ||
+      /CSRF verification failed/i.test(t403) ||
+      (() => {
+        try {
+          const j = JSON.parse(t403);
+          const d = j && (j.detail || j.message || j.error);
+          return typeof d === 'string' && /csrf/i.test(d);
+        } catch {
+          return false;
+        }
+      })();
+    if (looksCsrf) {
+      resetCsrfTokenCache();
+      try {
+        await authAPI.getCsrf();
+      } catch {
+        await ensureCsrfToken();
+      }
+      res = await postOnce();
+    }
+  }
   if (res.status === 401) {
     try {
       await ensureCsrfToken();
