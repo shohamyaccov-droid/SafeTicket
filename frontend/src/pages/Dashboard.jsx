@@ -424,6 +424,9 @@ const Dashboard = () => {
   };
 
   const handleAcceptOffer = async (offerId) => {
+    if (acceptingOfferId != null) {
+      return;
+    }
     const oid = Number(offerId);
     setAcceptingOfferId(oid);
     try {

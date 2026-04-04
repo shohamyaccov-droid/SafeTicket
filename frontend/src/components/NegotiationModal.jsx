@@ -36,6 +36,32 @@ const NegotiationModal = ({
 }) => {
   const [counterAmount, setCounterAmount] = useState('');
   const bodyRef = useRef(null);
+  const footerRef = useRef(null);
+  const counterInputRef = useRef(null);
+
+  const scrollFooterIntoView = () => {
+    const el = footerRef.current;
+    if (!el) return;
+    window.requestAnimationFrame(() => {
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  };
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+    const onResize = () => {
+      if (
+        footerRef.current &&
+        counterInputRef.current &&
+        document.activeElement === counterInputRef.current
+      ) {
+        scrollFooterIntoView();
+      }
+    };
+    vv.addEventListener('resize', onResize);
+    return () => vv.removeEventListener('resize', onResize);
+  }, []);
 
   const ticketDetails = group?.ticketDetails || {};
   const offers = group?.offers || [];
@@ -152,8 +178,8 @@ const NegotiationModal = ({
           })}
         </div>
 
-        {/* Footer */}
-        <div className="negotiation-modal-footer">
+        {/* Footer — ref + keyboard-safe scroll on mobile */}
+        <div className="negotiation-modal-footer" ref={footerRef}>
           {acceptedOfferRow && (
             <div className="negotiation-footer-accepted">
               {purchaseLocked ? (
@@ -181,7 +207,7 @@ const NegotiationModal = ({
                   </span>
                   <button
                     type="button"
-                    className="primary-button"
+                    className="primary-button negotiation-action-btn"
                     data-e2e="negotiation-complete-purchase"
                     onClick={() => onCompletePurchase(acceptedOfferRow)}
                     disabled={
@@ -214,7 +240,7 @@ const NegotiationModal = ({
               <div className="negotiation-footer-actions">
                 <button
                   type="button"
-                  className="accept-button"
+                  className="accept-button negotiation-action-btn"
                   data-e2e="negotiation-accept-offer"
                   onClick={() => onAccept(Number(latestPending.id))}
                   disabled={acceptInFlightForThisOffer || rejectInFlightForThisOffer}
@@ -223,7 +249,7 @@ const NegotiationModal = ({
                 </button>
                 <button
                   type="button"
-                  className="reject-button"
+                  className="reject-button negotiation-action-btn"
                   onClick={() => onReject(latestPending.id)}
                   disabled={
                     acceptInFlightForThisOffer ||
@@ -244,13 +270,17 @@ const NegotiationModal = ({
                   {canCounter && (
                     <>
                       <input
+                        ref={counterInputRef}
                         type="number"
+                        className="negotiation-counter-input"
                         value={counterAmount}
                         onChange={(e) => setCounterAmount(e.target.value)}
+                        onFocus={scrollFooterIntoView}
                         placeholder="הכנס סכום"
                         min="0"
                         step="0.01"
                         dir="ltr"
+                        enterKeyHint="done"
                       />
                       {/* PRIVACY: Only show fee preview to BUYER (isSeller=false) */}
                       {!isSeller && parseFloat(counterAmount) > 0 && (
@@ -260,7 +290,7 @@ const NegotiationModal = ({
                       )}
                       <button
                         type="button"
-                        className="primary-button"
+                        className="primary-button negotiation-action-btn"
                         data-e2e="negotiation-send-counter"
                         onClick={handleCounter}
                         disabled={

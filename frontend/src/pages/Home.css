@@ -7,6 +7,12 @@
   direction: rtl;
 }
 
+@media (max-width: 768px) {
+  .home-container {
+    overflow-x: hidden;
+  }
+}
+
 .home-container--loading {
   min-height: 70vh;
   padding-top: 1rem;
@@ -833,7 +839,8 @@
 
   .hero-search-input {
     padding: 0.875rem 2.75rem 0.875rem 1rem;
-    font-size: 0.95rem;
+    /* 16px minimum: avoids iOS focus zoom on mobile */
+    font-size: 1rem !important;
   }
 
   .category-pills-container {

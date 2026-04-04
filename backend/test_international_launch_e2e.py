@@ -21,6 +21,7 @@ from pypdf import PdfWriter
 from rest_framework.test import APIClient
 
 from users.models import Artist, Event, Ticket, Order, Offer
+from users.pricing import buyer_charge_from_base_amount
 
 User = get_user_model()
 
@@ -122,6 +123,101 @@ class InternationalLaunchE2ETest(TestCase):
             Offer.objects.filter(buyer=self.buyer, ticket_id=tid, offer_round_count=0).count(),
             1,
         )
+
+    def test_usd_full_negotiation_counter_accept_pay_and_fee_breakdown(self):
+        """International (USD): list → offer → seller counter → buyer accept → checkout → pay; verify 10%+5% fees."""
+        pdf = SimpleUploadedFile('tix_us.pdf', _pdf_bytes(), content_type='application/pdf')
+        self.client.force_authenticate(self.seller)
+        r_list = self.client.post(
+            '/api/users/tickets/',
+            {
+                'event_id': self.event.id,
+                'original_price': '150',
+                'listing_price': '150',
+                'available_quantity': '1',
+                'pdf_files_count': '1',
+                'pdf_file_0': pdf,
+                'delivery_method': 'instant',
+            },
+            format='multipart',
+        )
+        self.assertEqual(r_list.status_code, 201, r_list.content)
+        tid = r_list.json()['id']
+
+        self.client.force_authenticate(self.buyer)
+        r_off = self.client.post(
+            '/api/users/offers/',
+            {'ticket': tid, 'amount': '100.00', 'quantity': 1},
+            format='json',
+        )
+        self.assertEqual(r_off.status_code, 201, r_off.content)
+        oid0 = r_off.json()['id']
+        self.assertEqual(r_off.json().get('currency'), 'USD')
+
+        self.client.force_authenticate(self.seller)
+        r_co = self.client.post(
+            f'/api/users/offers/{oid0}/counter/',
+            {'amount': '120.00'},
+            format='json',
+        )
+        self.assertEqual(r_co.status_code, 201, r_co.content)
+        counter = r_co.json()
+        oid1 = counter['id']
+        self.assertEqual(counter.get('currency'), 'USD')
+        self.assertEqual(counter.get('offer_round_count'), 1)
+
+        self.client.force_authenticate(self.buyer)
+        r_acc1 = self.client.post(f'/api/users/offers/{oid1}/accept/', {}, format='json')
+        r_acc2 = self.client.post(f'/api/users/offers/{oid1}/accept/', {}, format='json')
+        r_acc3 = self.client.post(f'/api/users/offers/{oid1}/accept/', {}, format='json')
+        self.assertEqual(r_acc1.status_code, 200, r_acc1.content)
+        self.assertEqual(r_acc2.status_code, 400, r_acc2.content)
+        self.assertEqual(r_acc3.status_code, 400, r_acc3.content)
+
+        self.assertEqual(
+            Offer.objects.filter(pk=oid1, status='accepted', ticket_id=tid).count(),
+            1,
+        )
+        pending_accepted = Offer.objects.filter(ticket_id=tid, status='accepted').count()
+        self.assertEqual(pending_accepted, 1)
+
+        base = Decimal('120.00')
+        _, fee_buyer, total = buyer_charge_from_base_amount(base)
+        self.assertEqual(fee_buyer, Decimal('12.00'))
+        self.assertEqual(total, Decimal('132.00'))
+
+        r_ord = self.client.post(
+            '/api/users/orders/',
+            {
+                'ticket': tid,
+                'quantity': 1,
+                'total_amount': str(total),
+                'event_name': self.event.name,
+                'offer_id': oid1,
+            },
+            format='json',
+        )
+        self.assertEqual(r_ord.status_code, 201, r_ord.content)
+        order_id = r_ord.json()['id']
+        tok = r_ord.json().get('payment_confirm_token')
+        self.assertTrue(tok)
+
+        r_pay = self.client.post(
+            f'/api/users/orders/{order_id}/confirm-payment/',
+            {'mock_payment_ack': True, 'payment_confirm_token': tok},
+            format='json',
+        )
+        self.assertEqual(r_pay.status_code, 200, r_pay.content)
+
+        order = Order.objects.get(pk=order_id)
+        self.assertEqual(order.currency, 'USD')
+        self.assertEqual(order.status, 'paid')
+        self.assertEqual(order.final_negotiated_price, base)
+        self.assertEqual(order.buyer_service_fee, Decimal('12.00'))
+        self.assertEqual(order.seller_service_fee, Decimal('6.00'))
+        self.assertEqual(order.net_seller_revenue, Decimal('114.00'))
+        self.assertEqual(order.total_paid_by_buyer, total)
+        self.assertEqual(Order.objects.filter(user=self.buyer, ticket_id=tid).count(), 1)
 
 
 class InternationalLaunchReceiptAsyncE2E(TransactionTestCase):

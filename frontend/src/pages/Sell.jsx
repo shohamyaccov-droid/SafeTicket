@@ -27,6 +27,42 @@ function isTicketAttachmentFile(file) {
   return /\.(jpe?g|png)$/i.test(file.name || '');
 }
 
+/** Visual confirmation before submit: image thumbnail or PDF badge. */
+function TicketAttachmentPreview({ file }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    if (!file) {
+      setUrl(null);
+      return undefined;
+    }
+    if (isPdfFile(file)) {
+      setUrl(null);
+      return undefined;
+    }
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+
+  if (!file) return null;
+  if (url) {
+    return (
+      <div className="sell-file-preview sell-file-preview--image">
+        <img src={url} alt="" />
+        <span className="sell-file-preview-label">מוכן להעלאה</span>
+      </div>
+    );
+  }
+  return (
+    <div className="sell-file-preview sell-file-preview--pdf">
+      <span className="sell-file-preview-pdf-icon" aria-hidden>
+        PDF
+      </span>
+      <span className="sell-file-preview-label">מוכן להעלאה</span>
+    </div>
+  );
+}
+
 const Sell = () => {
   // ALL HOOKS MUST BE CALLED FIRST - BEFORE ANY EARLY RETURNS
   const { user, loading: authLoading, refreshProfile } = useAuth();
@@ -887,6 +923,18 @@ const Sell = () => {
 
   return (
     <div className="sell-container">
+      {loading && (
+        <div className="sell-upload-overlay" role="status" aria-live="polite" aria-busy="true">
+          <div className="sell-upload-overlay-card">
+            <div className="sell-upload-spinner" aria-hidden />
+            <p className="sell-upload-overlay-title">מעלה את הכרטיס...</p>
+            <p className="sell-upload-overlay-hint">נא להמתין — אל תסגרו את הדף</p>
+            <div className="sell-upload-progress-track" aria-hidden>
+              <div className="sell-upload-progress-bar" />
+            </div>
+          </div>
+        </div>
+      )}
       <div className="listing-card sell-form-compact">
         <div className="listing-card-header">
           <div className="secure-listing-header">
@@ -1237,7 +1285,10 @@ const Sell = () => {
                   accept={TICKET_FILE_INPUT_ACCEPT}
                 />
                 {formData.singleMultiPagePdf ? (
-                  <span className="uploaded-file-name">✓ {formData.singleMultiPagePdf.name}</span>
+                  <>
+                    <TicketAttachmentPreview file={formData.singleMultiPagePdf} />
+                    <span className="uploaded-file-name">✓ {formData.singleMultiPagePdf.name}</span>
+                  </>
                 ) : (
                   <span className="dropzone-placeholder">
                     {formData.available_quantity > 1
@@ -1292,7 +1343,10 @@ const Sell = () => {
                           required={uploadMethod === 'separate_files'}
                         />
                         {packageData.pdf_file && (
-                          <span className="uploaded-file-name">✓ {packageData.pdf_file.name}</span>
+                          <>
+                            <TicketAttachmentPreview file={packageData.pdf_file} />
+                            <span className="uploaded-file-name">✓ {packageData.pdf_file.name}</span>
+                          </>
                         )}
                       </div>
                     )}
