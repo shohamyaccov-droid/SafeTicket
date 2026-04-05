@@ -134,6 +134,15 @@ const Navbar = () => {
             <Link to="/sell" className="nav-link sell-btn" onClick={closeMobileMenu}>
               מכירת כרטיס
             </Link>
+            <Link to="/contact" className="nav-link nav-link-static" onClick={closeMobileMenu}>
+              צור קשר
+            </Link>
+            <Link to="/faq" className="nav-link nav-link-static" onClick={closeMobileMenu}>
+              שאלות ותשובות
+            </Link>
+            <Link to="/terms" className="nav-link nav-link-static" onClick={closeMobileMenu}>
+              תקנון
+            </Link>
           </nav>
         </div>
 
@@ -242,6 +251,9 @@ const Navbar = () => {
             </>
           )}
           <Link to="/sell" className="nav-link sell-btn" onClick={closeMobileMenu}>מכירת כרטיס</Link>
+          <Link to="/contact" className="nav-link nav-link-static" onClick={closeMobileMenu}>צור קשר</Link>
+          <Link to="/faq" className="nav-link nav-link-static" onClick={closeMobileMenu}>שאלות ותשובות</Link>
+          <Link to="/terms" className="nav-link nav-link-static" onClick={closeMobileMenu}>תקנון</Link>
         </nav>
         <div className="mobile-user-actions">
           {user ? (
@@ -254,7 +266,7 @@ const Navbar = () => {
                   לוח ניהול
                 </Link>
               )}
-              <button type="button" onClick={handleLogout} className="nav-link logout-btn">התנתקות</button>
+              <button type="button" onClick={handleLogout} className="logout-btn logout-btn--mobile-drawer">התנתקות</button>
             </>
           ) : (
             <>

@@ -93,6 +93,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   /** Synchronous snapshot so success UI never waits on PDF download or lost React state */
   const successSnapshotRef = useRef(null);
   const navigate = useNavigate();
+  const stepRef = useRef(step);
+  stepRef.current = step;
+  const guestEmailRef = useRef('');
+  useEffect(() => {
+    guestEmailRef.current = (guestForm.email || '').trim();
+  }, [guestForm.email]);
 
   useEffect(() => {
     console.info('[CheckoutModal] mount/update', {
@@ -316,6 +322,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         return;
       }
     }
+    setError('');
     setStep('payment');
     setInfoStepBusy(false);
   };
@@ -606,9 +613,15 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         }
       })();
     } catch (err) {
-      const message = err.response?.data?.detail ||
-                     err.response?.data?.error ||
-                     (typeof err.response?.data === 'string' ? err.response.data : JSON.stringify(err.response?.data)) ||
+      const res = err.response;
+      console.error('[CheckoutModal] handlePaymentSubmit failed', {
+        status: res?.status,
+        data: res?.data,
+        message: err.message,
+      });
+      const message = res?.data?.detail ||
+                     res?.data?.error ||
+                     (typeof res?.data === 'string' ? res.data : JSON.stringify(res?.data)) ||
                      err.message ||
                      'שגיאה בתקשורת עם השרת';
       setError(message);
@@ -659,22 +672,17 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     }
   };
 
-  // Reserve ticket when modal opens (only once)
+  // Reserve once per ticket id — do NOT depend on `step`: when step went info→payment, cleanup was
+  // releasing the hold while the client still thought it was reserved (broken checkout).
   useEffect(() => {
-    // Phase 1: Once order is complete, ignore ticket validation - prevents "Ticket unavailable" from ruining success screen
-    if (step === 'success') return;
+    const tid = ticket?.id;
+    if (!tid) return;
+
     const reserveTicket = async () => {
-      if (reservationRef.current || !ticket) return;
-      
+      if (stepRef.current === 'success') return;
+      if (reservationRef.current) return;
+
       try {
-        // Ensure we have a valid ticket ID
-        const ticketId = ticket.id;
-        if (!ticketId) {
-          setError('שגיאה: לא נמצא מזהה כרטיס תקין');
-          return;
-        }
-        
-        // Check if ticket is available (status should be 'active')
         if (ticket.status && ticket.status !== 'active') {
           setError('הכרטיס אינו זמין כרגע. אנא נסה כרטיס אחר.');
           setTimeout(() => {
@@ -682,74 +690,64 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           }, 3000);
           return;
         }
-        
-        const email = user ? null : guestForm.email || null;
+
+        const email = user ? null : guestEmailRef.current || null;
         const listingGroupId = ticketGroup?.listing_group_id || ticket?.listing_group_id;
-        console.log('Reserving Ticket ID:', ticketId);
-        console.log('Listing Group ID:', listingGroupId);
-        console.log('Ticket Group:', ticketGroup);
-        console.log('Ticket:', ticket);
-        const response = await ticketAPI.reserveTicket(ticketId, email);
-        
+        console.log('Reserving Ticket ID:', tid, 'listingGroupId:', listingGroupId);
+        const response = await ticketAPI.reserveTicket(tid, email);
+
         if (response.data && response.data.success) {
           reservationRef.current = true;
-          // Calculate remaining time from reservation
           if (response.data.expires_at) {
             const expiresAt = new Date(response.data.expires_at);
             const now = new Date();
             const remaining = Math.max(0, Math.floor((expiresAt - now) / 1000));
             setTimeRemaining(remaining);
           } else {
-            setTimeRemaining(600); // Default 10 minutes
+            setTimeRemaining(600);
           }
           console.log('Ticket reserved successfully');
         }
       } catch (err) {
-        // Check if ticket is reserved by someone else
-        if (err.response?.data?.status === 'reserved' || err.response?.data?.error?.includes('someone else')) {
-          const errorMsg = err.response?.data?.error || 'הכרטיס נמצא כעת בעגלה של מישהו אחר. הוא עשוי להיות זמין שוב בעוד כמה דקות.';
+        const res = err.response;
+        console.error('[CheckoutModal] reserveTicket failed', {
+          status: res?.status,
+          data: res?.data,
+          ticketId: tid,
+        });
+        if (res?.data?.status === 'reserved' || res?.data?.error?.includes('someone else')) {
+          const errorMsg = res?.data?.error || 'הכרטיס נמצא כעת בעגלה של מישהו אחר. הוא עשוי להיות זמין שוב בעוד כמה דקות.';
           setError(errorMsg);
           toastError(errorMsg);
-          // Close modal after showing error
           setTimeout(() => {
             handleClose();
           }, 5000);
-        } else if (err.response?.data?.error?.includes('no longer available') || err.response?.data?.error?.includes('not available')) {
-          const errorMsg = err.response?.data?.error || 'הכרטיס אינו זמין עוד. אנא נסה כרטיס אחר.';
+        } else if (res?.data?.error?.includes('no longer available') || res?.data?.error?.includes('not available')) {
+          const errorMsg = res?.data?.error || 'הכרטיס אינו זמין עוד. אנא נסה כרטיס אחר.';
           setError(errorMsg);
           toastError(errorMsg);
           setTimeout(() => {
             handleClose();
           }, 3000);
         } else {
-          // If reservation fails for other reasons, still allow checkout but show warning
-          const errorMsg = err.response?.data?.error || err.response?.data?.detail || 'לא ניתן לשמור את הכרטיס כרגע. אנא נסה שוב.';
+          const errorMsg = res?.data?.error || res?.data?.detail || 'לא ניתן לשמור את הכרטיס כרגע. אנא נסה שוב.';
           setError(errorMsg);
           toastError(errorMsg);
         }
       }
     };
 
-    // Reserve ticket immediately when modal opens
     reserveTicket();
 
     return () => {
-      // Release reservation if modal closes without completing purchase
       if (transactionCompleteRef.current) return;
-      if (reservationRef.current && step !== 'success' && ticket) {
-        const releaseReservation = async () => {
-          try {
-            const email = user ? null : guestForm.email || null;
-            await ticketAPI.releaseReservation(ticket.id, email);
-            console.log('Reservation released on modal close');
-          } catch {
-            /* best-effort release */
-          }
-        };
-        releaseReservation();
+      if (reservationRef.current) {
+        const email = user ? null : guestEmailRef.current || null;
+        reservationRef.current = false;
+        void ticketAPI.releaseReservation(tid, email).catch(() => {});
       }
     };
-  }, [ticket, step]); // Re-run if ticket changes; step guard prevents post-purchase validation
+  }, [ticket?.id, user]);
 
   // Reset and start timer when entering payment step
   useEffect(() => {

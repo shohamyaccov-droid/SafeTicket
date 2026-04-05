@@ -211,6 +211,15 @@
   text-decoration: none;
 }
 
+.nav-link-static {
+  font-size: 0.9rem;
+  color: var(--text-tertiary, #64748b);
+}
+
+.nav-link-static:hover {
+  color: var(--primary-blue);
+}
+
 .logout-btn {
   background: transparent;
   border: 1px solid var(--border-color);
@@ -222,6 +231,7 @@
   font-size: 0.95rem;
   transition: all 0.2s ease;
   font-family: inherit;
+  box-sizing: border-box;
 }
 
 .logout-btn:hover {
@@ -431,14 +441,26 @@ a.nav-mobile-auth-btn {
     text-align: center;
   }
   
-  .mobile-nav-overlay .logout-btn {
-    padding: var(--spacing-md);
+  .mobile-nav-overlay .logout-btn--mobile-drawer {
+    display: block;
     width: 100%;
+    margin-top: var(--spacing-sm);
+    padding: var(--spacing-md);
     text-align: right;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    margin-top: var(--spacing-md);
+    border: none;
+    border-radius: 10px;
+    background: rgba(0, 69, 175, 0.08);
+    color: var(--primary-blue);
+    font-weight: 600;
+    font-size: 1rem;
+    border-bottom: none;
   }
+
+  .mobile-nav-overlay .logout-btn--mobile-drawer:hover {
+    background: rgba(0, 69, 175, 0.14);
+    color: var(--primary-blue-hover, #003d9e);
+  }
+
   
   .mobile-nav-overlay .user-greeting {
     color: var(--text-secondary);

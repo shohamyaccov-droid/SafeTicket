@@ -43,13 +43,15 @@ const TicketSelectionPage = () => {
           }
         }
         
-        // Find the specific ticket by ID
-        const foundTicket = ticketsData.find(t => t.id === parseInt(ticketId));
+        const matchTicketId = (t) =>
+          t &&
+          (String(t.id) === String(ticketId) ||
+            (Number.isFinite(Number(ticketId)) && Number(t.id) === Number(ticketId)));
+        const foundTicket = ticketsData.find(matchTicketId);
         if (foundTicket) {
           setTicket(foundTicket);
-          // Set initial quantity to 1, but ensure it doesn't exceed available
           const maxQty = foundTicket.available_quantity ?? foundTicket.quantity ?? 1;
-          setQuantity(Math.min(1, maxQty));
+          setQuantity(1);
         }
       } catch (error) {
         toastError('לא ניתן לטעון את פרטי הכרטיס. חזרו לרשימה ונסו שוב.');
@@ -72,11 +74,29 @@ const TicketSelectionPage = () => {
   };
 
   const handleContinueToCheckout = () => {
-    // Validate quantity before proceeding
-    const maxQty = ticket?.available_quantity ?? ticket?.quantity ?? 1;
-    if (quantity > 0 && quantity <= maxQty) {
-      setSelectedTicket(ticket);
-      setShowCheckout(true);
+    try {
+      const maxQty = ticket?.available_quantity ?? ticket?.quantity ?? 1;
+      console.info('[TicketSelection] handleContinueToCheckout', {
+        hasTicket: !!ticket,
+        ticketId: ticket?.id,
+        quantity,
+        maxQty,
+      });
+      if (!ticket) {
+        console.error('[TicketSelection] handleContinueToCheckout: no ticket in state');
+        toastError('כרטיס לא זמין');
+        return;
+      }
+      if (quantity > 0 && quantity <= maxQty) {
+        setSelectedTicket(ticket);
+        setShowCheckout(true);
+        console.info('[TicketSelection] showCheckout set true');
+      } else {
+        console.warn('[TicketSelection] invalid quantity for checkout', { quantity, maxQty });
+      }
+    } catch (e) {
+      console.error('[TicketSelection] handleContinueToCheckout failed', e);
+      toastError('לא ניתן לפתוח את הקופה');
     }
   };
 
@@ -100,12 +120,15 @@ const TicketSelectionPage = () => {
       }
       
       // Find the specific ticket by ID and update state
-      const foundTicket = ticketsData.find(t => t.id === parseInt(ticketId));
+      const matchTicketId = (t) =>
+        t &&
+        (String(t.id) === String(ticketId) ||
+          (Number.isFinite(Number(ticketId)) && Number(t.id) === Number(ticketId)));
+      const foundTicket = ticketsData.find(matchTicketId);
       if (foundTicket) {
         setTicket(foundTicket);
-        // Update quantity to not exceed available
         const maxQty = foundTicket.available_quantity ?? foundTicket.quantity ?? 1;
-        setQuantity(Math.min(quantity, maxQty));
+        setQuantity((q) => Math.min(q, maxQty));
       }
     } catch {
       toastError('עדכון פרטי הכרטיס נכשל. נסו לרענן את הדף.');
@@ -338,6 +361,11 @@ const TicketSelectionPage = () => {
         <CheckoutModal
           ticket={selectedTicket}
           ticketGroup={{
+            id: String(
+              selectedTicket.listing_group_id != null && selectedTicket.listing_group_id !== ''
+                ? selectedTicket.listing_group_id
+                : selectedTicket.id
+            ),
             tickets: [selectedTicket],
             available_count:
               selectedTicket.available_quantity ?? selectedTicket.quantity ?? 1,

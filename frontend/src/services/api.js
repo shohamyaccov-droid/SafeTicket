@@ -555,11 +555,13 @@ export const ticketAPI = {
   /** Proof of purchase — staff/seller only (same auth as backend download_receipt). */
   downloadReceipt: (id) =>
     api.get(`/users/tickets/${id}/download_receipt/`, { responseType: 'blob' }),
-  reserveTicket: (id, email = null) => {
+  reserveTicket: async (id, email = null) => {
+    await ensureCsrfToken();
     const data = email ? { email } : {};
     return api.post(`/users/tickets/${id}/reserve/`, data);
   },
-  releaseReservation: (id, email = null) => {
+  releaseReservation: async (id, email = null) => {
+    await ensureCsrfToken();
     const data = email ? { email } : {};
     return api.post(`/users/tickets/${id}/release_reservation/`, data);
   },
