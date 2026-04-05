@@ -550,6 +550,19 @@
   border-radius: 0;
 }
 
+.venue-map-footer-label {
+  margin: 0;
+  padding: 0.65rem 1rem 0.85rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: 0.02em;
+  border-top: 1px solid #f1f5f9;
+  background: linear-gradient(to bottom, #ffffff, #f8fafc);
+  flex-shrink: 0;
+}
+
 /* Tickets List Container — below map on single-column layouts */
 .tickets-list-container {
   order: 1;

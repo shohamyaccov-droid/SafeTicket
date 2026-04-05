@@ -945,6 +945,7 @@ const EventDetailsPage = () => {
                     // ALWAYS render the map - never return null or conditional
                     return <VenueMapPin venueName={finalVenueName} sectionName={activeSectionName} />;
                   })()}
+                  <p className="venue-map-footer-label" aria-hidden="true">מפת האולם</p>
                 </div>
             </div>
           </div>

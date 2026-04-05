@@ -663,6 +663,11 @@ def _is_event_past(ticket):
         event_date = ticket.event_date
     if event_date is None:
         return False  # Legacy ticket without event - allow
+    # Naive legacy rows vs aware timezone.now() raises TypeError → 500; normalize for comparison.
+    if timezone.is_naive(event_date):
+        event_date = timezone.make_aware(
+            event_date, timezone.get_default_timezone()
+        )
     return event_date < timezone.now()
 
 
@@ -4018,6 +4023,23 @@ class OfferViewSet(viewsets.ModelViewSet):
         from django.utils import timezone
         from django.db.models import Q
         
+        user = self.request.user
+        # Get offers received (for sellers) - offers on tickets they own
+        if self.action == 'received':
+            user_scope = Q(ticket__seller=user)
+        # Get offers sent (for buyers) - offers they made
+        elif self.action == 'sent':
+            user_scope = Q(buyer=user)
+        else:
+            user_scope = Q(buyer=user) | Q(ticket__seller=user)
+
+        # Auto-expire old pending offers (plain queryset — no select_related on UPDATE)
+        Offer.objects.filter(
+            user_scope,
+            status='pending',
+            expires_at__lt=timezone.now(),
+        ).update(status='expired')
+
         queryset = Offer.objects.select_related(
             'buyer',
             'ticket',
@@ -4026,24 +4048,8 @@ class OfferViewSet(viewsets.ModelViewSet):
             'ticket__event__artist',
             'parent_offer',
             'counter_offer',
-        ).all()
-        
-        # Filter by user role
-        user = self.request.user
-        
-        # Get offers received (for sellers) - offers on tickets they own
-        if self.action == 'received':
-            queryset = queryset.filter(ticket__seller=user)
-        # Get offers sent (for buyers) - offers they made
-        elif self.action == 'sent':
-            queryset = queryset.filter(buyer=user)
-        # Default: show all offers user is involved in
-        else:
-            queryset = queryset.filter(Q(buyer=user) | Q(ticket__seller=user))
-        
-        # Auto-expire old pending offers (still return expired rows for history)
-        queryset.filter(status='pending', expires_at__lt=timezone.now()).update(status='expired')
-        
+        ).filter(user_scope)
+
         queryset = self._annotate_offer_flags(queryset)
         return queryset.order_by('-created_at')
     
