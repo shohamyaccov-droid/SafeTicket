@@ -1039,9 +1039,9 @@ class CookieTokenRefreshView(TokenRefreshView):
 @permission_classes([AllowAny])
 def csrf_token_view(request):
     """
-    Double-submit cookie: sets csrftoken on the API host + returns token in JSON.
-    Cross-origin SPAs cannot read document.cookie for the API domain; the body value
-    is used for X-CSRFToken while the browser still sends the cookie with credentials.
+    Returns CSRF token in JSON for X-CSRFToken on mutating requests when the cookie is available.
+    On some browsers / Render hosts the csrftoken cookie may not persist cross-site; checkout and
+    offers use csrf_exempt + JWT instead. This endpoint remains for endpoints that still enforce CSRF.
     """
     token = get_token(request)
     return Response({'success': True, 'csrfToken': token})
@@ -1416,12 +1416,13 @@ def update_ticket_price(request, ticket_id):
         )
 
 
-@csrf_required
+@csrf_exempt
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_order(request):
     """
-    Create order for authenticated user after payment
+    Create order for authenticated user after payment.
+    CSRF exempt: same rationale as OfferViewSet (SPA + API on separate Render hosts).
     """
     # Include user in the data so serializer validation passes
     order_data = request.data.copy()
@@ -1796,7 +1797,7 @@ def create_order(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@csrf_required
+@csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def confirm_order_payment(request, order_id):
@@ -1975,7 +1976,7 @@ def confirm_order_payment(request, order_id):
     return Response(OrderSerializer(order, context={'request': request}).data)
 
 
-@csrf_required
+@csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def payment_simulation(request):
@@ -2143,7 +2144,7 @@ def payment_simulation(request):
     }, status=status.HTTP_200_OK)
 
 
-@csrf_required
+@csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def guest_checkout(request):
@@ -3982,11 +3983,14 @@ def admin_reject_ticket(request, ticket_id):
         )
 
 
-@method_decorator(csrf_required, name='dispatch')
+@method_decorator(csrf_exempt, name='dispatch')
 class OfferViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Offer model - Bid/Ask Negotiation System
     Rate limited: 10 offers/min to prevent inventory lock spam
+
+    CSRF exempt: cross-origin SPA on Render cannot rely on csrftoken cookie (PSL / third-party
+    cookie policies). Mutations are protected by IsAuthenticated + JWT Bearer + CORS allowlist.
     """
     serializer_class = OfferSerializer
     permission_classes = [IsAuthenticated]

@@ -271,8 +271,9 @@ const EventDetailsPage = () => {
     return () => clearInterval(pollInterval);
   }, [eventId]);
 
-  // Fetch tickets with current filters and sorting. Returns tickets array for availability checks.
-  const fetchTickets = async () => {
+  // Fetch tickets with current filters and sorting. On network error returns null (caller must not treat as "sold out").
+  const fetchTickets = async (opts = {}) => {
+    const { rethrow = false } = opts;
     try {
       const params = {};
       if (filters.minPrice) params.min_price = filters.minPrice;
@@ -299,8 +300,10 @@ const EventDetailsPage = () => {
       );
       setTickets(ticketsArray);
       return ticketsArray;
-    } catch {
-      return [];
+    } catch (e) {
+      if (rethrow) throw e;
+      console.warn('[EventDetails] fetchTickets failed', e);
+      return null;
     }
   };
 
@@ -520,7 +523,16 @@ const EventDetailsPage = () => {
     if (buyOpeningRef.current) return;
     buyOpeningRef.current = true;
     try {
-      const freshTickets = await fetchTickets();
+      let freshTickets;
+      try {
+        freshTickets = await fetchTickets({ rethrow: true });
+      } catch {
+        setToast({
+          message: 'לא ניתן לרענן את הרשימה. בדקו את החיבור ונסו שוב.',
+          type: 'error',
+        });
+        return;
+      }
       const freshGroups = groupTicketsByListing(freshTickets);
       const groupId = ticketGroup.listing_group_id || ticketGroup.id;
       const stillAvailable = freshGroups.some(
@@ -534,7 +546,17 @@ const EventDetailsPage = () => {
         return;
       }
       setSelectedTicketGroup(ticketGroup);
-      setQuantity(1);
+      const split = normalizeSplitType(
+        ticketGroup.tickets?.[0]?.split_type || ticketGroup.split_type || ''
+      );
+      const avail = ticketGroup.available_count || 1;
+      if (split === 'all') {
+        setQuantity(avail);
+      } else if (split === 'pairs') {
+        setQuantity(avail >= 2 ? 2 : avail);
+      } else {
+        setQuantity(1);
+      }
       setShowCheckout(true);
     } finally {
       buyOpeningRef.current = false;
@@ -1256,9 +1278,21 @@ const EventDetailsPage = () => {
                     className="quick-offer-btn buy-now"
                     onClick={() => {
                       handleQuickOffer(100);
-                      // Trigger buy now - open checkout instead
                       setShowMakeOffer(false);
-                      setSelectedTicketGroup({ tickets: [selectedOfferTicket], available_count: selectedOfferTicketGroup?.available_count || 1 });
+                      if (selectedOfferTicketGroup) {
+                        setSelectedTicketGroup(selectedOfferTicketGroup);
+                      } else {
+                        setSelectedTicketGroup({
+                          id: selectedOfferTicket?.listing_group_id || String(selectedOfferTicket?.id),
+                          listing_group_id: selectedOfferTicket?.listing_group_id,
+                          tickets: [selectedOfferTicket],
+                          available_count:
+                            selectedOfferTicket?.available_quantity ??
+                            selectedOfferTicketGroup?.available_count ??
+                            1,
+                          split_type: selectedOfferTicket?.split_type || selectedOfferTicket?.split_option,
+                        });
+                      }
                       setQuantity(offerQuantity);
                       setShowCheckout(true);
                     }}

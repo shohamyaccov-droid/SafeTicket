@@ -372,13 +372,25 @@ export async function ensureCsrfToken() {
 }
 
 export const paymentAPI = {
-  simulatePayment: (data) => api.post('/users/payments/simulate/', data),
+  simulatePayment: async (data) => {
+    await ensureCsrfToken();
+    return api.post('/users/payments/simulate/', data);
+  },
 };
 
 export const orderAPI = {
-  createOrder: (data) => api.post('/users/orders/', data),
-  guestCheckout: (data) => api.post('/users/orders/guest/', data),
-  confirmPayment: (orderId, data) => api.post(`/users/orders/${orderId}/confirm-payment/`, data),
+  createOrder: async (data) => {
+    await ensureCsrfToken();
+    return api.post('/users/orders/', data);
+  },
+  guestCheckout: async (data) => {
+    await ensureCsrfToken();
+    return api.post('/users/orders/guest/', data);
+  },
+  confirmPayment: async (orderId, data) => {
+    await ensureCsrfToken();
+    return api.post(`/users/orders/${orderId}/confirm-payment/`, data);
+  },
   getReceipt: (orderId) => api.get(`/users/orders/${orderId}/receipt/`),
 };
 

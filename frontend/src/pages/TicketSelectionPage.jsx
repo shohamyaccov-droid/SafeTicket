@@ -334,9 +334,16 @@ const TicketSelectionPage = () => {
       </div>
 
       {/* Checkout Modal */}
-      {showCheckout && (
+      {showCheckout && selectedTicket && (
         <CheckoutModal
           ticket={selectedTicket}
+          ticketGroup={{
+            tickets: [selectedTicket],
+            available_count:
+              selectedTicket.available_quantity ?? selectedTicket.quantity ?? 1,
+            listing_group_id: selectedTicket.listing_group_id,
+            split_type: selectedTicket.split_type || selectedTicket.split_option,
+          }}
           user={user}
           quantity={quantity}
           onClose={handleCloseCheckout}
