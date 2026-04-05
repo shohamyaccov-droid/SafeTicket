@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authAPI, orderAPI, paymentAPI, ticketAPI } from '../services/api';
@@ -13,6 +14,11 @@ import {
 } from '../utils/priceFormat';
 import { toastError } from '../utils/toast';
 import './CheckoutModal.css';
+
+function portalCheckoutRoot(node) {
+  if (typeof document === 'undefined') return null;
+  return createPortal(node, document.body);
+}
 
 function validateGuestContact(email, phone) {
   const em = String(email || '').trim();
@@ -87,6 +93,15 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   /** Synchronous snapshot so success UI never waits on PDF download or lost React state */
   const successSnapshotRef = useRef(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    console.info('[CheckoutModal] mount/update', {
+      hasTicket: !!ticket,
+      hasTicketGroup: !!ticketGroup,
+      ticketId: ticket?.id,
+      groupTicketsLen: ticketGroup?.tickets?.length,
+    });
+  }, [ticket, ticketGroup]);
 
   // Get locked quantity from accepted offer if it exists (accepted_at = server truth after accept)
   const isNegotiatedPrice =
@@ -830,7 +845,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       resolvedOrderData?.currency || acceptedOffer?.currency || resolveTicketCurrency(ticket)
     ).toUpperCase();
     const paySym = currencySymbol(payIso);
-    return (
+    return portalCheckoutRoot(
       <div className="success-overlay" onClick={handleClose}>
         <div className="success-celebration" onClick={(e) => e.stopPropagation()}>
           <div className="success-celebration-content">
@@ -997,7 +1012,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
   // Payment screen — never after a completed checkout (even if step lags)
   if (step === 'payment' && !checkoutSucceeded) {
-    return (
+    return portalCheckoutRoot(
       <div className="modal-overlay checkout-modal-overlay" onClick={handleClose}>
         <div className="modal-content checkout-modal-shell" onClick={(e) => e.stopPropagation()}>
           <button type="button" className="close-button" onClick={handleClose} aria-label="סגירה">×</button>
@@ -1293,7 +1308,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   }
 
   // Info screen (initial)
-  return (
+  return portalCheckoutRoot(
     <div className="modal-overlay checkout-modal-overlay" onClick={handleClose}>
       <div className="modal-content checkout-modal-shell" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="close-button" onClick={handleClose} aria-label="סגירה">×</button>

@@ -4079,7 +4079,9 @@ class OfferViewSet(viewsets.ModelViewSet):
         ticket_pk = ticket.pk
 
         with transaction.atomic():
-            ticket_locked = Ticket.objects.select_for_update().select_related('event').get(pk=ticket_pk)
+            # No select_related on nullable FKs (e.g. event) with select_for_update — PostgreSQL rejects
+            # FOR UPDATE on the nullable side of an outer join.
+            ticket_locked = Ticket.objects.select_for_update().get(pk=ticket_pk)
             recent_cutoff = timezone.now() - timedelta(seconds=5)
             if Offer.objects.filter(
                 buyer=buyer,
@@ -4165,11 +4167,11 @@ class OfferViewSet(viewsets.ModelViewSet):
             except (TypeError, ValueError):
                 return Response({'error': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
 
+            # Lock Offer row only — no select_related (get_queryset adds nullable joins like parent_offer).
             offer = (
-                self.get_queryset()
-                .select_for_update()
-                .select_related('ticket', 'ticket__seller', 'buyer')
+                Offer.objects.select_for_update()
                 .filter(pk=pk_int)
+                .filter(Q(buyer=request.user) | Q(ticket__seller=request.user))
                 .first()
             )
             if not offer:

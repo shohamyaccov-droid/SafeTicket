@@ -8,7 +8,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
+  z-index: 10000;
   pointer-events: auto;
 }
 
@@ -550,7 +550,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 2000;
+  z-index: 10000;
   animation: fadeIn 0.3s ease;
 }
 
@@ -1367,6 +1367,7 @@
 
 /* Premium checkout shell + stepper (TradeTix) */
 .modal-overlay.checkout-modal-overlay {
+  z-index: 10000;
   padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
 }
 
