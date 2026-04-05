@@ -31,6 +31,17 @@ function App() {
     authAPI.getCsrf().catch(() => {});
   }, []);
 
+  /** Warm CSRF cache + mitigate Render free-tier cold starts while a tab is open (external uptime ping is still recommended). */
+  useEffect(() => {
+    const INTERVAL_MS = 7 * 60 * 1000;
+    const ping = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      authAPI.getCsrf().catch(() => {});
+    };
+    const id = window.setInterval(ping, INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, []);
+
   return (
     <AuthProvider>
       <Router>

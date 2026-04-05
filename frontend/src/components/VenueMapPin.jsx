@@ -143,6 +143,8 @@ const VenueMapPin = ({ venueName, sectionName }) => {
               src={venueConfig.imageUrl} 
               alt={`מפת ${venueName}`}
               className="venue-map-image"
+              loading="lazy"
+              decoding="async"
               onError={(e) => {
                 console.warn('⚠️ Image failed to load, using SVG fallback');
                 setImageError(true);

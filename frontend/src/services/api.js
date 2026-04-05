@@ -199,9 +199,10 @@ function stripContentTypeForMultipart(config) {
 }
 
 // Attach X-CSRFToken for unsafe methods (POST, PUT, PATCH, DELETE).
+// Cross-origin SPA: cookie is often unreadable — refresh token via /users/csrf/ before mutating if missing.
 // FormData: strip every Content-Type variant first, then set CSRF (multipart boundary must not be forced).
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
     const method = (config.method || 'get').toLowerCase();
     stripContentTypeForMultipart(config);
     const bearer = getEffectiveBearerAccess();
@@ -209,7 +210,15 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${bearer}`;
     }
     if (method !== 'get' && method !== 'head' && method !== 'options') {
-      const token = getCsrfTokenForRequest();
+      let token = getCsrfTokenForRequest();
+      if (!token) {
+        try {
+          await ensureCsrfToken();
+        } catch {
+          /* dev same-site may rely on csrftoken cookie only */
+        }
+        token = getCsrfTokenForRequest();
+      }
       if (token) {
         config.headers['X-CSRFToken'] = token;
       }

@@ -943,6 +943,8 @@ const Dashboard = () => {
                             <img
                               src={purchase.event_image_url}
                               alt={ticket.event_name || purchase.event_name || 'אירוע'}
+                              loading="lazy"
+                              decoding="async"
                               style={{ width: '36px', height: '36px', minWidth: '36px' }}
                             />
                           ) : (
@@ -1216,7 +1218,13 @@ const Dashboard = () => {
                             >
                               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 {group.ticketDetails?.event_image_url ? (
-                                  <img src={group.ticketDetails.event_image_url} alt="" style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover' }} />
+                                  <img
+                                    src={group.ticketDetails.event_image_url}
+                                    alt=""
+                                    loading="lazy"
+                                    decoding="async"
+                                    style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover' }}
+                                  />
                                 ) : (
                                   <div className="row-thumbnail-placeholder" style={{ width: '48px', height: '48px', borderRadius: '6px' }} />
                                 )}
@@ -1274,7 +1282,13 @@ const Dashboard = () => {
                             >
                               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
                                 {group.ticketDetails?.event_image_url ? (
-                                  <img src={group.ticketDetails.event_image_url} alt="" style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover' }} />
+                                  <img
+                                    src={group.ticketDetails.event_image_url}
+                                    alt=""
+                                    loading="lazy"
+                                    decoding="async"
+                                    style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover' }}
+                                  />
                                 ) : (
                                   <div className="row-thumbnail-placeholder" style={{ width: '48px', height: '48px', borderRadius: '6px' }} />
                                 )}
@@ -1403,6 +1417,8 @@ const Dashboard = () => {
                                   <img
                                     src={listing.event_image_url}
                                     alt={listing.event_name_display || listing.event_name || 'אירוע'}
+                                    loading="lazy"
+                                    decoding="async"
                                     style={{ width: '36px', height: '36px', minWidth: '36px' }}
                                   />
                                 ) : (

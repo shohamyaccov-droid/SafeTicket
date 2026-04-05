@@ -345,6 +345,7 @@ const Home = () => {
             src={img || fallback}
             alt=""
             loading="lazy"
+            decoding="async"
             onError={(e) => {
               e.currentTarget.onerror = null;
               e.currentTarget.src = fallback;

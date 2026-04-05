@@ -48,7 +48,7 @@ function TicketAttachmentPreview({ file }) {
   if (url) {
     return (
       <div className="sell-file-preview sell-file-preview--image">
-        <img src={url} alt="" />
+        <img src={url} alt="" loading="lazy" decoding="async" />
         <span className="sell-file-preview-label">מוכן להעלאה</span>
       </div>
     );

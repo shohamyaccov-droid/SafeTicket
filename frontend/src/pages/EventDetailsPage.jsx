@@ -718,7 +718,7 @@ const EventDetailsPage = () => {
               src={heroImageSrc}
               alt=""
               className="event-hero-image"
-              loading="eager"
+              loading="lazy"
               decoding="async"
               onError={(e) => {
                 e.currentTarget.onerror = null;
@@ -1162,7 +1162,7 @@ const EventDetailsPage = () => {
 
       {/* Make Offer Modal - StockX Style */}
       {showMakeOffer && selectedOfferTicket && (
-        <div className="modal-overlay" onClick={handleCloseMakeOffer}>
+        <div className="modal-overlay make-offer-modal-overlay" onClick={handleCloseMakeOffer}>
           <div className="modal-content make-offer-modal premium-modal" onClick={(e) => e.stopPropagation()}>
             {!offerSubmitted ? (
               <>
@@ -1316,11 +1316,11 @@ const EventDetailsPage = () => {
                   <div className="offer-note">
                     <p>ההצעה תפוג בעוד 48 שעות אם לא תתקבל</p>
                   </div>
-                  <div className="button-group">
-                    <button type="button" onClick={handleCloseMakeOffer} className="secondary-button">
+                  <div className="offer-modal-actions button-group">
+                    <button type="button" onClick={handleCloseMakeOffer} className="secondary-button offer-modal-btn">
                       ביטול
                     </button>
-                    <button type="submit" className="primary-button" disabled={offerSubmitting}>
+                    <button type="submit" className="primary-button offer-modal-btn" disabled={offerSubmitting}>
                       {offerSubmitting ? 'שולח…' : 'שלח הצעה'}
                     </button>
                   </div>

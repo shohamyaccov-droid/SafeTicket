@@ -1640,11 +1640,19 @@
   .tickets-split-container {
     grid-template-columns: 1fr;
     gap: 16px;
+    align-items: start;
   }
 
+  /* Sticky map + "מפת אולם" header as one unit (tablet / narrow desktop) */
   .venue-map-sticky-container {
     grid-column: 1;
     margin-bottom: var(--spacing-sm);
+    position: sticky;
+    top: calc(env(safe-area-inset-top, 0px) + 4.25rem);
+    z-index: 850;
+    align-self: start;
+    background: var(--bg-primary, #f8fafc);
+    -webkit-overflow-scrolling: touch;
   }
 
   .tickets-list-container {
@@ -1724,13 +1732,18 @@
     object-fit: contain;
     object-position: center;
   }
+
+  .tickets-section:has(.filters-section.mobile-open) .venue-map-sticky-container,
+  .tickets-section:has(.sort-section.mobile-open) .venue-map-sticky-container {
+    top: calc(env(safe-area-inset-top, 0px) + min(42vh, 11rem));
+  }
 }
 
 @media (max-width: 768px) {
+  /* Avoid overflow-x: clip on ancestors — it breaks position:sticky for the venue map block */
   .event-details-container {
     padding: var(--spacing-md) var(--spacing-sm);
     max-width: 100%;
-    overflow-x: clip;
   }
 
   /* Sticky filter/sort bar — stays reachable while scrolling the ticket list */
@@ -1848,6 +1861,8 @@
 
   .tickets-list-container {
     padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+    overflow-x: auto;
+    max-width: 100%;
   }
 
   /* When "סינון ומיון" is expanded, reserve more space so the map clears the panel */
@@ -2008,5 +2023,83 @@
     font-size: 0.75rem;
     padding: 0.35rem 0.6rem;
   }
+}
+
+/* Make Offer modal — mobile backdrop + full-width actions */
+.make-offer-modal-overlay {
+  background-color: rgba(15, 23, 42, 0.78) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  align-items: flex-end;
+  padding: 0;
+}
+
+@media (min-width: 480px) {
+  .make-offer-modal-overlay {
+    align-items: center;
+    padding: 1rem;
+  }
+}
+
+.make-offer-modal.premium-modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: min(92dvh, 920px);
+  border-radius: 16px 16px 0 0;
+  margin: 0;
+  padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 480px) {
+  .make-offer-modal.premium-modal {
+    border-radius: var(--radius-md);
+    width: 90%;
+    margin: auto;
+  }
+}
+
+.make-offer-modal .offer-modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 1.25rem;
+  width: 100%;
+}
+
+@media (min-width: 540px) {
+  .make-offer-modal .offer-modal-actions {
+    flex-direction: row-reverse;
+    align-items: stretch;
+  }
+}
+
+.make-offer-modal .offer-modal-actions .offer-modal-btn {
+  width: 100%;
+  min-height: 50px;
+  flex: 1 1 auto;
+  padding: 0.85rem 1rem;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+.make-offer-modal .custom-offer-input {
+  font-size: 16px;
+  min-height: 48px;
+  box-sizing: border-box;
+}
+
+.make-offer-modal .custom-offer-input:focus {
+  transform: none;
+}
+
+.make-offer-modal .quantity-select,
+.make-offer-modal select {
+  font-size: 16px;
+  min-height: 48px;
+}
+
+.event-details-container .venue-map-card-header {
+  position: relative;
+  z-index: 1;
 }
 

@@ -144,6 +144,8 @@ const ArtistEventsPage = () => {
           }
           alt={artist.name}
           className="compact-artist-image"
+          loading="lazy"
+          decoding="async"
           onError={(e) => {
             console.warn('[TradeTix] artist header image failed', artist.name, e.currentTarget.src);
             e.currentTarget.onerror = null;

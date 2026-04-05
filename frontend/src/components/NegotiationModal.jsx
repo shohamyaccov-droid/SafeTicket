@@ -133,7 +133,13 @@ const NegotiationModal = ({
         <div className="negotiation-modal-header">
           <div className="negotiation-header-content">
             {ticketDetails?.event_image_url ? (
-              <img src={ticketDetails.event_image_url} alt="" className="negotiation-header-img" />
+              <img
+                src={ticketDetails.event_image_url}
+                alt=""
+                className="negotiation-header-img"
+                loading="lazy"
+                decoding="async"
+              />
             ) : (
               <div className="negotiation-header-placeholder" />
             )}

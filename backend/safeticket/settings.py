@@ -491,6 +491,8 @@ X_FRAME_OPTIONS = 'DENY'
 
 # Cross-site cookies (SPA on different host than API). Safari / ITP requires SameSite=None; Secure=True.
 # Local HTTP: keep Lax unless SAFETICKET_CROSS_SITE_COOKIES=1 (HTTPS dev tunnel, e.g. ngrok/mkcert).
+# Render (frontend on *.onrender.com or custom domain, API on safeticket-api.onrender.com): production
+# branch MUST use SameSite=None + Secure so csrftoken is sent on cross-origin XHR with X-CSRFToken.
 _FORCE_CROSS_SITE = os.environ.get('SAFETICKET_CROSS_SITE_COOKIES', '').lower() in ('1', 'true', 'yes')
 if DEBUG and not _FORCE_CROSS_SITE:
     CSRF_COOKIE_SECURE = False
@@ -500,7 +502,7 @@ if DEBUG and not _FORCE_CROSS_SITE:
 else:
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SAMESITE = 'None'
+    CSRF_COOKIE_SAMESITE = 'None'  # required for cross-subdomain / cross-origin API + Vite SPA
     SESSION_COOKIE_SAMESITE = 'None'
 
 # When True, login/register return JWT in JSON so mobile Safari can use Authorization: Bearer (cookies often blocked on cross-origin XHR).
