@@ -174,6 +174,23 @@ if (_storedAccess) {
   syncAxiosDefaultAuthHeader();
 }
 
+function bodyTextLooksLikeCsrfFailure(data) {
+  if (data == null) return false;
+  if (typeof data === 'string') {
+    return /csrf/i.test(data) || /CSRF verification failed/i.test(data);
+  }
+  if (typeof data === 'object') {
+    const msg = data.detail || data.message || data.error;
+    if (typeof msg === 'string' && /csrf/i.test(msg)) return true;
+    try {
+      return /csrf/i.test(JSON.stringify(data));
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
 function stripContentTypeForMultipart(config) {
   if (!(config.data instanceof FormData)) {
     return;
@@ -253,6 +270,9 @@ api.interceptors.response.use(
   },
   async (error) => {
     const originalRequest = error.config;
+    if (!originalRequest) {
+      return Promise.reject(error);
+    }
     const is401 = error.response?.status === 401;
     const noRetryYet = !originalRequest._retry;
     const isAuthEndpoint = originalRequest.url?.includes('/login/') ||
@@ -285,6 +305,33 @@ api.interceptors.response.use(
         window.location.href = '/login';
       }
     }
+
+    const is403 = error.response?.status === 403;
+    const urlPath = originalRequest?.url || '';
+    const canCsrfRetry =
+      is403 &&
+      !originalRequest._csrfRetry &&
+      !urlPath.includes('/users/csrf/');
+    if (canCsrfRetry && bodyTextLooksLikeCsrfFailure(error.response?.data)) {
+      originalRequest._csrfRetry = true;
+      resetCsrfTokenCache();
+      try {
+        await ensureCsrfToken();
+      } catch {
+        /* ignore */
+      }
+      const token = getCsrfTokenForRequest();
+      if (token) {
+        const h = originalRequest.headers;
+        if (h && typeof h.set === 'function') {
+          h.set('X-CSRFToken', token);
+        } else if (h) {
+          h['X-CSRFToken'] = token;
+        }
+      }
+      return api(originalRequest);
+    }
+
     return Promise.reject(error);
   }
 );

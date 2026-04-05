@@ -18,8 +18,8 @@
 .App > main {
   flex: 1;
   padding-top: 0;
-  /* clip avoids horizontal bleed without creating a scroll box (hidden breaks position:sticky in descendants) */
-  overflow-x: clip;
+  /* Do not use overflow: clip/hidden here — it breaks position:sticky (event map + filters). Contain bleed in page roots. */
+  overflow-x: visible;
   width: 100%;
   max-width: 100%;
 }

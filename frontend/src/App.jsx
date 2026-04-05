@@ -31,9 +31,9 @@ function App() {
     authAPI.getCsrf().catch(() => {});
   }, []);
 
-  /** Warm CSRF cache + mitigate Render free-tier cold starts while a tab is open (external uptime ping is still recommended). */
+  /** Every 5 min while tab visible: hit /users/csrf/ to warm tokens + reduce Render spin-down (add external uptime for 100% coverage). */
   useEffect(() => {
-    const INTERVAL_MS = 7 * 60 * 1000;
+    const INTERVAL_MS = 5 * 60 * 1000;
     const ping = () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
       authAPI.getCsrf().catch(() => {});

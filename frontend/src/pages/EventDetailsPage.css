@@ -1,9 +1,11 @@
 .event-details-container {
   min-height: calc(100vh - 140px);
   padding: 1rem var(--spacing-lg);
-  max-width: 1200px;
+  max-width: min(1200px, 100%);
   margin: 0 auto;
   direction: rtl;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .event-header {
@@ -1648,11 +1650,31 @@
     grid-column: 1;
     margin-bottom: var(--spacing-sm);
     position: sticky;
-    top: calc(env(safe-area-inset-top, 0px) + 4.25rem);
-    z-index: 850;
+    top: calc(env(safe-area-inset-top, 0px) + 4.35rem);
+    z-index: 860;
     align-self: start;
     background: var(--bg-primary, #f8fafc);
     -webkit-overflow-scrolling: touch;
+    /* Solid edge so the title never ghosts over the ticket list while stuck */
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
+  }
+
+  /* Header stays visible: no clipping from card overflow while stuck */
+  .venue-map-sticky-container .venue-map-card {
+    overflow: visible;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.07);
+  }
+
+  .venue-map-sticky-container .venue-map-card-content {
+    overflow: hidden;
+    border-radius: 0 0 8px 8px;
+  }
+
+  .venue-map-sticky-container .venue-map-card-header {
+    position: relative;
+    z-index: 2;
+    background: #f9fafb;
+    flex-shrink: 0;
   }
 
   .tickets-list-container {
@@ -1760,15 +1782,26 @@
   /* Sticky seating map — pinned under the filter bar (~68px collapsed row) */
   .venue-map-sticky-container {
     position: sticky;
-    top: calc(env(safe-area-inset-top, 0px) + 4.25rem);
-    z-index: 850;
+    top: calc(env(safe-area-inset-top, 0px) + 4.35rem);
+    z-index: 860;
     margin-bottom: 0.35rem;
     background: var(--bg-primary, #f8fafc);
     -webkit-overflow-scrolling: touch;
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
   }
 
   .venue-map-sticky-container .venue-map-card {
+    overflow: visible;
     box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  }
+
+  .venue-map-sticky-container .venue-map-card-content {
+    overflow: hidden;
+    border-radius: 0 0 8px 8px;
+  }
+
+  .venue-map-sticky-container .venue-map-card-header {
+    z-index: 2;
   }
 
   .tickets-split-container {
@@ -2027,9 +2060,9 @@
 
 /* Make Offer modal — mobile backdrop + full-width actions */
 .make-offer-modal-overlay {
-  background-color: rgba(15, 23, 42, 0.78) !important;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background-color: rgba(15, 23, 42, 0.82) !important;
+  backdrop-filter: blur(10px) saturate(1.05);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05);
   align-items: flex-end;
   padding: 0;
 }
@@ -2048,6 +2081,12 @@
   border-radius: 16px 16px 0 0;
   margin: 0;
   padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+
+.make-offer-modal.premium-modal form {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 @media (min-width: 480px) {
@@ -2064,22 +2103,19 @@
   gap: 0.65rem;
   margin-top: 1.25rem;
   width: 100%;
-}
-
-@media (min-width: 540px) {
-  .make-offer-modal .offer-modal-actions {
-    flex-direction: row-reverse;
-    align-items: stretch;
-  }
+  align-items: stretch;
+  box-sizing: border-box;
 }
 
 .make-offer-modal .offer-modal-actions .offer-modal-btn {
-  width: 100%;
-  min-height: 50px;
-  flex: 1 1 auto;
-  padding: 0.85rem 1rem;
+  width: 100% !important;
+  max-width: 100%;
+  min-height: 48px;
+  flex: 0 0 auto !important;
+  padding: 0.875rem 1rem;
   font-size: 1rem;
   box-sizing: border-box;
+  margin: 0;
 }
 
 .make-offer-modal .custom-offer-input {
