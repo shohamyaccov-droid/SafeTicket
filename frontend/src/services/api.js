@@ -138,6 +138,7 @@ const api = axios.create({
   },
   withCredentials: true,
 });
+api.defaults.withCredentials = true;
 
 /**
  * CRITICAL (iOS Safari): set axios default Authorization synchronously so the very next
@@ -220,6 +221,7 @@ function stripContentTypeForMultipart(config) {
 // FormData: strip every Content-Type variant first, then set CSRF (multipart boundary must not be forced).
 api.interceptors.request.use(
   async (config) => {
+    config.withCredentials = true;
     const method = (config.method || 'get').toLowerCase();
     stripContentTypeForMultipart(config);
     const bearer = getEffectiveBearerAccess();

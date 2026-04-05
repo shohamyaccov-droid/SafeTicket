@@ -2,9 +2,10 @@
   min-height: calc(100vh - 140px);
   padding: 1rem var(--spacing-lg);
   max-width: min(1200px, 100%);
+  width: 100%;
+  min-width: 0;
   margin: 0 auto;
   direction: rtl;
-  overflow-x: hidden;
   box-sizing: border-box;
 }
 
@@ -1645,7 +1646,7 @@
     align-items: start;
   }
 
-  /* Sticky map + "מפת אולם" header as one unit (tablet / narrow desktop) */
+  /* Sticky map + "מפת אולם" header as one unit (tablet / narrow desktop). top clears sticky filter row; not 0 so title stays below filters. */
   .venue-map-sticky-container {
     grid-column: 1;
     margin-bottom: var(--spacing-sm);
@@ -1894,7 +1895,7 @@
 
   .tickets-list-container {
     padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
-    overflow-x: auto;
+    min-width: 0;
     max-width: 100%;
   }
 

@@ -366,6 +366,7 @@ SIMPLE_JWT = {
 # Default production allows both the static Render site and the Django-served SPA on the API host
 # (same machine: build_render.sh → Vite → collectstatic). Override via CORS_ALLOWED_ORIGINS / CSRF_TRUSTED_ORIGINS in dashboard.
 CORS_ALLOW_ALL_ORIGINS = False
+# Required for cross-origin XHR to send Accept-Credentials cookies (csrf, jwt cookies on API host).
 CORS_ALLOW_CREDENTIALS = True
 _RENDER_WEB_ORIGIN = 'https://safeticket-web.onrender.com'
 _RENDER_API_ORIGIN = 'https://safeticket-api.onrender.com'
@@ -413,6 +414,17 @@ if (os.environ.get('RENDER', '') or os.environ.get('RENDER_EXTERNAL_URL', '')).s
         _RENDER_API_ORIGIN,
         *([_FRONTEND_FROM_ENV] if _FRONTEND_FROM_ENV else []),
     )
+
+# Explicit production origins so env typos cannot drop them (browser Origin is the SPA).
+CSRF_TRUSTED_ORIGINS = _merge_unique_origins(
+    CSRF_TRUSTED_ORIGINS,
+    'https://safeticket-web.onrender.com',
+    'https://safeticket-api.onrender.com',
+)
+CORS_ALLOWED_ORIGINS = _merge_unique_origins(
+    CORS_ALLOWED_ORIGINS,
+    'https://safeticket-web.onrender.com',
+)
 
 # JWT HttpOnly cookie names
 JWT_ACCESS_COOKIE_NAME = 'access_token'
@@ -489,12 +501,12 @@ USE_X_FORWARDED_HOST = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
-# Cross-site cookies (SPA on different host than API). Safari / ITP requires SameSite=None; Secure=True.
-# Local HTTP: keep Lax unless SAFETICKET_CROSS_SITE_COOKIES=1 (HTTPS dev tunnel, e.g. ngrok/mkcert).
-# Render (frontend on *.onrender.com or custom domain, API on safeticket-api.onrender.com): production
-# branch MUST use SameSite=None + Secure so csrftoken is sent on cross-origin XHR with X-CSRFToken.
+# Cross-site cookies (SPA safeticket-web.onrender.com ↔ API safeticket-api.onrender.com).
+# Render sets RENDER=yes — force None+Secure even if DEBUG were mis-set, or CSRF fails on POST/offers.
+# Local HTTP: Lax unless SAFETICKET_CROSS_SITE_COOKIES=1 (HTTPS dev tunnel).
+_RENDER_SERVICE = bool((os.environ.get('RENDER') or '').strip())
 _FORCE_CROSS_SITE = os.environ.get('SAFETICKET_CROSS_SITE_COOKIES', '').lower() in ('1', 'true', 'yes')
-if DEBUG and not _FORCE_CROSS_SITE:
+if DEBUG and not _FORCE_CROSS_SITE and not _RENDER_SERVICE:
     CSRF_COOKIE_SECURE = False
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SAMESITE = 'Lax'
@@ -502,7 +514,7 @@ if DEBUG and not _FORCE_CROSS_SITE:
 else:
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SAMESITE = 'None'  # required for cross-subdomain / cross-origin API + Vite SPA
+    CSRF_COOKIE_SAMESITE = 'None'
     SESSION_COOKIE_SAMESITE = 'None'
 
 # When True, login/register return JWT in JSON so mobile Safari can use Authorization: Bearer (cookies often blocked on cross-origin XHR).

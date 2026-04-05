@@ -83,16 +83,29 @@ a:hover {
   text-decoration: underline;
 }
 
+html {
+  max-width: 100%;
+  overflow-x: visible;
+}
+
 body {
   margin: 0;
-  min-width: 320px;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   min-height: 100vh;
-  /* clip avoids horizontal scrollbar bleed without breaking position:sticky like overflow-x:hidden can */
-  overflow-x: clip;
+  /* Never use overflow-x: hidden/clip on html/body — it breaks position:sticky (e.g. event seating map). */
+  overflow-x: visible;
   background: var(--bg-primary);
   direction: rtl;
   text-align: right;
   padding: 0;
+}
+
+#root {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: visible;
 }
 
 /* Mobile edge padding - prevent content from touching screen edges */
