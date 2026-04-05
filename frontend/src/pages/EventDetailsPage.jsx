@@ -519,37 +519,59 @@ const EventDetailsPage = () => {
     }
   }, [ticketGroups]);
 
+  /** Stable id for matching listing groups after refetch (avoids 5 === "5" false negatives). */
+  const stableListingGroupKey = (group) => {
+    if (!group) return '';
+    const lid = group.listing_group_id;
+    if (lid != null && lid !== '') return String(lid).trim();
+    return String(group.id ?? '');
+  };
+
   const handleBuy = async (ticketGroup) => {
+    if (!ticketGroup) {
+      console.error('[EventDetails] handleBuy: missing ticketGroup');
+      return;
+    }
     if (buyOpeningRef.current) return;
     buyOpeningRef.current = true;
     try {
       let freshTickets;
       try {
         freshTickets = await fetchTickets({ rethrow: true });
-      } catch {
+      } catch (err) {
+        console.error('[EventDetails] handleBuy: fetchTickets failed', err);
         setToast({
           message: 'לא ניתן לרענן את הרשימה. בדקו את החיבור ונסו שוב.',
           type: 'error',
         });
         return;
       }
-      const freshGroups = groupTicketsByListing(freshTickets);
-      const groupId = ticketGroup.listing_group_id || ticketGroup.id;
-      const stillAvailable = freshGroups.some(
-        (g) => (g.listing_group_id || g.id) === groupId && (g.available_count || 0) > 0
+      const list = Array.isArray(freshTickets) ? freshTickets : [];
+      const freshGroups = groupTicketsByListing(list);
+      const targetKey = stableListingGroupKey(ticketGroup);
+      const matchingFresh = freshGroups.find(
+        (g) => stableListingGroupKey(g) === targetKey && (g.available_count || 0) > 0
       );
-      if (!stillAvailable) {
+      if (!matchingFresh) {
         setToast({
           message: 'הכרטיס נמכר ברגע זה. ריעננו את הרשימה – נסה כרטיס אחר.',
           type: 'error',
         });
         return;
       }
-      setSelectedTicketGroup(ticketGroup);
+      if (!matchingFresh.tickets?.length) {
+        console.error('[EventDetails] handleBuy: fresh group has no tickets', matchingFresh);
+        setToast({
+          message: 'שגיאה בטעינת הכרטיס. נסה שוב.',
+          type: 'error',
+        });
+        return;
+      }
+      setSelectedTicketGroup(matchingFresh);
       const split = normalizeSplitType(
-        ticketGroup.tickets?.[0]?.split_type || ticketGroup.split_type || ''
+        matchingFresh.tickets[0]?.split_type || matchingFresh.split_type || ''
       );
-      const avail = ticketGroup.available_count || 1;
+      const avail = matchingFresh.available_count || 1;
       if (split === 'all') {
         setQuantity(avail);
       } else if (split === 'pairs') {
@@ -558,6 +580,12 @@ const EventDetailsPage = () => {
         setQuantity(1);
       }
       setShowCheckout(true);
+    } catch (err) {
+      console.error('[EventDetails] handleBuy failed', err);
+      setToast({
+        message: 'לא ניתן לפתוח תשלום. נסה שוב.',
+        type: 'error',
+      });
     } finally {
       buyOpeningRef.current = false;
     }
@@ -645,12 +673,21 @@ const EventDetailsPage = () => {
       });
       setOfferSubmitted(true);
     } catch (error) {
+      console.error('[EventDetails] Submit offer failed', error);
       const d = error.response?.data;
+      const detailRaw = d?.detail;
+      const detailStr =
+        typeof detailRaw === 'string'
+          ? detailRaw
+          : detailRaw != null
+            ? JSON.stringify(detailRaw)
+            : null;
       const errorMsg =
         (Array.isArray(d?.non_field_errors) && d.non_field_errors[0]) ||
         d?.error ||
-        d?.detail ||
+        detailStr ||
         (typeof d === 'string' ? d : null) ||
+        error.message ||
         'שגיאה בשליחת ההצעה';
       setToast({ message: errorMsg, type: 'error' });
     } finally {
@@ -1278,24 +1315,53 @@ const EventDetailsPage = () => {
                     type="button"
                     className="quick-offer-btn buy-now"
                     onClick={() => {
-                      handleQuickOffer(100);
-                      setShowMakeOffer(false);
-                      if (selectedOfferTicketGroup) {
-                        setSelectedTicketGroup(selectedOfferTicketGroup);
-                      } else {
-                        setSelectedTicketGroup({
-                          id: selectedOfferTicket?.listing_group_id || String(selectedOfferTicket?.id),
-                          listing_group_id: selectedOfferTicket?.listing_group_id,
-                          tickets: [selectedOfferTicket],
-                          available_count:
-                            selectedOfferTicket?.available_quantity ??
-                            selectedOfferTicketGroup?.available_count ??
-                            1,
-                          split_type: selectedOfferTicket?.split_type || selectedOfferTicket?.split_option,
+                      try {
+                        if (!selectedOfferTicket) {
+                          console.error('[EventDetails] Buy now: no selectedOfferTicket');
+                          setToast({ message: 'אין כרטיס נבחר', type: 'error' });
+                          return;
+                        }
+                        handleQuickOffer(100);
+                        setShowMakeOffer(false);
+                        if (selectedOfferTicketGroup?.tickets?.length) {
+                          setSelectedTicketGroup(selectedOfferTicketGroup);
+                        } else {
+                          const lid = selectedOfferTicket.listing_group_id;
+                          const sellerKey =
+                            selectedOfferTicket.seller_username ||
+                            (typeof selectedOfferTicket.seller === 'object' &&
+                            selectedOfferTicket.seller != null
+                              ? selectedOfferTicket.seller.id
+                              : selectedOfferTicket.seller) ||
+                            selectedOfferTicket.seller_id ||
+                            'unknown';
+                          const priceKey =
+                            selectedOfferTicket.asking_price ?? selectedOfferTicket.original_price;
+                          const fallbackId = `${sellerKey}_${priceKey}`;
+                          setSelectedTicketGroup({
+                            id:
+                              lid != null && lid !== ''
+                                ? String(lid).trim()
+                                : fallbackId,
+                            listing_group_id: selectedOfferTicket.listing_group_id,
+                            tickets: [selectedOfferTicket],
+                            available_count:
+                              selectedOfferTicket.available_quantity ??
+                              selectedOfferTicketGroup?.available_count ??
+                              1,
+                            split_type:
+                              selectedOfferTicket.split_type || selectedOfferTicket.split_option,
+                          });
+                        }
+                        setQuantity(offerQuantity);
+                        setShowCheckout(true);
+                      } catch (err) {
+                        console.error('[EventDetails] Buy now from offer modal failed', err);
+                        setToast({
+                          message: 'לא ניתן לפתוח תשלום. נסה שוב.',
+                          type: 'error',
                         });
                       }
-                      setQuantity(offerQuantity);
-                      setShowCheckout(true);
                     }}
                   >
                     <span className="quick-offer-label">קנה עכשיו</span>

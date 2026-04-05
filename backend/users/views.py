@@ -17,13 +17,13 @@ from .throttles import (
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
-from django.http import FileResponse
+from django.http import FileResponse, Http404
 from django.db.models import F, Q, Count, Sum, Exists, OuterRef, Value, Prefetch, DecimalField
 from django.db.models.functions import Coalesce
 from decimal import Decimal
@@ -4007,6 +4007,22 @@ class OfferViewSet(viewsets.ModelViewSet):
         if getattr(self, 'action', None) in ('accept', 'reject', 'counter'):
             return [OffersMutationScopedThrottle()]
         return super().get_throttles()
+
+    def create(self, request, *args, **kwargs):
+        """JSON safety net: unhandled errors become JSON (not Django HTML 500) while DRF APIExceptions pass through."""
+        try:
+            return super().create(request, *args, **kwargs)
+        except APIException:
+            raise
+        except Http404:
+            raise
+        except Exception as e:
+            traceback.print_exc()
+            logger.exception('OfferViewSet.create unhandled error: %s', e)
+            return Response(
+                {'detail': f'SERVER CRASH: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     def _annotate_offer_flags(self, queryset):
         """One Exists subquery — avoids N+1 when serializing purchase_completed."""

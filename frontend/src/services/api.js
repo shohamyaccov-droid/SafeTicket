@@ -589,9 +589,22 @@ export const alertAPI = {
 };
 
 export const offerAPI = {
+  /** Normalize payload for DRF (ticket PK int, amount as decimal string, quantity int). */
   createOffer: async (data) => {
     await ensureCsrfToken();
-    return api.post('/users/offers/', data);
+    const rawT = data?.ticket ?? data?.ticket_id;
+    const tid = rawT != null ? parseInt(String(rawT), 10) : NaN;
+    const ticket = Number.isFinite(tid) ? tid : rawT;
+    const amtRaw = data?.amount ?? data?.price;
+    const amountNum = typeof amtRaw === 'number' ? amtRaw : parseFloat(String(amtRaw ?? ''));
+    const qRaw = data?.quantity ?? 1;
+    const quantity = Math.max(1, parseInt(String(qRaw), 10) || 1);
+    const payload = {
+      ticket,
+      amount: Number.isFinite(amountNum) ? String(amountNum) : '0',
+      quantity,
+    };
+    return api.post('/users/offers/', payload);
   },
   getOffers: () => api.get('/users/offers/'),
   getReceivedOffers: () => api.get('/users/offers/received/'),
