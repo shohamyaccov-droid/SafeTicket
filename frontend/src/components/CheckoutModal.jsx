@@ -113,6 +113,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const isNegotiatedPrice =
     acceptedOffer &&
     (acceptedOffer.status === 'accepted' || acceptedOffer.accepted_at != null);
+  /** Offer accept already locked inventory; skip cart /reserve and do not release on modal close. */
+  const skipCartReserveForNegotiatedOffer = Boolean(isNegotiatedPrice && acceptedOffer);
   const lockedQuantity = isNegotiatedPrice && acceptedOffer.quantity ? acceptedOffer.quantity : null;
   
   // Get available quantity - if locked quantity exists, use that; otherwise use ticket/group quantity
@@ -683,6 +685,16 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       if (reservationRef.current) return;
 
       try {
+        if (skipCartReserveForNegotiatedOffer) {
+          const cr = acceptedOffer?.checkout_time_remaining;
+          if (typeof cr === 'number' && cr > 0) {
+            setTimeRemaining(cr);
+          } else {
+            setTimeRemaining(4 * 60 * 60);
+          }
+          return;
+        }
+
         if (ticket.status && ticket.status !== 'active') {
           setError('הכרטיס אינו זמין כרגע. אנא נסה כרטיס אחר.');
           setTimeout(() => {
@@ -741,13 +753,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
     return () => {
       if (transactionCompleteRef.current) return;
+      if (skipCartReserveForNegotiatedOffer) return;
       if (reservationRef.current) {
         const email = user ? null : guestEmailRef.current || null;
         reservationRef.current = false;
         void ticketAPI.releaseReservation(tid, email).catch(() => {});
       }
     };
-  }, [ticket?.id, user]);
+  }, [ticket?.id, user, skipCartReserveForNegotiatedOffer, acceptedOffer?.id]);
 
   // Reset and start timer when entering payment step
   useEffect(() => {
@@ -763,18 +776,21 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             if (transactionCompleteRef.current || paymentSubmittingRef.current) {
               return prev;
             }
-            // Release reservation when timer expires - explicit API call
-            const releaseReservation = async () => {
-              try {
-                const email = user ? null : guestForm.email || null;
-                await ticketAPI.releaseReservation(ticket?.id, email);
-                reservationRef.current = false;
-              } catch {
-                /* best-effort release */
-              }
-            };
-            releaseReservation();
-            const expiredMsg = 'פג הזמן. הכרטיסים שוחררו חזרה למלאי. אנא נסה שוב.';
+            if (!skipCartReserveForNegotiatedOffer) {
+              const releaseReservation = async () => {
+                try {
+                  const email = user ? null : guestForm.email || null;
+                  await ticketAPI.releaseReservation(ticket?.id, email);
+                  reservationRef.current = false;
+                } catch {
+                  /* best-effort release */
+                }
+              };
+              void releaseReservation();
+            }
+            const expiredMsg = skipCartReserveForNegotiatedOffer
+              ? 'פג זמן התשלום להצעה. סגרו ונסו שוב או פנו לתמיכה.'
+              : 'פג הזמן. הכרטיסים שוחררו חזרה למלאי. אנא נסה שוב.';
             setError(expiredMsg);
             toastError(expiredMsg);
             setStep('info'); // Close payment step, back to info
@@ -797,7 +813,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         timerRef.current = null;
       }
     };
-  }, [step, ticket, user, guestForm.email]);
+  }, [step, ticket, user, guestForm.email, skipCartReserveForNegotiatedOffer]);
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -820,7 +836,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       onClose();
       return;
     }
-    if (reservationRef.current && step !== 'success') {
+    if (!skipCartReserveForNegotiatedOffer && reservationRef.current && step !== 'success') {
       try {
         const email = user ? null : guestForm.email || null;
         await ticketAPI.releaseReservation(ticket.id, email);

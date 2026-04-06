@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import { authAPI } from './services/api';
+import api, { authAPI } from './services/api';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
@@ -31,12 +31,15 @@ function App() {
     authAPI.getCsrf().catch(() => {});
   }, []);
 
-  /** Every 5 min while tab visible: hit /users/csrf/ to warm tokens + reduce Render spin-down (add external uptime for 100% coverage). */
+  /**
+   * Keep-alive: lightweight GET every 5 min while tab visible to reduce Render cold starts.
+   * Uses /api/health/ (no auth); CSRF warmup stays on mount above.
+   */
   useEffect(() => {
     const INTERVAL_MS = 5 * 60 * 1000;
     const ping = () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-      authAPI.getCsrf().catch(() => {});
+      api.get('/health/').catch(() => {});
     };
     const id = window.setInterval(ping, INTERVAL_MS);
     return () => window.clearInterval(id);

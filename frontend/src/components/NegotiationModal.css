@@ -243,8 +243,16 @@
 
 .negotiation-footer-actions {
   display: flex;
-  gap: 0.5rem;
-  justify-content: center;
+  flex-direction: column;
+  width: 100%;
+  gap: 12px;
+  box-sizing: border-box;
+}
+
+.negotiation-footer-actions .accept-button,
+.negotiation-footer-actions .reject-button {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .negotiation-footer-actions .accept-button {
@@ -282,28 +290,29 @@
 
 .negotiation-footer-counter {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-direction: column;
   width: 100%;
+  gap: 12px;
   box-sizing: border-box;
   align-items: stretch;
-  justify-content: center;
-  padding: 10px;
+  padding: 0;
   background: #fff;
 }
 
 .negotiation-footer-counter input {
-  flex: 1;
-  min-width: 120px;
+  width: 100%;
+  min-width: 0;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   font-size: 16px;
+  box-sizing: border-box;
 }
 
 .negotiation-footer-counter .primary-button {
-  flex: 1;
-  min-width: 120px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .counter-total-preview {

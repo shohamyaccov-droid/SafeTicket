@@ -3064,6 +3064,34 @@ class TicketViewSet(viewsets.ModelViewSet):
                 if ticket.reserved_at:
                     time_remaining = (ticket.reserved_at + timedelta(minutes=10)) - timezone.now()
                     if time_remaining.total_seconds() > 0:
+                        # Same buyer already holds this reservation (e.g. seller accepted offer — stock
+                        # locked for buyer). Do not 400: client must be able to open checkout / idempotent reserve.
+                        if request.user.is_authenticated and ticket.reserved_by_id == request.user.id:
+                            return Response(
+                                {
+                                    'success': True,
+                                    'message': 'Ticket reserved successfully',
+                                    'reserved_at': ticket.reserved_at.isoformat(),
+                                    'expires_at': (
+                                        ticket.reserved_at + timedelta(minutes=10)
+                                    ).isoformat(),
+                                },
+                                status=status.HTTP_200_OK,
+                            )
+                        guest_email = (request.data.get('email') or '').strip().lower()
+                        res_email = (ticket.reservation_email or '').strip().lower()
+                        if guest_email and res_email and guest_email == res_email:
+                            return Response(
+                                {
+                                    'success': True,
+                                    'message': 'Ticket reserved successfully',
+                                    'reserved_at': ticket.reserved_at.isoformat(),
+                                    'expires_at': (
+                                        ticket.reserved_at + timedelta(minutes=10)
+                                    ).isoformat(),
+                                },
+                                status=status.HTTP_200_OK,
+                            )
                         minutes_remaining = int(time_remaining.total_seconds() / 60)
                         return Response(
                             {

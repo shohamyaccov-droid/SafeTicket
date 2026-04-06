@@ -7,10 +7,15 @@ https://docs.djangoproject.com/en/4.2/topics/http/urls/
 from pathlib import Path
 
 from django.contrib import admin
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, JsonResponse
 from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
+
+
+def health_check(_request):
+    """Lightweight GET for uptime monitors and SPA keep-alive (Render cold-start mitigation)."""
+    return JsonResponse({'status': 'ok'})
 
 
 def spa_index_view(request):
@@ -27,6 +32,7 @@ def spa_index_view(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls')),
+    path('api/health/', health_check, name='health_check'),
     path('api/users/', include('users.urls')),
 ]
 

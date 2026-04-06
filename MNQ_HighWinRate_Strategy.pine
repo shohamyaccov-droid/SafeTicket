@@ -1,0 +1,207 @@
+//@version=5
+// =============================================================================
+// MNQ (Micro E-mini Nasdaq-100) — VWAP mean-reversion + volume climax + HTF filter
+// Hard constraints (NY time, America/New_York):
+//   • Friday: no new trades after 07:00; flatten from 07:00 onward
+//   • Daily EOD: flatten by 16:45 (04:45 PM)
+//   • Scheduled macro/news windows — no entries; flatten while window active
+// Costs: commission_value=2.0 (per contract, cash) + slippage=2 ticks
+// =============================================================================
+strategy(
+     title                   = "MNQ Pro — VWAP + Vol + MTF (Asymmetric)",
+     shorttitle              = "MNQ VWAP MR",
+     overlay                 = true,
+     pyramiding              = 0,
+     calc_on_every_tick      = false,
+     process_orders_on_close = true,
+     initial_capital         = 50000,
+     default_qty_type        = strategy.fixed,
+     default_qty_value       = 1,
+     margin_long             = 1,
+     margin_short            = 1,
+     commission_type         = strategy.commission.cash_per_contract,
+     commission_value        = 2.0,
+     slippage                = 2)
+
+// -----------------------------------------------------------------------------
+// NY clock (bar open time → components in America/New_York)
+// -----------------------------------------------------------------------------
+tz = "America/New_York"
+t = time
+nyH = hour(t, tz)
+nyMin = minute(t, tz)
+nyMins = nyH * 60 + nyMin
+
+isFriday = dayofweek(t, tz) == dayofweek.friday
+
+// Friday: no trading after 07:00 NY; positions flattened from 07:00 onward
+fridayAfterCutoff = isFriday and nyMins >= 7 * 60
+
+// EOD: flatten by 16:45 NY
+eodReached = nyMins >= 16 * 60 + 45
+
+// -----------------------------------------------------------------------------
+// News / macro — exact windows (user-specified), NY time via timestamp()
+// -----------------------------------------------------------------------------
+// ECB Rate Decision — March 5, 2026 05:00 – 09:30
+ecbPause = t >= timestamp(tz, 2026, 3, 5, 5, 0, 0) and t < timestamp(tz, 2026, 3, 5, 9, 30, 0)
+// US CPI — March 10, 2026 05:30 – 10:00
+cpiPause = t >= timestamp(tz, 2026, 3, 10, 5, 30, 0) and t < timestamp(tz, 2026, 3, 10, 10, 0, 0)
+// US PPI — March 11, 2026 05:30 – 10:00
+ppiPause = t >= timestamp(tz, 2026, 3, 11, 5, 30, 0) and t < timestamp(tz, 2026, 3, 11, 10, 0, 0)
+// FOMC — March 18, 2026 11:00 – 15:30
+fomcPause = t >= timestamp(tz, 2026, 3, 18, 11, 0, 0) and t < timestamp(tz, 2026, 3, 18, 15, 30, 0)
+// ISM Manufacturing — April 6, 2026 07:00 – 11:30
+ismPause = t >= timestamp(tz, 2026, 4, 6, 7, 0, 0) and t < timestamp(tz, 2026, 4, 6, 11, 30, 0)
+
+newsPause = ecbPause or cpiPause or ppiPause or fomcPause or ismPause
+
+sessionAllowsNewEntries = not newsPause and not fridayAfterCutoff and not eodReached
+
+// -----------------------------------------------------------------------------
+// Inputs
+// -----------------------------------------------------------------------------
+grpCore = "Core"
+longOnly = input.bool(true, "Long-only mode (asymmetric / regime)", group = grpCore)
+htfTf = input.timeframe("15", "Higher timeframe (trend filter)", group = grpCore)
+htfEmaLen = input.int(34, "HTF EMA length", minval = 5, group = grpCore)
+useHtfFilter = input.bool(true, "Require HTF close > EMA for longs", group = grpCore)
+useHtfFilterShort = input.bool(true, "Require HTF close < EMA for shorts", group = grpCore)
+
+grpVwap = "VWAP + volume"
+vwapTouchMode = input.string("Band", "VWAP touch mode", options = ["Band", "Exact"], group = grpVwap)
+vwapBandAtr = input.float(0.15, "VWAP band (× chart ATR)", minval = 0.05, step = 0.05, group = grpVwap)
+volSmaLen = input.int(20, "Volume SMA length", minval = 5, group = grpVwap)
+volClimaxMult = input.float(1.85, "Volume climax multiplier vs SMA", minval = 1.0, step = 0.05, group = grpVwap)
+requireVolClimax = input.bool(true, "Require volume climax on entry bar", group = grpVwap)
+
+grpRsi = "Oscillators"
+rsiLen = input.int(3, "RSI length (short — snapbacks)", minval = 2, group = grpRsi)
+rsiLongMax = input.int(38, "Long: RSI below", minval = 5, maxval = 50, group = grpRsi)
+rsiShortMin = input.int(62, "Short: RSI above", minval = 50, maxval = 95, group = grpRsi)
+
+grpPa = "Price action"
+bodyPctMin = input.float(0.35, "Min |close-open| / range", minval = 0.1, maxval = 1.0, step = 0.05, group = grpPa)
+wickRatioMin = input.float(1.25, "Min lower-wick / body (longs)", minval = 0.5, step = 0.05, group = grpPa)
+wickRatioShort = input.float(1.25, "Min upper-wick / body (shorts)", minval = 0.5, step = 0.05, group = grpPa)
+
+grpAtr = "ATR exits"
+atrLen = input.int(14, "ATR length", minval = 1, group = grpAtr)
+slAtrL = input.float(1.35, "Long stop (× ATR)", minval = 0.25, step = 0.05, group = grpAtr)
+tpAtrL = input.float(1.10, "Long target (× ATR)", minval = 0.25, step = 0.05, group = grpAtr)
+slAtrS = input.float(1.55, "Short stop (× ATR) — wider", minval = 0.25, step = 0.05, group = grpAtr)
+tpAtrS = input.float(0.95, "Short target (× ATR) — tighter", minval = 0.25, step = 0.05, group = grpAtr)
+maxBarsInTrade = input.int(24, "Max bars in trade (time stop)", minval = 3, group = grpAtr)
+
+grpSes = "Session (optional)"
+useRthOnly = input.bool(false, "Restrict entries to RTH 09:30–15:30 NY", group = grpSes)
+
+// -----------------------------------------------------------------------------
+// Indicators
+// -----------------------------------------------------------------------------
+atr = ta.atr(atrLen)
+vwap = ta.vwap(hlc3)
+vwapLo = vwap - vwapBandAtr * atr
+vwapHi = vwap + vwapBandAtr * atr
+
+volSma = ta.sma(volume, volSmaLen)
+volClimax = volume > volSma * volClimaxMult
+
+rsi = ta.rsi(close, rsiLen)
+
+rng = math.max(high - low, syminfo.mintick)
+body = math.abs(close - open)
+bodyPct = rng > 0 ? body / rng : 0
+lowerWick = math.min(open, close) - low
+upperWick = high - math.max(open, close)
+
+bullRejection = lowerWick >= body * wickRatioMin and close > open
+bearRejection = upperWick >= body * wickRatioShort and close < open
+
+htfClose = request.security(syminfo.tickerid, htfTf, close, lookahead = barmerge.lookahead_off)
+htfEma = request.security(syminfo.tickerid, htfTf, ta.ema(close, htfEmaLen), lookahead = barmerge.lookahead_off)
+htfBull = htfClose > htfEma
+htfBear = htfClose < htfEma
+
+rthEntryOk = not useRthOnly or (nyMins >= 570 and nyMins < 930)
+
+// Pullback into VWAP value area (from above for longs)
+touchedVwapLong = vwapTouchMode == "Exact" ? low <= vwap and high >= vwap * 0.9999 : low <= vwapHi and low >= vwapLo - atr * 0.05
+touchedVwapShort = vwapTouchMode == "Exact" ? high >= vwap and low <= vwap * 1.0001 : high >= vwapLo and high <= vwapHi + atr * 0.05
+
+longSetup =
+     sessionAllowsNewEntries and rthEntryOk and
+     touchedVwapLong and
+     rsi < rsiLongMax and
+     bodyPct >= bodyPctMin and
+     bullRejection and
+     (not useHtfFilter or htfBull) and
+     (not requireVolClimax or volClimax)
+
+shortSetup =
+     not longOnly and
+     sessionAllowsNewEntries and rthEntryOk and
+     touchedVwapShort and
+     rsi > rsiShortMin and
+     bodyPct >= bodyPctMin and
+     bearRejection and
+     (not useHtfFilterShort or htfBear) and
+     (not requireVolClimax or volClimax)
+
+longCondition = longSetup and strategy.position_size == 0
+shortCondition = shortSetup and strategy.position_size == 0
+
+var int entryBar = na
+if strategy.position_size != 0 and strategy.position_size[1] == 0
+    entryBar := bar_index
+if strategy.position_size == 0
+    entryBar := na
+
+barsInTrade = not na(entryBar) ? bar_index - entryBar : 0
+timeStopLong = strategy.position_size > 0 and barsInTrade >= maxBarsInTrade
+timeStopShort = strategy.position_size < 0 and barsInTrade >= maxBarsInTrade
+
+// -----------------------------------------------------------------------------
+// Mandatory flatten (policy)
+// -----------------------------------------------------------------------------
+if newsPause
+    strategy.close_all(comment = "News pause")
+
+if fridayAfterCutoff
+    strategy.close_all(comment = "Friday 07:00 NY")
+
+if eodReached
+    strategy.close_all(comment = "EOD 16:45 NY")
+
+// -----------------------------------------------------------------------------
+// Entries
+// -----------------------------------------------------------------------------
+if longCondition
+    strategy.entry("LONG", strategy.long)
+
+if shortCondition
+    strategy.entry("SHORT", strategy.short)
+
+// Brackets (ATR-scaled); only attach when in position
+strategy.exit("LX", "LONG", profit = tpAtrL * atr, loss = slAtrL * atr, comment_profit = "TP", comment_loss = "SL")
+strategy.exit("SX", "SHORT", profit = tpAtrS * atr, loss = slAtrS * atr, comment_profit = "TP", comment_loss = "SL")
+
+if timeStopLong
+    strategy.close("LONG", comment = "Time")
+
+if timeStopShort
+    strategy.close("SHORT", comment = "Time")
+
+// -----------------------------------------------------------------------------
+// Visuals
+// -----------------------------------------------------------------------------
+plot(vwap, "VWAP", color = color.new(color.orange, 0), linewidth = 2)
+plot(vwapLo, "VWAP − band", color = color.new(color.orange, 75))
+plot(vwapHi, "VWAP + band", color = color.new(color.orange, 75))
+
+bgcolor(newsPause ? color.new(color.red, 85) : fridayAfterCutoff ? color.new(color.purple, 90) : eodReached ? color.new(color.blue, 92) : na)
+
+// =============================================================================
+// Deploy: intraday chart (1–5m) on MNQ1! ; validate in Strategy Tester.
+// Long-only default: toggle off after walk-forward if shorts add PF.
+// =============================================================================
