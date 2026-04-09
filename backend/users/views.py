@@ -2750,7 +2750,9 @@ class TicketViewSet(viewsets.ModelViewSet):
         created_tickets = []
 
         if is_auto_split_mode:
-            # AUTO-SPLIT: Split multi-page PDF into one Ticket per page
+            # AUTO-SPLIT: Split multi-page PDF into one Ticket per page.
+            # Use only the module-level ContentFile import — a function-local import here
+            # makes Python treat ContentFile as local for the whole method and crashes on line above.
             single_pdf = pdf_files[0]
             single_pdf.seek(0)  # Reset after validation read
             reader = _pdf_reader_for_upload(single_pdf, relax_pdf)
