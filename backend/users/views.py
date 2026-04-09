@@ -2,11 +2,6 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.middleware.csrf import get_token
 
-
-def csrf_required(view):
-    """Override DRF's csrf_exempt so CSRF is enforced for cookie-based auth."""
-    view.csrf_exempt = False
-    return view
 from rest_framework import generics, status, viewsets
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.throttling import ScopedRateThrottle
@@ -41,6 +36,12 @@ import uuid
 from pypdf import PdfReader, PdfWriter
 
 logger = logging.getLogger(__name__)
+
+
+def csrf_required(view):
+    """Override DRF's csrf_exempt so CSRF is enforced for cookie-based auth."""
+    view.csrf_exempt = False
+    return view
 
 
 def _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity):

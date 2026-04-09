@@ -55,8 +55,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dummy-key-for-dev')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# TEMP: force True on Render so ticket upload/traceback surfaces as HTML during debugging.
-DEBUG = True  # TODO: revert to os.environ.get('DEBUG', 'True') == 'True' before production
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 # When True: looser PDF MIME checks (%PDF magic bytes), non-strict PyPDF, optional fallbacks for testing.
 # Set RELAX_PDF_UPLOAD_VALIDATION=true on Render only while testing uploads; turn off for production.
@@ -70,9 +69,16 @@ RELAX_PDF_UPLOAD_VALIDATION = os.environ.get('RELAX_PDF_UPLOAD_VALIDATION', 'Fal
 # Set CLOUDINARY_URL (recommended) or CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET.
 # Use one consistent source: mixed/stale split vars + a different CLOUDINARY_URL causes signature failures
 # and uploads that never persist. After changing keys in the Cloudinary dashboard, update Render env in sync.
-USE_CLOUDINARY = bool(
-    (os.environ.get('CLOUDINARY_URL') or os.environ.get('CLOUDINARY_CLOUD_NAME') or '').strip()
+#
+# IMPORTANT: only enable when credentials are *complete*. A lone CLOUDINARY_CLOUD_NAME (common partial
+# dashboard state) previously set USE_CLOUDINARY=True and then ImproperlyConfigured at import — breaking
+# migrate/collectstatic on Render (build exit 1).
+_cld_url_set = bool((os.environ.get('CLOUDINARY_URL') or '').strip())
+_cld_split_complete = all(
+    bool((os.environ.get(k) or '').strip())
+    for k in ('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET')
 )
+USE_CLOUDINARY = _cld_url_set or _cld_split_complete
 
 # Host header must match for Django to serve the request; mismatch -> fast 400 (DisallowedHost), not a hang.
 # Not involved in TLS redirects (that would be SECURE_SSL_REDIRECT + proxy headers).
