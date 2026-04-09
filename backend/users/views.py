@@ -2770,7 +2770,6 @@ class TicketViewSet(viewsets.ModelViewSet):
                 ticket_data['available_quantity'] = 1
                 ticket_data['listing_group_id'] = listing_group_id
                 if receipt_dup:
-                    from django.core.files.base import ContentFile
                     ticket_data['receipt_file'] = ContentFile(receipt_dup[0], name=receipt_dup[1])
 
                 if i < len(seat_data_list):
@@ -2825,7 +2824,6 @@ class TicketViewSet(viewsets.ModelViewSet):
                 ticket_data['available_quantity'] = 1
                 ticket_data['listing_group_id'] = listing_group_id
                 if receipt_dup:
-                    from django.core.files.base import ContentFile
                     ticket_data['receipt_file'] = ContentFile(receipt_dup[0], name=receipt_dup[1])
 
                 if i < len(seat_data_list):

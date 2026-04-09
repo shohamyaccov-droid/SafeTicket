@@ -144,17 +144,17 @@ const Navbar = () => {
     return (
       <nav className="navbar">
         <div className="nav-container nav-container--bar">
-          <div className="nav-cluster nav-cluster--right">
-            <button type="button" className="nav-drawer-toggle" disabled aria-label="תפריט">
-              ☰
-            </button>
-          </div>
+          <div className="nav-cluster nav-cluster--left" aria-hidden />
           <div className="nav-cluster nav-cluster--center">
             <Link to="/" className="nav-logo">
               TradeTix
             </Link>
           </div>
-          <div className="nav-cluster nav-cluster--left" aria-hidden />
+          <div className="nav-cluster nav-cluster--right">
+            <button type="button" className="nav-drawer-toggle" disabled aria-label="תפריט">
+              ☰
+            </button>
+          </div>
         </div>
       </nav>
     );
@@ -172,22 +172,6 @@ const Navbar = () => {
       )}
 
       <div className="nav-container nav-container--bar">
-        <div className="nav-cluster nav-cluster--right">
-          <button
-            type="button"
-            className="nav-drawer-toggle"
-            onClick={toggleDrawer}
-            aria-label="תפריט"
-            aria-expanded={isDrawerOpen}
-          >
-            ☰
-          </button>
-        </div>
-        <div className="nav-cluster nav-cluster--center">
-          <Link to="/" className="nav-logo" onClick={closeDrawer}>
-            TradeTix
-          </Link>
-        </div>
         <div className="nav-cluster nav-cluster--left">
           {user ? (
             <span className="nav-user-inline" dir="rtl">
@@ -198,6 +182,22 @@ const Navbar = () => {
               התחבר
             </Link>
           )}
+        </div>
+        <div className="nav-cluster nav-cluster--center">
+          <Link to="/" className="nav-logo" onClick={closeDrawer}>
+            TradeTix
+          </Link>
+        </div>
+        <div className="nav-cluster nav-cluster--right">
+          <button
+            type="button"
+            className="nav-drawer-toggle"
+            onClick={toggleDrawer}
+            aria-label="תפריט"
+            aria-expanded={isDrawerOpen}
+          >
+            ☰
+          </button>
         </div>
       </div>
 
