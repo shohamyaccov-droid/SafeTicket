@@ -116,6 +116,7 @@ INSTALLED_APPS = _INSTALLED_CORE + [
 ]
 
 MIDDLEWARE = [
+    'safeticket.middleware.GlobalExceptionJSONMiddleware',
     'corsheaders.middleware.CorsMiddleware',  # First: CORS headers on all responses (before Whitenoise/Common)
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -212,6 +213,8 @@ if _frontend_dist.is_dir():
 # Media files (user uploaded files like PDFs)
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+if not USE_CLOUDINARY:
+    os.makedirs(MEDIA_ROOT, exist_ok=True)
 
 # Populated below. On Cloudinary, credentials + cloudinary.config() run before STORAGES so
 # MediaCloudinaryStorage / RawMediaCloudinaryStorage see a fully configured SDK (avoids admin upload quirks).
