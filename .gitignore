@@ -2,6 +2,10 @@
 .DS_Store
 Thumbs.db
 
+# Local / CI SQLite artifacts (never commit)
+backend/tmp_*.db
+backend/db.sqlite3
+
 # Playwright E2E
 e2e/node_modules/
 e2e/test-results/
