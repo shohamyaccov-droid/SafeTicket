@@ -16,6 +16,7 @@ import django
 django.setup()
 
 from django.contrib.auth import get_user_model
+from django.db import OperationalError
 
 User = get_user_model()
 TARGET_EMAIL = 'shohamyaccov@gmail.com'
@@ -34,20 +35,26 @@ def _promote(user, label: str) -> None:
 
 
 def main() -> int:
-    qs = User.objects.filter(email__iexact=TARGET_EMAIL)
-    if not qs.exists():
-        print(
-            f'[fix_admin] WARNING: no user with email {TARGET_EMAIL!r} — create account first, then redeploy.',
-            flush=True,
-        )
-    else:
-        _promote(qs.first(), 'primary admin')
+    try:
+        qs = User.objects.filter(email__iexact=TARGET_EMAIL)
+        if not qs.exists():
+            print(
+                f'[fix_admin] WARNING: no user with email {TARGET_EMAIL!r} — create account first, then redeploy.',
+                flush=True,
+            )
+        else:
+            _promote(qs.first(), 'primary admin')
 
-    qa = User.objects.filter(email__iexact=QA_BOT_EMAIL).first()
-    if qa:
-        _promote(qa, 'qa_bot')
-    else:
-        print(f'[fix_admin] INFO: no user {QA_BOT_EMAIL!r} yet (seed_production will create it).', flush=True)
+        qa = User.objects.filter(email__iexact=QA_BOT_EMAIL).first()
+        if qa:
+            _promote(qa, 'qa_bot')
+        else:
+            print(
+                f'[fix_admin] INFO: no user {QA_BOT_EMAIL!r} yet (seed_production will create it).',
+                flush=True,
+            )
+    except OperationalError as e:
+        print(f'[fix_admin] WARNING: DB unavailable — skipping admin promotion: {e}', flush=True)
 
     return 0
 

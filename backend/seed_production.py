@@ -41,7 +41,7 @@ from datetime import datetime, timezone as dt_timezone
 
 import requests
 from django.core.files.base import ContentFile
-from django.db import transaction
+from django.db import OperationalError, transaction
 from django.utils import timezone
 
 from django.contrib.auth import get_user_model
@@ -305,8 +305,7 @@ def seed_events() -> None:
 
 
 @transaction.atomic
-def main() -> int:
-    print('[seed] starting seed_production.py', flush=True)
+def _seed_all() -> None:
     seed_admin()
     seed_qa_user()
     seed_artists()
@@ -315,6 +314,16 @@ def main() -> int:
         f'[seed] done: {Artist.objects.count()} artists, {Event.objects.count()} events total in DB',
         flush=True,
     )
+
+
+def main() -> int:
+    print('[seed] starting seed_production.py', flush=True)
+    try:
+        _seed_all()
+    except OperationalError as e:
+        # Render: transient DNS / DB cold-start must NOT prevent Gunicorn from booting (502 for all traffic).
+        print(f'[seed] WARNING: seed skipped — DB unavailable: {e}', flush=True)
+        return 0
     return 0
 
 
