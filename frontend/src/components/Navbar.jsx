@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { offerAPI } from '../services/api';
@@ -9,7 +9,7 @@ const Navbar = () => {
   const [offerCounts, setOfferCounts] = useState({ actionRequired: 0, acceptedOffers: 0 });
   const navigate = useNavigate();
   const location = useLocation();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [navSearch, setNavSearch] = useState('');
 
   useEffect(() => {
@@ -19,25 +19,39 @@ const Navbar = () => {
     }
   }, [location.pathname, location.search]);
 
+  const closeDrawer = useCallback(() => {
+    setIsDrawerOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isDrawerOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') closeDrawer();
+    };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [isDrawerOpen, closeDrawer]);
+
   const submitNavSearch = (e) => {
     e.preventDefault();
     const q = navSearch.trim();
     navigate(q ? `/?q=${encodeURIComponent(q)}` : '/');
-    setIsMobileMenuOpen(false);
+    closeDrawer();
   };
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
-    setIsMobileMenuOpen(false);
+    closeDrawer();
   };
 
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
-
-  const closeMobileMenu = () => {
-    setIsMobileMenuOpen(false);
+  const toggleDrawer = () => {
+    setIsDrawerOpen((o) => !o);
   };
 
   useEffect(() => {
@@ -54,12 +68,12 @@ const Navbar = () => {
         const receivedData = receivedRes.data?.results || receivedRes.data || [];
         const sentData = sentRes.data?.results || sentRes.data || [];
         const allOffers = [...(Array.isArray(receivedData) ? receivedData : []), ...(Array.isArray(sentData) ? sentData : [])];
-        const uniqueOffers = allOffers.filter((o, i, self) => i === self.findIndex(x => x.id === o.id));
-        const receivedOffers = uniqueOffers.filter(o => {
+        const uniqueOffers = allOffers.filter((o, i, self) => i === self.findIndex((x) => x.id === o.id));
+        const receivedOffers = uniqueOffers.filter((o) => {
           const buyerId = typeof o.buyer === 'object' ? o.buyer?.id : o.buyer;
           return buyerId !== user.id && o.buyer_username !== user.username;
         });
-        const sentOffers = uniqueOffers.filter(o => {
+        const sentOffers = uniqueOffers.filter((o) => {
           const buyerId = typeof o.buyer === 'object' ? o.buyer?.id : o.buyer;
           return buyerId === user.id || o.buyer_username === user.username;
         });
@@ -68,12 +82,12 @@ const Navbar = () => {
           const roundCount = offer.offer_round_count ?? 0;
           return (roundCount % 2 === 0 && isSeller) || (roundCount === 1 && !isSeller);
         };
-        const actionRequired = receivedOffers.filter(o => isOfferActionRequired(o, true)).length + sentOffers.filter(o => isOfferActionRequired(o, false)).length;
+        const actionRequired =
+          receivedOffers.filter((o) => isOfferActionRequired(o, true)).length +
+          sentOffers.filter((o) => isOfferActionRequired(o, false)).length;
         const acceptedPendingCheckout = sentOffers.filter(
           (o) =>
-            o.status === 'accepted' &&
-            !o.purchase_completed &&
-            o.ticket_listing_status !== 'sold'
+            o.status === 'accepted' && !o.purchase_completed && o.ticket_listing_status !== 'sold'
         ).length;
         setOfferCounts({ actionRequired, acceptedOffers: acceptedPendingCheckout });
       } catch {
@@ -86,6 +100,45 @@ const Navbar = () => {
   }, [user]);
 
   const isAdminUser = Boolean(user && (user.is_staff || user.is_superuser));
+
+  const drawerNavLinks = (
+    <>
+      <Link to="/" className="nav-link nav-drawer-link" onClick={closeDrawer}>
+        בית
+      </Link>
+      {user && (
+        <>
+          <Link to="/dashboard" className="nav-link nav-link-personal nav-drawer-link" onClick={closeDrawer}>
+            {offerCounts.acceptedOffers > 0 && <span className="nav-dot nav-dot-accepted" aria-hidden="true" />}
+            {offerCounts.acceptedOffers === 0 && offerCounts.actionRequired > 0 && (
+              <span className="nav-dot nav-dot-action" aria-hidden="true" />
+            )}
+            האזור האישי
+          </Link>
+          {isAdminUser && (
+            <Link to="/admin-panel" className="nav-link nav-link-admin nav-drawer-link" onClick={closeDrawer}>
+              ניהול
+            </Link>
+          )}
+        </>
+      )}
+      <Link to="/sell" className="nav-link sell-btn nav-drawer-link" onClick={closeDrawer}>
+        מכירת כרטיס
+      </Link>
+      <Link to="/contact" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
+        צור קשר
+      </Link>
+      <Link to="/faq" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
+        שאלות ותשובות
+      </Link>
+      <Link to="/terms" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
+        תקנון
+      </Link>
+      <Link to="/refunds" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
+        ביטולים והחזרים
+      </Link>
+    </>
+  );
 
   if (loading) {
     return (
@@ -105,45 +158,31 @@ const Navbar = () => {
 
   return (
     <nav className="navbar">
+      {isDrawerOpen && (
+        <button
+          type="button"
+          className="nav-drawer-backdrop"
+          aria-label="סגור תפריט"
+          onClick={closeDrawer}
+        />
+      )}
+
       <div className="nav-container">
         <div className="nav-bar-start">
+          <button
+            type="button"
+            className="nav-drawer-toggle"
+            onClick={toggleDrawer}
+            aria-label="תפריט"
+            aria-expanded={isDrawerOpen}
+          >
+            ☰
+          </button>
           <div className="nav-logo-block">
-            <Link to="/" className="nav-logo" onClick={closeMobileMenu}>
+            <Link to="/" className="nav-logo" onClick={closeDrawer}>
               TradeTix
             </Link>
           </div>
-
-          <nav className="nav-menu nav-menu-desktop">
-            <Link to="/" className="nav-link" onClick={closeMobileMenu}>
-              בית
-            </Link>
-            {user && (
-              <>
-                <Link to="/dashboard" className="nav-link nav-link-personal" onClick={closeMobileMenu}>
-                  {offerCounts.acceptedOffers > 0 && <span className="nav-dot nav-dot-accepted" aria-hidden="true" />}
-                  {offerCounts.acceptedOffers === 0 && offerCounts.actionRequired > 0 && <span className="nav-dot nav-dot-action" aria-hidden="true" />}
-                  האזור האישי
-                </Link>
-                {isAdminUser && (
-                  <Link to="/admin-panel" className="nav-link nav-link-admin" onClick={closeMobileMenu}>
-                    ניהול
-                  </Link>
-                )}
-              </>
-            )}
-            <Link to="/sell" className="nav-link sell-btn" onClick={closeMobileMenu}>
-              מכירת כרטיס
-            </Link>
-            <Link to="/contact" className="nav-link nav-link-static" onClick={closeMobileMenu}>
-              צור קשר
-            </Link>
-            <Link to="/faq" className="nav-link nav-link-static" onClick={closeMobileMenu}>
-              שאלות ותשובות
-            </Link>
-            <Link to="/terms" className="nav-link nav-link-static" onClick={closeMobileMenu}>
-              תקנון
-            </Link>
-          </nav>
         </div>
 
         <form className="nav-search-form nav-search-form--desktop" onSubmit={submitNavSearch} role="search">
@@ -162,68 +201,34 @@ const Navbar = () => {
           />
           <button type="submit" className="nav-search-submit" aria-label="חיפוש">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-              <path d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path
+                d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
             </svg>
           </button>
         </form>
-
-        <div className="user-actions user-actions-desktop nav-bar-end">
-          {user ? (
-            <>
-              <Link to="/dashboard?tab=settings" className="nav-link user-greeting" onClick={closeMobileMenu}>
-                שלום, {user?.username || 'משתמש'}
-              </Link>
-              {isAdminUser && (
-                <Link to="/admin-panel" className="nav-link nav-link-admin" onClick={closeMobileMenu}>
-                  לוח ניהול
-                </Link>
-              )}
-              <button type="button" onClick={handleLogout} className="nav-link logout-btn">
-                התנתקות
-              </button>
-            </>
-          ) : (
-            <>
-              <Link to="/login" className="nav-link" onClick={closeMobileMenu}>
-                התחברות
-              </Link>
-              <Link to="/register" className="nav-link" onClick={closeMobileMenu}>
-                הרשמה
-              </Link>
-            </>
-          )}
-        </div>
-
-        <div className="nav-mobile-end">
-          {user ? (
-            <button type="button" className="nav-mobile-auth-btn" onClick={handleLogout}>
-              התנתקות
-            </button>
-          ) : (
-            <Link to="/login" className="nav-mobile-auth-btn" onClick={closeMobileMenu}>
-              התחברות
-            </Link>
-          )}
-          <button
-            type="button"
-            className="hamburger-menu"
-            onClick={toggleMobileMenu}
-            aria-label="תפריט"
-            aria-expanded={isMobileMenuOpen}
-          >
-            <span className={`hamburger-line ${isMobileMenuOpen ? 'open' : ''}`}></span>
-            <span className={`hamburger-line ${isMobileMenuOpen ? 'open' : ''}`}></span>
-            <span className={`hamburger-line ${isMobileMenuOpen ? 'open' : ''}`}></span>
-          </button>
-        </div>
       </div>
 
-      <div className={`mobile-nav-overlay ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
-        <form className="nav-search-form nav-search-form--mobile" onSubmit={submitNavSearch} role="search">
+      <aside
+        className={`nav-side-drawer ${isDrawerOpen ? 'nav-side-drawer--open' : ''}`}
+        aria-hidden={!isDrawerOpen}
+        id="nav-side-drawer"
+      >
+        <div className="nav-drawer-head">
+          <span className="nav-drawer-title">תפריט</span>
+          <button type="button" className="nav-drawer-close" onClick={closeDrawer} aria-label="סגור">
+            ×
+          </button>
+        </div>
+
+        <form className="nav-search-form nav-search-form--drawer" onSubmit={submitNavSearch} role="search">
           <input
             type="search"
             className="nav-search-input"
-            placeholder="חיפוש..."
+            placeholder="חיפוש אמן, אירוע, עיר..."
             value={navSearch}
             onChange={(e) => setNavSearch(e.target.value)}
             dir="rtl"
@@ -234,52 +239,40 @@ const Navbar = () => {
             חפש
           </button>
         </form>
-        <nav className="mobile-nav-menu">
-          <Link to="/" className="nav-link" onClick={closeMobileMenu}>בית</Link>
-          {user && (
-            <>
-              <Link to="/dashboard" className="nav-link nav-link-personal" onClick={closeMobileMenu}>
-                {offerCounts.acceptedOffers > 0 && <span className="nav-dot nav-dot-accepted" aria-hidden="true" />}
-                {offerCounts.acceptedOffers === 0 && offerCounts.actionRequired > 0 && <span className="nav-dot nav-dot-action" aria-hidden="true" />}
-                האזור האישי
-              </Link>
-              {isAdminUser && (
-                <Link to="/admin-panel" className="nav-link nav-link-admin" onClick={closeMobileMenu}>
-                  לוח ניהול
-                </Link>
-              )}
-            </>
-          )}
-          <Link to="/sell" className="nav-link sell-btn" onClick={closeMobileMenu}>מכירת כרטיס</Link>
-          <Link to="/contact" className="nav-link nav-link-static" onClick={closeMobileMenu}>צור קשר</Link>
-          <Link to="/faq" className="nav-link nav-link-static" onClick={closeMobileMenu}>שאלות ותשובות</Link>
-          <Link to="/terms" className="nav-link nav-link-static" onClick={closeMobileMenu}>תקנון</Link>
-        </nav>
-        <div className="mobile-user-actions">
+
+        <nav className="nav-drawer-links">{drawerNavLinks}</nav>
+
+        <div className="nav-drawer-user">
           {user ? (
             <>
-              <Link to="/dashboard?tab=settings" className="nav-link user-greeting" onClick={closeMobileMenu}>
+              <Link to="/dashboard?tab=settings" className="nav-link user-greeting nav-drawer-link" onClick={closeDrawer}>
                 שלום, {user?.username || 'משתמש'}
               </Link>
               {isAdminUser && (
-                <Link to="/admin-panel" className="nav-link nav-link-admin" onClick={closeMobileMenu}>
+                <Link to="/admin-panel" className="nav-link nav-link-admin nav-drawer-link" onClick={closeDrawer}>
                   לוח ניהול
                 </Link>
               )}
-              <button type="button" onClick={handleLogout} className="logout-btn logout-btn--mobile-drawer">התנתקות</button>
+              <button type="button" onClick={handleLogout} className="logout-btn logout-btn--drawer">
+                התנתקות
+              </button>
             </>
           ) : (
             <>
-              <Link to="/login" className="nav-link" onClick={closeMobileMenu}>התחברות</Link>
-              <Link to="/register" className="nav-link" onClick={closeMobileMenu}>הרשמה</Link>
+              <Link to="/login" className="nav-link nav-drawer-link" onClick={closeDrawer}>
+                התחברות
+              </Link>
+              <Link to="/register" className="nav-link nav-drawer-link" onClick={closeDrawer}>
+                הרשמה
+              </Link>
             </>
           )}
         </div>
-      </div>
+      </aside>
 
       <Link to="/sell" className="mobile-sell-fab" aria-label="מכירת כרטיס">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       </Link>
     </nav>

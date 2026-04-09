@@ -70,6 +70,8 @@ const EventDetailsPage = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeTicketId, setActiveTicketId] = useState(null);
   const [artists, setArtists] = useState([]);
+  /** Prevents double-opens / race when Buy Now refetches listings before showing checkout. */
+  const buyOpeningRef = useRef(false);
 
   // Helper function to group tickets by listing
   const groupTicketsByListing = (ticketsArray) => {
