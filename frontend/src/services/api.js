@@ -310,11 +310,22 @@ api.interceptors.response.use(
 
     const is403 = error.response?.status === 403;
     const urlPath = originalRequest?.url || '';
+    const reqMethod = (originalRequest.method || 'get').toLowerCase();
+    const isCheckoutCsrfSensitive =
+      reqMethod === 'post' &&
+      (/\/tickets\/\d+\/reserve\//.test(urlPath) ||
+        /\/tickets\/\d+\/release_reservation\//.test(urlPath) ||
+        urlPath.includes('/payments/simulate/') ||
+        urlPath.includes('/orders/guest/') ||
+        urlPath.includes('/orders/'));
     const canCsrfRetry =
       is403 &&
       !originalRequest._csrfRetry &&
       !urlPath.includes('/users/csrf/');
-    if (canCsrfRetry && bodyTextLooksLikeCsrfFailure(error.response?.data)) {
+    if (
+      canCsrfRetry &&
+      (bodyTextLooksLikeCsrfFailure(error.response?.data) || isCheckoutCsrfSensitive)
+    ) {
       originalRequest._csrfRetry = true;
       resetCsrfTokenCache();
       try {

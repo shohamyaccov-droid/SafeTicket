@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { authAPI, orderAPI, paymentAPI, ticketAPI } from '../services/api';
+import { authAPI, orderAPI, paymentAPI, ticketAPI, ensureCsrfToken } from '../services/api';
 import {
   getTicketPrice,
   formatPrice,
@@ -19,6 +19,35 @@ import './CheckoutModal.css';
 function portalCheckoutRoot(node) {
   if (typeof document === 'undefined') return null;
   return createPortal(node, document.body);
+}
+
+function formatCheckoutBackendError(err) {
+  const data = err?.response?.data;
+  if (data == null || data === '') {
+    return err?.message ? String(err.message) : '';
+  }
+  if (typeof data === 'string') {
+    return data.replace(/<[^>]+>/g, '').trim().slice(0, 600);
+  }
+  const d = data.detail ?? data.error ?? data.message;
+  if (typeof d === 'string') return d;
+  if (Array.isArray(d)) {
+    return d
+      .map((x) => (typeof x === 'string' ? x : JSON.stringify(x)))
+      .join('; ');
+  }
+  if (d && typeof d === 'object') {
+    try {
+      return JSON.stringify(d);
+    } catch {
+      return err?.message || '';
+    }
+  }
+  try {
+    return JSON.stringify(data);
+  } catch {
+    return err?.message || '';
+  }
 }
 
 function validateGuestContact(email, phone) {
@@ -440,6 +469,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         paymentData.guest_email = guestForm.email.trim();
       }
 
+      await ensureCsrfToken();
       const paymentResponse = await paymentAPI.simulatePayment(paymentData);
 
       console.log('Payment response:', paymentResponse);
@@ -515,7 +545,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           offer_id: orderData.offer_id ? typeof orderData.offer_id : 'null',
           listing_group_id: listing_group_id ? typeof listing_group_id : 'null'
         });
-        
+
+        await ensureCsrfToken();
         orderResponse = await orderAPI.createOrder(orderData);
       } else {
         // Guest checkout
@@ -548,7 +579,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           offer_id: orderData.offer_id ? typeof orderData.offer_id : 'null',
           listing_group_id: listing_group_id ? typeof listing_group_id : 'null'
         });
-        
+
+        await ensureCsrfToken();
         orderResponse = await orderAPI.guestCheckout(orderData);
       }
 
@@ -618,20 +650,27 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       })();
     } catch (err) {
       const res = err.response;
+      console.error('Checkout Error Payload:', res?.data);
       console.error('[CheckoutModal] handlePaymentSubmit failed', {
         status: res?.status,
         data: res?.data,
         message: err.message,
       });
-      const message = res?.data?.detail ||
-                     res?.data?.error ||
-                     (typeof res?.data === 'string' ? res.data : JSON.stringify(res?.data)) ||
-                     err.message ||
-                     'שגיאה בתקשורת עם השרת';
-      setError(message);
-      toastError(message);
+      const formatted = formatCheckoutBackendError(err);
+      const detail =
+        formatted ||
+        (typeof res?.data?.detail === 'string' ? res.data.detail : '') ||
+        (typeof res?.data?.error === 'string' ? res.data.error : '') ||
+        (typeof res?.data === 'string' ? res.data : '') ||
+        err.message ||
+        '';
+      const userFacing = detail
+        ? `לא ניתן לשמור: ${detail}`
+        : 'שגיאה בתקשורת עם השרת';
+      setError(userFacing);
+      toastError(userFacing);
       // Enterprise UX: Show Toast for "ticket was just sold" - beautiful feedback instead of raw alert
-      const isSoldError = /sold|נמכר|just sold/i.test(message);
+      const isSoldError = /sold|נמכר|just sold/i.test(userFacing);
       if (isSoldError && onErrorToParent) {
         onErrorToParent({ message: 'הכרטיס נמכר ברגע זה. ריעננו את הרשימה – נסה כרטיס אחר.', type: 'error' });
       }
@@ -667,11 +706,15 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     }
   };
 
-  // Reserve once per ticket id — do NOT depend on `step`: when step went info→payment, cleanup was
-  // releasing the hold while the client still thought it was reserved (broken checkout).
+  // Reserve once per ticket: logged-in users can hold on info step; guests only on payment step
+  // (email + CSRF warm — fixes mobile Safari generic "לא ניתן לשמור את הכרטיס").
   useEffect(() => {
     const tid = ticket?.id;
-    if (!tid) return;
+    if (!tid) return undefined;
+
+    if (!user && step !== 'payment' && !skipCartReserveForNegotiatedOffer) {
+      return undefined;
+    }
 
     const reserveTicket = async () => {
       if (stepRef.current === 'success') return;
@@ -699,6 +742,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         const email = user ? null : guestEmailRef.current || null;
         const listingGroupId = ticketGroup?.listing_group_id || ticket?.listing_group_id;
         console.log('Reserving Ticket ID:', tid, 'listingGroupId:', listingGroupId);
+        await ensureCsrfToken();
         const response = await ticketAPI.reserveTicket(tid, email);
 
         if (response.data && response.data.success) {
@@ -720,6 +764,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           data: res?.data,
           ticketId: tid,
         });
+        console.error('Checkout Error Payload (reserve):', res?.data);
         if (res?.data?.status === 'reserved' || res?.data?.error?.includes('someone else')) {
           const errorMsg = res?.data?.error || 'הכרטיס נמצא כעת בעגלה של מישהו אחר. הוא עשוי להיות זמין שוב בעוד כמה דקות.';
           setError(errorMsg);
@@ -735,14 +780,23 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             handleClose();
           }, 3000);
         } else {
-          const errorMsg = res?.data?.error || res?.data?.detail || 'לא ניתן לשמור את הכרטיס כרגע. אנא נסה שוב.';
+          const detail = formatCheckoutBackendError(err);
+          const suffix =
+            detail ||
+            (typeof res?.data?.error === 'string' ? res.data.error : '') ||
+            (typeof res?.data?.detail === 'string' ? res.data.detail : '') ||
+            err.message ||
+            '';
+          const errorMsg = suffix
+            ? `לא ניתן לשמור: ${suffix}`
+            : 'לא ניתן לשמור את הכרטיס כרגע. אנא נסה שוב.';
           setError(errorMsg);
           toastError(errorMsg);
         }
       }
     };
 
-    reserveTicket();
+    void reserveTicket();
 
     return () => {
       if (transactionCompleteRef.current) return;
@@ -753,7 +807,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         void ticketAPI.releaseReservation(tid, email).catch(() => {});
       }
     };
-  }, [ticket?.id, user, skipCartReserveForNegotiatedOffer, acceptedOffer?.id]);
+  }, [ticket?.id, user, skipCartReserveForNegotiatedOffer, acceptedOffer?.id, step]);
 
   // Reset and start timer when entering payment step
   useEffect(() => {

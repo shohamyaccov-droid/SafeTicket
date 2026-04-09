@@ -12,30 +12,45 @@
 .nav-container {
   max-width: 1400px;
   margin: 0 auto;
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  direction: rtl;
-  gap: var(--spacing-md);
 }
 
-.nav-bar-trailing {
+/* Bar: physical RIGHT = hamburger, CENTER = logo, LEFT = greeting / התחבר (RTL UX via row-reverse) */
+.nav-container--bar {
   display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-between;
   align-items: center;
+  width: 100%;
   gap: var(--spacing-sm);
-  flex-shrink: 0;
+}
+
+.nav-cluster {
   min-width: 0;
 }
 
-.nav-flex-spacer {
-  flex: 1;
-  min-width: 0;
-}
-
-.nav-bar-brand {
+.nav-cluster--right {
+  flex: 1 1 0;
   display: flex;
   align-items: center;
-  flex-shrink: 0;
+  justify-content: flex-start;
+}
+
+.nav-cluster--center {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-cluster--center .nav-logo {
+  margin: 0 auto;
+}
+
+.nav-cluster--left {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .nav-user-inline {

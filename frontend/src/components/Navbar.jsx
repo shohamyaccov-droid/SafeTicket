@@ -143,18 +143,18 @@ const Navbar = () => {
   if (loading) {
     return (
       <nav className="navbar">
-        <div className="nav-container">
-          <div className="nav-bar-trailing">
+        <div className="nav-container nav-container--bar">
+          <div className="nav-cluster nav-cluster--right">
             <button type="button" className="nav-drawer-toggle" disabled aria-label="תפריט">
               ☰
             </button>
           </div>
-          <div className="nav-flex-spacer" aria-hidden />
-          <div className="nav-bar-brand">
+          <div className="nav-cluster nav-cluster--center">
             <Link to="/" className="nav-logo">
               TradeTix
             </Link>
           </div>
+          <div className="nav-cluster nav-cluster--left" aria-hidden />
         </div>
       </nav>
     );
@@ -171,17 +171,8 @@ const Navbar = () => {
         />
       )}
 
-      <div className="nav-container">
-        <div className="nav-bar-trailing">
-          {user ? (
-            <span className="nav-user-inline" dir="rtl">
-              שלום, {user?.username || 'משתמש'}
-            </span>
-          ) : (
-            <Link to="/login" className="nav-login-inline" onClick={closeDrawer}>
-              התחבר
-            </Link>
-          )}
+      <div className="nav-container nav-container--bar">
+        <div className="nav-cluster nav-cluster--right">
           <button
             type="button"
             className="nav-drawer-toggle"
@@ -192,11 +183,21 @@ const Navbar = () => {
             ☰
           </button>
         </div>
-        <div className="nav-flex-spacer" aria-hidden />
-        <div className="nav-bar-brand">
+        <div className="nav-cluster nav-cluster--center">
           <Link to="/" className="nav-logo" onClick={closeDrawer}>
             TradeTix
           </Link>
+        </div>
+        <div className="nav-cluster nav-cluster--left">
+          {user ? (
+            <span className="nav-user-inline" dir="rtl">
+              שלום, {user?.username || 'משתמש'}
+            </span>
+          ) : (
+            <Link to="/login" className="nav-login-inline" onClick={closeDrawer}>
+              התחבר
+            </Link>
+          )}
         </div>
       </div>
 
