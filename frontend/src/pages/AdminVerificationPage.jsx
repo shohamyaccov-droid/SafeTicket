@@ -5,6 +5,7 @@ import { adminAPI, ticketAPI } from '../services/api';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { currencySymbol, formatAmountForCurrency, resolveTicketCurrency } from '../utils/priceFormat';
 import { toastError, toastSuccess } from '../utils/toast';
+import { ticketFileMimeFromAxiosHeaders } from '../utils/ticketDownload';
 import './AdminVerificationPage.css';
 
 const AdminVerificationPage = () => {
@@ -94,13 +95,14 @@ const AdminVerificationPage = () => {
   const handlePreviewPDF = async (ticketId) => {
     try {
       const response = await ticketAPI.downloadPDF(ticketId);
-      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const mime = ticketFileMimeFromAxiosHeaders(response.headers);
+      const blob = new Blob([response.data], { type: mime });
       const url = window.URL.createObjectURL(blob);
       window.open(url, '_blank');
       // Clean up after a delay
       setTimeout(() => window.URL.revokeObjectURL(url), 100);
     } catch (err) {
-      toastError('שגיאה בפתיחת קובץ ה-PDF. אנא נסה שוב.');
+      toastError('שגיאה בפתיחת קובץ הכרטיס. אנא נסה שוב.');
     }
   };
 

@@ -2988,6 +2988,18 @@ class TicketViewSet(viewsets.ModelViewSet):
                     ct = 'image/png'
                 else:
                     ct = 'application/octet-stream'
+            _root, _ext = os.path.splitext(safe_ascii)
+            if not _ext:
+                if ct == 'application/pdf':
+                    safe_ascii = f'{safe_ascii}.pdf'
+                elif ct == 'image/jpeg':
+                    safe_ascii = f'{safe_ascii}.jpg'
+                elif ct == 'image/png':
+                    safe_ascii = f'{safe_ascii}.png'
+                elif ct == 'image/webp':
+                    safe_ascii = f'{safe_ascii}.webp'
+                elif ct == 'image/gif':
+                    safe_ascii = f'{safe_ascii}.gif'
             response = HttpResponse(content, content_type=ct)
             response['Content-Disposition'] = f'attachment; filename="{safe_ascii}"'
             return response

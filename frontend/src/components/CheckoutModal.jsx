@@ -13,6 +13,7 @@ import {
   getTicketBaseNumeric,
 } from '../utils/priceFormat';
 import { toastError } from '../utils/toast';
+import { downloadTicketFromAxiosBlob, ticketFileMimeFromAxiosHeaders } from '../utils/ticketDownload';
 import './CheckoutModal.css';
 
 function portalCheckoutRoot(node) {
@@ -607,11 +608,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       void (async () => {
         try {
           const pdfResponse = await ticketAPI.downloadPDF(ticket.id, emailForPdf);
-          const blob = new Blob([pdfResponse.data], { type: 'application/pdf' });
+          const ct = ticketFileMimeFromAxiosHeaders(pdfResponse.headers);
+          const blob = new Blob([pdfResponse.data], { type: ct });
           const url = window.URL.createObjectURL(blob);
           setPdfUrl(url);
         } catch (pdfError) {
-          toastError('לא ניתן להכין את ה-PDF כרגע. ניתן להוריד שוב מעמוד ההזמנה.');
+          toastError('לא ניתן להכין את קובץ הכרטיס כרגע. ניתן להוריד שוב מעמוד ההזמנה.');
         }
       })();
     } catch (err) {
@@ -655,18 +657,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     try {
       const email = user ? null : (guestForm?.email?.trim() || null);
       const response = await ticketAPI.downloadPDF(ticketId, email);
-      
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = index != null ? `ticket-${index + 1}.pdf` : `ticket-${ticketId}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      downloadTicketFromAxiosBlob(response, { ticketId, index });
     } catch (err) {
-      const msg = 'הורדת ה-PDF נכשלה. אנא נסה שוב מאוחר יותר.';
+      const msg = 'הורדת הכרטיס נכשלה. אנא נסה שוב מאוחר יותר.';
       setError(msg);
       toastError(msg);
     } finally {
@@ -912,10 +905,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             {!user && (
               <div className="guest-post-purchase-panel" role="region" aria-label="הוראות לאורח">
                 <p className="guest-post-purchase-lead">
-                  <strong>הרכישה הושלמה ללא הרשמה.</strong> הורידו את קובץ ה-PDF כעת והשמרו אותו בטלפון או במחשב לפני האירוע.
+                  <strong>הרכישה הושלמה ללא הרשמה.</strong> הורידו את קובץ הכרטיס כעת והשמרו אותו בטלפון או במחשב לפני האירוע.
                 </p>
                 <ul className="guest-post-purchase-list">
-                  <li>לחצו על &quot;הורדת כרטיס PDF&quot; — זה הכרטיס התקף לכניסה.</li>
+                  <li>לחצו על &quot;הורדת כרטיס&quot; — זה הכרטיס התקף לכניסה.</li>
                   <li>אם הזנתם אימייל בקופה, נשלח אליכם עותק (בדקו גם בתיקיית ספאם).</li>
                   <li>אין חובה להירשם; אפשר לפתוח חשבון מאוחר יותר כדי לראות הזמנות עתידיות בדשבורד.</li>
                 </ul>
@@ -948,7 +941,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                       >
                         <CheckIcon />
                         <DownloadIcon />
-                        {ticketIds.length > 1 ? `הורד כרטיס ${idx + 1}` : 'הורדת כרטיס PDF'}
+                        {`הורד כרטיס ${idx + 1}`}
                       </button>
                     ));
                   }
@@ -963,7 +956,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                       >
                         <CheckIcon />
                         <DownloadIcon />
-                        הורדת כרטיס PDF
+                        הורדת כרטיס
                       </button>
                     );
                   }
@@ -977,7 +970,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     >
                       <CheckIcon />
                       <DownloadIcon />
-                      הורדת כרטיס PDF
+                      הורדת כרטיס
                     </button>
                   );
                 })()}
@@ -991,7 +984,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   }}
                   className="success-close-button success-primary-dashboard"
                 >
-                  מעבר לדשבורד
+                  מעבר לאזור האישי
                 </button>
               ) : (
                 <>

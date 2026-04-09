@@ -485,8 +485,19 @@ class Ticket(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
-        event_name = self.event.name if self.event else (self.event_name or 'Unknown Event')
-        return f"{event_name} - {self.seller.username} (₪{self.asking_price})"
+        try:
+            ev = getattr(self, 'event', None)
+            event_name = ev.name if ev else (self.event_name or 'Unknown Event')
+            seller = getattr(self, 'seller', None)
+            if seller is None:
+                seller_name = '?'
+            elif hasattr(seller, 'get_username'):
+                seller_name = seller.get_username() or str(seller.pk)
+            else:
+                seller_name = str(getattr(seller, 'username', '')) or str(seller.pk)
+            return f'{event_name} - {seller_name} (₪{self.asking_price})'
+        except Exception:
+            return f'Ticket #{getattr(self, "pk", "") or "—"}'
     
     class Meta:
         ordering = ['-created_at']

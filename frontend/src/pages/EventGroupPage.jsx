@@ -156,8 +156,6 @@ const EventGroupPage = () => {
   };
 
   const decodedEventName = decodeURIComponent(eventName);
-  const recentViewers = Math.floor(Math.random() * 150) + 50;
-
   if (loading) {
     return (
       <div className="event-group-container event-group-container--loading">
@@ -183,16 +181,6 @@ const EventGroupPage = () => {
       {/* Top Header */}
       <section className="event-group-header">
         <h1 className="event-group-title">{decodedEventName}</h1>
-        
-        {/* Social Proof Banner */}
-        <div className="social-proof-banner">
-          <svg className="social-proof-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM13 17H11V15H13V17ZM13 13H11V7H13V13Z" fill="currentColor"/>
-          </svg>
-          <span className="social-proof-text">
-            🕒 {recentViewers} אנשים צפו באירועי {decodedEventName} בשעה האחרונה
-          </span>
-        </div>
       </section>
 
       {/* Events List */}

@@ -16,6 +16,7 @@ import NegotiationModal from '../components/NegotiationModal';
 import Toast from '../components/Toast';
 import DashboardSkeleton from '../components/skeletons/DashboardSkeleton';
 import { toastError, toastSuccess } from '../utils/toast';
+import { downloadTicketFromAxiosBlob } from '../utils/ticketDownload';
 import './Dashboard.css';
 
 function offerBuyerId(offer) {
@@ -574,17 +575,9 @@ const Dashboard = () => {
     }
     try {
       const response = await ticketAPI.downloadPDF(ticketId);
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `ticket-${ticketId}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      downloadTicketFromAxiosBlob(response, { ticketId });
     } catch (err) {
-      toastError('הורדת ה-PDF נכשלה. אנא נסה שוב מאוחר יותר.');
+      toastError('הורדת הכרטיס נכשלה. אנא נסה שוב מאוחר יותר.');
     }
   };
 
@@ -997,7 +990,7 @@ const Dashboard = () => {
                                 handleDownloadPDF(ticketIds[0]);
                               }}
                               title="הורדת כרטיס"
-                              aria-label="Download ticket PDF"
+                              aria-label="הורדת כרטיס"
                             >
                               📄
                             </button>

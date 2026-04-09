@@ -11,6 +11,7 @@ import {
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { toastError } from '../utils/toast';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
+import { downloadTicketFromAxiosBlob } from '../utils/ticketDownload';
 import './Profile.css';
 
 const Profile = () => {
@@ -98,19 +99,9 @@ const Profile = () => {
   const handleDownloadPDF = async (ticketId) => {
     try {
       const response = await ticketAPI.downloadPDF(ticketId);
-      
-      // Create blob and download
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `ticket-${ticketId}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      downloadTicketFromAxiosBlob(response, { ticketId });
     } catch (err) {
-      toastError('הורדת ה-PDF נכשלה. אנא נסה שוב מאוחר יותר.');
+      toastError('הורדת הכרטיס נכשלה. אנא נסה שוב מאוחר יותר.');
     }
   };
 
@@ -306,7 +297,7 @@ const Profile = () => {
                               onClick={() => handleDownloadPDF(order?.ticket || ticket?.id)}
                               className="buy-button"
                             >
-                              הורדת PDF
+                              הורדת כרטיס
                             </button>
                           )}
                         </div>

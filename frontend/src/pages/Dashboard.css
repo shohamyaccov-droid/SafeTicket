@@ -638,6 +638,15 @@
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
 }
 
+/* Current step that is already completed (e.g. ready for download): keep green check, not empty blue ring */
+.timeline-step.completed.current .step-circle,
+.timeline-step.completed.active .step-circle {
+  border-color: #10b981;
+  background-color: #10b981 !important;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.12);
+  color: #fff;
+}
+
 .step-label {
   margin-top: 0.15rem;
   font-size: 0.7rem;

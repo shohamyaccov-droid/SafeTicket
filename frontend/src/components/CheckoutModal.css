@@ -869,9 +869,10 @@
   font-weight: 700;
 }
 
-.success-primary-dashboard:hover {
+.success-close-button.success-primary-dashboard:hover {
   filter: brightness(1.06);
-  color: #fff;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  color: #ffffff;
   border: none;
 }
 

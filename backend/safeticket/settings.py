@@ -379,6 +379,8 @@ SIMPLE_JWT = {
 CORS_ALLOW_ALL_ORIGINS = False
 # Required for cross-origin XHR to send Accept-Credentials cookies (csrf, jwt cookies on API host).
 CORS_ALLOW_CREDENTIALS = True
+# Allow SPA scripts to read filenames on ticket blob downloads (extension / saved name).
+CORS_EXPOSE_HEADERS = ['Content-Disposition']
 _RENDER_WEB_ORIGIN = 'https://safeticket-web.onrender.com'
 _RENDER_API_ORIGIN = 'https://safeticket-api.onrender.com'
 _FRONTEND_FROM_ENV = os.environ.get('FRONTEND_ORIGIN', '').strip().rstrip('/')

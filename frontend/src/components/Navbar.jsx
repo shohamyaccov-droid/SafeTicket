@@ -143,13 +143,17 @@ const Navbar = () => {
   if (loading) {
     return (
       <nav className="navbar">
-        <div className="nav-container nav-container--loading">
-          <div className="nav-bar-start">
-            <div className="nav-logo-block">
-              <Link to="/" className="nav-logo">
-                TradeTix
-              </Link>
-            </div>
+        <div className="nav-container">
+          <div className="nav-bar-trailing">
+            <button type="button" className="nav-drawer-toggle" disabled aria-label="תפריט">
+              ☰
+            </button>
+          </div>
+          <div className="nav-flex-spacer" aria-hidden />
+          <div className="nav-bar-brand">
+            <Link to="/" className="nav-logo">
+              TradeTix
+            </Link>
           </div>
         </div>
       </nav>
@@ -168,7 +172,16 @@ const Navbar = () => {
       )}
 
       <div className="nav-container">
-        <div className="nav-bar-start">
+        <div className="nav-bar-trailing">
+          {user ? (
+            <span className="nav-user-inline" dir="rtl">
+              שלום, {user?.username || 'משתמש'}
+            </span>
+          ) : (
+            <Link to="/login" className="nav-login-inline" onClick={closeDrawer}>
+              התחבר
+            </Link>
+          )}
           <button
             type="button"
             className="nav-drawer-toggle"
@@ -178,38 +191,13 @@ const Navbar = () => {
           >
             ☰
           </button>
-          <div className="nav-logo-block">
-            <Link to="/" className="nav-logo" onClick={closeDrawer}>
-              TradeTix
-            </Link>
-          </div>
         </div>
-
-        <form className="nav-search-form nav-search-form--desktop" onSubmit={submitNavSearch} role="search">
-          <label htmlFor="nav-search-input" className="visually-hidden">
-            חיפוש אירועים
-          </label>
-          <input
-            id="nav-search-input"
-            type="search"
-            className="nav-search-input"
-            placeholder="חיפוש אמן, אירוע, עיר..."
-            value={navSearch}
-            onChange={(e) => setNavSearch(e.target.value)}
-            dir="rtl"
-            autoComplete="off"
-          />
-          <button type="submit" className="nav-search-submit" aria-label="חיפוש">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-              <path
-                d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
-        </form>
+        <div className="nav-flex-spacer" aria-hidden />
+        <div className="nav-bar-brand">
+          <Link to="/" className="nav-logo" onClick={closeDrawer}>
+            TradeTix
+          </Link>
+        </div>
       </div>
 
       <aside
