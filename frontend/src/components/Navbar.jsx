@@ -144,17 +144,17 @@ const Navbar = () => {
     return (
       <nav className="navbar">
         <div className="nav-container nav-container--bar">
-          <div className="nav-cluster nav-cluster--left" aria-hidden />
-          <div className="nav-cluster nav-cluster--center">
-            <Link to="/" className="nav-logo">
-              TradeTix
-            </Link>
-          </div>
-          <div className="nav-cluster nav-cluster--right">
+          <div className="nav-right-cluster">
             <button type="button" className="nav-drawer-toggle" disabled aria-label="תפריט">
               ☰
             </button>
           </div>
+          <div className="nav-center-cluster">
+            <Link to="/" className="nav-logo">
+              TradeTix
+            </Link>
+          </div>
+          <div className="nav-left-cluster" aria-hidden />
         </div>
       </nav>
     );
@@ -172,23 +172,7 @@ const Navbar = () => {
       )}
 
       <div className="nav-container nav-container--bar">
-        <div className="nav-cluster nav-cluster--left">
-          {user ? (
-            <span className="nav-user-inline" dir="rtl">
-              שלום, {user?.username || 'משתמש'}
-            </span>
-          ) : (
-            <Link to="/login" className="nav-login-inline" onClick={closeDrawer}>
-              התחבר
-            </Link>
-          )}
-        </div>
-        <div className="nav-cluster nav-cluster--center">
-          <Link to="/" className="nav-logo" onClick={closeDrawer}>
-            TradeTix
-          </Link>
-        </div>
-        <div className="nav-cluster nav-cluster--right">
+        <div className="nav-right-cluster">
           <button
             type="button"
             className="nav-drawer-toggle"
@@ -198,6 +182,22 @@ const Navbar = () => {
           >
             ☰
           </button>
+        </div>
+        <div className="nav-center-cluster">
+          <Link to="/" className="nav-logo" onClick={closeDrawer}>
+            TradeTix
+          </Link>
+        </div>
+        <div className="nav-left-cluster">
+          {user ? (
+            <span className="nav-user-inline" dir="rtl">
+              שלום, {user?.username || 'משתמש'}
+            </span>
+          ) : (
+            <Link to="/login" className="nav-login-inline" onClick={closeDrawer}>
+              התחבר
+            </Link>
+          )}
         </div>
       </div>
 

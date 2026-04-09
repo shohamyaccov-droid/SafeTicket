@@ -17,10 +17,10 @@
   margin: 0 auto;
 }
 
-/* Full-width bar: physical LEFT = user/login, CENTER = logo, RIGHT = hamburger */
+/* RTL grid: column 1 = physical RIGHT (hamburger), col 2 = dead-center logo, col 3 = physical LEFT (user) */
 .nav-container.nav-container--bar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   width: 100%;
   max-width: none;
@@ -28,32 +28,32 @@
   padding: 0;
   gap: var(--spacing-sm);
   box-sizing: border-box;
-  /* Pin columns to screen edges (not RTL-flipped grid columns) */
-  direction: ltr;
+  direction: rtl;
 }
 
-.nav-cluster {
-  min-width: 0;
+.nav-right-cluster {
   display: flex;
   align-items: center;
-}
-
-.nav-cluster--left {
+  min-width: 0;
   justify-self: start;
-  justify-content: flex-start;
 }
 
-.nav-cluster--center {
-  justify-self: center;
+.nav-center-cluster {
+  display: flex;
+  align-items: center;
   justify-content: center;
+  justify-self: center;
+  min-width: 0;
 }
 
-.nav-cluster--right {
+.nav-left-cluster {
+  display: flex;
+  align-items: center;
+  min-width: 0;
   justify-self: end;
-  justify-content: flex-end;
 }
 
-.nav-cluster--center .nav-logo {
+.nav-center-cluster .nav-logo {
   margin: 0;
 }
 
