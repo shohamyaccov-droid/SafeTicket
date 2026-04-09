@@ -55,8 +55,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dummy-key-for-dev')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# TEMP: surface full tracebacks on Render while stabilizing ticket upload — revert to env when done.
-DEBUG = True  # Temp for debugging
+# Set DEBUG=true in .env only for local dev. On Render, leave unset or false so errors are not leaked.
+DEBUG = os.environ.get('DEBUG', 'False').lower() in ('1', 'true', 'yes')
 
 # When True: looser PDF MIME checks (%PDF magic bytes), non-strict PyPDF, optional fallbacks for testing.
 # Set RELAX_PDF_UPLOAD_VALIDATION=true on Render only while testing uploads; turn off for production.
@@ -386,10 +386,12 @@ _RENDER_API_ORIGIN = 'https://safeticket-api.onrender.com'
 _FRONTEND_FROM_ENV = os.environ.get('FRONTEND_ORIGIN', '').strip().rstrip('/')
 if DEBUG:
     CORS_ALLOWED_ORIGINS = _env_origin_list(
-        'CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000'
+        'CORS_ALLOWED_ORIGINS',
+        'http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173',
     )
     CSRF_TRUSTED_ORIGINS = _env_origin_list(
-        'CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000'
+        'CSRF_TRUSTED_ORIGINS',
+        'http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173',
     )
     if _FRONTEND_FROM_ENV:
         CORS_ALLOWED_ORIGINS = _merge_unique_origins(
@@ -412,23 +414,27 @@ else:
     CORS_ALLOWED_ORIGINS = _merge_unique_origins(CORS_ALLOWED_ORIGINS, _fe_trust)
     CSRF_TRUSTED_ORIGINS = _merge_unique_origins(CSRF_TRUSTED_ORIGINS, _fe_trust)
 
-# Render.com sets RENDER / RENDER_EXTERNAL_URL. Always merge the known SPA + API origins so a mis-set
-# DEBUG flag or partial env cannot strip CSRF/CORS trust for the production hostname pair.
-if (os.environ.get('RENDER', '') or os.environ.get('RENDER_EXTERNAL_URL', '')).strip():
-    CSRF_TRUSTED_ORIGINS = _merge_unique_origins(
-        CSRF_TRUSTED_ORIGINS,
-        _RENDER_WEB_ORIGIN,
-        _RENDER_API_ORIGIN,
-        *([_FRONTEND_FROM_ENV] if _FRONTEND_FROM_ENV else []),
-    )
-    CORS_ALLOWED_ORIGINS = _merge_unique_origins(
-        CORS_ALLOWED_ORIGINS,
-        _RENDER_WEB_ORIGIN,
-        _RENDER_API_ORIGIN,
-        *([_FRONTEND_FROM_ENV] if _FRONTEND_FROM_ENV else []),
-    )
+# Always merge canonical browser origins — not only when RENDER env is set.
+# DEBUG=True on the API previously combined with missing RENDER allowed only localhost CORS; the SPA
+# then saw "blocked by CORS" (same symptom as a 502 with no ACAO header).
+CORS_ALLOWED_ORIGINS = _merge_unique_origins(
+    CORS_ALLOWED_ORIGINS,
+    _RENDER_WEB_ORIGIN,
+    _RENDER_API_ORIGIN,
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    *([_FRONTEND_FROM_ENV] if _FRONTEND_FROM_ENV else []),
+)
+CSRF_TRUSTED_ORIGINS = _merge_unique_origins(
+    CSRF_TRUSTED_ORIGINS,
+    _RENDER_WEB_ORIGIN,
+    _RENDER_API_ORIGIN,
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    *([_FRONTEND_FROM_ENV] if _FRONTEND_FROM_ENV else []),
+)
 
-# Explicit production origins so env typos cannot drop them (browser Origin is the SPA).
+# Explicit production origins (defense in depth if env lists are truncated).
 CSRF_TRUSTED_ORIGINS = _merge_unique_origins(
     CSRF_TRUSTED_ORIGINS,
     'https://safeticket-web.onrender.com',
@@ -437,6 +443,7 @@ CSRF_TRUSTED_ORIGINS = _merge_unique_origins(
 CORS_ALLOWED_ORIGINS = _merge_unique_origins(
     CORS_ALLOWED_ORIGINS,
     'https://safeticket-web.onrender.com',
+    'https://safeticket-api.onrender.com',
 )
 
 # JWT HttpOnly cookie names
