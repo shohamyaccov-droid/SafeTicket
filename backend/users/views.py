@@ -8,6 +8,7 @@ def csrf_required(view):
     view.csrf_exempt = False
     return view
 from rest_framework import generics, status, viewsets
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.throttling import ScopedRateThrottle
 from .throttles import (
     AuthLoginScopedThrottle,
@@ -2492,6 +2493,7 @@ class TicketViewSet(viewsets.ModelViewSet):
     """
     queryset = Ticket.objects.all()
     permission_classes = [IsAuthenticatedOrReadOnly]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
     
     def get_serializer_class(self):
         if self.action == 'list':
@@ -2542,10 +2544,16 @@ class TicketViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Authentication required to create tickets.")
         if request.user.role != 'seller':
             raise PermissionDenied("Only users with seller role can create tickets.")
-        
+
+        def _safe_int(value, default=0):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return default
+
         # Extract PDF files from request
         pdf_files = []
-        pdf_files_count = int(request.data.get('pdf_files_count', 0))
+        pdf_files_count = _safe_int(request.data.get('pdf_files_count', 0), 0)
         
         # Collect all PDF files (pdf_file_0, pdf_file_1, etc.)
         for i in range(pdf_files_count):
@@ -2558,7 +2566,7 @@ class TicketViewSet(viewsets.ModelViewSet):
             pdf_files = [request.FILES['pdf_file']]
             pdf_files_count = 1
         
-        available_quantity = int(request.data.get('available_quantity', 1))
+        available_quantity = max(1, min(10, _safe_int(request.data.get('available_quantity', 1), 1)))
         relax_pdf = getattr(settings, 'RELAX_PDF_UPLOAD_VALIDATION', False)
 
         # AUTO-SPLIT MODE: 1 multi-page PDF for N tickets (images cannot be split)
@@ -2610,7 +2618,7 @@ class TicketViewSet(viewsets.ModelViewSet):
             )
         
         # Block uploading tickets for past events
-        event_id = request.data.get('event')
+        event_id = request.data.get('event') or request.data.get('event_id')
         if event_id:
             try:
                 evt = Event.objects.get(pk=event_id)

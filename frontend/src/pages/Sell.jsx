@@ -772,14 +772,21 @@ const Sell = () => {
       }
     }
 
-    // Create FormData for file upload
+    // Create FormData for file upload — never append undefined/null; coerce numbers to strings.
+    const qtyNum = Math.max(1, Math.min(10, parseInt(String(formData.available_quantity ?? 1), 10) || 1));
+    const originalPriceNum = Math.max(
+      0,
+      parseFloat(String(formData.original_price ?? '').replace(',', '.')) || 0
+    );
+    const originalPriceStr = String(originalPriceNum);
+
     const submitData = new FormData();
-    submitData.append('event_id', formData.event_id);
-    // Legacy fields for backward compatibility (if needed)
-    if (formData.event_name) {
-      submitData.append('event_name', formData.event_name);
+    submitData.append('event_id', String(formData.event_id));
+    const evNameTrim = String(formData.event_name || '').trim();
+    if (evNameTrim) {
+      submitData.append('event_name', evNameTrim);
     }
-    submitData.append('seat_row', formData.seat_row || ''); // Legacy field
+    submitData.append('seat_row', String(formData.seat_row || '')); // Legacy field
     const vd = eventDetail?.venue_detail;
     const structured = vd?.sections;
     const hasStructured = Array.isArray(structured) && structured.length > 0;
@@ -789,12 +796,12 @@ const Sell = () => {
     } else if (secVal) {
       submitData.append('custom_section_text', secVal);
     }
-    submitData.append('row', formData.row || '');
-    submitData.append('original_price', formData.original_price);
+    submitData.append('row', String(formData.row || ''));
+    submitData.append('original_price', originalPriceStr);
     const askForApi =
       ilEvent && formData.listing_price !== '' && formData.listing_price != null
         ? String(Math.max(0, Math.round(parseFloat(String(formData.listing_price)) || 0)))
-        : String(Math.max(0, Math.round(parseFloat(String(formData.original_price)) || 0)));
+        : String(Math.max(0, Math.round(originalPriceNum)));
     submitData.append('listing_price', askForApi);
     if (formData.receipt_file) {
       submitData.append('receipt_file', formData.receipt_file);
@@ -802,11 +809,11 @@ const Sell = () => {
     if (ilEvent) {
       submitData.append('il_legal_declaration', 'true');
     }
-    submitData.append('available_quantity', formData.available_quantity || 1);
-    submitData.append('is_together', formData.is_together);
+    submitData.append('available_quantity', String(qtyNum));
+    submitData.append('is_together', formData.is_together ? 'true' : 'false');
     // Master Architecture fields
     submitData.append('ticket_type', 'כרטיס אלקטרוני (PDF או תמונה)');
-    submitData.append('split_type', formData.split_type || 'כל כמות');
+    submitData.append('split_type', String(formData.split_type || 'כל כמות'));
     // Multipart: send explicit boolean strings (avoid FormData coercing booleans oddly).
     submitData.append('is_obstructed_view', formData.is_obstructed_view ? 'true' : 'false');
     
@@ -825,8 +832,8 @@ const Sell = () => {
       submitData.append('pdf_files_count', '1');
       submitData.append('pdf_file_0', pdf0, fname0);
       packages.forEach((pkg, index) => {
-        submitData.append(`row_number_${index}`, globalRow);
-        submitData.append(`seat_number_${index}`, pkg?.seat_number || '');
+        submitData.append(`row_number_${index}`, String(globalRow || ''));
+        submitData.append(`seat_number_${index}`, String(pkg?.seat_number || ''));
       });
     } else {
       // Separate files: each ticket gets its own PDF (third arg = filename; required by some stacks)
@@ -836,8 +843,8 @@ const Sell = () => {
           const fn = f instanceof File ? f.name : `ticket_${index}.pdf`;
           submitData.append(`pdf_file_${index}`, f, fn);
         }
-        submitData.append(`row_number_${index}`, globalRow);
-        submitData.append(`seat_number_${index}`, pkg?.seat_number || '');
+        submitData.append(`row_number_${index}`, String(globalRow || ''));
+        submitData.append(`seat_number_${index}`, String(pkg?.seat_number || ''));
       });
       submitData.append('pdf_files_count', String(packages.length));
     }
