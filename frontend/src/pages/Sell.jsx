@@ -772,48 +772,50 @@ const Sell = () => {
       }
     }
 
-    // Create FormData for file upload — never append undefined/null; coerce numbers to strings.
+    // Create FormData for file upload — never append undefined/null as values (multipart-safe scalars).
+    const fdText = (v) => (v === undefined || v === null ? '' : String(v));
     const qtyNum = Math.max(1, Math.min(10, parseInt(String(formData.available_quantity ?? 1), 10) || 1));
     const originalPriceNum = Math.max(
       0,
       parseFloat(String(formData.original_price ?? '').replace(',', '.')) || 0
     );
-    const originalPriceStr = String(originalPriceNum);
+    const originalPriceStr = fdText(originalPriceNum);
 
     const submitData = new FormData();
-    submitData.append('event_id', String(formData.event_id));
-    const evNameTrim = String(formData.event_name || '').trim();
+    submitData.append('event_id', fdText(formData.event_id));
+    const evNameTrim = fdText(formData.event_name).trim();
     if (evNameTrim) {
       submitData.append('event_name', evNameTrim);
     }
-    submitData.append('seat_row', String(formData.seat_row || '')); // Legacy field
+    submitData.append('seat_row', fdText(formData.seat_row)); // Legacy field
     const vd = eventDetail?.venue_detail;
     const structured = vd?.sections;
     const hasStructured = Array.isArray(structured) && structured.length > 0;
     const secVal = (formData.section || '').trim();
     if (hasStructured && secVal) {
-      submitData.append('venue_section', secVal);
+      submitData.append('venue_section', fdText(secVal));
     } else if (secVal) {
-      submitData.append('custom_section_text', secVal);
+      submitData.append('custom_section_text', fdText(secVal));
     }
-    submitData.append('row', String(formData.row || ''));
+    submitData.append('row', fdText(formData.row));
     submitData.append('original_price', originalPriceStr);
     const askForApi =
       ilEvent && formData.listing_price !== '' && formData.listing_price != null
         ? String(Math.max(0, Math.round(parseFloat(String(formData.listing_price)) || 0)))
         : String(Math.max(0, Math.round(originalPriceNum)));
-    submitData.append('listing_price', askForApi);
+    submitData.append('listing_price', fdText(askForApi));
     if (formData.receipt_file) {
       submitData.append('receipt_file', formData.receipt_file);
     }
     if (ilEvent) {
       submitData.append('il_legal_declaration', 'true');
     }
-    submitData.append('available_quantity', String(qtyNum));
+    submitData.append('delivery_method', 'instant');
+    submitData.append('available_quantity', fdText(qtyNum));
     submitData.append('is_together', formData.is_together ? 'true' : 'false');
     // Master Architecture fields
     submitData.append('ticket_type', 'כרטיס אלקטרוני (PDF או תמונה)');
-    submitData.append('split_type', String(formData.split_type || 'כל כמות'));
+    submitData.append('split_type', fdText(formData.split_type || 'כל כמות'));
     // Multipart: send explicit boolean strings (avoid FormData coercing booleans oddly).
     submitData.append('is_obstructed_view', formData.is_obstructed_view ? 'true' : 'false');
     
@@ -832,8 +834,8 @@ const Sell = () => {
       submitData.append('pdf_files_count', '1');
       submitData.append('pdf_file_0', pdf0, fname0);
       packages.forEach((pkg, index) => {
-        submitData.append(`row_number_${index}`, String(globalRow || ''));
-        submitData.append(`seat_number_${index}`, String(pkg?.seat_number || ''));
+        submitData.append(`row_number_${index}`, fdText(globalRow));
+        submitData.append(`seat_number_${index}`, fdText(pkg?.seat_number));
       });
     } else {
       // Separate files: each ticket gets its own PDF (third arg = filename; required by some stacks)
@@ -843,10 +845,10 @@ const Sell = () => {
           const fn = f instanceof File ? f.name : `ticket_${index}.pdf`;
           submitData.append(`pdf_file_${index}`, f, fn);
         }
-        submitData.append(`row_number_${index}`, String(globalRow || ''));
-        submitData.append(`seat_number_${index}`, String(pkg?.seat_number || ''));
+        submitData.append(`row_number_${index}`, fdText(globalRow));
+        submitData.append(`seat_number_${index}`, fdText(pkg?.seat_number));
       });
-      submitData.append('pdf_files_count', String(packages.length));
+      submitData.append('pdf_files_count', fdText(packages.length));
     }
 
     try {

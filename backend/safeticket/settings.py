@@ -55,7 +55,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dummy-key-for-dev')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+# TEMP: surface full tracebacks on Render while stabilizing ticket upload — revert to env when done.
+DEBUG = True  # Temp for debugging
 
 # When True: looser PDF MIME checks (%PDF magic bytes), non-strict PyPDF, optional fallbacks for testing.
 # Set RELAX_PDF_UPLOAD_VALIDATION=true on Render only while testing uploads; turn off for production.
