@@ -21,13 +21,38 @@ function portalCheckoutRoot(node) {
   return createPortal(node, document.body);
 }
 
+/** Django CSRF / generic HTML error pages — never show raw HTML in toasts (especially on mobile). */
+const CHECKOUT_CSRF_HTML_MESSAGE =
+  'שגיאת אבטחה בתקשורת. אנא רענן את העמוד ונסה שוב.';
+
+function responseDataLooksLikeHtml(data) {
+  if (typeof data !== 'string' || !data.length) return false;
+  const head = data.slice(0, 800).toLowerCase();
+  return (
+    head.includes('<html') ||
+    head.includes('<!doctype') ||
+    head.includes('<body') ||
+    head.includes('body {') ||
+    head.includes('csrf verification failed') ||
+    (head.includes('forbidden') && head.includes('403'))
+  );
+}
+
 function formatCheckoutBackendError(err) {
   const data = err?.response?.data;
+  const status = err?.response?.status;
   if (data == null || data === '') {
     return err?.message ? String(err.message) : '';
   }
   if (typeof data === 'string') {
-    return data.replace(/<[^>]+>/g, '').trim().slice(0, 600);
+    if (responseDataLooksLikeHtml(data) || (status === 403 && /csrf|forbidden/i.test(data))) {
+      return CHECKOUT_CSRF_HTML_MESSAGE;
+    }
+    const stripped = data.replace(/<[^>]+>/g, '').trim();
+    if (responseDataLooksLikeHtml(stripped) || (status === 403 && /csrf verification failed/i.test(stripped))) {
+      return CHECKOUT_CSRF_HTML_MESSAGE;
+    }
+    return stripped.slice(0, 600);
   }
   const d = data.detail ?? data.error ?? data.message;
   if (typeof d === 'string') return d;
@@ -661,12 +686,15 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         formatted ||
         (typeof res?.data?.detail === 'string' ? res.data.detail : '') ||
         (typeof res?.data?.error === 'string' ? res.data.error : '') ||
-        (typeof res?.data === 'string' ? res.data : '') ||
+        (typeof res?.data === 'string' && !responseDataLooksLikeHtml(res.data) ? res.data : '') ||
         err.message ||
         '';
-      const userFacing = detail
-        ? `לא ניתן לשמור: ${detail}`
-        : 'שגיאה בתקשורת עם השרת';
+      const userFacing =
+        detail === CHECKOUT_CSRF_HTML_MESSAGE
+          ? detail
+          : detail
+            ? `לא ניתן לשמור: ${detail}`
+            : 'שגיאה בתקשורת עם השרת';
       setError(userFacing);
       toastError(userFacing);
       // Enterprise UX: Show Toast for "ticket was just sold" - beautiful feedback instead of raw alert
@@ -787,9 +815,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             (typeof res?.data?.detail === 'string' ? res.data.detail : '') ||
             err.message ||
             '';
-          const errorMsg = suffix
-            ? `לא ניתן לשמור: ${suffix}`
-            : 'לא ניתן לשמור את הכרטיס כרגע. אנא נסה שוב.';
+          const errorMsg =
+            suffix === CHECKOUT_CSRF_HTML_MESSAGE
+              ? suffix
+              : suffix
+                ? `לא ניתן לשמור: ${suffix}`
+                : 'לא ניתן לשמור את הכרטיס כרגע. אנא נסה שוב.';
           setError(errorMsg);
           toastError(errorMsg);
         }

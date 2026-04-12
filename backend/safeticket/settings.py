@@ -522,7 +522,9 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
 # Cross-site cookies (SPA safeticket-web.onrender.com ↔ API safeticket-api.onrender.com).
-# Render sets RENDER=yes — force None+Secure even if DEBUG were mis-set, or CSRF fails on POST/offers.
+# Mobile Safari / ITP: CSRF + session cookies MUST be SameSite=None; Secure=True on HTTPS API
+# or the browser will not attach them on credentialed XHR/fetch from the static site origin.
+# Render sets RENDER=yes — force None+Secure even if DEBUG were mis-set (avoids silent CSRF 403 on checkout).
 # Local HTTP: Lax unless SAFETICKET_CROSS_SITE_COOKIES=1 (HTTPS dev tunnel).
 _RENDER_SERVICE = bool((os.environ.get('RENDER') or '').strip())
 _FORCE_CROSS_SITE = os.environ.get('SAFETICKET_CROSS_SITE_COOKIES', '').lower() in ('1', 'true', 'yes')

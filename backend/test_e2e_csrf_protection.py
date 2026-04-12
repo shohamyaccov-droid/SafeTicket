@@ -2,14 +2,27 @@
 E2E CSRF Protection: Double-Submit Cookie pattern validation.
   - Test 1: POST without X-CSRFToken (attack blocked) -> 403
   - Test 2: POST with X-CSRFToken (legitimate) -> 200
+  - Test 3: Production-style cookie flags (SameSite=None; Secure) for cross-origin SPA ↔ API (mobile Safari)
 
 Run: python manage.py test test_e2e_csrf_protection -v 2
 """
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.test.client import ClientHandler
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
+
+
+def _csrf_set_cookie_line(response):
+    """Django stores Set-Cookie on response.cookies (response.items() often omits it)."""
+    out = response.cookies.output()
+    if not out:
+        return ''
+    # output() can be multi-line if several cookies
+    for line in out.splitlines():
+        if 'csrftoken=' in line:
+            return line
+    return ''
 
 
 class E2ECSRFProtectionTest(TestCase):
@@ -77,3 +90,25 @@ class E2ECSRFProtectionTest(TestCase):
             r2.status_code, 200,
             f'Legitimate request must succeed. Got: {r2.status_code}. Body: {r2.content.decode()}',
         )
+
+
+@override_settings(
+    DEBUG=False,
+    CSRF_COOKIE_SECURE=True,
+    CSRF_COOKIE_SAMESITE='None',
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SAMESITE='None',
+)
+class MobileCrossOriginCSRFCookieFlagsTest(TestCase):
+    """
+    Mirrors Render: HTTPS API + static SPA on another subdomain.
+    Ensures csrftoken is issued with SameSite=None and Secure so mobile browsers attach it on credentialed requests.
+    """
+
+    def test_csrf_endpoint_set_cookie_includes_samesite_none_and_secure(self):
+        r = self.client.get('/api/users/csrf/')
+        self.assertEqual(r.status_code, 200)
+        csrftoken_line = _csrf_set_cookie_line(r)
+        self.assertTrue(csrftoken_line, f'Expected csrftoken cookie, cookies.output()={r.cookies.output()!r}')
+        self.assertIn('SameSite=None', csrftoken_line)
+        self.assertIn('Secure', csrftoken_line)
