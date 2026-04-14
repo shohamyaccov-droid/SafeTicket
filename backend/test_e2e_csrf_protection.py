@@ -99,6 +99,18 @@ class E2ECSRFProtectionTest(TestCase):
     SESSION_COOKIE_SECURE=True,
     SESSION_COOKIE_SAMESITE='None',
 )
+class CsrfJsonWarmupTest(TestCase):
+    """GET /api/users/csrf/ returns JSON { csrfToken } for SPA header warmup (mobile ITP)."""
+
+    def test_csrf_endpoint_returns_json_csrf_token(self):
+        r = self.client.get('/api/users/csrf/')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.headers.get('Content-Type', '').split(';')[0], 'application/json')
+        data = r.json()
+        self.assertIn('csrfToken', data)
+        self.assertTrue(len(data.get('csrfToken') or '') > 10)
+
+
 class MobileCrossOriginCSRFCookieFlagsTest(TestCase):
     """
     Mirrors Render: HTTPS API + static SPA on another subdomain.

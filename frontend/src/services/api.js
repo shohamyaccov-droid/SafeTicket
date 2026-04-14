@@ -7,11 +7,6 @@ axios.defaults.xsrfHeaderName = 'X-CSRFToken';
 /** In-memory CSRF for cross-origin: csrftoken cookie is not visible on document.cookie for the API host. */
 let csrfTokenFromApi = null;
 
-/** Clear cached CSRF (e.g. stale token on mobile / after 403). */
-export function resetCsrfTokenCache() {
-  csrfTokenFromApi = null;
-}
-
 /**
  * Mobile-first JWT: Authorization Bearer is the primary auth for cross-origin API calls.
  * Access + refresh are persisted in localStorage so iOS Safari survives reloads without cookies.
@@ -139,6 +134,22 @@ const api = axios.create({
   withCredentials: true,
 });
 api.defaults.withCredentials = true;
+
+/** Apply token to axios defaults so every request sends X-CSRFToken (pairs with JSON /csrf warmup). */
+function applyCsrfDefaultHeader(token) {
+  if (token != null && token !== '') {
+    const s = String(token);
+    api.defaults.headers.common['X-CSRFToken'] = s;
+    axios.defaults.headers.common['X-CSRFToken'] = s;
+  }
+}
+
+/** Clear cached CSRF (e.g. stale token on mobile / after 403). */
+export function resetCsrfTokenCache() {
+  csrfTokenFromApi = null;
+  delete api.defaults.headers.common['X-CSRFToken'];
+  delete axios.defaults.headers.common['X-CSRFToken'];
+}
 
 /**
  * CRITICAL (iOS Safari): set axios default Authorization synchronously so the very next
@@ -379,6 +390,10 @@ export async function ensureCsrfToken() {
     } catch {
       /* same-site dev may still work via csrftoken cookie on document */
     }
+  }
+  const t = getCsrfTokenForRequest();
+  if (t) {
+    applyCsrfDefaultHeader(t);
   }
 }
 

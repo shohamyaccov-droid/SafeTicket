@@ -139,6 +139,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const [orderData, setOrderData] = useState(null);
   const [pdfUrl, setPdfUrl] = useState(null);
   const [timeRemaining, setTimeRemaining] = useState(600); // 10 minutes in seconds
+  /** Initial budget for progress bar (reservation / offer checkout window). */
+  const timerBudgetRef = useRef(600);
   const [paidAmounts, setPaidAmounts] = useState(null); // Store actual paid amounts: { baseAmount, serviceFee, totalAmount }
   const [checkoutSucceeded, setCheckoutSucceeded] = useState(false); // Completed purchase — never return to payment for this session
   const timerRef = useRef(null);
@@ -170,6 +172,16 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     (acceptedOffer.status === 'accepted' || acceptedOffer.accepted_at != null);
   /** Offer accept already locked inventory; skip cart /reserve and do not release on modal close. */
   const skipCartReserveForNegotiatedOffer = Boolean(isNegotiatedPrice && acceptedOffer);
+  const checkoutTicketIdRef = useRef(null);
+  useEffect(() => {
+    const tid = ticket?.id;
+    if (tid == null) return;
+    if (checkoutTicketIdRef.current !== tid) {
+      checkoutTicketIdRef.current = tid;
+      timerBudgetRef.current = 600;
+      setTimeRemaining(600);
+    }
+  }, [ticket?.id]);
   const lockedQuantity = isNegotiatedPrice && acceptedOffer.quantity ? acceptedOffer.quantity : null;
   
   // Get available quantity - if locked quantity exists, use that; otherwise use ticket/group quantity
@@ -751,11 +763,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       try {
         if (skipCartReserveForNegotiatedOffer) {
           const cr = acceptedOffer?.checkout_time_remaining;
-          if (typeof cr === 'number' && cr > 0) {
-            setTimeRemaining(cr);
-          } else {
-            setTimeRemaining(4 * 60 * 60);
-          }
+          const budget = typeof cr === 'number' && cr > 0 ? cr : 4 * 60 * 60;
+          timerBudgetRef.current = budget;
+          setTimeRemaining(budget);
           return;
         }
 
@@ -779,8 +789,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             const expiresAt = new Date(response.data.expires_at);
             const now = new Date();
             const remaining = Math.max(0, Math.floor((expiresAt - now) / 1000));
+            timerBudgetRef.current = remaining;
             setTimeRemaining(remaining);
           } else {
+            timerBudgetRef.current = 600;
             setTimeRemaining(600);
           }
           console.log('Ticket reserved successfully');
@@ -893,13 +905,20 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     };
   }, [step, ticket, user, guestForm.email, skipCartReserveForNegotiatedOffer]);
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const formatTime = (rawSeconds) => {
+    const seconds = Math.max(0, Math.floor(Number(rawSeconds) || 0));
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) {
+      return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  const progressPercentage = ((600 - timeRemaining) / 600) * 100;
+  const budget = timerBudgetRef.current > 0 ? timerBudgetRef.current : 600;
+  const progressPercentage =
+    budget > 0 ? Math.min(100, Math.max(0, ((budget - timeRemaining) / budget) * 100)) : 0;
 
   const handleClose = async () => {
     if (pdfUrl) {

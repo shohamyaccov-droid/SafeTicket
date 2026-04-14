@@ -19,7 +19,8 @@ from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, JsonResponse
+from django.views.decorators.http import require_GET
 from django.db.models import F, Q, Count, Sum, Exists, OuterRef, Value, Prefetch, DecimalField
 from django.db.models.functions import Coalesce
 from decimal import Decimal
@@ -1042,16 +1043,14 @@ class CookieTokenRefreshView(TokenRefreshView):
 
 
 @ensure_csrf_cookie
-@api_view(['GET'])
-@permission_classes([AllowAny])
+@require_GET
 def csrf_token_view(request):
     """
-    Returns CSRF token in JSON for X-CSRFToken on mutating requests when the cookie is available.
-    On some browsers / Render hosts the csrftoken cookie may not persist cross-site; checkout and
-    offers use csrf_exempt + JWT instead. This endpoint remains for endpoints that still enforce CSRF.
+    JSON csrfToken for X-CSRFToken on credentialed XHR (mobile Safari / ITP may omit cookie on
+    cross-site requests; header + in-memory default still satisfies Django when cookie is present,
+    and cart reserve no longer forces CSRF — see TicketViewSet).
     """
-    token = get_token(request)
-    return Response({'success': True, 'csrfToken': token})
+    return JsonResponse({'csrfToken': get_token(request)})
 
 
 @csrf_required
@@ -2487,10 +2486,12 @@ def guest_checkout(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@method_decorator(csrf_required, name='dispatch')
 class TicketViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for Ticket model
+    ViewSet for Ticket model.
+    CSRF: not forced at dispatch (DRF default). Reserve/release must work for guests on mobile
+    when third-party cookies are blocked; auth is JWT Bearer + optional cookie. Upload/create still
+    requires authenticated seller.
     """
     queryset = Ticket.objects.all()
     permission_classes = [IsAuthenticatedOrReadOnly]
