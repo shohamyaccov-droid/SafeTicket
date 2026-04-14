@@ -416,7 +416,6 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   };
 
   const handlePaymentSubmit = async (e) => {
-    console.log('Starting payment...');
     e.preventDefault();
     e.stopPropagation();
     if (checkoutSucceeded || transactionCompleteRef.current) {
@@ -476,38 +475,13 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         totalAmount: totalAmount.toFixed(2),
       };
       setPaidAmounts(paidSnapshot);
-      
-      // CRITICAL DEBUG: Trace all values before payment
-      console.log('=== PAYMENT FLOW DEBUG ===');
-      console.log('listUnitFace (shekels):', listUnitFace, 'unitDisplayPrice:', unitDisplayPrice);
-      console.log('isNegotiatedPrice:', isNegotiatedPrice);
-      console.log('acceptedOffer:', acceptedOffer ? {
-        id: acceptedOffer.id,
-        amount: acceptedOffer.amount,
-        quantity: acceptedOffer.quantity,
-        status: acceptedOffer.status
-      } : 'null');
-      console.log('quantity (state):', quantity, 'type:', typeof quantity);
-      console.log('lockedQuantity:', lockedQuantity);
-      console.log('availableQuantity:', availableQuantity);
-      console.log('ticket.id:', ticket?.id);
-      console.log('ticket.event_name:', ticket?.event_name);
-      console.log('ticket.event:', ticket?.event);
-      console.log('Base amount (calculated):', baseAmount, 'type:', typeof baseAmount);
-      console.log('Service fee (calculated):', serviceFee, 'type:', typeof serviceFee);
-      console.log('Total amount (calculated):', totalAmount, 'type:', typeof totalAmount);
-      
+
       // Get listing_group_id from ticketGroup if available (CRITICAL for grouped tickets)
       const listingGroupId = ticketGroup?.listing_group_id || ticket?.listing_group_id;
-      console.log('Listing Group ID:', listingGroupId);
-      console.log('========================');
-      
+
       const finalTotal = totalAmount;
-      console.log('finalTotal=', finalTotal, 'isNegotiated=', isNegotiatedPrice);
-      
+
       // Step 1: Simulate payment - send total amount (with service fee)
-      console.log('Calling paymentAPI.simulatePayment...');
-      console.log('Payment simulation - Listing Group ID:', listingGroupId);
       const paymentData = {
         ticket_id: ticket.id,
         amount: finalTotal,
@@ -519,7 +493,6 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       // CRITICAL: If this is a negotiated price, include offer_id
       if (isNegotiatedPrice && acceptedOffer && acceptedOffer.id) {
         paymentData.offer_id = acceptedOffer.id;
-        console.log('Including offer_id in payment simulation:', acceptedOffer.id);
       }
       if (!user && guestForm?.email?.trim()) {
         paymentData.guest_email = guestForm.email.trim();
@@ -528,14 +501,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       await ensureCsrfToken();
       const paymentResponse = await paymentAPI.simulatePayment(paymentData);
 
-      console.log('Payment response:', paymentResponse);
-
       if (!paymentResponse.data || !paymentResponse.data.success) {
         throw new Error(paymentResponse.data?.message || 'סימולציית התשלום נכשלה');
       }
 
       // Step 2: Create order - ensure total_amount is a Number
-      console.log('Creating order...');
       setPaymentPhase('creating_order');
       let orderResponse;
       // Get listing_group_id from ticketGroup if available
@@ -562,15 +532,6 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         throw new Error('שגיאה: סכום הזמנה לא תקין');
       }
       
-      // Final validation before API call
-      console.log('=== FINAL VALIDATION ===');
-      console.log('ticketId:', ticketId, 'type:', typeof ticketId);
-      console.log('orderQuantity:', orderQuantity, 'type:', typeof orderQuantity);
-      console.log('orderTotalAmount:', orderTotalAmount, 'type:', typeof orderTotalAmount);
-      console.log('eventName:', eventName, 'type:', typeof eventName);
-      console.log('listing_group_id:', listing_group_id, 'type:', typeof listing_group_id);
-      console.log('======================');
-      
       if (user) {
         // Authenticated user checkout
         const orderData = {
@@ -584,23 +545,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         // This tells the backend to bypass price validation and use the offer amount
         if (isNegotiatedPrice && acceptedOffer && acceptedOffer.id) {
           orderData.offer_id = acceptedOffer.id;
-          console.log('Including offer_id in payload:', acceptedOffer.id);
         }
-        
+
         // Only add listing_group_id if it exists
         if (listing_group_id) {
           orderData.listing_group_id = listing_group_id;
         }
-        
-        console.log('PAYLOAD (Authenticated):', JSON.stringify(orderData, null, 2));
-        console.log('Payload values:', {
-          ticket: typeof orderData.ticket,
-          total_amount: typeof orderData.total_amount,
-          quantity: typeof orderData.quantity,
-          event_name: typeof orderData.event_name,
-          offer_id: orderData.offer_id ? typeof orderData.offer_id : 'null',
-          listing_group_id: listing_group_id ? typeof listing_group_id : 'null'
-        });
 
         await ensureCsrfToken();
         orderResponse = await orderAPI.createOrder(orderData);
@@ -618,29 +568,16 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         // CRITICAL: If this is a negotiated price from an accepted offer, include offer_id
         if (isNegotiatedPrice && acceptedOffer && acceptedOffer.id) {
           orderData.offer_id = acceptedOffer.id;
-          console.log('Including offer_id in payload (Guest):', acceptedOffer.id);
         }
-        
+
         // Only add listing_group_id if it exists
         if (listing_group_id) {
           orderData.listing_group_id = listing_group_id;
         }
-        
-        console.log('PAYLOAD (Guest):', JSON.stringify(orderData, null, 2));
-        console.log('Payload values:', {
-          ticket_id: typeof orderData.ticket_id,
-          total_amount: typeof orderData.total_amount,
-          quantity: typeof orderData.quantity,
-          event_name: typeof orderData.event_name,
-          offer_id: orderData.offer_id ? typeof orderData.offer_id : 'null',
-          listing_group_id: listing_group_id ? typeof listing_group_id : 'null'
-        });
 
         await ensureCsrfToken();
         orderResponse = await orderAPI.guestCheckout(orderData);
       }
-
-      console.log('Order response:', orderResponse);
 
       const pendingOrder = orderResponse.data;
       const pendingId = pendingOrder?.id;
@@ -750,7 +687,6 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     if (pdfDownloadBusyId != null) {
       return;
     }
-    console.log('Downloading ticket ID:', ticketId);
     setPdfDownloadBusyId(ticketId);
     try {
       const email = user ? null : (guestForm?.email?.trim() || null);
@@ -800,7 +736,6 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
         const email = user ? null : guestEmailRef.current || null;
         const listingGroupId = ticketGroup?.listing_group_id || ticket?.listing_group_id;
-        console.log('Reserving Ticket ID:', tid, 'listingGroupId:', listingGroupId);
         await ensureCsrfToken();
         const response = await ticketAPI.reserveTicket(tid, email);
 
@@ -817,16 +752,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             timerBudgetRef.current = CART_RESERVE_SECONDS;
             setTimeRemaining(CART_RESERVE_SECONDS);
           }
-          console.log('Ticket reserved successfully');
         }
       } catch (err) {
         const res = err.response;
-        console.error('[CheckoutModal] reserveTicket failed', {
-          status: res?.status,
-          data: res?.data,
-          ticketId: tid,
-        });
-        console.error('Checkout Error Payload (reserve):', res?.data);
         if (res?.data?.status === 'reserved' || res?.data?.error?.includes('someone else')) {
           const errorMsg = res?.data?.error || 'הכרטיס נמצא כעת בעגלה של מישהו אחר. הוא עשוי להיות זמין שוב בעוד כמה דקות.';
           setError(errorMsg);

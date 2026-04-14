@@ -112,14 +112,22 @@ def price_as_int_for_json(value):
 
 
 def user_can_access_ticket_pdf(user, ticket) -> bool:
-    """Same rules as TicketViewSet.download_pdf: seller, staff, or buyer with paid order."""
+    """Same rules as TicketViewSet.download_pdf: seller, staff, or buyer with paid/completed order."""
     if not user or not user.is_authenticated:
         return False
+    if getattr(user, 'is_superuser', False):
+        return True
     if getattr(user, 'is_staff', False) and user.is_staff:
         return True
     if ticket.seller_id == user.id:
         return True
-    qs = Order.objects.filter(user=user, status__in=['paid', 'completed']).only('ticket_id', 'ticket_ids')
+    email = (getattr(user, 'email', None) or '').strip()
+    q = Q(user=user)
+    if email:
+        q |= Q(guest_email__iexact=email)
+    qs = Order.objects.filter(q, status__in=['paid', 'completed']).only(
+        'ticket_id', 'ticket_ids', 'guest_email', 'user_id'
+    )
     for o in qs.iterator():
         if o.covers_ticket(ticket.id):
             return True

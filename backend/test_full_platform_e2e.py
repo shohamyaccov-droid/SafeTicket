@@ -2,6 +2,9 @@
 Full platform E2E (Django integration): CORS allowlist, registration, sell listing,
 public browse, Buy Now checkout, guest checkout, negotiation → pay, ticket download.
 
+Guest path asserts anonymous PDF download is forbidden (403) without a signed `dl` token;
+see users.ticket_download_tokens and test_night_shift_security.
+
 Run: cd backend && python manage.py test test_full_platform_e2e -v 2
 """
 from __future__ import annotations
@@ -11,7 +14,6 @@ import uuid
 from datetime import timedelta
 from decimal import Decimal
 from io import BytesIO
-
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
@@ -21,6 +23,7 @@ from rest_framework.test import APIClient
 
 from users.models import Artist, Event, Offer, Order, Ticket
 from users.pricing import buyer_charge_from_base_amount, expected_buy_now_total, expected_negotiated_total_from_offer_base
+from users.ticket_download_tokens import build_ticket_download_token
 
 User = get_user_model()
 
@@ -272,6 +275,19 @@ class FullPlatformE2ETest(TestCase):
         self.assertIn(cf.json().get('status'), ('paid', 'completed'))
         ticket.refresh_from_db()
         self.assertEqual(ticket.status, 'sold')
+
+        self.api.credentials()
+        self.api.logout()
+        r_anon = self.api.get(f'/api/users/tickets/{tid}/download_pdf/')
+        self.assertEqual(r_anon.status_code, 403, r_anon.content)
+        r_leak = self.api.get(
+            f'/api/users/tickets/{tid}/download_pdf/',
+            {'email': guest_email},
+        )
+        self.assertEqual(r_leak.status_code, 403, r_leak.content)
+        tok = build_ticket_download_token(tid, oid)
+        r_dl = self.api.get(f'/api/users/tickets/{tid}/download_pdf/', {'dl': tok})
+        self.assertEqual(r_dl.status_code, 200, r_dl.content[:120])
 
     def test_negotiation_counter_accept_registered_checkout(self):
         """FLOW B: offer → seller counter → buyer accept → simulate payment → order → confirm."""

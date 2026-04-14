@@ -196,10 +196,6 @@ const Sell = () => {
     };
   }, [catalogRetryKey]);
 
-  useEffect(() => {
-    console.log('Frontend Version (Sell):', SELL_PAGE_BUILD_TAG);
-  }, []);
-
   // Concerts: ONLY source for dropdown — GET ?for_sell=1&artist=<id>. No extra client filters (date/category) that can drop valid rows.
   useEffect(() => {
     if (selectedCategory !== 'concert' || !selectedArtistId) {
@@ -320,11 +316,6 @@ const Sell = () => {
       return false;
     });
   }, [events, artistEvents, artistEventsLoading, selectedCategory, selectedArtistId]);
-
-  useEffect(() => {
-    if (selectedCategory !== 'concert' || !selectedArtistId) return;
-    console.log('Events for dropdown:', eventsForDropdown);
-  }, [selectedCategory, selectedArtistId, eventsForDropdown, artistEventsLoading]);
 
   const submitEventRequest = async (e) => {
     e.preventDefault();

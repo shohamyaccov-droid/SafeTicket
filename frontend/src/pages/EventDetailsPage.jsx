@@ -18,6 +18,7 @@ import BuyerListingPrice from '../components/BuyerListingPrice';
 import { getFullImageUrl } from '../utils/formatters';
 import { toastError } from '../utils/toast';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
+import { Helmet } from 'react-helmet-async';
 import './EventDetailsPage.css';
 
 /** Seller id from API may be a numeric PK or nested object — compare robustly to current user. */
@@ -76,25 +77,12 @@ const EventDetailsPage = () => {
   // Helper function to group tickets by listing
   const groupTicketsByListing = (ticketsArray) => {
     const groups = {};
-    
-    console.log('groupTicketsByListing - Input tickets:', ticketsArray.length);
-    console.log('groupTicketsByListing - Sample tickets:', ticketsArray.slice(0, 3).map(t => ({
-      id: t.id,
-      listing_group_id: t.listing_group_id,
-      available_quantity: t.available_quantity,
-      status: t.status
-    })));
-    
+
     ticketsArray.forEach(ticket => {
       // Group by listing_group_id if available, otherwise by seller+price combination
       // IMPORTANT: Use strict comparison and handle null/undefined/empty string
       let groupKey;
       const listingGroupId = ticket.listing_group_id;
-      
-      // Debug: Log each ticket's listing_group_id
-      if (ticketsArray.indexOf(ticket) < 5) {
-        console.log(`Ticket ${ticket.id}: listing_group_id =`, listingGroupId, `(type: ${typeof listingGroupId})`);
-      }
       
       // Check if listing_group_id exists and is valid
       if (listingGroupId !== null && listingGroupId !== undefined && listingGroupId !== '') {
@@ -107,10 +95,6 @@ const EventDetailsPage = () => {
         const price = ticket.asking_price || ticket.original_price;
         groupKey = `${sellerId}_${price}`;
         
-        // Debug: Log when falling back to seller+price grouping
-        if (ticketsArray.indexOf(ticket) < 5) {
-          console.log(`Ticket ${ticket.id}: No listing_group_id, using fallback key: ${groupKey}`);
-        }
       }
       
       if (!groups[groupKey]) {
@@ -138,14 +122,7 @@ const EventDetailsPage = () => {
     });
     
     const grouped = Object.values(groups);
-    console.log('groupTicketsByListing - Output groups:', grouped.length);
-    console.log('groupTicketsByListing - Group details:', grouped.map(g => ({
-      id: g.id,
-      listing_group_id: g.listing_group_id,
-      ticket_count: g.tickets.length,
-      available_count: g.available_count
-    })));
-    
+
     return grouped;
   };
 
@@ -333,9 +310,7 @@ const EventDetailsPage = () => {
   // Calculate filtered and sorted ticket groups
   const ticketGroups = useMemo(() => {
     const grouped = groupTicketsByListing(tickets);
-    console.log('Grouped Tickets:', grouped);
-    console.log('Group Counts:', grouped.map(g => ({ id: g.id, count: g.available_count })));
-    
+
     // Apply client-side filtering (additional to backend filtering)
     let filtered = grouped;
     
@@ -513,8 +488,6 @@ const EventDetailsPage = () => {
             /* scrollIntoView unavailable */
           }
         }, 100);
-      } else {
-        console.log(`No tickets found for section ${sectionId}`);
       }
     } catch {
       /* invalid map interaction */
@@ -767,8 +740,31 @@ const EventDetailsPage = () => {
     ? getFullImageUrl(heroImageRaw)
     : `https://via.placeholder.com/640x400/0f172a/e2e8f0?text=${encodeURIComponent((event.name || '').slice(0, 28))}`;
 
+  const pageCanonical =
+    typeof window !== 'undefined' && eventId
+      ? `${window.location.origin}/events/${eventId}`
+      : '';
+  const ogDescription = [event.name, event.city, 'כרטיסים מאובטחים ב-TradeTix']
+    .filter(Boolean)
+    .join(' · ');
+
   return (
     <div className="event-details-container">
+      <Helmet>
+        <title>{`TradeTix - ${event.name} | כרטיסים`}</title>
+        <meta name="description" content={ogDescription} />
+        <link rel="canonical" href={pageCanonical || undefined} />
+        <meta property="og:site_name" content="TradeTix" />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content={`TradeTix - ${event.name}`} />
+        <meta property="og:description" content={ogDescription} />
+        <meta property="og:image" content={heroImageSrc} />
+        {pageCanonical ? <meta property="og:url" content={pageCanonical} /> : null}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`TradeTix - ${event.name}`} />
+        <meta name="twitter:description" content={ogDescription} />
+        <meta name="twitter:image" content={heroImageSrc} />
+      </Helmet>
       <div className="event-header">
         <button type="button" onClick={() => navigate(-1)} className="back-button">
           ← חזרה

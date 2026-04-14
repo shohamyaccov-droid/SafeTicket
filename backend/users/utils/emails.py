@@ -45,19 +45,18 @@ def _order_ticket_ids(order):
 
 
 def _build_download_link_rows(order):
-    """Absolute API URLs for download_pdf (guest: email query); empty if API_PUBLIC_ORIGIN unset."""
+    """Absolute signed URLs for download_pdf; empty if API_PUBLIC_ORIGIN unset."""
+    from ..ticket_download_tokens import build_ticket_download_token
+
     api_base = (getattr(settings, 'API_PUBLIC_ORIGIN', '') or '').strip().rstrip('/')
     if not api_base:
         return []
-    guest_email = (getattr(order, 'guest_email', None) or '').strip()
+    oid = int(getattr(order, 'id', 0) or 0)
     rows = []
     for tid in _order_ticket_ids(order):
-        if guest_email:
-            url = f'{api_base}/api/users/tickets/{tid}/download_pdf/?email={quote(guest_email)}'
-            label = f'הורדת כרטיס #{tid} (קישור מאובטח לאימייל זה)'
-        else:
-            url = f'{api_base}/api/users/tickets/{tid}/download_pdf/'
-            label = f'הורדת כרטיס #{tid} (לאחר התחברות לאתר עם אותו חשבון)'
+        token = build_ticket_download_token(int(tid), oid)
+        url = f'{api_base}/api/users/tickets/{int(tid)}/download_pdf/?dl={quote(token)}'
+        label = f'הורדת כרטיס #{tid} (קישור חתום ומוגבל בזמן)'
         rows.append((label, url))
     return rows
 
@@ -95,8 +94,8 @@ def _receipt_subject_body_html(order, recipient_is_guest: bool):
     guest_note = ''
     if recipient_is_guest:
         guest_note = (
-            '<p style="color:#334155;font-size:14px;">שמרו מייל זה: הקישורים למעלה תקפים עבור כתובת האימייל '
-            'שהוזנה בעת הרכישה.</p>'
+            '<p style="color:#334155;font-size:14px;">שמרו את המייל והקישורים — הם חתומים דיגיטלית ותקפים לתקופה '
+            'מוגבלת. אפשר גם להירשם לאתר עם אותה כתובת אימייל ולהוריד מהאזור האישי.</p>'
         )
     elif dash_link:
         guest_note = (

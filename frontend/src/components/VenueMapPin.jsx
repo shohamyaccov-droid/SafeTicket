@@ -69,11 +69,8 @@ const VenueMapPin = ({ venueName, sectionName }) => {
   let venueConfig = VENUE_MAPS[venueName];
   
   if (!venueConfig) {
-    console.warn('⚠️ Venue not found in VENUE_MAPS:', venueName);
-    console.log('Available venues:', Object.keys(VENUE_MAPS));
     // Default to Menora instead of returning null
     venueConfig = VENUE_MAPS['מנורה מבטחים'] || VENUE_MAPS['מנורה תל אביב'] || Object.values(VENUE_MAPS)[0];
-    console.log('✅ Using fallback venue config:', Object.keys(VENUE_MAPS).find(k => VENUE_MAPS[k] === venueConfig));
   }
 
   // Try multiple section name formats for flexible matching
@@ -97,7 +94,6 @@ const VenueMapPin = ({ venueName, sectionName }) => {
   for (const format of sectionFormats) {
     if (format && venueConfig.sections[format]) {
       sectionCoords = venueConfig.sections[format];
-      console.log('✅ Section matched:', format, '→', sectionCoords);
       break;
     }
   }
@@ -108,20 +104,15 @@ const VenueMapPin = ({ venueName, sectionName }) => {
       const keyDigits = normalizeSection(key).replace(/\D/g, '');
       if (keyDigits === digitsOnly) {
         sectionCoords = coords;
-        console.log('✅ Section matched by digits:', key, '→', sectionCoords);
         break;
       }
     }
   }
   
   if (!sectionCoords) {
-    console.warn('⚠️ Section not found:', sectionName, 'for venue:', venueName);
-    console.log('Tried formats:', sectionFormats);
-    console.log('Available sections:', Object.keys(venueConfig.sections));
     // Use first available section as fallback, or center point
     const firstSection = Object.keys(venueConfig.sections)[0];
     sectionCoords = firstSection ? venueConfig.sections[firstSection] : { x: 50, y: 50 };
-    console.log('📍 Using fallback coordinates:', sectionCoords);
   }
 
   const { x, y } = sectionCoords;

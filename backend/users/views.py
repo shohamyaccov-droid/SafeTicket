@@ -185,7 +185,9 @@ from .serializers import (
     EventRequestSerializer,
     build_profile_orders_serialization_context,
     build_listing_primary_order_map,
+    user_can_access_ticket_pdf,
 )
+from .ticket_download_tokens import verify_ticket_download_token
 from .models import Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage, EventRequest, VenueSection
 from .pricing import (
     buyer_charge_from_base_amount,
@@ -1256,7 +1258,7 @@ def order_receipt(request, order_id):
     if request.user.is_authenticated:
         order = (
             Order.objects.filter(user=request.user, id=order_id)
-            .select_related('ticket', 'ticket__event', 'ticket__event__artist')
+            .select_related('ticket', 'ticket__event', 'ticket__event__artist', 'ticket__event__venue_place')
             .first()
         )
     else:
@@ -1275,7 +1277,7 @@ def order_receipt(request, order_id):
                 id=order_id,
                 status__in=['paid', 'completed'],
             )
-            .select_related('ticket', 'ticket__event', 'ticket__event__artist')
+            .select_related('ticket', 'ticket__event', 'ticket__event__artist', 'ticket__event__venue_place')
             .first()
         )
     if not order:
@@ -1455,7 +1457,7 @@ def create_order(request):
         
         # Get listing_group_id if provided (for grouped tickets)
         listing_group_id = request.data.get('listing_group_id')
-        print(f"create_order - Ticket ID: {ticket_id}, Listing Group ID: {listing_group_id}, Quantity: {request.data.get('quantity', 1)}, Offer ID: {offer_id}")
+        logger.debug(f"create_order - Ticket ID: {ticket_id}, Listing Group ID: {listing_group_id}, Quantity: {request.data.get('quantity', 1)}, Offer ID: {offer_id}")
         
         # Get quantity from request (default to 1 if not provided)
         order_quantity = int(request.data.get('quantity', 1))
@@ -1488,7 +1490,7 @@ def create_order(request):
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
-                print(
+                logger.debug(
                     f"Negotiated offer found: ID={oid}, Amount={negotiated_offer.amount}, Quantity={negotiated_offer.quantity}"
                 )
                 expected_total = expected_negotiated_total_from_offer_base(negotiated_offer.amount)
@@ -1505,7 +1507,7 @@ def create_order(request):
                     )
             # If listing_group_id is provided, IGNORE the specific ticket_id and find any active tickets in the group
             if listing_group_id:
-                print(f"Checking availability for Group: {listing_group_id}")
+                logger.debug(f"Checking availability for Group: {listing_group_id}")
                 # CRITICAL: When listing_group_id is provided, IGNORE the specific ticket_id status
                 # Find ANY active tickets from the group, regardless of which ticket_id was sent
                 try:
@@ -1515,13 +1517,13 @@ def create_order(request):
                     ).first()
 
                     if not reference_ticket:
-                        print(f"Group {listing_group_id} not found")
+                        logger.debug(f"Group {listing_group_id} not found")
                         return Response(
                             {'error': 'Ticket group not found'},
                             status=status.HTTP_404_NOT_FOUND
                         )
 
-                    print(f"Reference ticket found: ID={reference_ticket.id}, status={reference_ticket.status}, price={reference_ticket.original_price}")
+                    logger.debug(f"Reference ticket found: ID={reference_ticket.id}, status={reference_ticket.status}, price={reference_ticket.original_price}")
                     # Validate total_amount ONLY when NOT a negotiated offer (offer_id overrides ticket price)
                     if not negotiated_offer:
                         try:
@@ -1533,8 +1535,8 @@ def create_order(request):
                                     status=status.HTTP_400_BAD_REQUEST
                                 )
                         except Exception as e:
-                            print(f"Error validating total_amount for grouped tickets: {e}")
-                    print(f"IGNORING ticket_id {ticket_id} - looking for active tickets in group {listing_group_id}")
+                            logger.debug(f"Error validating total_amount for grouped tickets: {e}")
+                    logger.debug(f"IGNORING ticket_id {ticket_id} - looking for active tickets in group {listing_group_id}")
 
                     # Prevent sellers from buying their own tickets
                     if reference_ticket.seller == request.user:
@@ -1558,7 +1560,7 @@ def create_order(request):
                         status__in=['active', 'reserved']
                     )
                     available_count = available_tickets_query.count()
-                    print(f"Available tickets in group {listing_group_id}: {available_count}, Requested: {order_quantity}")
+                    logger.debug(f"Available tickets in group {listing_group_id}: {available_count}, Requested: {order_quantity}")
 
                     # Enforce split logic for grouped listings based on split_type
                     split_type_raw = (reference_ticket.split_type or '').strip()
@@ -1641,24 +1643,24 @@ def create_order(request):
 
                     # Use the first ticket as the base ticket for the order
                     ticket = available_tickets[0]
-                    print(f"Order will be linked to ticket {ticket.id} from group {listing_group_id}")
+                    logger.debug(f"Order will be linked to ticket {ticket.id} from group {listing_group_id}")
                 except Ticket.DoesNotExist:
                     return Response(
                         {'error': 'Ticket group not found'},
                         status=status.HTTP_404_NOT_FOUND
                     )
                 except Exception as e:
-                    print(f"Error processing group purchase: {str(e)}")
+                    logger.debug(f"Error processing group purchase: {str(e)}")
                     return Response(
                         {'error': f'Error processing purchase: {str(e)}'},
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR
                     )
             else:
                 # Single ticket purchase (backward compatibility)
-                print(f"Single ticket purchase (no listing_group_id)")
+                logger.debug(f"Single ticket purchase (no listing_group_id)")
                 try:
                     ticket = Ticket.objects.select_for_update().get(id=ticket_id)
-                    print(f"Single ticket found: ID={ticket.id}, status={ticket.status}, available_quantity={ticket.available_quantity}")
+                    logger.debug(f"Single ticket found: ID={ticket.id}, status={ticket.status}, available_quantity={ticket.available_quantity}")
                     if not negotiated_offer:
                         try:
                             sent_total = decimal_money(request.data.get('total_amount', 0))
@@ -1669,9 +1671,9 @@ def create_order(request):
                                     status=status.HTTP_400_BAD_REQUEST
                                 )
                         except Exception as e:
-                            print(f"Error validating total_amount for single ticket: {e}")
+                            logger.debug(f"Error validating total_amount for single ticket: {e}")
                 except Ticket.DoesNotExist:
-                    print(f"Ticket {ticket_id} not found")
+                    logger.debug(f"Ticket {ticket_id} not found")
                     return Response(
                         {'error': 'Ticket not found'},
                         status=status.HTTP_404_NOT_FOUND
@@ -1724,7 +1726,7 @@ def create_order(request):
                         status=status.HTTP_400_BAD_REQUEST
                     )
                 if ticket.status not in ['active', 'reserved']:
-                    print(f"ERROR: Ticket {ticket_id} status is {ticket.status}, not 'active' or 'reserved'")
+                    logger.debug(f"ERROR: Ticket {ticket_id} status is {ticket.status}, not 'active' or 'reserved'")
                     return Response(
                         {'error': 'Ticket is no longer available'},
                         status=status.HTTP_400_BAD_REQUEST
@@ -2026,7 +2028,7 @@ def payment_simulation(request):
     with transaction.atomic():
         # If listing_group_id is provided, check availability in the group (not just the single ticket)
         if listing_group_id:
-            print(f"payment_simulation - Listing Group ID provided: {listing_group_id}, Quantity: {quantity}")
+            logger.debug(f"payment_simulation - Listing Group ID provided: {listing_group_id}, Quantity: {quantity}")
             try:
                 from django.db.models import Q
                 if request.user.is_authenticated:
@@ -2049,16 +2051,16 @@ def payment_simulation(request):
                         {'error': 'Ticket group not found'},
                         status=status.HTTP_404_NOT_FOUND
                     )
-                print(f"payment_simulation - Available tickets in group: {available_tickets_count}, Requested: {quantity}")
+                logger.debug(f"payment_simulation - Available tickets in group: {available_tickets_count}, Requested: {quantity}")
                 if available_tickets_count < quantity:
                     return Response(
                         {'error': f'Invalid quantity. Available in group: {available_tickets_count}, Requested: {quantity}'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
                 ticket = locked_tickets[0]
-                print(f"payment_simulation - Using reference ticket {ticket.id} for price calculation")
+                logger.debug(f"payment_simulation - Using reference ticket {ticket.id} for price calculation")
             except Exception as e:
-                print(f"payment_simulation - Error processing group: {str(e)}")
+                logger.debug(f"payment_simulation - Error processing group: {str(e)}")
                 return Response(
                     {'error': f'Error processing payment: {str(e)}'},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -2121,7 +2123,7 @@ def payment_simulation(request):
 
             is_negotiated = True
             base_dec, fee_dec, total_dec = buyer_charge_from_base_amount(offer.amount)
-            print(
+            logger.debug(
                 f"Payment simulation: Negotiated offer {oid}, "
                 f"base={base_dec}, expected_total={total_dec}"
             )
@@ -2175,7 +2177,7 @@ def guest_checkout(request):
             return Response({'error': 'Invalid offer_id.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             negotiated_offer = Offer.objects.get(id=oid, status='accepted')
-            print(f"Guest checkout: Negotiated offer found: ID={oid}, Amount={negotiated_offer.amount}")
+            logger.debug(f"Guest checkout: Negotiated offer found: ID={oid}, Amount={negotiated_offer.amount}")
         except Offer.DoesNotExist:
             return Response(
                 {'error': 'Invalid or ineligible offer for checkout.'},
@@ -2246,7 +2248,7 @@ def guest_checkout(request):
                             status=status.HTTP_400_BAD_REQUEST
                         )
 
-                    print(f"Guest checkout - IGNORING ticket_id {ticket_id}, looking for active tickets in group {listing_group_id}")
+                    logger.debug(f"Guest checkout - IGNORING ticket_id {ticket_id}, looking for active tickets in group {listing_group_id}")
 
                     # Find all available tickets in the same listing group
                     available_tickets_query = Ticket.objects.filter(
@@ -2331,7 +2333,7 @@ def guest_checkout(request):
                         status=status.HTTP_404_NOT_FOUND
                     )
                 except Exception as e:
-                    print(f"Error processing guest group purchase: {str(e)}")
+                    logger.debug(f"Error processing guest group purchase: {str(e)}")
                     return Response(
                         {'error': f'Error processing purchase: {str(e)}'},
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -2532,7 +2534,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         
         # Log the count for verification
         count = queryset.count()
-        print(f'Active tickets ready: {count}')
+        logger.debug(f'Active tickets ready: {count}')
         logger.info(f'TicketViewSet.get_queryset: Active tickets ready: {count}')
         
         # For authenticated users, also show their own tickets (for sellers to manage) - same upcoming filter
@@ -2826,7 +2828,7 @@ class TicketViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-                print(f'Ticket {ticket.id} saved (auto-split page {i + 1}/{available_quantity}), Row: {ticket_data.get("row_number", "N/A")}, Seat: {ticket_data.get("seat_number", "N/A")}, Listing Group: {listing_group_id}')
+                logger.debug(f'Ticket {ticket.id} saved (auto-split page {i + 1}/{available_quantity}), Row: {ticket_data.get("row_number", "N/A")}, Seat: {ticket_data.get("seat_number", "N/A")}, Listing Group: {listing_group_id}')
                 created_tickets.append(ticket)
         else:
             # NORMAL: One PDF file per Ticket
@@ -2877,7 +2879,7 @@ class TicketViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-                print(f'Ticket {ticket.id} saved with PDF: {pdf_file.name}, Row: {ticket_data.get("row_number", "N/A")}, Seat: {ticket_data.get("seat_number", "N/A")}, Listing Group: {ticket.listing_group_id}')
+                logger.debug(f'Ticket {ticket.id} saved with PDF: {pdf_file.name}, Row: {ticket_data.get("row_number", "N/A")}, Seat: {ticket_data.get("seat_number", "N/A")}, Listing Group: {ticket.listing_group_id}')
                 created_tickets.append(ticket)
         
         # Return the first ticket (or all tickets if needed)
@@ -2909,48 +2911,30 @@ class TicketViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def download_pdf(self, request, pk=None):
         """
-        Download PDF ticket file.
-        IDOR PROTECTION: Only seller OR buyer with paid order can access.
-        - Seller: ticket.seller == request.user
-        - Buyer: authenticated user with Order (status paid/completed) containing this ticket
-        - Guest: guest_email param with matching Order containing this ticket
+        Download PDF/image ticket file.
+        IDOR PROTECTION:
+        - Seller: always (listing owner).
+        - Staff/superuser: support.
+        - Authenticated buyer: paid/completed Order where user owns the order OR account email matches guest_email on order.
+        - Anonymous: valid signed `dl` query param issued for this ticket+order (e.g. receipt email).
+        Weak `?email=` alone is not accepted.
         """
         ticket = get_object_or_404(Ticket, pk=pk)
-        
-        # IDOR: Explicit permission check - seller OR paid-order buyer only
+
         has_access = False
-        
-        # 1. Seller can always download
-        if request.user.is_authenticated and ticket.seller == request.user:
+        if request.user.is_authenticated and user_can_access_ticket_pdf(request.user, ticket):
             has_access = True
-        
-        # 2. Authenticated buyer: must have paid Order containing this ticket
-        if request.user.is_authenticated:
-            orders = Order.objects.filter(
-                user=request.user,
-                status__in=['paid', 'completed']
-            )
-            for order in orders:
-                if order.covers_ticket(ticket.pk):
-                    has_access = True
-                    break
-        
-        # 3. Guest buyer: must provide email matching paid Order containing this ticket
-        guest_email = request.query_params.get('email')
-        if guest_email and not has_access:
-            orders = Order.objects.filter(
-                guest_email=guest_email.strip(),
-                status__in=['paid', 'completed']
-            )
-            for order in orders:
-                if order.covers_ticket(ticket.pk):
-                    has_access = True
-                    break
-        
-        # Staff / superuser: support access for verified investigations (same as receipt rules pattern).
-        if not has_access and request.user.is_authenticated:
-            if getattr(request.user, 'is_staff', False) or getattr(request.user, 'is_superuser', False):
-                has_access = True
+        if not has_access:
+            raw_dl = (request.query_params.get('dl') or '').strip()
+            if raw_dl:
+                payload = verify_ticket_download_token(raw_dl)
+                if payload and int(payload['t']) == int(ticket.pk):
+                    order = Order.objects.filter(
+                        pk=int(payload['o']),
+                        status__in=['paid', 'completed'],
+                    ).first()
+                    if order and order.covers_ticket(ticket.pk):
+                        has_access = True
 
         if not has_access:
             return Response(
@@ -3407,25 +3391,25 @@ class EventViewSet(viewsets.ModelViewSet):
         max_price = request.query_params.get('max_price')
         min_quantity = request.query_params.get('min_quantity')
         
-        print(f"Event {pk} - Filter params: min_price={min_price}, max_price={max_price}, min_quantity={min_quantity}")
-        print(f"Event {pk} - Tickets before filtering: {tickets.count()}")
+        logger.debug(f"Event {pk} - Filter params: min_price={min_price}, max_price={max_price}, min_quantity={min_quantity}")
+        logger.debug(f"Event {pk} - Tickets before filtering: {tickets.count()}")
         
         if min_price:
             try:
                 tickets = tickets.filter(asking_price__gte=float(min_price))
-                print(f"Event {pk} - After min_price filter: {tickets.count()}")
+                logger.debug(f"Event {pk} - After min_price filter: {tickets.count()}")
             except ValueError:
                 pass
         if max_price:
             try:
                 tickets = tickets.filter(asking_price__lte=float(max_price))
-                print(f"Event {pk} - After max_price filter: {tickets.count()}")
+                logger.debug(f"Event {pk} - After max_price filter: {tickets.count()}")
             except ValueError:
                 pass
         if min_quantity:
             try:
                 min_qty = int(min_quantity)
-                print(f"Event {pk} - Applying min_quantity filter: >= {min_qty}")
+                logger.debug(f"Event {pk} - Applying min_quantity filter: >= {min_qty}")
                 tickets_before = tickets.count()
                 
                 # HARDCODED TEST: Bypass filter for testing
@@ -3442,8 +3426,8 @@ class EventViewSet(viewsets.ModelViewSet):
                 
                 # Debug: Show all listing_group_ids before filtering
                 all_group_ids_raw = list(tickets.values_list('listing_group_id', flat=True).distinct())
-                print(f"Event {pk} - All unique listing_group_ids (raw): {all_group_ids_raw[:10]}")
-                print(f"Event {pk} - Total unique groups: {len(all_group_ids_raw)}")
+                logger.debug(f"Event {pk} - All unique listing_group_ids (raw): {all_group_ids_raw[:10]}")
+                logger.debug(f"Event {pk} - Total unique groups: {len(all_group_ids_raw)}")
                 
                 # Count tickets per group (including NULL and empty)
                 group_counts = {}
@@ -3455,7 +3439,7 @@ class EventViewSet(viewsets.ModelViewSet):
                     else:
                         count = tickets.filter(listing_group_id=group_id).count()
                     group_counts[group_id] = count
-                    print(f"  Group '{group_id}' (type: {type(group_id).__name__}): {count} tickets")
+                    logger.debug(f"  Group '{group_id}' (type: {type(group_id).__name__}): {count} tickets")
                 
                 # Get listing_group_ids that have enough tickets
                 if min_qty > 1:
@@ -3473,8 +3457,8 @@ class EventViewSet(viewsets.ModelViewSet):
                         .values_list('listing_group_id', flat=True)
                     )
                     
-                    print(f"Event {pk} - Valid group IDs (count >= {min_qty}): {valid_group_ids}")
-                    print(f"Event {pk} - Valid group IDs count: {len(valid_group_ids)}")
+                    logger.debug(f"Event {pk} - Valid group IDs (count >= {min_qty}): {valid_group_ids}")
+                    logger.debug(f"Event {pk} - Valid group IDs count: {len(valid_group_ids)}")
                     
                     # Also check single tickets (no listing_group_id) with available_quantity >= min_qty
                     single_tickets_with_qty = tickets.filter(
@@ -3482,7 +3466,7 @@ class EventViewSet(viewsets.ModelViewSet):
                         available_quantity__gte=min_qty
                     )
                     single_tickets_count = single_tickets_with_qty.count()
-                    print(f"Event {pk} - Single tickets (no group) with available_quantity >= {min_qty}: {single_tickets_count}")
+                    logger.debug(f"Event {pk} - Single tickets (no group) with available_quantity >= {min_qty}: {single_tickets_count}")
                     
                     # Filter: either in a valid group OR (no group AND available_quantity >= min_qty)
                     # Handle both grouped tickets (count by listing_group_id) and single tickets (check available_quantity)
@@ -3503,17 +3487,17 @@ class EventViewSet(viewsets.ModelViewSet):
                     pass
                 
                 tickets_after = tickets.count()
-                print(f"Event {pk} - After min_quantity filter (>= {min_qty}): {tickets_before} -> {tickets_after}")
+                logger.debug(f"Event {pk} - After min_quantity filter (>= {min_qty}): {tickets_before} -> {tickets_after}")
                 if min_qty > 1:
-                    print(f"Event {pk} - Valid group IDs (first 10): {valid_group_ids[:10]}")
+                    logger.debug(f"Event {pk} - Valid group IDs (first 10): {valid_group_ids[:10]}")
                 
                 # Debug: Show sample tickets after filtering
                 sample_tickets = list(tickets[:10])
-                print(f"Event {pk} - Sample tickets after filter ({len(sample_tickets)} shown):")
+                logger.debug(f"Event {pk} - Sample tickets after filter ({len(sample_tickets)} shown):")
                 for t in sample_tickets:
-                    print(f"  Ticket {t.id}: listing_group_id='{t.listing_group_id}' (type: {type(t.listing_group_id).__name__}), available_quantity={t.available_quantity}, status={t.status}")
+                    logger.debug(f"  Ticket {t.id}: listing_group_id='{t.listing_group_id}' (type: {type(t.listing_group_id).__name__}), available_quantity={t.available_quantity}, status={t.status}")
             except ValueError as e:
-                print(f"Event {pk} - Error in min_quantity filter: {e}")
+                logger.debug(f"Event {pk} - Error in min_quantity filter: {e}")
                 pass
         
         # Sorting
@@ -3534,7 +3518,7 @@ class EventViewSet(viewsets.ModelViewSet):
         
         # Log the count for verification
         count = tickets.count()
-        print(f'Active tickets found for event {pk}: {count}')
+        logger.debug(f'Active tickets found for event {pk}: {count}')
         logger.info(f'EventViewSet.tickets: Active tickets found for event {pk}: {count}')
         
         tickets = tickets.distinct()
