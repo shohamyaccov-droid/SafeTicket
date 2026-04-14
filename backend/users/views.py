@@ -1283,7 +1283,16 @@ def order_receipt(request, order_id):
             {'error': 'Order not found'},
             status=status.HTTP_404_NOT_FOUND
         )
-    
+
+    ticket = order.ticket
+    event = getattr(ticket, 'event', None) if ticket else None
+    event_name = order.event_name or (getattr(event, 'name', None) if event else None) or 'Unknown Event'
+    venue = None
+    if event:
+        venue = getattr(event, 'venue', None)
+    elif ticket:
+        venue = getattr(ticket, 'venue', None)
+
     # For now, return JSON receipt data
     # In production, you might want to generate a PDF
     receipt_data = {
@@ -1298,14 +1307,14 @@ def order_receipt(request, order_id):
         'net_seller_revenue': str(order.net_seller_revenue) if order.net_seller_revenue is not None else None,
         'currency': (order.currency or 'ILS').strip().upper(),
         'quantity': order.quantity,
-        'event_name': order.event_name or (order.ticket.event.name if order.ticket and order.ticket.event else 'Unknown Event'),
+        'event_name': event_name,
         'ticket_details': {
-            'section': order.ticket.get_section_display() if order.ticket else None,
-            'row': order.ticket.row if order.ticket else None,
-            'venue': order.ticket.event.venue if order.ticket and order.ticket.event else (order.ticket.venue if order.ticket else None),
-        } if order.ticket else {},
+            'section': ticket.get_section_display() if ticket else None,
+            'row': ticket.row if ticket else None,
+            'venue': venue,
+        } if ticket else {},
     }
-    
+
     return Response(receipt_data, status=status.HTTP_200_OK)
 
 

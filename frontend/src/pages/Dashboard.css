@@ -1795,6 +1795,52 @@
   }
 }
 
+/* Purchases tab — accordion summary (image, title, date, price, badge, chevron) */
+.purchase-card-accordion-summary {
+  cursor: pointer;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.purchase-card-accordion-summary:focus-visible {
+  outline: 2px solid var(--primary-blue);
+  outline-offset: 2px;
+}
+
+.purchase-card-accordion-summary-end {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.purchase-card-accordion-price {
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.purchase-accordion-chevron {
+  font-size: 1.15rem;
+  line-height: 1;
+  color: var(--text-tertiary);
+  transition: transform 0.2s ease;
+  user-select: none;
+}
+
+.purchase-accordion-chevron--open {
+  transform: rotate(180deg);
+}
+
+@media (min-width: 769px) {
+  .purchase-card-accordion-summary-end {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+}
+
 .dashboard-skeleton-wrap {
   padding: 0.5rem 0 1.5rem;
 }

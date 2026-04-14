@@ -582,36 +582,64 @@ const Dashboard = () => {
   };
 
   const handleViewReceipt = async (orderId) => {
+    if (orderId == null) {
+      toastError('מספר הזמנה חסר');
+      return;
+    }
+    const escapeHtml = (s) =>
+      String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
     try {
       const response = await orderAPI.getReceipt(orderId);
       const d = response.data || {};
       const rc = String(d.currency || 'ILS').toUpperCase();
       const rsym = currencySymbol(rc);
       const fmt = (v) => (v != null && v !== '' ? `${rsym}${formatAmountForCurrency(v, rc)}` : '—');
-      // For now, open receipt in new window with JSON data
-      // In production, you might want to generate a PDF
-      const receiptWindow = window.open('', '_blank');
-      receiptWindow.document.write(`
-        <html>
-          <head><title>קבלה - הזמנה ${orderId}</title></head>
-          <body style="font-family: Arial; padding: 20px; direction: rtl;">
-            <h1>קבלה</h1>
-            <p><strong>מטבע:</strong> ${rc}</p>
-            <p><strong>מספר הזמנה:</strong> ${d.order_id}</p>
-            <p><strong>תאריך:</strong> ${new Date(d.order_date).toLocaleDateString('he-IL')}</p>
-            <p><strong>סטטוס:</strong> ${d.status}</p>
-            <p><strong>סה״כ שולם (לקונה):</strong> ${fmt(d.total_paid_by_buyer ?? d.total_amount)}</p>
-            <p><strong>מחיר מוסכם (בסיס):</strong> ${d.final_negotiated_price != null ? fmt(d.final_negotiated_price) : '—'}</p>
-            <p><strong>עמלת שירות (לקוח):</strong> ${d.buyer_service_fee != null ? fmt(d.buyer_service_fee) : '—'}</p>
-            <p><strong>עמלת פלטפורמה (מוכר, 5%):</strong> ${d.seller_service_fee != null ? fmt(d.seller_service_fee) : '—'}</p>
-            <p><strong>נטו למוכר:</strong> ${d.net_seller_revenue != null ? fmt(d.net_seller_revenue) : '—'}</p>
-            <p><strong>כמות:</strong> ${d.quantity}</p>
-            <p><strong>אירוע:</strong> ${d.event_name}</p>
-            <button onclick="window.print()">הדפס</button>
-          </body>
-        </html>
-      `);
+      let dateLabel = '—';
+      if (d.order_date) {
+        try {
+          const dt = new Date(d.order_date);
+          dateLabel = Number.isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('he-IL');
+        } catch {
+          dateLabel = '—';
+        }
+      }
+      const lblDate = '\u05EA\u05D0\u05E8\u05D9\u05DA';
+      const lblTotalPaid = '\u05E1\u05D4\u05F4\u05DB \u05E9\u05D5\u05DC\u05DD (\u05DC\u05E7\u05D5\u05E0\u05D4)';
+      const htmlDoc = `<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head><meta charset="utf-8"/><title>קבלה - הזמנה ${escapeHtml(orderId)}</title></head>
+<body style="font-family: system-ui, Arial, sans-serif; padding: 20px; direction: rtl;">
+  <h1>קבלה</h1>
+  <p><strong>מטבע:</strong> ${escapeHtml(rc)}</p>
+  <p><strong>מספר הזמנה:</strong> ${escapeHtml(d.order_id)}</p>
+  <p><strong>${lblDate}:</strong> ${escapeHtml(dateLabel)}</p>
+  <p><strong>סטטוס:</strong> ${escapeHtml(d.status)}</p>
+  <p><strong>${lblTotalPaid}:</strong> ${escapeHtml(fmt(d.total_paid_by_buyer ?? d.total_amount))}</p>
+  <p><strong>מחיר מוסכם (בסיס):</strong> ${escapeHtml(d.final_negotiated_price != null ? fmt(d.final_negotiated_price) : '—')}</p>
+  <p><strong>עמלת שירות (לקוח):</strong> ${escapeHtml(d.buyer_service_fee != null ? fmt(d.buyer_service_fee) : '—')}</p>
+  <p><strong>עמלת פלטפורמה (מוכר, 5%):</strong> ${escapeHtml(d.seller_service_fee != null ? fmt(d.seller_service_fee) : '—')}</p>
+  <p><strong>נטו למוכר:</strong> ${escapeHtml(d.net_seller_revenue != null ? fmt(d.net_seller_revenue) : '—')}</p>
+  <p><strong>כמות:</strong> ${escapeHtml(d.quantity)}</p>
+  <p><strong>אירוע:</strong> ${escapeHtml(d.event_name)}</p>
+  <p><button type="button" onclick="window.print()">הדפס</button></p>
+</body>
+</html>`;
+      const blob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8' });
+      const blobUrl = URL.createObjectURL(blob);
+      const w = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+      if (!w) {
+        URL.revokeObjectURL(blobUrl);
+        toastError('הדפדפן חסם חלון קופץ. אפשרו חלונות קופצים לאתר ונסו שוב.');
+        return;
+      }
+      w.addEventListener('beforeunload', () => URL.revokeObjectURL(blobUrl), { once: true });
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000);
     } catch (err) {
+      console.error('handleViewReceipt', err);
       toastError('טעינת הקבלה נכשלה. אנא נסה שוב מאוחר יותר.');
     }
   };
@@ -923,15 +951,24 @@ const Dashboard = () => {
                   const ticketIds = tickets.length > 0 ? tickets.map(t => t.id) : [purchase.ticket || ticket.id];
 
                   return (
-                    <div key={purchase.id} className="purchase-card enterprise-card dashboard-compact-card" style={{ width: '100%', display: 'block', marginBottom: '8px', boxSizing: 'border-box' }}>
+                    <div key={purchase.id} className="purchase-card enterprise-card dashboard-compact-card purchase-card-accordion" style={{ width: '100%', display: 'block', marginBottom: '8px', boxSizing: 'border-box' }}>
                       <div
-                        className="dashboard-compact-row"
+                        className="dashboard-compact-row purchase-card-accordion-summary"
                         style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', boxSizing: 'border-box', padding: '8px 16px' }}
                         onClick={() =>
                           setExpandedPurchaseId(isExpanded ? null : purchase.id)
                         }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setExpandedPurchaseId(isExpanded ? null : purchase.id);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={isExpanded}
                       >
-                        <div className="row-thumbnail">
+                        <div className="row-thumbnail purchase-card-accordion-thumb">
                           {purchase.event_image_url ? (
                             <img
                               src={purchase.event_image_url}
@@ -953,50 +990,17 @@ const Dashboard = () => {
                             {formatEventDateTimeWithLocality(ticket.event_date, ticket)}
                           </div>
                         </div>
-                        <span className="row-quantity">{purchase.quantity || 1} כרטיסים</span>
-                        <span className="row-price">{paySym}{formatAmountForCurrency(purchase.total_paid_by_buyer ?? purchase.total_amount, payCur)}</span>
-                        <span className={`status-badge status-${purchase.status}`}>
-                          {purchase.status === 'paid'
-                            ? 'שולם'
-                            : purchase.status === 'completed'
-                            ? 'הושלם'
-                            : purchase.status}
-                        </span>
-                        {hasDownloadablePdf && (
-                          ticketIds.length > 1 ? (
-                            <div className="row-action-buttons" onClick={(e) => e.stopPropagation()}>
-                              {ticketIds.slice(0, 3).map((tid, idx) => (
-                                <button
-                                  key={tid}
-                                  className="row-action-button"
-                                  type="button"
-                                  onClick={() => handleDownloadPDF(tid)}
-                                  title={`הורד כרטיס ${idx + 1}`}
-                                  aria-label={`Download ticket ${idx + 1}`}
-                                >
-                                  📄{idx + 1}
-                                </button>
-                              ))}
-                              {ticketIds.length > 3 && (
-                                <span className="row-action-more">+{ticketIds.length - 3}</span>
-                              )}
-                            </div>
-                          ) : (
-                            <button
-                              className="row-action-button"
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDownloadPDF(ticketIds[0]);
-                              }}
-                              title="הורדת כרטיס"
-                              aria-label="הורדת כרטיס"
-                            >
-                              📄
-                            </button>
-                          )
-                        )}
-                        <span className={`row-chevron ${isExpanded ? 'expanded' : ''}`}>▾</span>
+                        <div className="purchase-card-accordion-summary-end">
+                          <span className="row-price purchase-card-accordion-price">{paySym}{formatAmountForCurrency(purchase.total_paid_by_buyer ?? purchase.total_amount, payCur)}</span>
+                          <span className={`status-badge status-${purchase.status}`}>
+                            {purchase.status === 'paid'
+                              ? 'שולם'
+                              : purchase.status === 'completed'
+                              ? 'הושלם'
+                              : purchase.status}
+                          </span>
+                          <span className={`purchase-accordion-chevron ${isExpanded ? 'purchase-accordion-chevron--open' : ''}`} aria-hidden>⌄</span>
+                        </div>
                       </div>
 
                       {isExpanded && (

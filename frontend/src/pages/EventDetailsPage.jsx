@@ -1417,7 +1417,10 @@ const EventDetailsPage = () => {
                   )}
 
                   <div className="offer-note">
-                    <p>ההצעה תפוג בעוד 48 שעות אם לא תתקבל</p>
+                    <p>ההצעה תפוג בעוד 48 שעות אם לא תתקבל.</p>
+                    <p className="offer-note-checkout-window">
+                      לאחר אישור המוכר, יש לך 24 שעות להשלים את הרכישה. הצעה זו תפוג תוך 24 שעות מרגע האישור.
+                    </p>
                   </div>
                   <div className="offer-modal-actions button-group modal-actions">
                     <button type="button" onClick={handleCloseMakeOffer} className="secondary-button offer-modal-btn modal-action-secondary">

@@ -16,6 +16,10 @@ import { toastError } from '../utils/toast';
 import { downloadTicketFromAxiosBlob, ticketFileMimeFromAxiosHeaders } from '../utils/ticketDownload';
 import './CheckoutModal.css';
 
+/** Buy Now: server cart hold (see TicketViewSet reserve). Negotiation: post-accept checkout window. */
+const CART_RESERVE_SECONDS = 10 * 60;
+const OFFER_CHECKOUT_FALLBACK_SECONDS = 24 * 60 * 60;
+
 function portalCheckoutRoot(node) {
   if (typeof document === 'undefined') return null;
   return createPortal(node, document.body);
@@ -138,9 +142,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const [orderId, setOrderId] = useState(null);
   const [orderData, setOrderData] = useState(null);
   const [pdfUrl, setPdfUrl] = useState(null);
-  const [timeRemaining, setTimeRemaining] = useState(600); // 10 minutes in seconds
+  const [timeRemaining, setTimeRemaining] = useState(CART_RESERVE_SECONDS);
   /** Initial budget for progress bar (reservation / offer checkout window). */
-  const timerBudgetRef = useRef(600);
+  const timerBudgetRef = useRef(CART_RESERVE_SECONDS);
+  /** Buy Now: true only after /reserve succeeds so the 10m clock runs on info + payment. */
+  const [reservationActive, setReservationActive] = useState(false);
   const [paidAmounts, setPaidAmounts] = useState(null); // Store actual paid amounts: { baseAmount, serviceFee, totalAmount }
   const [checkoutSucceeded, setCheckoutSucceeded] = useState(false); // Completed purchase — never return to payment for this session
   const timerRef = useRef(null);
@@ -176,12 +182,25 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   useEffect(() => {
     const tid = ticket?.id;
     if (tid == null) return;
-    if (checkoutTicketIdRef.current !== tid) {
+    const tidChanged = checkoutTicketIdRef.current !== tid;
+    if (tidChanged) {
       checkoutTicketIdRef.current = tid;
-      timerBudgetRef.current = 600;
-      setTimeRemaining(600);
     }
-  }, [ticket?.id]);
+    if (skipCartReserveForNegotiatedOffer) {
+      setReservationActive(true);
+      if (tidChanged) {
+        const cr = acceptedOffer?.checkout_time_remaining;
+        const budget =
+          typeof cr === 'number' && cr > 0 ? cr : OFFER_CHECKOUT_FALLBACK_SECONDS;
+        timerBudgetRef.current = budget;
+        setTimeRemaining(budget);
+      }
+    } else if (tidChanged) {
+      timerBudgetRef.current = CART_RESERVE_SECONDS;
+      setTimeRemaining(CART_RESERVE_SECONDS);
+      setReservationActive(false);
+    }
+  }, [ticket?.id, skipCartReserveForNegotiatedOffer, acceptedOffer?.checkout_time_remaining]);
   const lockedQuantity = isNegotiatedPrice && acceptedOffer.quantity ? acceptedOffer.quantity : null;
   
   // Get available quantity - if locked quantity exists, use that; otherwise use ticket/group quantity
@@ -763,9 +782,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       try {
         if (skipCartReserveForNegotiatedOffer) {
           const cr = acceptedOffer?.checkout_time_remaining;
-          const budget = typeof cr === 'number' && cr > 0 ? cr : 24 * 60 * 60;
+          const budget =
+            typeof cr === 'number' && cr > 0 ? cr : OFFER_CHECKOUT_FALLBACK_SECONDS;
           timerBudgetRef.current = budget;
           setTimeRemaining(budget);
+          setReservationActive(true);
           return;
         }
 
@@ -785,6 +806,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
         if (response.data && response.data.success) {
           reservationRef.current = true;
+          setReservationActive(true);
           if (response.data.expires_at) {
             const expiresAt = new Date(response.data.expires_at);
             const now = new Date();
@@ -792,8 +814,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             timerBudgetRef.current = remaining;
             setTimeRemaining(remaining);
           } else {
-            timerBudgetRef.current = 600;
-            setTimeRemaining(600);
+            timerBudgetRef.current = CART_RESERVE_SECONDS;
+            setTimeRemaining(CART_RESERVE_SECONDS);
           }
           console.log('Ticket reserved successfully');
         }
@@ -847,55 +869,70 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       if (reservationRef.current) {
         const email = user ? null : guestEmailRef.current || null;
         reservationRef.current = false;
+        setReservationActive(false);
         void ticketAPI.releaseReservation(tid, email).catch(() => {});
       }
     };
   }, [ticket?.id, user, skipCartReserveForNegotiatedOffer, acceptedOffer?.id, step]);
 
-  // Reset and start timer when entering payment step
+  /** Countdown: 10m cart lock ticks after reserve; 24h offer window ticks from open (info + payment). */
   useEffect(() => {
-    if (step === 'payment') {
-      // Start the countdown timer
-      timerRef.current = setInterval(() => {
-        setTimeRemaining((prev) => {
-          if (paymentSubmittingRef.current || transactionCompleteRef.current) {
-            return prev;
-          }
-          if (prev <= 1) {
-            clearInterval(timerRef.current);
-            if (transactionCompleteRef.current || paymentSubmittingRef.current) {
-              return prev;
-            }
-            if (!skipCartReserveForNegotiatedOffer) {
-              const releaseReservation = async () => {
-                try {
-                  const email = user ? null : guestForm.email || null;
-                  await ticketAPI.releaseReservation(ticket?.id, email);
-                  reservationRef.current = false;
-                } catch {
-                  /* best-effort release */
-                }
-              };
-              void releaseReservation();
-            }
-            const expiredMsg = skipCartReserveForNegotiatedOffer
-              ? 'פג זמן התשלום להצעה. סגרו ונסו שוב או פנו לתמיכה.'
-              : 'פג הזמן. הכרטיסים שוחררו חזרה למלאי. אנא נסה שוב.';
-            setError(expiredMsg);
-            toastError(expiredMsg);
-            setStep('info'); // Close payment step, back to info
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      // Clear timer when not in payment step
+    if (checkoutSucceeded || step === 'success') {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
+      return undefined;
     }
+
+    const negotiated = skipCartReserveForNegotiatedOffer;
+    const shouldTick =
+      (negotiated && (step === 'info' || step === 'payment')) ||
+      (!negotiated && reservationActive && (step === 'info' || step === 'payment'));
+
+    if (!shouldTick) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return undefined;
+    }
+
+    timerRef.current = setInterval(() => {
+      setTimeRemaining((prev) => {
+        if (paymentSubmittingRef.current || transactionCompleteRef.current) {
+          return prev;
+        }
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+          if (transactionCompleteRef.current || paymentSubmittingRef.current) {
+            return prev;
+          }
+          if (!skipCartReserveForNegotiatedOffer) {
+            const releaseReservation = async () => {
+              try {
+                const email = user ? null : guestForm.email || null;
+                await ticketAPI.releaseReservation(ticket?.id, email);
+                reservationRef.current = false;
+                setReservationActive(false);
+              } catch {
+                /* best-effort release */
+              }
+            };
+            void releaseReservation();
+          }
+          const expiredMsg = skipCartReserveForNegotiatedOffer
+            ? 'פג זמן התשלום להצעה. סגרו ונסו שוב או פנו לתמיכה.'
+            : 'פג הזמן. הכרטיסים שוחררו חזרה למלאי. אנא נסה שוב.';
+          setError(expiredMsg);
+          toastError(expiredMsg);
+          setStep('info');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
 
     return () => {
       if (timerRef.current) {
@@ -903,7 +940,15 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         timerRef.current = null;
       }
     };
-  }, [step, ticket, user, guestForm.email, skipCartReserveForNegotiatedOffer]);
+  }, [
+    step,
+    reservationActive,
+    skipCartReserveForNegotiatedOffer,
+    checkoutSucceeded,
+    ticket?.id,
+    user,
+    guestForm.email,
+  ]);
 
   /** Always H:MM:SS so multi-hour windows never show confusing mm:ss (e.g. 239:53 for ~4h). */
   const formatTime = (rawSeconds) => {
@@ -914,7 +959,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const budget = timerBudgetRef.current > 0 ? timerBudgetRef.current : 600;
+  const defaultTimerBudget = skipCartReserveForNegotiatedOffer
+    ? OFFER_CHECKOUT_FALLBACK_SECONDS
+    : CART_RESERVE_SECONDS;
+  const budget =
+    timerBudgetRef.current > 0 ? timerBudgetRef.current : defaultTimerBudget;
   const progressPercentage =
     budget > 0 ? Math.min(100, Math.max(0, ((budget - timeRemaining) / budget) * 100)) : 0;
 
@@ -936,11 +985,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         const email = user ? null : guestForm.email || null;
         await ticketAPI.releaseReservation(ticket.id, email);
         reservationRef.current = false;
+        setReservationActive(false);
       } catch {
         /* best-effort release */
       }
     }
-    
+
     onClose();
   };
 
@@ -1146,8 +1196,16 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 <path d="M10 1L3 4V9C3 13.55 6.16 17.74 10 19C13.84 17.74 17 13.55 17 9V4L10 1Z" fill="currentColor"/>
                 <path d="M8 9L9 10L12 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              <span>הכרטיסים שמורים לך למשך:</span>
-              <span className={`timer-countdown ${timeRemaining < 60 ? 'timer-warning' : ''} ${timeRemaining === 0 ? 'timer-expired' : ''}`}>
+              <span>
+                {skipCartReserveForNegotiatedOffer
+                  ? 'הצעה מאושרת — יש לך עד 24 שעות להשלים את התשלום. זמן נותר:'
+                  : 'רכישה ישירה — הכרטיס נעול בעגלה למשך 10 דקות. זמן נותר:'}
+              </span>
+              <span
+                className={`timer-countdown ${
+                  timeRemaining < (skipCartReserveForNegotiatedOffer ? 300 : 60) ? 'timer-warning' : ''
+                } ${timeRemaining === 0 ? 'timer-expired' : ''}`}
+              >
                 {formatTime(timeRemaining)}
               </span>
             </div>
