@@ -1235,6 +1235,18 @@
   text-align: right;
 }
 
+.checkout-reservation-banner-label {
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .reservation-notice .checkout-reservation-banner-label {
+    font-size: 0.85rem;
+    white-space: normal;
+    line-height: 1.35;
+  }
+}
+
 .timer-countdown {
   font-size: 1.25rem;
   font-weight: 700;

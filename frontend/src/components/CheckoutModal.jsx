@@ -1021,7 +1021,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             <div className="success-ticket-summary">
               <h3>{ticket?.event_name || 'אירוע'}</h3>
               <div className="success-ticket-details">
-                <p><strong>מיקום:</strong> {ticket?.venue || 'לא צוין'}</p>
+                <p><strong>מיקום:</strong> {ticket?.event_venue || ticket?.venue || 'לא צוין'}</p>
                 {isNegotiatedPrice && (
                   <p><strong>מחיר מוסכם:</strong> <span style={{color: '#10b981', fontSize: '0.9em'}}>{paySym}{formatAmountForCurrency(resolvedPaid?.baseAmount ?? effectivePrice, payIso)}</span></p>
                 )}
@@ -1196,10 +1196,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 <path d="M10 1L3 4V9C3 13.55 6.16 17.74 10 19C13.84 17.74 17 13.55 17 9V4L10 1Z" fill="currentColor"/>
                 <path d="M8 9L9 10L12 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              <span>
+              <span className="checkout-reservation-banner-label">
                 {skipCartReserveForNegotiatedOffer
                   ? 'הצעה מאושרת — יש לך עד 24 שעות להשלים את התשלום. זמן נותר:'
-                  : 'רכישה ישירה — הכרטיס נעול בעגלה למשך 10 דקות. זמן נותר:'}
+                  : 'רכישה ישירה: הכרטיס שמור ל-10 דקות · זמן נותר:'}
               </span>
               <span
                 className={`timer-countdown ${
@@ -1219,7 +1219,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
           <div className="ticket-summary">
             <h3>{ticket.event_name}</h3>
-            <p>מיקום: {ticket.venue}</p>
+            <p>מיקום: {ticket.event_venue || ticket.venue}</p>
             
             {/* PDF Verified Badge */}
             {(ticket.has_pdf_file || ticket.pdf_file_url) && (
@@ -1496,7 +1496,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         
           <div className="ticket-summary">
             <h3>{ticket.event_name}</h3>
-            <p>מיקום: {ticket.venue}</p>
+            <p>מיקום: {ticket.event_venue || ticket.venue}</p>
             
             {/* Quantity Selector */}
             <div className="quantity-selector-group">

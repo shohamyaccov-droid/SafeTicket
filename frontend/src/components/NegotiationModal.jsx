@@ -6,6 +6,7 @@ import {
   currencySymbol,
 } from '../utils/priceFormat';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
+import { getAcceptedCheckoutSecondsRemaining } from '../utils/offerTimer';
 import './NegotiationModal.css';
 
 /**
@@ -78,6 +79,9 @@ const NegotiationModal = ({
     (typeof isOfferPurchaseComplete === 'function'
       ? isOfferPurchaseComplete(acceptedOfferRow)
       : false);
+  const checkoutSecondsLeft = acceptedOfferRow
+    ? getAcceptedCheckoutSecondsRemaining(acceptedOfferRow, countdownTimers)
+    : 0;
   const roundCount = latestPending?.offer_round_count ?? 0;
   const isRecipient = (roundCount % 2 === 0 && isSeller) || (roundCount === 1 && !isSeller);
   const canCounter = isRecipient && latestPending?.status === 'pending' && roundCount < 2;
@@ -202,23 +206,18 @@ const NegotiationModal = ({
                 >
                   נרכש בהצלחה
                 </span>
-              ) : !isSeller &&
-                (countdownTimers?.[acceptedOfferRow.id] ?? acceptedOfferRow?.checkout_time_remaining) > 0 ? (
+              ) : !isSeller && checkoutSecondsLeft > 0 ? (
                 <>
                   <span className="countdown-text">
                     נותרו{' '}
-                    {formatTimeRemaining(
-                      countdownTimers?.[acceptedOfferRow.id] ?? acceptedOfferRow?.checkout_time_remaining
-                    )}
+                    {formatTimeRemaining(checkoutSecondsLeft)}
                   </span>
                   <button
                     type="button"
                     className="primary-button negotiation-action-btn"
                     data-e2e="negotiation-complete-purchase"
                     onClick={() => onCompletePurchase(acceptedOfferRow)}
-                    disabled={
-                      (countdownTimers?.[acceptedOfferRow.id] ?? acceptedOfferRow?.checkout_time_remaining) <= 0
-                    }
+                    disabled={checkoutSecondsLeft <= 0}
                   >
                     השלם רכישה
                   </button>
@@ -227,10 +226,8 @@ const NegotiationModal = ({
                 <span className="expired-text">זמן התשלום פג</span>
               ) : (
                 <span className="countdown-text" style={{ opacity: 0.9 }}>
-                  {(countdownTimers?.[acceptedOfferRow.id] ?? acceptedOfferRow?.checkout_time_remaining) > 0
-                    ? `הקונה יכול להשלים תשלום בזמן: ${formatTimeRemaining(
-                        countdownTimers?.[acceptedOfferRow.id] ?? acceptedOfferRow?.checkout_time_remaining
-                      )}`
+                  {checkoutSecondsLeft > 0
+                    ? `הקונה יכול להשלים תשלום בזמן: ${formatTimeRemaining(checkoutSecondsLeft)}`
                     : 'חלון התשלום נסגר — לא הושלמה רכישה'}
                 </span>
               )}

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { offerAPI } from '../services/api';
+import { isAcceptedOfferCheckoutExpired } from '../utils/offerTimer';
 import './Navbar.css';
 
 /** Local part of email / short username for compact navbar greeting */
@@ -96,7 +97,10 @@ const Navbar = () => {
           sentOffers.filter((o) => isOfferActionRequired(o, false)).length;
         const acceptedPendingCheckout = sentOffers.filter(
           (o) =>
-            o.status === 'accepted' && !o.purchase_completed && o.ticket_listing_status !== 'sold'
+            o.status === 'accepted' &&
+            !o.purchase_completed &&
+            o.ticket_listing_status !== 'sold' &&
+            !isAcceptedOfferCheckoutExpired(o)
         ).length;
         setOfferCounts({ actionRequired, acceptedOffers: acceptedPendingCheckout });
       } catch {

@@ -277,10 +277,32 @@
   flex-shrink: 0;
 }
 
+.accepted-offer-banner-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  flex: 1;
+}
+
 .accepted-offer-text {
   font-size: 1rem;
   font-weight: 700;
   color: #065f46;
+}
+
+.accepted-offer-countdown {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #047857;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .accepted-offer-countdown {
+    font-size: 0.85rem;
+  }
 }
 
 /* Content - fills container */

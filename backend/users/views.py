@@ -1190,7 +1190,7 @@ def user_activity(request):
         all_listings = list(
             Ticket.objects.filter(seller=user)
             .order_by('-created_at')
-            .select_related('event')
+            .select_related('event', 'event__venue_place')
             .prefetch_related(
                 Prefetch('orders', queryset=Order.objects.only('id', 'ticket_id', 'status'))
             )
@@ -4121,6 +4121,7 @@ class OfferViewSet(viewsets.ModelViewSet):
             'ticket__seller',
             'ticket__event',
             'ticket__event__artist',
+            'ticket__event__venue_place',
             'parent_offer',
             'counter_offer',
         ).filter(user_scope)

@@ -30,3 +30,32 @@ export const getResponsesLeft = (roundCount) => {
   const r = roundCount ?? 0;
   return Math.max(0, 2 - r);
 };
+
+/**
+ * Seconds until accepted-offer checkout deadline (live map from parent, else API field, else ISO).
+ */
+export const getAcceptedCheckoutSecondsRemaining = (offer, countdownTimers) => {
+  if (!offer || offer.status !== 'accepted') return 0;
+  const id = offer.id;
+  const mapVal = countdownTimers && countdownTimers[id];
+  if (mapVal !== undefined && mapVal !== null) {
+    return Math.max(0, Number(mapVal) || 0);
+  }
+  if (offer.checkout_time_remaining != null) {
+    return Math.max(0, Number(offer.checkout_time_remaining) || 0);
+  }
+  if (offer.checkout_expires_at) {
+    const expires = new Date(offer.checkout_expires_at).getTime();
+    if (Number.isNaN(expires)) return 0;
+    return Math.max(0, Math.floor((expires - Date.now()) / 1000));
+  }
+  return 0;
+};
+
+/** True when the 24h (or server) checkout window for an accepted offer has closed. */
+export const isAcceptedOfferCheckoutExpired = (offer) => {
+  if (!offer || offer.status !== 'accepted') return false;
+  if (typeof offer.is_checkout_expired === 'boolean') return offer.is_checkout_expired;
+  if (!offer.checkout_expires_at) return false;
+  return new Date(offer.checkout_expires_at).getTime() <= Date.now();
+};

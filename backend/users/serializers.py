@@ -53,7 +53,7 @@ def build_profile_orders_serialization_context(request, orders_queryset):
         profile_tickets_by_id = {
             t.id: t
             for t in Ticket.objects.filter(id__in=ticket_ids).select_related(
-                'event', 'event__artist', 'venue_section'
+                'event', 'event__artist', 'event__venue_place', 'venue_section'
             )
         }
     return {
@@ -415,10 +415,11 @@ class OrderSerializer(serializers.ModelSerializer):
     
     def get_ticket_info(self, obj):
         if obj.ticket:
+            ev = obj.ticket.event
             return {
                 'id': obj.ticket.id,
-                'event_name': obj.ticket.event_name,
-                'venue': obj.ticket.venue,
+                'event_name': ev.name if ev else (obj.ticket.event_name or ''),
+                'venue': ev.venue_display_name() if ev else (obj.ticket.venue or ''),
                 'asking_price': str(obj.ticket.asking_price),
             }
         return None
@@ -686,7 +687,9 @@ class TicketSerializer(serializers.ModelSerializer):
         return obj.event.date if obj.event else (obj.event_date or None)
     
     def get_venue(self, obj):
-        return obj.event.venue if obj.event else (obj.venue or '')
+        if obj.event:
+            return obj.event.venue_display_name()
+        return (obj.venue or '').strip()
 
     def get_section(self, obj):
         return obj.get_section_display()
@@ -894,6 +897,7 @@ class TicketListSerializer(serializers.ModelSerializer):
     event_name = serializers.SerializerMethodField()
     event_date = serializers.SerializerMethodField()
     venue = serializers.SerializerMethodField()
+    event_venue = serializers.SerializerMethodField()
     event_city = serializers.SerializerMethodField()
     event_country = serializers.SerializerMethodField()
     section = serializers.SerializerMethodField()
@@ -902,7 +906,7 @@ class TicketListSerializer(serializers.ModelSerializer):
         model = Ticket
         fields = (
             'id', 'seller', 'seller_username', 'seller_is_verified', 'event', 'event_name', 'event_date', 
-            'venue', 'event_city', 'event_country', 'seat_row', 'section', 'row', 'seat_numbers',
+            'venue', 'event_venue', 'event_city', 'event_country', 'seat_row', 'section', 'row', 'seat_numbers',
             'row_number', 'seat_number', 'listing_group_id',
             'original_price', 'asking_price', 'currency', 'delivery_method',
             'is_together', 'available_quantity', 'split_type', 'status', 'has_pdf_file',
@@ -923,7 +927,12 @@ class TicketListSerializer(serializers.ModelSerializer):
         return obj.event.date if obj.event else (obj.event_date or None)
     
     def get_venue(self, obj):
-        return obj.event.venue if obj.event else (obj.venue or '')
+        if obj.event:
+            return obj.event.venue_display_name()
+        return (obj.venue or '').strip()
+
+    def get_event_venue(self, obj):
+        return self.get_venue(obj)
 
     def get_event_city(self, obj):
         return (obj.event.city or '').strip() if obj.event else ''
@@ -995,13 +1004,16 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
     
     def get_ticket_details(self, obj):
         if obj.ticket:
+            ev = obj.ticket.event
+            vlabel = ev.venue_display_name() if ev else (obj.ticket.venue or '')
             td = {
                 'id': obj.ticket.id,
-                'event_name': obj.ticket.event.name if obj.ticket.event else (obj.ticket.event_name or 'Unknown Event'),
-                'event_date': obj.ticket.event.date if obj.ticket.event else obj.ticket.event_date,
-                'venue': obj.ticket.event.venue if obj.ticket.event else (obj.ticket.venue or ''),
-                'city': obj.ticket.event.city if obj.ticket.event else '',
-                'country': obj.ticket.event.country if obj.ticket.event else '',
+                'event_name': ev.name if ev else (obj.ticket.event_name or 'Unknown Event'),
+                'event_date': ev.date if ev else obj.ticket.event_date,
+                'venue': vlabel,
+                'event_venue': vlabel,
+                'city': ev.city if ev else '',
+                'country': ev.country if ev else '',
                 'seat_row': getattr(obj.ticket, 'seat_row', None),
                 'section': obj.ticket.get_section_display() if obj.ticket else '',
                 'row': getattr(obj.ticket, 'row', None) or '',
@@ -1131,7 +1143,9 @@ class ProfileListingSerializer(serializers.ModelSerializer):
         return obj.event.date if obj.event else obj.event_date
     
     def get_venue_display(self, obj):
-        return obj.event.venue if obj.event else (obj.venue or '')
+        if obj.event:
+            return obj.event.venue_display_name()
+        return (obj.venue or '').strip()
 
     def get_event_city(self, obj):
         return (obj.event.city or '').strip() if obj.event else ''
@@ -1220,7 +1234,16 @@ class OfferSerializer(serializers.ModelSerializer):
     
     def get_is_expired(self, obj):
         from django.utils import timezone
-        return obj.status == 'expired' or (obj.expires_at and timezone.now() > obj.expires_at)
+        if obj.status == 'expired':
+            return True
+        if obj.status == 'accepted':
+            # Pending-offer expires_at must not mark accepted offers "expired" while checkout is open
+            if obj.checkout_expires_at:
+                return timezone.now() > obj.checkout_expires_at
+            return False
+        if obj.expires_at:
+            return timezone.now() > obj.expires_at
+        return False
     
     def get_is_checkout_expired(self, obj):
         from django.utils import timezone

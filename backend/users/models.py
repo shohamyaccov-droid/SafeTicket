@@ -230,6 +230,15 @@ class Event(models.Model):
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def venue_display_name(self):
+        """Buyer-facing venue: prefer linked Venue.name (full hall) over the choice field (e.g. אחר)."""
+        vp = getattr(self, 'venue_place', None)
+        if vp is not None:
+            name = (vp.name or '').strip()
+            if name:
+                return name
+        return (self.venue or '').strip()
     
     def __str__(self):
         # For sports events with teams, show team matchup

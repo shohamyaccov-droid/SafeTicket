@@ -9,7 +9,11 @@ import {
   resolveTicketCurrency,
 } from '../utils/priceFormat';
 import { translateSectionDisplay } from '../utils/venueMaps';
-import { getOfferExpirationDisplay, getResponsesLeft } from '../utils/offerTimer';
+import {
+  getOfferExpirationDisplay,
+  getResponsesLeft,
+  getAcceptedCheckoutSecondsRemaining,
+} from '../utils/offerTimer';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import CheckoutModal from '../components/CheckoutModal';
 import NegotiationModal from '../components/NegotiationModal';
@@ -519,6 +523,10 @@ const Dashboard = () => {
   };
 
   const handleCompletePurchase = (offer, group) => {
+    if (getAcceptedCheckoutSecondsRemaining(offer, countdownTimers) <= 0) {
+      toastError('פג זמן התשלום להצעה המאושרת.');
+      return;
+    }
     if (checkoutOpeningRef.current || showCheckout) {
       return;
     }
@@ -814,7 +822,16 @@ const Dashboard = () => {
   );
 
   const hasAcceptedOfferPendingPayment = offersSent.some(
-    (o) => o.status === 'accepted' && !isOfferPurchaseComplete(o)
+    (o) =>
+      o.status === 'accepted' &&
+      !isOfferPurchaseComplete(o) &&
+      getAcceptedCheckoutSecondsRemaining(o, countdownTimers) > 0
+  );
+  const firstPendingCheckoutOffer = offersSent.find(
+    (o) =>
+      o.status === 'accepted' &&
+      !isOfferPurchaseComplete(o) &&
+      getAcceptedCheckoutSecondsRemaining(o, countdownTimers) > 0
   );
 
   return (
@@ -1167,7 +1184,20 @@ const Dashboard = () => {
             {hasAcceptedOfferPendingPayment && (
               <div className="accepted-offer-banner" role="alert">
                 <span className="accepted-offer-emoji">🎉</span>
-                <span className="accepted-offer-text">הצעתך אושרה! יש לך כרטיס שממתין לתשלום. השלם את הרכישה עכשיו לפני שיפוג התוקף.</span>
+                <div className="accepted-offer-banner-copy">
+                  <span className="accepted-offer-text">
+                    הצעתך אושרה! יש לך כרטיס שממתין לתשלום. השלם את הרכישה עכשיו לפני שיפוג התוקף.
+                  </span>
+                  {firstPendingCheckoutOffer && (
+                    <span className="accepted-offer-countdown" dir="ltr">
+                      נותרו{' '}
+                      {formatTimeRemaining(
+                        getAcceptedCheckoutSecondsRemaining(firstPendingCheckoutOffer, countdownTimers)
+                      )}{' '}
+                      להשלמת התשלום
+                    </span>
+                  )}
+                </div>
               </div>
             )}
             {offersReceived.length === 0 && offersSent.length === 0 ? (
@@ -1308,6 +1338,16 @@ const Dashboard = () => {
                                         {formatOfferExpiration(latestPending)}
                                       </span>
                                     )}
+                                    {acceptedOffer &&
+                                      !isOfferPurchaseComplete(acceptedOffer) &&
+                                      getAcceptedCheckoutSecondsRemaining(acceptedOffer, countdownTimers) > 0 && (
+                                      <span className="offer-timer-badge" title="זמן לתשלום">
+                                        נותרו{' '}
+                                        {formatTimeRemaining(
+                                          getAcceptedCheckoutSecondsRemaining(acceptedOffer, countdownTimers)
+                                        )}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                                 {acceptedOffer && isOfferPurchaseComplete(acceptedOffer) && (
@@ -1315,7 +1355,9 @@ const Dashboard = () => {
                                     נרכש בהצלחה
                                   </span>
                                 )}
-                                {acceptedOffer && !isOfferPurchaseComplete(acceptedOffer) && (
+                                {acceptedOffer &&
+                                  !isOfferPurchaseComplete(acceptedOffer) &&
+                                  getAcceptedCheckoutSecondsRemaining(acceptedOffer, countdownTimers) > 0 && (
                                   <button
                                     type="button"
                                     className="primary-button checkout-btn"
@@ -1323,6 +1365,25 @@ const Dashboard = () => {
                                   >
                                     השלם רכישה
                                   </button>
+                                )}
+                                {acceptedOffer &&
+                                  !isOfferPurchaseComplete(acceptedOffer) &&
+                                  getAcceptedCheckoutSecondsRemaining(acceptedOffer, countdownTimers) <= 0 && (
+                                  <span
+                                    className="offer-checkout-expired-badge"
+                                    style={{
+                                      whiteSpace: 'nowrap',
+                                      padding: '6px 12px',
+                                      borderRadius: '8px',
+                                      background: 'var(--bg-primary)',
+                                      border: '1px solid var(--border-color)',
+                                      color: 'var(--text-secondary)',
+                                      fontSize: '0.85rem',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    זמן התשלום פג
+                                  </span>
                                 )}
                                 <span className="row-chevron">▾</span>
                               </div>
