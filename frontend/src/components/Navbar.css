@@ -527,14 +527,6 @@
     vertical-align: middle;
   }
 
-  .nav-user-inline .nav-user-greeting {
-    margin-inline-end: 0.2em;
-  }
-
-  .nav-user-inline .nav-user-name {
-    font-weight: 600;
-  }
-
   .nav-user-inline {
     max-width: 80px;
     font-size: 0.72rem;

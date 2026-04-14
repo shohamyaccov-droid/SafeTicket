@@ -1419,11 +1419,11 @@ const EventDetailsPage = () => {
                   <div className="offer-note">
                     <p>ההצעה תפוג בעוד 48 שעות אם לא תתקבל</p>
                   </div>
-                  <div className="offer-modal-actions button-group">
-                    <button type="button" onClick={handleCloseMakeOffer} className="secondary-button offer-modal-btn">
+                  <div className="offer-modal-actions button-group modal-actions">
+                    <button type="button" onClick={handleCloseMakeOffer} className="secondary-button offer-modal-btn modal-action-secondary">
                       ביטול
                     </button>
-                    <button type="submit" className="primary-button offer-modal-btn" disabled={offerSubmitting}>
+                    <button type="submit" className="primary-button offer-modal-btn modal-action-primary" disabled={offerSubmitting}>
                       {offerSubmitting ? 'שולח…' : 'שלח הצעה'}
                     </button>
                   </div>

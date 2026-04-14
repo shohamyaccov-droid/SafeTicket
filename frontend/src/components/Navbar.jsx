@@ -4,6 +4,15 @@ import { useAuth } from '../context/AuthContext';
 import { offerAPI } from '../services/api';
 import './Navbar.css';
 
+/** Local part of email / short username for compact navbar greeting */
+function greetingDisplayName(user) {
+  if (!user) return '';
+  const raw = (user.username || user.email || '').trim();
+  if (!raw) return 'משתמש';
+  const local = raw.split('@')[0];
+  return local || 'משתמש';
+}
+
 const Navbar = () => {
   const { user, logout, loading } = useAuth();
   const [offerCounts, setOfferCounts] = useState({ actionRequired: 0, acceptedOffers: 0 });
@@ -193,10 +202,9 @@ const Navbar = () => {
             <span
               className="nav-user-inline"
               dir="rtl"
-              title={user?.username || user?.email || ''}
+              title={(user?.username || user?.email || '').trim() || undefined}
             >
-              <span className="nav-user-greeting">שלום</span>
-              <span className="nav-user-name">{user?.username || 'משתמש'}</span>
+              שלום, {greetingDisplayName(user)}
             </span>
           ) : (
             <Link to="/login" className="nav-login-inline" onClick={closeDrawer}>
@@ -240,7 +248,7 @@ const Navbar = () => {
           {user ? (
             <>
               <Link to="/dashboard?tab=settings" className="nav-link user-greeting nav-drawer-link" onClick={closeDrawer}>
-                שלום, {user?.username || 'משתמש'}
+                שלום, {greetingDisplayName(user)}
               </Link>
               {isAdminUser && (
                 <Link to="/admin-panel" className="nav-link nav-link-admin nav-drawer-link" onClick={closeDrawer}>

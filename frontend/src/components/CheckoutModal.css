@@ -20,7 +20,7 @@
   padding-bottom: 3rem;
   width: 90%;
   max-width: 600px;
-  min-height: 400px; /* Prevent layout jump when transitioning between steps */
+  min-height: 0;
   max-height: 90vh;
   position: relative;
   display: flex;
@@ -275,7 +275,9 @@
 .guest-checkout {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .user-checkout .checkout-button,
@@ -288,10 +290,12 @@
   font-size: 1rem !important;
   font-weight: 600 !important;
   cursor: pointer !important;
-  margin: 1rem auto 0 !important;
+  margin: 1rem 0 0 !important;
   display: block !important;
-  width: auto !important;
-  min-width: 200px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
   transition: background-color 0.2s ease !important;
 }
 
@@ -424,6 +428,44 @@
   direction: rtl;
 }
 
+/* Bottom action row — checkout + shared with make-offer via .modal-actions */
+.modal-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.modal-actions > button {
+  flex: 1;
+  min-width: 0;
+}
+
+.modal-action-primary.checkout-button,
+.modal-actions .modal-action-primary.checkout-button {
+  background-color: #0045af !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+.modal-action-primary.checkout-button:hover:not(:disabled) {
+  background-color: #003894 !important;
+}
+
+.modal-action-secondary.back-button,
+.modal-actions .modal-action-secondary.back-button {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.modal-action-secondary.back-button:hover:not(:disabled) {
+  background-color: var(--border-light) !important;
+  border-color: var(--primary-blue) !important;
+  color: var(--primary-blue) !important;
+}
+
 .button-group {
   display: flex;
   align-items: center;
@@ -469,6 +511,7 @@
   flex: 1;
   height: 48px;
   min-height: 48px;
+  min-width: 0;
   margin: 0;
   border-radius: 8px;
   font-weight: 600;
@@ -476,7 +519,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 0; /* Force equal width with flex: 1 */
 }
 
 .back-button {
@@ -566,7 +608,7 @@
 .success-celebration {
   width: 100%;
   max-width: 600px;
-  min-height: 400px; /* Prevent layout jump when transitioning from payment to success */
+  min-height: 0;
   max-height: 80vh;
   overflow-y: auto;
   background: var(--bg-card);
@@ -589,7 +631,7 @@
 
 .success-celebration-content {
   padding: 1rem 1.25rem;
-  min-height: 350px; /* Stable height to prevent content jump */
+  min-height: 0;
   text-align: center;
   direction: rtl;
 }
@@ -963,8 +1005,9 @@
   .modal-content {
     width: 100%;
     max-width: 100%;
-    max-height: 95vh;
-    height: 95vh;
+    max-height: min(95vh, 100dvh);
+    min-height: 0;
+    height: auto;
     padding: var(--spacing-md);
     padding-top: 3rem;
     border-radius: var(--radius-md) var(--radius-md) 0 0;
@@ -1052,8 +1095,9 @@
   }
   
   .button-group {
-    flex-direction: column-reverse;
-    gap: var(--spacing-sm);
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 10px;
     margin-top: var(--spacing-md);
     padding-top: var(--spacing-md);
     padding-bottom: var(--spacing-md);
@@ -1067,6 +1111,10 @@
     padding-right: var(--spacing-md);
     margin-bottom: calc(-1 * var(--spacing-md));
     box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.1);
+  }
+
+  .button-group.modal-actions {
+    justify-content: space-between;
   }
   
   .checkout-button,
@@ -1272,8 +1320,9 @@
   .success-celebration {
     width: 100%;
     max-width: 100%;
-    height: 95vh;
-    max-height: 95vh;
+    max-height: min(95vh, 100dvh);
+    min-height: 0;
+    height: auto;
     border-radius: var(--radius-md) var(--radius-md) 0 0;
     display: flex;
     flex-direction: column;
@@ -1340,15 +1389,17 @@
     /* Keep sticky checkout actions reachable when the keyboard / safe-area shrinks the viewport */
     scroll-padding-bottom: max(6rem, env(safe-area-inset-bottom, 0px));
   }
-  .checkout-buttons-row {
-    flex-direction: column-reverse;
-    gap: 0.75rem;
+  .checkout-buttons-row.modal-actions {
+    flex-direction: row;
+    flex-wrap: nowrap;
     align-items: stretch;
+    gap: 10px;
   }
   .checkout-row-btn {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     min-height: 48px;
-    font-size: 1rem;
+    font-size: 0.95rem;
   }
   .price-breakdown .price-row {
     flex-wrap: wrap;

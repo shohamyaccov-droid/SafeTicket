@@ -2121,6 +2121,15 @@
   box-sizing: border-box;
 }
 
+/* Side-by-side actions: primary (submit) + secondary (cancel) */
+.make-offer-modal .offer-modal-actions.modal-actions {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 20px;
+}
+
 .make-offer-modal .offer-modal-actions .offer-modal-btn {
   width: 100% !important;
   max-width: 100%;
@@ -2130,6 +2139,34 @@
   font-size: 1rem;
   box-sizing: border-box;
   margin: 0;
+}
+
+.make-offer-modal .offer-modal-actions.modal-actions .offer-modal-btn {
+  flex: 1 !important;
+  width: auto !important;
+  min-width: 0;
+}
+
+.make-offer-modal .modal-action-primary.primary-button {
+  background: #0045af;
+  color: #fff;
+  border: none;
+}
+
+.make-offer-modal .modal-action-primary.primary-button:hover:not(:disabled) {
+  background: #003894;
+}
+
+.make-offer-modal .modal-action-secondary.secondary-button {
+  background: var(--bg-primary, #f8fafc);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.make-offer-modal .modal-action-secondary.secondary-button:hover:not(:disabled) {
+  border-color: var(--primary-blue);
+  color: var(--primary-blue);
+  background: var(--border-light, #f1f5f9);
 }
 
 .make-offer-modal .custom-offer-input {

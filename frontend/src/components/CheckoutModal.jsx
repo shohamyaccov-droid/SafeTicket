@@ -1364,11 +1364,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               </div>
             )}
             
-            <div className="button-group checkout-buttons-row">
+            <div className="button-group checkout-buttons-row modal-actions">
               <button
                 type="button"
                 onClick={() => setStep('info')}
-                className="back-button checkout-row-btn"
+                className="back-button checkout-row-btn modal-action-secondary"
                 disabled={loading || timeRemaining === 0}
               >
                 חזרה
@@ -1376,7 +1376,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               <button
                 type="submit"
                 disabled={loading || checkoutSucceeded || timeRemaining === 0}
-                className="checkout-button checkout-row-btn"
+                className="checkout-button checkout-row-btn modal-action-primary"
               >
                 {loading
                   ? paymentPhase === 'creating_order'
