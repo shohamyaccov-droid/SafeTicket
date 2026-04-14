@@ -763,7 +763,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       try {
         if (skipCartReserveForNegotiatedOffer) {
           const cr = acceptedOffer?.checkout_time_remaining;
-          const budget = typeof cr === 'number' && cr > 0 ? cr : 4 * 60 * 60;
+          const budget = typeof cr === 'number' && cr > 0 ? cr : 24 * 60 * 60;
           timerBudgetRef.current = budget;
           setTimeRemaining(budget);
           return;
@@ -905,15 +905,13 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     };
   }, [step, ticket, user, guestForm.email, skipCartReserveForNegotiatedOffer]);
 
+  /** Always H:MM:SS so multi-hour windows never show confusing mm:ss (e.g. 239:53 for ~4h). */
   const formatTime = (rawSeconds) => {
     const seconds = Math.max(0, Math.floor(Number(rawSeconds) || 0));
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
-    if (h > 0) {
-      return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    }
-    return `${m}:${s.toString().padStart(2, '0')}`;
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
   const budget = timerBudgetRef.current > 0 ? timerBudgetRef.current : 600;

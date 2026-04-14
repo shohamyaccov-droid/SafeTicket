@@ -4291,7 +4291,7 @@ class OfferViewSet(viewsets.ModelViewSet):
 
             offer.status = 'accepted'
             offer.accepted_at = timezone.now()
-            offer.checkout_expires_at = timezone.now() + timedelta(hours=4)
+            offer.checkout_expires_at = timezone.now() + timedelta(hours=24)
             offer.save()
 
             group_ticket_ids = [ticket.id]

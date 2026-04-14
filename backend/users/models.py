@@ -768,7 +768,7 @@ class Offer(models.Model):
     checkout_expires_at = models.DateTimeField(
         null=True,
         blank=True,
-        help_text="When the checkout window expires (4 hours after acceptance)"
+        help_text="When the checkout window expires (24 hours after acceptance)"
     )
     counter_offer = models.ForeignKey(
         'self',

@@ -374,6 +374,7 @@ export const authAPI = {
     const t = response.data?.csrfToken;
     if (t != null && t !== '') {
       csrfTokenFromApi = String(t);
+      applyCsrfDefaultHeader(csrfTokenFromApi);
     }
     return response;
   },

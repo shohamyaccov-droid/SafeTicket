@@ -190,8 +190,13 @@ const Navbar = () => {
         </div>
         <div className="nav-left-cluster">
           {user ? (
-            <span className="nav-user-inline" dir="rtl">
-              שלום, {user?.username || 'משתמש'}
+            <span
+              className="nav-user-inline"
+              dir="rtl"
+              title={user?.username || user?.email || ''}
+            >
+              <span className="nav-user-greeting">שלום</span>
+              <span className="nav-user-name">{user?.username || 'משתמש'}</span>
             </span>
           ) : (
             <Link to="/login" className="nav-login-inline" onClick={closeDrawer}>

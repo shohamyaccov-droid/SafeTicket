@@ -516,9 +516,28 @@
     justify-content: flex-end;
   }
 
+  /* Long campus emails must not cover the centered logo */
+  .nav-left-cluster span.nav-user-inline,
+  .nav-left-cluster > span {
+    max-width: 80px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  .nav-user-inline .nav-user-greeting {
+    margin-inline-end: 0.2em;
+  }
+
+  .nav-user-inline .nav-user-name {
+    font-weight: 600;
+  }
+
   .nav-user-inline {
-    max-width: 100%;
-    font-size: 0.78rem;
+    max-width: 80px;
+    font-size: 0.72rem;
   }
 
   .mobile-sell-fab {
