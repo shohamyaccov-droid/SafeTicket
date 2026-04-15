@@ -49,6 +49,46 @@ class NightShiftSecurityTests(TestCase):
             category='concert',
         )
 
+    def test_stale_bearer_does_not_block_public_events_list(self):
+        """
+        Stale Authorization: Bearer in localStorage must not 401 GET /events/ (IsAuthenticatedOrReadOnly).
+        Stock JWTAuthentication raised InvalidToken before permission checks and broke the homepage.
+        """
+        seller = User.objects.create_user(
+            username='ns_seller_feed',
+            email='ns_seller_feed@test.invalid',
+            password='x',
+            role='seller',
+        )
+        pdf = SimpleUploadedFile('feed.pdf', _minimal_pdf_bytes(), content_type='application/pdf')
+        self.api.force_authenticate(seller)
+        r = self.api.post(
+            '/api/users/tickets/',
+            {
+                'event_id': self.event.id,
+                'original_price': '100.00',
+                'listing_price': '100.00',
+                'available_quantity': '1',
+                'pdf_files_count': '1',
+                'pdf_file_0': pdf,
+                'delivery_method': 'instant',
+            },
+            format='multipart',
+        )
+        self.assertEqual(r.status_code, 201, r.content)
+        self.api.force_authenticate(None)
+        bad = (
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.'
+            'eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.'
+            'SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c'
+        )
+        r_list = self.api.get('/api/users/events/', HTTP_AUTHORIZATION=f'Bearer {bad}')
+        self.assertEqual(r_list.status_code, 200, r_list.content[:500])
+        payload = r_list.json()
+        rows = payload if isinstance(payload, list) else payload.get('results', [])
+        ids = [e['id'] for e in rows]
+        self.assertIn(self.event.id, ids)
+
     def test_anonymous_download_pdf_forbidden_without_token(self):
         seller = User.objects.create_user(
             username='ns_seller_dl',

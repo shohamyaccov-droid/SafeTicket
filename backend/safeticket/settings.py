@@ -342,8 +342,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Django REST Framework settings
 # SessionAuthentication enforces CSRF; removed for JWT-only API (avoids 403 on cross-origin login)
 REST_FRAMEWORK = {
+    # Single entry: JWTCookieAuthentication subclasses JWT (header) + HttpOnly cookie; avoids double
+    # registration where the stock JWTAuthentication 401s on stale Bearer before cookie fallback.
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
         'users.authentication.JWTCookieAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [

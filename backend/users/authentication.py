@@ -4,6 +4,7 @@ Falls back to Authorization header for backward compatibility.
 """
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken
+from rest_framework.exceptions import AuthenticationFailed
 from django.conf import settings
 
 
@@ -63,10 +64,15 @@ def clear_jwt_cookies(response):
 class JWTCookieAuthentication(JWTAuthentication):
     """
     Authenticate using Authorization header first (Safari ITP / cookie fallback), then HttpOnly cookie.
+
+    Invalid/expired Bearer tokens must not401 public IsAuthenticatedOrReadOnly GETs (e.g. event feed):
+    JWTAuthentication raises on bad headers before permission checks; treat as anonymous instead.
     """
     def authenticate(self, request):
-        # Bearer header: preferred when SPA uses body-token fallback
-        header_auth = super().authenticate(request)
+        try:
+            header_auth = super().authenticate(request)
+        except (InvalidToken, AuthenticationFailed):
+            header_auth = None
         if header_auth:
             return header_auth
         raw_token = request.COOKIES.get(ACCESS_TOKEN_COOKIE)
