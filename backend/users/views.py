@@ -189,6 +189,7 @@ from .serializers import (
 )
 from .ticket_download_tokens import verify_ticket_download_token
 from .models import Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage, EventRequest, VenueSection
+from .schema_compat import event_queryset_defer_rollout_columns, ticket_queryset_defer_event_rollout_columns
 from .pricing import (
     buyer_charge_from_base_amount,
     compute_order_price_breakdown,
@@ -2526,7 +2527,7 @@ class TicketViewSet(viewsets.ModelViewSet):
             Q(event__isnull=True, event_date__gte=now) |
             Q(event__isnull=True, event_date__isnull=True)
         )
-        queryset = (
+        queryset = ticket_queryset_defer_event_rollout_columns(
             Ticket.objects.filter(status='active')
             .filter(upcoming_filter)
             .select_related('event', 'event__venue_place', 'seller', 'venue_section')
@@ -2539,7 +2540,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         
         # For authenticated users, also show their own tickets (for sellers to manage) - same upcoming filter
         if self.request.user.is_authenticated:
-            user_tickets = (
+            user_tickets = ticket_queryset_defer_event_rollout_columns(
                 Ticket.objects.filter(seller=self.request.user)
                 .filter(upcoming_filter)
                 .select_related('event', 'event__venue_place', 'seller', 'venue_section')
@@ -2634,7 +2635,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         event_id = request.data.get('event') or request.data.get('event_id')
         if event_id:
             try:
-                evt = Event.objects.get(pk=event_id)
+                evt = event_queryset_defer_rollout_columns(Event.objects.all()).get(pk=event_id)
                 if evt.date < timezone.now():
                     return Response(
                         {'error': 'This event has already passed. You cannot upload tickets for past events.'},
@@ -3312,7 +3313,7 @@ class EventViewSet(viewsets.ModelViewSet):
                 search = qp.get('search')
                 if search:
                     qs = qs.filter(name__icontains=search)
-                return qs
+                return event_queryset_defer_rollout_columns(qs)
 
         queryset = (
             Event.objects.filter(date__gte=now)
@@ -3351,15 +3352,18 @@ class EventViewSet(viewsets.ModelViewSet):
         if search:
             queryset = queryset.filter(name__icontains=search)
 
-        return queryset
+        return event_queryset_defer_rollout_columns(queryset)
     
     def retrieve(self, request, *args, **kwargs):
         """Override retrieve to increment view_count"""
         instance = self.get_object()
         # Increment view count atomically
         Event.objects.filter(pk=instance.pk).update(view_count=F('view_count') + 1)
-        # Refresh instance to get updated view_count
-        instance.refresh_from_db()
+        # Refresh only view_count so deferred rollout columns (e.g. high_demand) are not loaded if absent in DB.
+        try:
+            instance.refresh_from_db(fields=['view_count'])
+        except Exception:
+            logger.warning('Event.retrieve: refresh view_count skipped', exc_info=True)
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
     
@@ -3376,15 +3380,17 @@ class EventViewSet(viewsets.ModelViewSet):
         import logging
         from django.db.models import F
         logger = logging.getLogger(__name__)
-        event = get_object_or_404(Event, pk=pk)
+        event = get_object_or_404(event_queryset_defer_rollout_columns(Event.objects.all()), pk=pk)
         # Lazy cart abandonment cleanup
         release_abandoned_carts()
         # Public marketplace: only listable inventory (active + qty > 0)
-        tickets = Ticket.objects.filter(
-            event=event,
-            status='active',
-            available_quantity__gt=0,
-        ).select_related('event', 'event__venue_place', 'seller', 'venue_section')
+        tickets = ticket_queryset_defer_event_rollout_columns(
+            Ticket.objects.filter(
+                event=event,
+                status='active',
+                available_quantity__gt=0,
+            ).select_related('event', 'event__venue_place', 'seller', 'venue_section')
+        )
         
         # Filtering
         min_price = request.query_params.get('min_price')
@@ -3575,7 +3581,7 @@ class ArtistViewSet(viewsets.ModelViewSet):
         """
         artist = get_object_or_404(Artist, pk=pk)
         now = timezone.now()
-        events = (
+        events = event_queryset_defer_rollout_columns(
             Event.objects.filter(artist=artist, date__gte=now)
             .select_related('artist')
             .annotate(
@@ -3610,7 +3616,7 @@ def create_ticket_alert(request):
             )
         
         try:
-            event = Event.objects.get(id=event_id)
+            event = event_queryset_defer_rollout_columns(Event.objects.all()).get(id=event_id)
         except Event.DoesNotExist:
             return Response(
                 {'error': 'Event not found'},

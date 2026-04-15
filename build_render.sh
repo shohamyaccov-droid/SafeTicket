@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Render build: Node (nvm if needed) → Vite frontend → Django migrate/collectstatic.
+# Migrations also run at container start (backend/start_render.sh) so production DB cannot lag behind code.
 # Run from repo root: bash build_render.sh
 # With Render rootDir=backend: bash ../build_render.sh
 set -euo pipefail

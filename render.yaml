@@ -14,8 +14,8 @@ services:
     rootDir: backend
     # Repo root build_render.sh: npm build → pip → python manage.py migrate --noinput → collectstatic.
     buildCommand: bash ../build_render.sh
-    # Seed DB (artists/events/qa_bot) then promote admins, then serve.
-    startCommand: python seed_production.py && python fix_admin.py && gunicorn safeticket.wsgi --bind 0.0.0.0:$PORT --workers 1 --worker-class gthread --threads 2 --timeout 90
+    # Runtime: migrate against live DATABASE_URL, then seed + fix_admin, then Gunicorn (see backend/start_render.sh).
+    startCommand: bash start_render.sh
     plan: free
     envVars:
       - key: DATABASE_URL

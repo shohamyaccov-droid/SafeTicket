@@ -15,6 +15,7 @@ from .models import (
     Venue,
     VenueSection,
 )
+from .schema_compat import safe_event_high_demand_bool
 from .currency import (
     iso4217_for_country,
     currency_symbol,
@@ -530,6 +531,7 @@ class EventSerializer(serializers.ModelSerializer):
     tickets_count = serializers.SerializerMethodField()
     currency = serializers.SerializerMethodField()
     currency_symbol = serializers.SerializerMethodField()
+    high_demand = serializers.SerializerMethodField()
     artist = ArtistSerializer(read_only=True)
     artist_id = serializers.PrimaryKeyRelatedField(queryset=Artist.objects.all(), source='artist', write_only=True, required=False, allow_null=True)
     venue_detail = VenueDetailSerializer(source='venue_place', read_only=True)
@@ -564,6 +566,9 @@ class EventSerializer(serializers.ModelSerializer):
         total = obj.tickets.filter(status='active').aggregate(total=Sum('available_quantity'))['total']
         return total or 0
 
+    def get_high_demand(self, obj):
+        return safe_event_high_demand_bool(obj)
+
 
 class EventListSerializer(serializers.ModelSerializer):
     """Simplified serializer for Event list view"""
@@ -571,6 +576,7 @@ class EventListSerializer(serializers.ModelSerializer):
     tickets_count = serializers.SerializerMethodField()
     currency = serializers.SerializerMethodField()
     currency_symbol = serializers.SerializerMethodField()
+    high_demand = serializers.SerializerMethodField()
     artist_name = serializers.CharField(source='artist.name', read_only=True)
     artist_detail = ArtistCardSerializer(source='artist', read_only=True)
     venue_detail = VenueDetailSerializer(source='venue_place', read_only=True)
@@ -601,6 +607,9 @@ class EventListSerializer(serializers.ModelSerializer):
             return int(ann) if ann else 0
         total = obj.tickets.filter(status='active').aggregate(total=Sum('available_quantity'))['total']
         return total or 0
+
+    def get_high_demand(self, obj):
+        return safe_event_high_demand_bool(obj)
 
 
 class GuestCheckoutSerializer(serializers.Serializer):
