@@ -540,7 +540,7 @@ class EventSerializer(serializers.ModelSerializer):
             'id', 'artist', 'artist_id', 'name', 'date', 'ends_at', 'venue', 'venue_detail', 'city', 'country',
             'currency', 'currency_symbol',
             'image', 'image_url',
-            'tickets_count', 'view_count', 'category', 'home_team', 'away_team', 'tournament',
+            'tickets_count', 'view_count', 'category', 'home_team', 'away_team', 'tournament', 'high_demand',
             'created_at', 'updated_at'
         )
         read_only_fields = (
@@ -582,7 +582,7 @@ class EventListSerializer(serializers.ModelSerializer):
             'currency', 'currency_symbol',
             'image_url',
             'tickets_count',
-            'category', 'home_team', 'away_team', 'tournament'
+            'category', 'home_team', 'away_team', 'tournament', 'high_demand',
         )
         read_only_fields = fields
     

@@ -1,8 +1,7 @@
 """
-Order pricing: 10% buyer service fee + 5% seller service fee (15% platform on negotiated/list base).
+Order pricing: buyer service fee + seller withholding (rates from Django settings, default 10% + 5%).
 
-Buyer pays: round(base * 1.10, 2) (buyer_service_fee = 10% of base).
-Seller receives: round(base * 0.95, 2) after 5% seller-side fee (seller_service_fee = 5% of base).
+Buyer pays: base + buyer fee (quantized). Seller receives: base minus seller-side fee.
 
 Amounts use Decimal quantized to 0.01 in the listing currency.
 """
@@ -12,12 +11,27 @@ from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING, Any, Optional
 
+from django.conf import settings
 from django.utils import timezone
 
 if TYPE_CHECKING:
     from .models import Offer, Ticket
 
 QUANT = Decimal('0.01')
+
+
+def _buyer_fee_rate() -> Decimal:
+    r = getattr(settings, 'PLATFORM_BUYER_SERVICE_FEE_RATE', None)
+    if r is None:
+        return Decimal('0.10')
+    return Decimal(str(r)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+
+
+def _seller_fee_rate() -> Decimal:
+    r = getattr(settings, 'PLATFORM_SELLER_SERVICE_FEE_RATE', None)
+    if r is None:
+        return Decimal('0.05')
+    return Decimal(str(r)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
 
 
 def decimal_money(x: Any) -> Decimal:
@@ -30,11 +44,11 @@ def decimal_money(x: Any) -> Decimal:
 
 
 def seller_fee_from_base_amount(base: Any) -> Decimal:
-    """5% platform fee withheld from the seller (on negotiated / list subtotal)."""
+    """Seller-side platform fee withheld from the negotiated / list subtotal."""
     b = decimal_money(base)
     if b <= 0:
         return Decimal('0.00')
-    return (b * Decimal('0.05')).quantize(QUANT, rounding=ROUND_HALF_UP)
+    return (b * _seller_fee_rate()).quantize(QUANT, rounding=ROUND_HALF_UP)
 
 
 def buyer_charge_from_base_amount(base: Any) -> tuple[Decimal, Decimal, Decimal]:
@@ -45,7 +59,7 @@ def buyer_charge_from_base_amount(base: Any) -> tuple[Decimal, Decimal, Decimal]
     b = decimal_money(base)
     if b <= 0:
         return Decimal('0.00'), Decimal('0.00'), Decimal('0.00')
-    fee = (b * Decimal('0.10')).quantize(QUANT, rounding=ROUND_HALF_UP)
+    fee = (b * _buyer_fee_rate()).quantize(QUANT, rounding=ROUND_HALF_UP)
     total = (b + fee).quantize(QUANT, rounding=ROUND_HALF_UP)
     return b, fee, total
 

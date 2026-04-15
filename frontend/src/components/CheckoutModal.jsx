@@ -14,6 +14,7 @@ import {
 } from '../utils/priceFormat';
 import { toastError } from '../utils/toast';
 import { downloadTicketFromAxiosBlob, ticketFileMimeFromAxiosHeaders } from '../utils/ticketDownload';
+import { BUYER_SERVICE_FEE_PERCENT } from '../constants/pricing';
 import './CheckoutModal.css';
 
 /** Buy Now: server cart hold (see TicketViewSet reserve). Negotiation: post-accept checkout window. */
@@ -962,20 +963,20 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                       <p><strong>מחיר מוסכם (למוכר):</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.final_negotiated_price, payIso)}</p>
                     )}
                     {resolvedOrderData?.buyer_service_fee != null && Number(resolvedOrderData.buyer_service_fee) > 0 && (
-                      <p><strong>עמלת שירות:</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.buyer_service_fee, payIso)}</p>
+                      <p><strong>עמלת שירות ({BUYER_SERVICE_FEE_PERCENT}%):</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.buyer_service_fee, payIso)}</p>
                     )}
                     <p><strong>סה״כ שולם (לקונה):</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.total_paid_by_buyer ?? resolvedOrderData.total_amount, payIso)}</p>
                   </>
                 ) : resolvedPaid ? (
                   <>
                     <p><strong>מחיר כרטיסים:</strong> {paySym}{formatAmountForCurrency(resolvedPaid.baseAmount, payIso)}</p>
-                    <p><strong>עמלת שירות (10%):</strong> {paySym}{formatAmountForCurrency(resolvedPaid.serviceFee, payIso)}</p>
+                    <p><strong>עמלת שירות ({BUYER_SERVICE_FEE_PERCENT}%):</strong> {paySym}{formatAmountForCurrency(resolvedPaid.serviceFee, payIso)}</p>
                     <p><strong>סה"כ שולם:</strong> {paySym}{formatAmountForCurrency(resolvedPaid.totalAmount, payIso)}</p>
                   </>
                 ) : (
                   <>
                     <p><strong>מחיר כרטיסים:</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.baseAmount != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).baseAmount, payIso) : '—'}</p>
-                    <p><strong>עמלת שירות (10%):</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.serviceFee != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).serviceFee, payIso) : '—'}</p>
+                    <p><strong>עמלת שירות ({BUYER_SERVICE_FEE_PERCENT}%):</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.serviceFee != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).serviceFee, payIso) : '—'}</p>
                     <p><strong>סה"כ שולם:</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.totalAmount != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).totalAmount, payIso) : '—'}</p>
                   </>
                 )}
@@ -1241,7 +1242,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.baseAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
-                    <span>עמלת שירות (10%)</span>
+                    <span>עמלת שירות ({BUYER_SERVICE_FEE_PERCENT}%)</span>
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.serviceFee, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row total-row">
@@ -1266,7 +1267,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   )}
                   <div className="price-row">
-                    <span>עמלת שירות (10%)</span>
+                    <span>עמלת שירות ({BUYER_SERVICE_FEE_PERCENT}%)</span>
                     <span>{curSym}{formatAmountForCurrency(standardReceiptFeeTotal, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row total-row">
@@ -1504,7 +1505,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.baseAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
-                    <span>עמלת שירות (10%)</span>
+                    <span>עמלת שירות ({BUYER_SERVICE_FEE_PERCENT}%)</span>
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.serviceFee, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row total-row">
@@ -1529,7 +1530,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   )}
                   <div className="price-row">
-                    <span>עמלת שירות (10%)</span>
+                    <span>עמלת שירות ({BUYER_SERVICE_FEE_PERCENT}%)</span>
                     <span>{curSym}{formatAmountForCurrency(standardReceiptFeeTotal, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row total-row">

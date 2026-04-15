@@ -226,6 +226,11 @@ class Event(models.Model):
         null=True,
         help_text='When the show ends (optional). Escrow payout uses ends_at + 24h when set; else date + 24h.',
     )
+
+    high_demand = models.BooleanField(
+        default=False,
+        help_text='Show high-demand urgency badge on discovery (e.g. official launch headliners).',
+    )
     
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)

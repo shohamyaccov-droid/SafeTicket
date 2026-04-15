@@ -1499,7 +1499,7 @@ def create_order(request):
                     return Response(
                         {
                             'error': (
-                                f'Amount mismatch. Expected {expected_total:.2f} (negotiated base + 10% buyer fee), '
+                                f'Amount mismatch. Expected {expected_total:.2f} (negotiated base + buyer service fee), '
                                 f'got {received_total}'
                             )
                         },
@@ -3651,7 +3651,7 @@ def _admin_staff_or_superuser(request):
 def admin_dashboard_stats(request):
     """
     Aggregated platform metrics for admin control panel.
-    Platform fees = buyer_service_fee (10%) + seller_service_fee (5%) per order, in listing currency.
+    Platform fees = buyer_service_fee + seller_service_fee per order (rates from settings), in listing currency.
     totals_ils_* uses FX_RATES_TO_ILS (see settings / env FX_USD_ILS, etc.).
     """
     if not _admin_staff_or_superuser(request):

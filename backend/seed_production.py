@@ -38,6 +38,9 @@ import django
 django.setup()
 
 from datetime import datetime, timezone as dt_timezone
+from decimal import Decimal
+from zoneinfo import ZoneInfo
+import uuid
 
 import requests
 from django.core.files.base import ContentFile
@@ -46,7 +49,7 @@ from django.utils import timezone
 
 from django.contrib.auth import get_user_model
 
-from users.models import Artist, Event
+from users.models import Artist, Event, Ticket, Venue
 
 User = get_user_model()
 
@@ -59,8 +62,34 @@ QA_USER_EMAIL = 'qa_bot@safeticket.com'
 QA_USER_USERNAME = 'qa_bot'
 QA_USER_PASSWORD = 'SafeTicketQA2026!'
 
+IL_TZ = ZoneInfo('Asia/Jerusalem')
+
+
+def _il_dt(year: int, month: int, day: int, hour: int, minute: int) -> datetime:
+    return datetime(year, month, day, hour, minute, tzinfo=IL_TZ)
+
+
+def _launch_pdf_file(name: str) -> ContentFile:
+    body = b'%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n'
+    return ContentFile(body, name=name)
+
+
 # Unsplash CDN (license: https://unsplash.com/license) — distinct music/live photos per artist.
 SEED_ARTISTS: list[dict] = [
+    {
+        'name': 'בן צור',
+        'genre': 'מזרחית',
+        'description': 'אמן ישראלי.',
+        'image': 'https://images.unsplash.com/photo-1540039155633-ebb4a7940fd9?auto=format&fit=crop&w=800&q=80',
+        'cover_image': 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80',
+    },
+    {
+        'name': 'איתי לוי',
+        'genre': 'מזרחית',
+        'description': 'זמר ישראלי.',
+        'image': 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=800&q=80',
+        'cover_image': 'https://images.unsplash.com/photo-1501612780327-45045589102c?auto=format&fit=crop&w=1600&q=80',
+    },
     {
         'name': 'עומר אדם',
         'genre': 'פופ / מזרחית',
@@ -72,8 +101,8 @@ SEED_ARTISTS: list[dict] = [
         'name': 'אייל גולן',
         'genre': 'מזרחית',
         'description': 'זמר ואמן ישראלי.',
-        'image': 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=800&q=80',
-        'cover_image': 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=1600&q=80',
+        'image': 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=800&q=80',
+        'cover_image': 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=1600&q=80',
     },
     {
         'name': 'עדן בן זקן',
@@ -109,6 +138,54 @@ SEED_ARTISTS: list[dict] = [
         'description': 'זמר ויוצר ישראלי.',
         'image': 'https://images.unsplash.com/photo-1501612780327-45045589102c?auto=format&fit=crop&w=800&q=80',
         'cover_image': 'https://images.unsplash.com/photo-1522158637959-30385a09e0da?auto=format&fit=crop&w=1600&q=80',
+    },
+]
+
+# Official launch headliners (inventory required for homepage marketplace feed).
+SEED_LAUNCH_EVENTS: list[dict] = [
+    {
+        'name': 'בן צור - ארנה ירושלים',
+        'date': _il_dt(2026, 5, 28, 21, 0),
+        'venue': 'אחר',
+        'venue_struct': ('היכל הפיס ארנה', 'ירושלים'),
+        'city': 'ירושלים',
+        'category': 'concert',
+        'artist_name': 'בן צור',
+        'prices': [169, 219, 319],
+        'event_image': 'https://images.unsplash.com/photo-1540039155633-ebb4a7940fd9?auto=format&fit=crop&w=1400&q=85',
+    },
+    {
+        'name': 'אייל גולן - בלומפילד',
+        'date': _il_dt(2026, 6, 18, 20, 0),
+        'venue': 'בלומפילד',
+        'venue_struct': ('אצטדיון בלומפילד', 'תל אביב'),
+        'city': 'תל אביב',
+        'category': 'concert',
+        'artist_name': 'אייל גולן',
+        'prices': [229, 269, 299],
+        'event_image': 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=1400&q=85',
+    },
+    {
+        'name': 'איתי לוי - אמפי MAX',
+        'date': _il_dt(2026, 5, 28, 20, 45),
+        'venue': 'אחר',
+        'venue_struct': ('אמפי MAX (לייב פארק)', 'ראשון לציון'),
+        'city': 'ראשון לציון',
+        'category': 'concert',
+        'artist_name': 'איתי לוי',
+        'prices': [229, 269],
+        'event_image': 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=1400&q=85',
+    },
+    {
+        'name': 'עדן חסון - היכל מנורה',
+        'date': _il_dt(2026, 6, 25, 20, 45),
+        'venue': 'מנורה מבטחים',
+        'venue_struct': ('היכל מנורה מבטחים', 'תל אביב'),
+        'city': 'תל אביב',
+        'category': 'concert',
+        'artist_name': 'עדן חסון',
+        'prices': [199, 299, 399],
+        'event_image': 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?auto=format&fit=crop&w=1400&q=85',
     },
 ]
 
@@ -280,6 +357,73 @@ def seed_artists() -> None:
         print(f'[seed] artist {status}: {name}', flush=True)
 
 
+def seed_launch_events_and_tickets() -> None:
+    """Four official launch shows + verified listing inventory (feed requires active tickets)."""
+    seller = User.objects.filter(username=QA_USER_USERNAME).first()
+    if not seller:
+        print('[seed] launch inventory skipped — QA user missing', flush=True)
+        return
+
+    artists_by_name = {a.name: a for a in Artist.objects.all()}
+
+    for row in SEED_LAUNCH_EVENTS:
+        vname, vcity = row['venue_struct']
+        venue_obj, _ = Venue.objects.get_or_create(name=vname, city=vcity)
+        artist = artists_by_name.get(row['artist_name'])
+        if not artist:
+            print(f'[seed] launch event skipped (no artist): {row["name"]}', flush=True)
+            continue
+        defaults = {
+            'venue': row['venue'],
+            'city': row['city'],
+            'category': row['category'],
+            'status': 'פעיל',
+            'artist': artist,
+            'home_team': None,
+            'away_team': None,
+            'tournament': None,
+            'country': 'IL',
+            'venue_place': venue_obj,
+            'high_demand': True,
+        }
+        ev, created = Event.objects.update_or_create(
+            name=row['name'],
+            date=row['date'],
+            defaults=defaults,
+        )
+        _download_to_imagefield(ev, 'image', row['event_image'])
+        action = 'created' if created else 'updated'
+        print(f'[seed] launch event {action}: {ev.name} @ {ev.date}', flush=True)
+
+        for price in row['prices']:
+            dec_price = Decimal(price)
+            row_key = f'launch-tier-{price}'
+            existing = Ticket.objects.filter(event=ev, seller=seller, seat_row=row_key).first()
+            if existing:
+                if existing.original_price != dec_price:
+                    existing.original_price = dec_price
+                    existing.asking_price = dec_price
+                    existing.save(update_fields=['original_price', 'asking_price', 'updated_at'])
+                continue
+            t = Ticket(
+                seller=seller,
+                event=ev,
+                event_name=ev.name,
+                event_date=ev.date,
+                venue=ev.venue,
+                original_price=dec_price,
+                asking_price=dec_price,
+                available_quantity=2,
+                verification_status='מאומת',
+                status='active',
+                seat_row=row_key,
+                listing_group_id=str(uuid.uuid4()),
+                pdf_file=_launch_pdf_file(f'launch_e{ev.id}_{price}.pdf'),
+            )
+            t.save()
+            print(f'[seed] launch ticket: event={ev.id} price={price} NIS', flush=True)
+
+
 def seed_events() -> None:
     artists_by_name = {a.name: a for a in Artist.objects.all()}
     for row in SEED_EVENTS:
@@ -309,6 +453,7 @@ def _seed_all() -> None:
     seed_admin()
     seed_qa_user()
     seed_artists()
+    seed_launch_events_and_tickets()
     seed_events()
     print(
         f'[seed] done: {Artist.objects.count()} artists, {Event.objects.count()} events total in DB',

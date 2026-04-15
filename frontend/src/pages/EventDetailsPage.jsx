@@ -19,6 +19,7 @@ import { getFullImageUrl } from '../utils/formatters';
 import { toastError } from '../utils/toast';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import { Helmet } from 'react-helmet-async';
+import { BUYER_SERVICE_FEE_PERCENT } from '../constants/pricing';
 import './EventDetailsPage.css';
 
 /** Seller id from API may be a numeric PK or nested object — compare robustly to current user. */
@@ -1236,7 +1237,7 @@ const EventDetailsPage = () => {
                     ) : null}
                     <p className="current-price">מחיר נוכחי: {offerModalSym}{getTicketPrice(selectedOfferTicket)}</p>
                     <p className="offer-fee-clarification" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem', lineHeight: 1.5 }}>
-                      ההצעה היא לפני עמלת שירות (10% יתווספו בקופה).
+                      ההצעה היא לפני עמלת שירות ({BUYER_SERVICE_FEE_PERCENT}% יתווספו בקופה).
                     </p>
                   </div>
                 </div>

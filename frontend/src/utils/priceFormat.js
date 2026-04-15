@@ -1,7 +1,9 @@
 /**
- * Money: buyer total = base + 10% fee, quantized like backend (agorot/cents).
+ * Money: buyer total = base + buyer service fee, quantized like backend (agorot/cents).
  * Currency follows Event.country → ISO 4217 (same mapping as backend users/currency.py).
  */
+
+import { BUYER_SERVICE_FEE_PERCENT } from '../constants/pricing';
 
 /** @param {string|null|undefined} countryCode */
 export function iso4217FromCountry(countryCode) {
@@ -107,7 +109,7 @@ export function buyerChargeFromBase(baseInput) {
   }
   const base = Math.round(raw * 100) / 100;
   const baseAg = Math.round(base * 100);
-  const feeAg = Math.round((baseAg * 10) / 100);
+  const feeAg = Math.round((baseAg * BUYER_SERVICE_FEE_PERCENT) / 100);
   const totalAg = baseAg + feeAg;
   return {
     baseAmount: baseAg / 100,
@@ -156,7 +158,7 @@ export const getBuyerServiceFeeShekels = (basePrice) => {
 };
 
 /**
- * Total for quantity: 10% fee on (unit base × qty) subtotal.
+ * Total for quantity: buyer service fee on (unit base × qty) subtotal.
  */
 export const getTotalWithFee = (basePrice, quantity) => {
   const qty = typeof quantity === 'string' ? parseInt(quantity, 10) : Number(quantity);
@@ -181,7 +183,7 @@ export const calculateBaseAmount = (unitPrice, quantity) => {
   return parseFloat(baseAmount.toFixed(2)).toFixed(2);
 };
 
-export const calculateServiceFee = (baseAmount, serviceFeePercent = 10) => {
+export const calculateServiceFee = (baseAmount, serviceFeePercent = BUYER_SERVICE_FEE_PERCENT) => {
   const amountStr = typeof baseAmount === 'string' ? baseAmount : String(baseAmount);
   const amount = parseFloat(amountStr);
 
@@ -193,7 +195,7 @@ export const calculateServiceFee = (baseAmount, serviceFeePercent = 10) => {
   return serviceFee.toFixed(2);
 };
 
-export const calculateTotalWithFee = (unitPrice, quantity, serviceFeePercent = 10) => {
+export const calculateTotalWithFee = (unitPrice, quantity, serviceFeePercent = BUYER_SERVICE_FEE_PERCENT) => {
   const baseAmount = calculateBaseAmount(unitPrice, quantity);
   const { totalAmount } = buyerChargeFromBase(parseFloat(baseAmount));
   return totalAmount.toFixed(2);
