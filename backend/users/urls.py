@@ -1,5 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+
+from .payme_views import payme_init_checkout
 from .views import (
     RegisterView,
     verify_email,
@@ -55,6 +57,7 @@ urlpatterns = [
     path('orders/<int:order_id>/receipt/', order_receipt, name='order_receipt'),
     path('tickets/<int:ticket_id>/update-price/', update_ticket_price, name='update_ticket_price'),
     path('payments/simulate/', payment_simulation, name='payment_simulation'),
+    path('payments/payme/init/', payme_init_checkout, name='payme_init_checkout'),
     path('orders/', create_order, name='create_order'),
     path('orders/guest/', guest_checkout, name='guest_checkout'),
     path('orders/<int:order_id>/confirm-payment/', confirm_order_payment, name='confirm_order_payment'),

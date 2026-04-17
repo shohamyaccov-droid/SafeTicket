@@ -403,6 +403,10 @@ export const paymentAPI = {
     await ensureCsrfToken();
     return api.post('/users/payments/simulate/', data);
   },
+  paymeInitCheckout: async (data) => {
+    await ensureCsrfToken();
+    return api.post('/users/payments/payme/init/', data);
+  },
 };
 
 export const orderAPI = {
@@ -418,7 +422,10 @@ export const orderAPI = {
     await ensureCsrfToken();
     return api.post(`/users/orders/${orderId}/confirm-payment/`, data);
   },
-  getReceipt: (orderId) => api.get(`/users/orders/${orderId}/receipt/`),
+  getReceipt: (orderId, guestEmail) =>
+    api.get(`/users/orders/${orderId}/receipt/`, {
+      params: guestEmail ? { email: guestEmail } : {},
+    }),
 };
 
 /**

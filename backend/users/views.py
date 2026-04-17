@@ -1249,11 +1249,12 @@ def user_activity(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def order_receipt(request, order_id):
     """
     Generate and return a receipt for an order (PDF or HTML)
-    IDOR PROTECTION: Only fetch orders the user owns - never expose others' orders
+    IDOR PROTECTION: Only fetch orders the user owns - never expose others' orders.
+    Guests must pass ?email= matching guest_email (also allowed while pending_payment for Payme polling).
     """
     # IDOR FIX: Filter by owner first - never fetch orders we don't own
     if request.user.is_authenticated:
@@ -1276,7 +1277,7 @@ def order_receipt(request, order_id):
             Order.objects.filter(
                 guest_email__iexact=guest_email,
                 id=order_id,
-                status__in=['paid', 'completed'],
+                status__in=['paid', 'completed', 'pending_payment'],
             )
             .select_related('ticket', 'ticket__event', 'ticket__event__artist', 'ticket__event__venue_place')
             .first()
@@ -1302,6 +1303,7 @@ def order_receipt(request, order_id):
         'order_id': order.id,
         'order_date': order.created_at,
         'status': order.status,
+        'payme_status': getattr(order, 'payme_status', None),
         'total_amount': str(order.total_amount),
         'total_paid_by_buyer': str(order.total_paid_by_buyer) if order.total_paid_by_buyer is not None else str(order.total_amount),
         'final_negotiated_price': str(order.final_negotiated_price) if order.final_negotiated_price is not None else None,

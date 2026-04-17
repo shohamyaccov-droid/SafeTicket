@@ -21,6 +21,8 @@ import FAQ from './pages/FAQ';
 import Contact from './pages/Contact';
 import TermsPage from './pages/TermsPage';
 import RefundsPage from './pages/RefundsPage';
+import PaymeCheckoutSuccess from './pages/PaymeCheckoutSuccess';
+import PaymeCheckoutFailure from './pages/PaymeCheckoutFailure';
 import FloatingWhatsApp from './components/FloatingWhatsApp';
 import Footer from './components/Footer';
 import ScrollToTop from './components/ScrollToTop';
@@ -76,6 +78,8 @@ function App() {
               <Route path="/contact" element={<Contact />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/refunds" element={<RefundsPage />} />
+              <Route path="/checkout/payme/success" element={<PaymeCheckoutSuccess />} />
+              <Route path="/checkout/payme/failure" element={<PaymeCheckoutFailure />} />
             </Routes>
           </main>
           <Footer />

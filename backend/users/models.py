@@ -659,6 +659,19 @@ class Order(models.Model):
     # without a global webhook secret (cleared when the order becomes paid).
     payment_confirm_token = models.CharField(max_length=64, blank=True, null=True)
 
+    payme_transaction_id = models.CharField(
+        max_length=120,
+        blank=True,
+        null=True,
+        help_text='Payme gateway transaction / sale id',
+    )
+    payme_status = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        help_text='Last known Payme payment status (webhook / API)',
+    )
+
     def covers_ticket(self, ticket_id):
         """True if this order includes the given ticket (FK or JSON list; int/str safe)."""
         if ticket_id is None:

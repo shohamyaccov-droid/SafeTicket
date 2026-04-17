@@ -137,7 +137,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const [loading, setLoading] = useState(false);
   const [infoStepBusy, setInfoStepBusy] = useState(false);
   const [pdfDownloadBusyId, setPdfDownloadBusyId] = useState(null);
-  /** 'idle' | 'creating_order' | 'confirming_payment' — shown while pending_payment → paid */
+  /** 'idle' | 'creating_order' | 'confirming_payment' | 'redirecting' — shown while pending_payment → paid / Payme */
   const [paymentPhase, setPaymentPhase] = useState('idle');
   const [error, setError] = useState('');
   const [orderId, setOrderId] = useState(null);
@@ -157,6 +157,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   /** Synchronous snapshot so success UI never waits on PDF download or lost React state */
   const successSnapshotRef = useRef(null);
   const navigate = useNavigate();
+  /** Set `VITE_USE_PAYME=true` in frontend env to send buyers to Payme hosted checkout (test/sandbox). */
+  const usePayme = import.meta.env.VITE_USE_PAYME === 'true';
   const stepRef = useRef(step);
   stepRef.current = step;
   const guestEmailRef = useRef('');
@@ -426,10 +428,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       return;
     }
     setError('');
-    const payErr = validateMockPaymentFields(paymentForm);
-    if (payErr) {
-      setError(payErr);
-      return;
+    if (!usePayme) {
+      const payErr = validateMockPaymentFields(paymentForm);
+      if (payErr) {
+        setError(payErr);
+        return;
+      }
     }
     setLoading(true);
     setPaymentPhase('idle');
@@ -482,31 +486,31 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
       const finalTotal = totalAmount;
 
-      // Step 1: Simulate payment - send total amount (with service fee)
-      const paymentData = {
-        ticket_id: ticket.id,
-        amount: finalTotal,
-        quantity: quantity,
-        timestamp: Date.now(),
-        listing_group_id: listingGroupId, // CRITICAL: Send listing_group_id so backend checks group availability
-      };
+      if (!usePayme) {
+        const paymentData = {
+          ticket_id: ticket.id,
+          amount: finalTotal,
+          quantity: quantity,
+          timestamp: Date.now(),
+          listing_group_id: listingGroupId,
+        };
 
-      // CRITICAL: If this is a negotiated price, include offer_id
-      if (isNegotiatedPrice && acceptedOffer && acceptedOffer.id) {
-        paymentData.offer_id = acceptedOffer.id;
+        if (isNegotiatedPrice && acceptedOffer && acceptedOffer.id) {
+          paymentData.offer_id = acceptedOffer.id;
+        }
+        if (!user && guestForm?.email?.trim()) {
+          paymentData.guest_email = guestForm.email.trim();
+        }
+
+        await ensureCsrfToken();
+        const paymentResponse = await paymentAPI.simulatePayment(paymentData);
+
+        if (!paymentResponse.data || !paymentResponse.data.success) {
+          throw new Error(paymentResponse.data?.message || 'סימולציית התשלום נכשלה');
+        }
       }
-      if (!user && guestForm?.email?.trim()) {
-        paymentData.guest_email = guestForm.email.trim();
-      }
 
-      await ensureCsrfToken();
-      const paymentResponse = await paymentAPI.simulatePayment(paymentData);
-
-      if (!paymentResponse.data || !paymentResponse.data.success) {
-        throw new Error(paymentResponse.data?.message || 'סימולציית התשלום נכשלה');
-      }
-
-      // Step 2: Create order - ensure total_amount is a Number
+      // Create order - ensure total_amount is a Number
       setPaymentPhase('creating_order');
       let orderResponse;
       // Get listing_group_id from ticketGroup if available
@@ -584,6 +588,42 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       const pendingId = pendingOrder?.id;
       if (pendingId == null) {
         throw new Error('יצירת ההזמנה נכשלה — לא התקבל מזהה הזמנה');
+      }
+
+      if (usePayme) {
+        setPaymentPhase('redirecting');
+        await ensureCsrfToken();
+        const origin = window.location.origin.replace(/\/+$/, '');
+        const successUrl = `${origin}/checkout/payme/success?order_id=${encodeURIComponent(String(pendingId))}`;
+        const failureUrl = `${origin}/checkout/payme/failure?order_id=${encodeURIComponent(String(pendingId))}`;
+        const initPayload = {
+          order_id: pendingId,
+          success_url: successUrl,
+          failure_url: failureUrl,
+        };
+        if (!user && guestForm?.email?.trim()) {
+          initPayload.guest_email = guestForm.email.trim();
+          try {
+            sessionStorage.setItem('payme_checkout_guest_email', initPayload.guest_email);
+          } catch {
+            /* ignore */
+          }
+        } else {
+          try {
+            sessionStorage.removeItem('payme_checkout_guest_email');
+          } catch {
+            /* ignore */
+          }
+        }
+        const paymeRes = await paymentAPI.paymeInitCheckout(initPayload);
+        const redirectUrl = paymeRes.data?.redirect_url;
+        if (!redirectUrl) {
+          throw new Error(
+            paymeRes.data?.error || 'Payme לא החזיר כתובת תשלום — בדקו הגדרות PAYME_* בשרת',
+          );
+        }
+        window.location.assign(redirectUrl);
+        return;
       }
 
       setPaymentPhase('confirming_payment');
@@ -1280,70 +1320,142 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           </div>
           
           <form onSubmit={handlePaymentSubmit} className="payment-form">
-            <div className="form-group">
-              <label htmlFor="cardholderName">שם בעל הכרטיס *</label>
-              <input
-                type="text"
-                id="cardholderName"
-                name="cardholderName"
-                value={paymentForm.cardholderName}
-                onChange={handlePaymentChange}
-                required
-                placeholder="שם פרטי ומשפחה"
-                dir="rtl"
-              />
-            </div>
-            
-            <div className="form-group">
-              <label htmlFor="cardNumber">מספר כרטיס *</label>
-              <input
-                type="text"
-                id="cardNumber"
-                name="cardNumber"
-                value={paymentForm.cardNumber}
-                onChange={handlePaymentChange}
-                required
-                placeholder="1234 5678 9012 3456"
-                maxLength="19"
-                dir="ltr"
-              />
-            </div>
-            
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="expiryDate">תאריך תפוגה *</label>
-                <input
-                  type="text"
-                  id="expiryDate"
-                  name="expiryDate"
-                  value={paymentForm.expiryDate}
-                  onChange={handlePaymentChange}
-                  required
-                  placeholder="MM/YY"
-                  maxLength="5"
-                  dir="ltr"
-                />
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="cvv">CVV *</label>
-                <input
-                  type="text"
-                  id="cvv"
-                  name="cvv"
-                  value={paymentForm.cvv}
-                  onChange={handlePaymentChange}
-                  required
-                  placeholder="123"
-                  maxLength="4"
-                  dir="ltr"
-                />
-              </div>
-            </div>
-            
-            <p className="payment-note">
-              <small>🔒 זהו סימולציה של תשלום. לא יתבצע תשלום אמיתי.</small>
-            </p>
+            {!usePayme ? (
+              <>
+                <div className="form-group">
+                  <label htmlFor="cardholderName">שם בעל הכרטיס *</label>
+                  <input
+                    type="text"
+                    id="cardholderName"
+                    name="cardholderName"
+                    value={paymentForm.cardholderName}
+                    onChange={handlePaymentChange}
+                    required
+                    placeholder="שם פרטי ומשפחה"
+                    dir="rtl"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="cardNumber">מספר כרטיס *</label>
+                  <input
+                    type="text"
+                    id="cardNumber"
+                    name="cardNumber"
+                    value={paymentForm.cardNumber}
+                    onChange={handlePaymentChange}
+                    required
+                    placeholder="1234 5678 9012 3456"
+                    maxLength="19"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="expiryDate">תאריך תפוגה *</label>
+                    <input
+                      type="text"
+                      id="expiryDate"
+                      name="expiryDate"
+                      value={paymentForm.expiryDate}
+                      onChange={handlePaymentChange}
+                      required
+                      placeholder="MM/YY"
+                      maxLength="5"
+                      dir="ltr"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="cvv">CVV *</label>
+                    <input
+                      type="text"
+                      id="cvv"
+                      name="cvv"
+                      value={paymentForm.cvv}
+                      onChange={handlePaymentChange}
+                      required
+                      placeholder="123"
+                      maxLength="4"
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+
+                <p className="payment-note">
+                  <small>🔒 זהו סימולציה של תשלום. לא יתבצע תשלום אמיתי.</small>
+                </p>
+              </>
+            ) : (
+              <>
+                <div
+                  className="payme-hosted-hint"
+                  style={{
+                    padding: '1rem',
+                    background: '#f1f5f9',
+                    borderRadius: '8px',
+                    marginBottom: '1rem',
+                    textAlign: 'center',
+                    color: '#334155',
+                    fontSize: '0.95rem',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  התשלום ימשיך בדף מאובטח של Payme (סביבת בדיקות). לאחר האישור יוחזרו לכאן לסטטוס ההזמנה.
+                </div>
+                <div
+                  className="payme-test-methods"
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '0.5rem',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginBottom: '1rem',
+                  }}
+                  aria-label="אמצעי תשלום זמינים במצב בדיקה"
+                >
+                  <span
+                    style={{
+                      fontSize: '0.75rem',
+                      color: '#64748b',
+                      width: '100%',
+                      textAlign: 'center',
+                    }}
+                  >
+                    במצב בדיקה בדף Payme זמינים גם:
+                  </span>
+                  <span
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '999px',
+                      background: '#0f172a',
+                      color: '#fff',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Apple Pay
+                  </span>
+                  <span
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '999px',
+                      background: '#0068f5',
+                      color: '#fff',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                    }}
+                  >
+                    ביט (Bit)
+                  </span>
+                </div>
+                <p className="payment-note">
+                  <small>🔒 Payme Test — חיוב בפיקדון (Authorize) לפי הגדרות הסוחר.</small>
+                </p>
+              </>
+            )}
             
             {error && (
               <div className="error-message" role="alert" aria-live="polite">
@@ -1368,12 +1480,16 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 {loading
                   ? paymentPhase === 'creating_order'
                     ? 'יוצר הזמנה...'
-                    : paymentPhase === 'confirming_payment'
-                      ? 'מעבד תשלום...'
-                      : 'מעבד...'
+                    : paymentPhase === 'redirecting'
+                      ? 'מעביר ל-Payme...'
+                      : paymentPhase === 'confirming_payment'
+                        ? 'מעבד תשלום...'
+                        : 'מעבד...'
                   : timeRemaining === 0
                     ? 'זמן פג'
-                    : 'השלמת תשלום'}
+                    : usePayme
+                      ? 'המשך לתשלום מאובטח'
+                      : 'השלמת תשלום'}
               </button>
             </div>
             <div className="payment-security-badges">
