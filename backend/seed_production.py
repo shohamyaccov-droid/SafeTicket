@@ -20,7 +20,7 @@ A) One-time start command (then revert to gunicorn-only):
 B) Dashboard → Web Service → Shell (Basic+ plans):
    cd backend && python seed_production.py
    Uses DATABASE_URL from the service — prunes legacy placeholder events, re-seeds artists,
-   the 4 launch shows + inventory, and 3 high_demand waitlist events (no tickets).
+   the 4 launch shows + inventory, and 2 high_demand waitlist events (no tickets).
 
 C) One-off local run against production DB:
    DATABASE_URL='postgres://...' python seed_production.py
