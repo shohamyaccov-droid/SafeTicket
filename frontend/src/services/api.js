@@ -604,7 +604,10 @@ export const artistAPI = {
 };
 
 export const alertAPI = {
-  createAlert: (data) => api.post('/users/alerts/', data),
+  createAlert: async (data) => {
+    await ensureCsrfToken();
+    return api.post('/users/alerts/', data);
+  },
 };
 
 export const offerAPI = {

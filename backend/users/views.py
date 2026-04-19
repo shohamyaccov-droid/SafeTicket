@@ -3334,9 +3334,9 @@ class EventViewSet(viewsets.ModelViewSet):
             )
             .order_by('date', 'name')
         )
-        # Marketplace list only: hide events with no listable inventory (detail/retrieve unchanged).
+        # Marketplace list: show events with inventory, plus high_demand “coming soon” rows (waitlist / lead magnet).
         if self.action == 'list':
-            queryset = queryset.filter(_active_tickets_total__gt=0)
+            queryset = queryset.filter(Q(_active_tickets_total__gt=0) | Q(high_demand=True))
 
         artist_id = qp.get('artist')
         if artist_id not in (None, ''):
@@ -3592,7 +3592,7 @@ class ArtistViewSet(viewsets.ModelViewSet):
                     Value(0),
                 )
             )
-            .filter(_active_tickets_total__gt=0)
+            .filter(Q(_active_tickets_total__gt=0) | Q(high_demand=True))
             .order_by('date', 'name')
         )
         serializer = EventListSerializer(events, many=True, context={'request': request})
@@ -3604,46 +3604,61 @@ class ArtistViewSet(viewsets.ModelViewSet):
 @permission_classes([AllowAny])
 def create_ticket_alert(request):
     """
-    Create a ticket alert (waitlist) for an event
+    Create a ticket alert (waitlist) for an event with no listable inventory.
     """
     serializer = TicketAlertSerializer(data=request.data)
-    if serializer.is_valid():
-        event_id = request.data.get('event')
-        email = request.data.get('email')
-        
-        if not event_id or not email:
-            return Response(
-                {'error': 'event and email are required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        try:
-            event = event_queryset_defer_rollout_columns(Event.objects.all()).get(id=event_id)
-        except Event.DoesNotExist:
-            return Response(
-                {'error': 'Event not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Check if alert already exists for this event+email combination
-        alert, created = TicketAlert.objects.get_or_create(
-            event=event,
-            email=email,
-            defaults={'notified': False}
-        )
-        
-        if not created:
-            return Response(
-                {'message': 'You are already on the waitlist for this event', 'alert': TicketAlertSerializer(alert).data},
-                status=status.HTTP_200_OK
-            )
-        
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    event = serializer.validated_data.get('event')
+    email = serializer.validated_data.get('email')
+    phone = (serializer.validated_data.get('phone') or '').strip()
+
+    if not event or not email:
         return Response(
-            {'message': 'Successfully added to waitlist', 'alert': serializer.data},
-            status=status.HTTP_201_CREATED
+            {'error': 'event and email are required'},
+            status=status.HTTP_400_BAD_REQUEST
         )
-    
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    from django.db.models import Sum
+
+    listed = (
+        Ticket.objects.filter(event=event, status='active').aggregate(
+            s=Sum('available_quantity'),
+        )['s']
+        or 0
+    )
+    if listed > 0:
+        return Response(
+            {
+                'error': 'לאירוע זה יש כרטיסים זמינים — ניתן לרכוש ישירות מהמודעות.',
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    alert, created = TicketAlert.objects.get_or_create(
+        event=event,
+        email=email,
+        defaults={'notified': False, 'phone': phone},
+    )
+    if not created and phone and alert.phone != phone:
+        alert.phone = phone
+        alert.save(update_fields=['phone'])
+
+    if not created:
+        return Response(
+            {
+                'message': 'You are already on the waitlist for this event',
+                'alert': TicketAlertSerializer(alert).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    alert.refresh_from_db()
+    return Response(
+        {'message': 'Successfully added to waitlist', 'alert': TicketAlertSerializer(alert).data},
+        status=status.HTTP_201_CREATED,
+    )
 
 
 def _admin_staff_or_superuser(request):

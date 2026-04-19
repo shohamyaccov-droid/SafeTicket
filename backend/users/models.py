@@ -713,6 +713,12 @@ class TicketAlert(models.Model):
         help_text="The event to be notified about"
     )
     email = models.EmailField(help_text="Email address to notify when tickets become available")
+    phone = models.CharField(
+        max_length=32,
+        blank=True,
+        default='',
+        help_text='Optional phone for SMS / WhatsApp follow-up',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     notified = models.BooleanField(default=False, help_text="Whether this alert has been sent")
     notified_at = models.DateTimeField(null=True, blank=True, help_text="When the notification was sent")

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { eventAPI, ticketAPI, offerAPI, artistAPI } from '../services/api';
 import CheckoutModal from '../components/CheckoutModal';
+import WaitlistSignupModal from '../components/WaitlistSignupModal';
 import Toast from '../components/Toast';
 import VenueMapPin from '../components/VenueMapPin';
 import InteractiveMenoraMap from '../components/InteractiveMenoraMap';
@@ -61,6 +62,7 @@ const EventDetailsPage = () => {
   const [toast, setToast] = useState(null);
   const [offerSubmitted, setOfferSubmitted] = useState(false);
   const [offerSubmitting, setOfferSubmitting] = useState(false);
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
 
   // Filtering and sorting state
   const [filters, setFilters] = useState({
@@ -808,6 +810,15 @@ const EventDetailsPage = () => {
         </div>
       </div>
 
+      {ticketGroups.length === 0 ? (
+        <div className="event-waitlist-hero-banner" dir="rtl">
+          <p className="event-waitlist-hero-text">אין כרטיסים זמינים כרגע — נעדכן את הרשימה כשמוכרים יפרסמו.</p>
+          <button type="button" className="event-waitlist-cta" onClick={() => setWaitlistOpen(true)}>
+            קבל התראה כשמתפנה כרטיס
+          </button>
+        </div>
+      ) : null}
+
       {/* Tickets Section - Split Screen Layout (filters live here so mobile sticky map stacks below sticky filter bar) */}
       <div className="tickets-section">
         {/* Filters and Sort Bar */}
@@ -1164,6 +1175,9 @@ const EventDetailsPage = () => {
             ) : (
               <div className="empty-state">
                 <p>אין כרטיסים זמינים לאירוע זה כרגע</p>
+                <button type="button" className="event-waitlist-cta event-waitlist-cta--block" onClick={() => setWaitlistOpen(true)}>
+                  קבל התראה כשמתפנה כרטיס
+                </button>
                 {(filters.minPrice || filters.maxPrice || filters.minQuantity) && (
                   <button
                     className="clear-filters-btn"
@@ -1179,6 +1193,10 @@ const EventDetailsPage = () => {
       </div>
 
       {/* Checkout Modal */}
+      {waitlistOpen && event ? (
+        <WaitlistSignupModal event={event} onClose={() => setWaitlistOpen(false)} />
+      ) : null}
+
       {showCheckout && selectedTicketGroup && (
         <CheckoutModal
           ticket={selectedTicketGroup.tickets[0]}

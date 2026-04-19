@@ -13,6 +13,45 @@
   margin-bottom: 0.5rem;
 }
 
+.event-waitlist-hero-banner {
+  margin: 0.75rem 0 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fff7ed, #ffedd5);
+  border: 1px solid #fdba74;
+  text-align: center;
+}
+
+.event-waitlist-hero-text {
+  margin: 0 0 0.75rem;
+  color: #9a3412;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.event-waitlist-cta {
+  display: inline-block;
+  padding: 0.65rem 1.1rem;
+  border: none;
+  border-radius: 8px;
+  background: #ea580c;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.event-waitlist-cta:hover {
+  background: #c2410c;
+}
+
+.event-waitlist-cta--block {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 0.75rem auto 0;
+}
+
 .back-button {
   background: none;
   border: none;

@@ -17,14 +17,30 @@ How to run on Render (pick one)
 A) One-time start command (then revert to gunicorn-only):
    python seed_production.py && gunicorn safeticket.wsgi --bind 0.0.0.0:$PORT ...
 
-B) Dashboard → service → Shell (if available on your plan):
+B) Dashboard → Web Service → Shell (Basic+ plans):
    cd backend && python seed_production.py
+   Uses DATABASE_URL from the service — prunes legacy placeholder events, re-seeds artists,
+   the 4 launch shows + inventory, and 3 high_demand waitlist events (no tickets).
 
 C) One-off local run against production DB:
    DATABASE_URL='postgres://...' python seed_production.py
    (from backend/ with venv activated)
 
 After a successful seed, remove seed_production.py from Start Command if you used (A).
+
+Production refresh (Render, after deploy)
+---------------------------------------
+1. Open Render Dashboard → your **Web Service** (e.g. safeticket-api) → **Shell** (requires paid instance).
+2. Run:
+       cd backend
+       python seed_production.py
+   The process uses the service `DATABASE_URL`. It prunes legacy placeholder events (incl. Coldplay /
+   Taylor Swift / Hamilton / Real Madrid style names and old Hebrew demo rows), re-syncs the four launch
+   shows + QA inventory, and upserts the three high_demand waitlist events (no tickets).
+3. Optional: verify in Django admin → Events / Ticket alerts.
+
+This does **not** delete user accounts or paid orders; it **does** delete Events (and cascaded tickets)
+that match the prune rules — take a DB backup before running if you have custom events you need to keep.
 """
 from __future__ import annotations
 
@@ -74,7 +90,7 @@ def _launch_pdf_file(name: str) -> ContentFile:
     return ContentFile(body, name=name)
 
 
-# Unsplash CDN (license: https://unsplash.com/license) — distinct music/live photos per artist.
+# Headliner artists only (launch inventory + waitlist lead magnets).
 SEED_ARTISTS: list[dict] = [
     {
         'name': 'בן צור',
@@ -105,39 +121,11 @@ SEED_ARTISTS: list[dict] = [
         'cover_image': 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=1600&q=80',
     },
     {
-        'name': 'עדן בן זקן',
-        'genre': 'פופ / מזרחית',
-        'description': 'זמרת ויוצרת ישראלית.',
-        'image': 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=800&q=80',
-        'cover_image': 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=1600&q=80',
-    },
-    {
         'name': 'עדן חסון',
         'genre': 'פופ',
         'description': 'זמרת ישראלית.',
         'image': 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?auto=format&fit=crop&w=800&q=80',
         'cover_image': 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80',
-    },
-    {
-        'name': 'אודייה אזולאי',
-        'genre': 'פופ',
-        'description': 'זמרת ישראלית.',
-        'image': 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80',
-        'cover_image': 'https://images.unsplash.com/photo-1501612780327-45045589102c?w=1600&q=80',
-    },
-    {
-        'name': 'טונה',
-        'genre': 'היפ הופ',
-        'description': 'ראפר ויוצר ישראלי.',
-        'image': 'https://images.unsplash.com/photo-1571266028243-e978f754a31a?auto=format&fit=crop&w=800&q=80',
-        'cover_image': 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=1600&q=80',
-    },
-    {
-        'name': 'רביד פלוטניק',
-        'genre': 'אינדי / רוק',
-        'description': 'זמר ויוצר ישראלי.',
-        'image': 'https://images.unsplash.com/photo-1501612780327-45045589102c?auto=format&fit=crop&w=800&q=80',
-        'cover_image': 'https://images.unsplash.com/photo-1522158637959-30385a09e0da?auto=format&fit=crop&w=1600&q=80',
     },
 ]
 
@@ -189,80 +177,84 @@ SEED_LAUNCH_EVENTS: list[dict] = [
     },
 ]
 
-# Mirrors local sqlite events (ids 4–8) + samples for every Event.category choice.
-# Dates preserved in UTC to match local DB timestamps.
-UTC = dt_timezone.utc
-
-SEED_EVENTS: list[dict] = [
+# High-demand “coming soon” rows — no tickets; drives homepage waitlist CTA.
+SEED_WAITLIST_EVENTS: list[dict] = [
     {
-        'name': 'מכבי תל אביב VS הפועל תל אביב',
-        'date': datetime(2026, 1, 1, 19, 0, tzinfo=UTC),
-        'venue': 'בלומפילד',
-        'city': 'תל אביב-יפו',
+        'name': 'גמר גביע המדינה בכדורגל',
+        'date': _il_dt(2026, 5, 25, 20, 0),
+        'venue': 'סמי עופר',
+        'venue_struct': ('אצטדיון סמי עופר', 'חיפה'),
+        'city': 'חיפה',
         'category': 'sport',
         'artist_name': None,
-        'home_team': 'מכבי תל אביב',
-        'away_team': 'הפועל תל אביב',
-        'tournament': 'ליגת העל',
+        'home_team': None,
+        'away_team': None,
+        'tournament': 'גביע המדינה',
+        'event_image': 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1400&q=85',
     },
     {
-        'name': 'עומר אדם - היכל מנורה מבטחים',
-        'date': datetime(2026, 3, 6, 18, 0, tzinfo=UTC),
-        'venue': 'מנורה מבטחים',
-        'city': 'תל אביב-יפו',
+        'name': 'עומר אדם - מופע פארק',
+        'date': _il_dt(2026, 6, 10, 19, 30),
+        'venue': 'אחר',
+        'venue_struct': ('פארק הירקון', 'תל אביב'),
+        'city': 'תל אביב',
         'category': 'concert',
         'artist_name': 'עומר אדם',
+        'home_team': None,
+        'away_team': None,
+        'tournament': None,
+        'event_image': 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=1400&q=85',
     },
     {
-        'name': 'עומר אדם',
-        'date': datetime(2026, 3, 9, 12, 49, 32, tzinfo=UTC),
-        'venue': 'מנורה מבטחים',
-        'city': 'תל אביב-יפו',
-        'category': 'concert',
-        'artist_name': 'עומר אדם',
-    },
-    {
-        'name': 'עומר אדם - היכל מנורה מבטחים',
-        'date': datetime(2026, 4, 1, 18, 0, tzinfo=UTC),
-        'venue': 'מנורה מבטחים',
-        'city': 'תל אביב-יפו',
-        'category': 'concert',
-        'artist_name': 'עומר אדם',
-    },
-    {
-        'name': 'עומר אדם - היכל מנורה מבטחים',
-        'date': datetime(2026, 4, 8, 18, 0, tzinfo=UTC),
-        'venue': 'מנורה מבטחים',
-        'city': 'תל אביב-יפו',
-        'category': 'concert',
-        'artist_name': 'עומר אדם',
-    },
-    # Category coverage (theatre / festival / standup) — same cities & venues as local patterns
-    {
-        'name': 'הצגה: שומרי הסף — תיאטרון הבימה',
-        'date': datetime(2026, 5, 10, 17, 0, tzinfo=UTC),
-        'venue': 'סמי עופר',
+        'name': 'יום הסטודנט בטכניון 2026',
+        'date': _il_dt(2026, 6, 4, 10, 0),
+        'venue': 'אחר',
+        'venue_struct': ('הטכניון', 'חיפה'),
         'city': 'חיפה',
-        'category': 'theater',
-        'artist_name': 'רביד פלוטניק',
-    },
-    {
-        'name': 'פסטיבל קיץ תל אביב — ליין אמנים',
-        'date': datetime(2026, 6, 20, 16, 0, tzinfo=UTC),
-        'venue': 'בארבי תל אביב',
-        'city': 'תל אביב-יפו',
         'category': 'festival',
-        'artist_name': 'טונה',
-    },
-    {
-        'name': 'סטנדאפ: לילה של צחוק',
-        'date': datetime(2026, 7, 5, 19, 30, tzinfo=UTC),
-        'venue': 'מנורה מבטחים',
-        'city': 'תל אביב-יפו',
-        'category': 'standup',
-        'artist_name': 'אייל גולן',
+        'artist_name': None,
+        'home_team': None,
+        'away_team': None,
+        'tournament': None,
+        'event_image': 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1400&q=85',
     },
 ]
+
+_LEGACY_EVENT_NAME_SUBSTRINGS = (
+    'coldplay',
+    'taylor swift',
+    'hamilton',
+    'real madrid',
+    'eras tour',
+    'music of the spheres',
+    'the eras',
+)
+
+_LEGACY_EVENT_NAMES_EXACT = {
+    'מכבי תל אביב VS הפועל תל אביב',
+    'עומר אדם - היכל מנורה מבטחים',
+    'עומר אדם',
+    'הצגה: שומרי הסף — תיאטרון הבימה',
+    'פסטיבל קיץ תל אביב — ליין אמנים',
+    'סטנדאפ: לילה של צחוק',
+}
+
+
+def prune_legacy_placeholder_events() -> None:
+    """Remove old demo / duplicate catalog rows before re-seeding (production-safe names only)."""
+    deleted = 0
+    for ev in Event.objects.all().iterator():
+        name = (ev.name or '').strip()
+        low = name.lower()
+        if any(s in low for s in _LEGACY_EVENT_NAME_SUBSTRINGS):
+            ev.delete()
+            deleted += 1
+            continue
+        if name in _LEGACY_EVENT_NAMES_EXACT:
+            ev.delete()
+            deleted += 1
+    if deleted:
+        print(f'[seed] pruned {deleted} legacy / placeholder events', flush=True)
 
 
 def _download_to_imagefield(instance, field_name: str, url: str) -> None:
@@ -424,11 +416,14 @@ def seed_launch_events_and_tickets() -> None:
             print(f'[seed] launch ticket: event={ev.id} price={price} NIS', flush=True)
 
 
-def seed_events() -> None:
+def seed_waitlist_events() -> None:
+    """High-demand upcoming events with intentionally no listings — waitlist / lead capture."""
     artists_by_name = {a.name: a for a in Artist.objects.all()}
-    for row in SEED_EVENTS:
+    for row in SEED_WAITLIST_EVENTS:
         an = row.get('artist_name')
         artist = artists_by_name.get(an) if an else None
+        vname, vcity = row['venue_struct']
+        venue_obj, _ = Venue.objects.get_or_create(name=vname, city=vcity)
         defaults = {
             'venue': row['venue'],
             'city': row['city'],
@@ -438,23 +433,29 @@ def seed_events() -> None:
             'home_team': row.get('home_team') or None,
             'away_team': row.get('away_team') or None,
             'tournament': row.get('tournament') or None,
+            'country': 'IL',
+            'venue_place': venue_obj,
+            'high_demand': True,
         }
         ev, created = Event.objects.update_or_create(
             name=row['name'],
             date=row['date'],
             defaults=defaults,
         )
+        if row.get('event_image'):
+            _download_to_imagefield(ev, 'image', row['event_image'])
         action = 'created' if created else 'updated'
-        print(f'[seed] event {action}: {ev.name} @ {ev.date}', flush=True)
+        print(f'[seed] waitlist event {action}: {ev.name} @ {ev.date} (no tickets)', flush=True)
 
 
 @transaction.atomic
 def _seed_all() -> None:
+    prune_legacy_placeholder_events()
     seed_admin()
     seed_qa_user()
     seed_artists()
     seed_launch_events_and_tickets()
-    seed_events()
+    seed_waitlist_events()
     print(
         f'[seed] done: {Artist.objects.count()} artists, {Event.objects.count()} events total in DB',
         flush=True,

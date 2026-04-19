@@ -1211,10 +1211,13 @@ class ProfileListingSerializer(serializers.ModelSerializer):
 class TicketAlertSerializer(serializers.ModelSerializer):
     """Serializer for TicketAlert model"""
     event_name = serializers.CharField(source='event.name', read_only=True)
-    
+    phone = serializers.CharField(required=False, allow_blank=True, max_length=32, default='')
+
     class Meta:
         model = TicketAlert
-        fields = ('id', 'event', 'event_name', 'email', 'created_at', 'notified', 'notified_at')
+        fields = (
+            'id', 'event', 'event_name', 'email', 'phone', 'created_at', 'notified', 'notified_at',
+        )
         read_only_fields = ('id', 'created_at', 'notified', 'notified_at')
 
 

@@ -1,10 +1,11 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { eventAPI } from '../services/api';
-import { getFullImageUrl } from '../utils/formatters';
 import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import EmptyState from '../components/EmptyState';
+import EventCard from '../components/EventCard';
+import WaitlistSignupModal from '../components/WaitlistSignupModal';
 import { toastError } from '../utils/toast';
 import './Home.css';
 
@@ -19,10 +20,6 @@ function formatEventDateHe(iso) {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function hasTicketInventory(event) {
-  return (event?.tickets_count ?? 0) > 0;
 }
 
 /** Normalize API category (DB uses concert|sport|theater|standup|festival). */
@@ -42,6 +39,7 @@ const Home = () => {
   const [loadError, setLoadError] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') ?? '');
+  const [waitlistEvent, setWaitlistEvent] = useState(null);
 
   const qFromUrl = searchParams.get('q') ?? '';
   useEffect(() => {
@@ -114,12 +112,16 @@ const Home = () => {
     return d;
   }, []);
 
+  /** Marketplace rows: events with tickets, or high_demand “coming soon” (waitlist) events. */
   const inventoryEvents = useMemo(() => {
     let list = [...(events || [])].filter((event) => {
       if (!event?.date) return false;
-      if (!hasTicketInventory(event)) return false;
       if (new Date(event.date) < todayStart) return false;
-      return true;
+      const tc = event?.tickets_count ?? 0;
+      const hd = Boolean(event?.high_demand);
+      if (tc > 0) return true;
+      if (tc === 0 && hd) return true;
+      return false;
     });
 
     if (searchQuery.trim()) {
@@ -303,68 +305,17 @@ const Home = () => {
           <div ref={scrollRef} className="home-carousel-scroll viagogo-carousel-track" role="list">
             {items.map((event) => (
               <div key={event.id} className="home-carousel-item" role="listitem">
-                <EventRowCard event={event} />
+                <EventCard
+                  event={event}
+                  formatEventDateHe={formatEventDateHe}
+                  onNavigate={() => handleEventClick(event.id)}
+                  onOpenWaitlist={() => setWaitlistEvent(event)}
+                />
               </div>
             ))}
           </div>
         </div>
       </section>
-    );
-  };
-
-  const EventRowCard = ({ event }) => {
-    const img =
-      getFullImageUrl(event.image_url) ||
-      getFullImageUrl(event.artist_detail?.image_url) ||
-      '';
-    const title = event.name || 'אירוע';
-    const subtitle = event.artist_detail?.name || event.artist_name || '';
-    const fallback = `https://via.placeholder.com/640x360/0f172a/e2e8f0?text=${encodeURIComponent(title.slice(0, 24))}`;
-    const venueLine = event.venue_detail?.name
-      ? `${event.venue_detail.name}, ${event.city || ''}`.replace(/,\s*$/, '').trim()
-      : [event.venue, event.city].filter(Boolean).join(', ');
-    const curSym = event.currency_symbol || '₪';
-
-    return (
-      <article
-        className="home-carousel-card"
-        role="link"
-        tabIndex={0}
-        onClick={() => handleEventClick(event.id)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            handleEventClick(event.id);
-          }
-        }}
-      >
-        <div className="home-carousel-card__media">
-          {event.high_demand ? (
-            <span className="home-carousel-card__badge" role="status">
-              ביקוש גבוה
-            </span>
-          ) : null}
-          <img
-            src={img || fallback}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            onError={(e) => {
-              e.currentTarget.onerror = null;
-              e.currentTarget.src = fallback;
-            }}
-          />
-        </div>
-        <div className="home-carousel-card__body">
-          <h3 className="home-carousel-card__title">{title}</h3>
-          {subtitle ? <p className="home-carousel-card__artist">{subtitle}</p> : null}
-          <p className="home-carousel-card__meta">{formatEventDateHe(event.date)}</p>
-          {venueLine ? <p className="home-carousel-card__venue">{venueLine}</p> : null}
-          <p className="home-carousel-card__tickets">
-            {event.tickets_count} כרטיסים זמינים ({curSym})
-          </p>
-        </div>
-      </article>
     );
   };
 
@@ -464,7 +415,7 @@ const Home = () => {
         <div className="home-empty-wrap">
           <EmptyState
             icon="🎫"
-            title="אין אירועים עם כרטיסים זמינים"
+            title="אין אירועים להצגה"
             description="נסו לרענן מאוחר יותר או לשנות את החיפוש."
             actionLabel="איפוס חיפוש"
             onAction={() => setSearchQuerySynced('')}
@@ -479,6 +430,9 @@ const Home = () => {
           <CarouselSection slug="theater" title="תיאטרון" items={theaterEvents} />
         </div>
       )}
+      {waitlistEvent ? (
+        <WaitlistSignupModal event={waitlistEvent} onClose={() => setWaitlistEvent(null)} />
+      ) : null}
     </div>
   );
 };

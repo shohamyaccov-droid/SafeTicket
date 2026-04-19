@@ -444,6 +444,32 @@
   transition: transform 0.3s ease;
 }
 
+/* Waitlist CTA on homepage cards (zero inventory) */
+.event-card-waitlist-btn {
+  display: block;
+  width: 100%;
+  margin-top: 0.65rem;
+  padding: 0.55rem 0.75rem;
+  border: none;
+  border-radius: 8px;
+  background: #ea580c;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.event-card-waitlist-btn:hover {
+  background: #c2410c;
+}
+
+.home-carousel-card__tickets--none {
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
 .trending-event-card:hover .event-image {
   transform: scale(1.05);
 }
