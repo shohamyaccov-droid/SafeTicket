@@ -1,4 +1,4 @@
-/* Shared shell for Bloomfield + Jerusalem Arena interactive SVG maps */
+/* Pan/zoom shell for Bloomfield + Jerusalem Arena static map images */
 
 .venue-interactive-map {
   position: relative;
@@ -28,12 +28,18 @@
   height: 100%;
   transform-origin: center center;
   will-change: transform;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.venue-interactive-map__svg {
+.venue-interactive-map__img {
   width: 100%;
   height: 100%;
+  object-fit: contain;
   display: block;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .venue-interactive-map__controls {
@@ -71,88 +77,4 @@
 .venue-interactive-map__zoom-btn:hover {
   background: #f8fafc;
   color: #2563eb;
-}
-
-.venue-interactive-map__simulate {
-  position: absolute;
-  bottom: 8px;
-  left: 8px;
-  right: 8px;
-  z-index: 5;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #fff;
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
-}
-
-.venue-interactive-map__simulate:hover {
-  filter: brightness(1.05);
-}
-
-.venue-interactive-map__hint {
-  position: absolute;
-  bottom: 48px;
-  left: 8px;
-  right: 8px;
-  z-index: 4;
-  margin: 0;
-  padding: 0.35rem 0.5rem;
-  font-size: 0.72rem;
-  color: #475569;
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: 6px;
-  text-align: center;
-  line-height: 1.35;
-}
-
-/* SVG hit targets */
-.venue-map-hit {
-  stroke: rgba(15, 23, 42, 0.25);
-  stroke-width: 1;
-  transition: fill 0.25s ease, stroke 0.25s ease, filter 0.25s ease;
-  cursor: pointer;
-}
-
-.venue-map-hit:hover {
-  filter: brightness(1.08);
-  stroke: #3b82f6;
-  stroke-width: 2;
-}
-
-.venue-map-hit--active {
-  fill: #2563eb !important;
-  stroke: #1d4ed8 !important;
-  stroke-width: 2.5 !important;
-  filter: drop-shadow(0 0 10px rgba(37, 99, 235, 0.55));
-}
-
-.venue-map-label {
-  pointer-events: none;
-  user-select: none;
-  font-size: 11px;
-  font-weight: 700;
-  fill: #0f172a;
-}
-
-.venue-map-hit--disabled {
-  fill: #94a3b8;
-  stroke: rgba(15, 23, 42, 0.2);
-  stroke-width: 1;
-  pointer-events: none;
-  cursor: default;
-}
-
-.venue-map-pitch {
-  pointer-events: none;
-}
-
-.venue-map-legend {
-  pointer-events: none;
-  font-size: 9px;
-  fill: #64748b;
 }
