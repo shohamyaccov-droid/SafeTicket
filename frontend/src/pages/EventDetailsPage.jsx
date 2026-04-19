@@ -7,6 +7,8 @@ import WaitlistSignupModal from '../components/WaitlistSignupModal';
 import Toast from '../components/Toast';
 import VenueMapPin from '../components/VenueMapPin';
 import InteractiveMenoraMap from '../components/InteractiveMenoraMap';
+import BloomfieldMap from '../components/BloomfieldMap';
+import JerusalemArenaMap from '../components/JerusalemArenaMap';
 import { VENUE_MAPS, getVenueConfig, normalizeSection } from '../utils/venueMaps';
 import {
   getTicketPrice,
@@ -969,6 +971,18 @@ const EventDetailsPage = () => {
                     // Use flexible venue matching - ALWAYS returns a config (never null)
                     const venueMatch = getVenueConfig(venueName);
                     const finalVenueName = venueMatch ? venueMatch.matchedName : 'מנורה מבטחים';
+
+                    const venueHaystack = [
+                      event?.venue,
+                      event?.name,
+                      event?.venue_detail?.name,
+                      finalVenueName,
+                    ]
+                      .filter(Boolean)
+                      .join(' ');
+                    const isBloomfield = venueHaystack.includes('בלומפילד');
+                    const isJerusalemArena =
+                      venueHaystack.includes('ארנה') || venueHaystack.includes('פיס ארנה');
                     
                     // Use InteractiveMenoraMap for Menora venues, otherwise use VenueMapPin
                     const isMenora = finalVenueName.includes('מנורה') || finalVenueName.includes('מבטחים');
@@ -987,6 +1001,14 @@ const EventDetailsPage = () => {
                       } catch {
                         return <VenueMapPin venueName={finalVenueName} sectionName={activeSectionName} />;
                       }
+                    }
+
+                    if (isBloomfield) {
+                      return <BloomfieldMap />;
+                    }
+
+                    if (isJerusalemArena) {
+                      return <JerusalemArenaMap />;
                     }
                     
                     // ALWAYS render the map - never return null or conditional

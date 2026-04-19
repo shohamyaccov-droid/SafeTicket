@@ -1,0 +1,158 @@
+/* Shared shell for Bloomfield + Jerusalem Arena interactive SVG maps */
+
+.venue-interactive-map {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 10/7;
+  max-height: 480px;
+  min-height: 280px;
+  background: #f1f5f9;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.venue-interactive-map__viewport {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+.venue-interactive-map__viewport:active {
+  cursor: grabbing;
+}
+
+.venue-interactive-map__transform {
+  width: 100%;
+  height: 100%;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.venue-interactive-map__svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.venue-interactive-map__controls {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.venue-interactive-map__zoom-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: #fff;
+  color: #0f172a;
+  font-size: 1.25rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.venue-interactive-map__zoom-btn:first-child {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.venue-interactive-map__zoom-btn:hover {
+  background: #f8fafc;
+  color: #2563eb;
+}
+
+.venue-interactive-map__simulate {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 5;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
+}
+
+.venue-interactive-map__simulate:hover {
+  filter: brightness(1.05);
+}
+
+.venue-interactive-map__hint {
+  position: absolute;
+  bottom: 48px;
+  left: 8px;
+  right: 8px;
+  z-index: 4;
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.72rem;
+  color: #475569;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 6px;
+  text-align: center;
+  line-height: 1.35;
+}
+
+/* SVG hit targets */
+.venue-map-hit {
+  stroke: rgba(15, 23, 42, 0.25);
+  stroke-width: 1;
+  transition: fill 0.25s ease, stroke 0.25s ease, filter 0.25s ease;
+  cursor: pointer;
+}
+
+.venue-map-hit:hover {
+  filter: brightness(1.08);
+  stroke: #3b82f6;
+  stroke-width: 2;
+}
+
+.venue-map-hit--active {
+  fill: #2563eb !important;
+  stroke: #1d4ed8 !important;
+  stroke-width: 2.5 !important;
+  filter: drop-shadow(0 0 10px rgba(37, 99, 235, 0.55));
+}
+
+.venue-map-label {
+  pointer-events: none;
+  user-select: none;
+  font-size: 11px;
+  font-weight: 700;
+  fill: #0f172a;
+}
+
+.venue-map-hit--disabled {
+  fill: #94a3b8;
+  stroke: rgba(15, 23, 42, 0.2);
+  stroke-width: 1;
+  pointer-events: none;
+  cursor: default;
+}
+
+.venue-map-pitch {
+  pointer-events: none;
+}
+
+.venue-map-legend {
+  pointer-events: none;
+  font-size: 9px;
+  fill: #64748b;
+}
