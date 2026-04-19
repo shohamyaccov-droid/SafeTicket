@@ -1,7 +1,7 @@
 import { useVenueMapPanZoom } from '../hooks/useVenueMapPanZoom';
 import './VenueInteractiveMaps.css';
 
-const ARENA_MAP_SRC = 'https://paisarena.co.il/wp-content/uploads/2019/07/map.jpg';
+const ARENA_MAP_SRC = '/arena-map.jpg';
 
 export default function JerusalemArenaMap() {
   const panZoom = useVenueMapPanZoom();

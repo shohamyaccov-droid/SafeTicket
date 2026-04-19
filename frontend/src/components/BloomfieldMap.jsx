@@ -1,8 +1,7 @@
 import { useVenueMapPanZoom } from '../hooks/useVenueMapPanZoom';
 import './VenueInteractiveMaps.css';
 
-const BLOOMFIELD_MAP_SRC =
-  'https://www.maccabi-tlv.co.il/wp-content/uploads/2019/08/bloomfield_map_2019-2.png';
+const BLOOMFIELD_MAP_SRC = '/bloomfield-map.jpg';
 
 export default function BloomfieldMap() {
   const panZoom = useVenueMapPanZoom();
