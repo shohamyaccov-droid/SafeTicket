@@ -6,6 +6,28 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
+# Fail fast with a clear message if the DB env var is missing (common after DB plan changes / new instances).
+if [ "${RENDER:-}" = "true" ]; then
+  if [ -z "${DATABASE_URL:-}" ]; then
+    echo "[start_render] FATAL: DATABASE_URL is empty. Link Postgres to this service or set Internal Database URL."
+    exit 1
+  fi
+  # Log connection target only (never print credentials).
+  python -c "
+import os
+from urllib.parse import urlparse, unquote
+raw = os.environ.get('DATABASE_URL', '')
+if not raw:
+    print('[start_render] DATABASE_URL: (empty)')
+else:
+    u = urlparse(raw)
+    host = u.hostname or '(no host)'
+    port = u.port or 'default'
+    db = (u.path or '').lstrip('/') or '(no db name)'
+    print(f'[start_render] DATABASE_URL -> {u.scheme}://{host}:{port}/{db} (user={unquote(u.username) if u.username else \"?\"})')
+" || true
+fi
+
 echo "[start_render] Applying database migrations..."
 python manage.py migrate --noinput
 

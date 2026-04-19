@@ -33,6 +33,10 @@ npm run build
 
 cd "$ROOT/backend"
 pip install -r requirements.txt
+if [ "${RENDER:-}" = "true" ] && [ -z "${DATABASE_URL:-}" ]; then
+  echo "build_render.sh FATAL: DATABASE_URL is empty on Render — link Postgres to the web service."
+  exit 1
+fi
 python manage.py migrate --noinput
 python manage.py collectstatic --noinput
 

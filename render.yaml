@@ -4,6 +4,7 @@
 databases:
   - name: safeticket-db
     databaseName: safeticket
+    # Dashboard may show a higher plan (e.g. Basic); if you replace the DB instance, re-link DATABASE_URL on the web service.
     plan: free
 
 services:
@@ -14,10 +15,13 @@ services:
     rootDir: backend
     # Repo root build_render.sh: npm build → pip → python manage.py migrate --noinput → collectstatic.
     buildCommand: bash ../build_render.sh
+    # Runs against live DATABASE_URL before traffic switches — helps after Payme/migration deploys if build DB differed.
+    preDeployCommand: python manage.py migrate --noinput
     # Runtime: migrate against live DATABASE_URL, then seed + fix_admin, then Gunicorn (see backend/start_render.sh).
     startCommand: bash start_render.sh
     plan: free
     envVars:
+      # Must be the *current* Postgres internal URL. Upgrading DB plan or creating a new instance requires updating this link.
       - key: DATABASE_URL
         fromDatabase:
           name: safeticket-db

@@ -161,9 +161,25 @@ WSGI_APPLICATION = 'safeticket.wsgi.application'
 # Database - Postgres via DATABASE_URL on Render; SQLite locally.
 # CONN_MAX_AGE=0: no persistent connections (avoids workers blocking on stale DB conns after idle/sleep).
 import dj_database_url
+
 _db_config = dj_database_url.config(conn_max_age=0, conn_health_checks=True)
 if _db_config:
     _db_config['CONN_MAX_AGE'] = 0
+    # Fail fast when hostname/port is wrong (otherwise the deploy can hang until health check timeout).
+    _engine = (_db_config.get('ENGINE') or '').lower()
+    if 'postgresql' in _engine:
+        _opts = _db_config.setdefault('OPTIONS', {})
+        _opts.setdefault('connect_timeout', 15)
+
+# On Render, never silently fall back to SQLite — that masks a missing DB link and breaks production.
+_on_render = (os.environ.get('RENDER', '') or '').lower() == 'true'
+if _on_render and not _db_config:
+    raise ImproperlyConfigured(
+        'DATABASE_URL is not set. In the Render dashboard: open your web service → Environment → '
+        'ensure Postgres is linked (or paste the Internal Database URL as DATABASE_URL). '
+        'After creating or replacing a database instance, update this value and redeploy.'
+    )
+
 DATABASES = {
     'default': _db_config if _db_config else {
         'ENGINE': 'django.db.backends.sqlite3',
