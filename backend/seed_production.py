@@ -50,8 +50,21 @@ import sys
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'safeticket.settings')
 
 import django
+from django.conf import settings as django_settings
 
-django.setup()
+# Standalone script needs setup; `manage.py migrate` already configured Django before importing this module.
+if not django_settings.configured:
+    django.setup()
+
+
+def _seed_log(msg: str) -> None:
+    """Windows consoles often use cp1252 — migrations must not crash on Hebrew log output."""
+    try:
+        print(msg, flush=True)
+    except UnicodeEncodeError:
+        sys.stdout.buffer.write((msg + os.linesep).encode('utf-8', errors='replace'))
+        sys.stdout.buffer.flush()
+
 
 from datetime import datetime, timezone as dt_timezone
 from decimal import Decimal
@@ -254,7 +267,7 @@ def prune_legacy_placeholder_events() -> None:
             ev.delete()
             deleted += 1
     if deleted:
-        print(f'[seed] pruned {deleted} legacy / placeholder events', flush=True)
+        _seed_log(f'[seed] pruned {deleted} legacy / placeholder events')
 
 
 def _download_to_imagefield(instance, field_name: str, url: str) -> None:
@@ -277,20 +290,22 @@ def _download_to_imagefield(instance, field_name: str, url: str) -> None:
         fname = f'seed_{field_name}_{instance.pk or "new"}.{ext}'
         field.save(fname, ContentFile(r.content), save=True)
     except Exception as ex:
-        print(f'  [seed] skip {field_name} for {instance}: {ex}', flush=True)
+        # Avoid UnicodeEncodeError on Windows consoles when `instance` repr contains Hebrew.
+        _seed_log(
+            f'  [seed] skip {field_name} pk={getattr(instance, "pk", None)} model={instance.__class__.__name__}: {ex!r}'
+        )
         err = str(ex).lower()
         if 'signature' in err or 'invalid' in err or 'cloudinary' in err:
-            print(
+            _seed_log(
                 '  [seed] Cloudinary/media hint: verify CLOUDINARY_URL (or CLOUDINARY_* env) matches '
-                'the dashboard; see safeticket.settings CLOUDINARY_STORAGE.',
-                flush=True,
+                'the dashboard; see safeticket.settings CLOUDINARY_STORAGE.'
             )
 
 
 def seed_admin() -> None:
     qs = User.objects.filter(email__iexact=ADMIN_EMAIL)
     if not qs.exists():
-        print(f'[seed] WARNING: no user {ADMIN_EMAIL!r} — register first, then re-run seed.', flush=True)
+        _seed_log(f'[seed] WARNING: no user {ADMIN_EMAIL!r} — register first, then re-run seed.')
         return
     u = qs.first()
     u.set_password(ADMIN_TEMP_PASSWORD)
@@ -298,10 +313,7 @@ def seed_admin() -> None:
     u.is_staff = True
     u.role = 'seller'
     u.save()
-    print(
-        f'[seed] admin OK: {u.username} (password reset, staff, superuser, seller)',
-        flush=True,
-    )
+    _seed_log(f'[seed] admin OK: {u.username} (password reset, staff, superuser, seller)')
 
 
 def seed_qa_user() -> None:
@@ -322,9 +334,8 @@ def seed_qa_user() -> None:
     u.set_password(QA_USER_PASSWORD)
     u.save()
     action = 'created' if created else 'updated'
-    print(
-        f'[seed] QA user {action}: {QA_USER_USERNAME} <{QA_USER_EMAIL}> (staff, superuser, seller; password not printed)',
-        flush=True,
+    _seed_log(
+        f'[seed] QA user {action}: {QA_USER_USERNAME} <{QA_USER_EMAIL}> (staff, superuser, seller; password not printed)'
     )
 
 
@@ -346,14 +357,14 @@ def seed_artists() -> None:
         if row.get('cover_image'):
             _download_to_imagefield(artist, 'cover_image', row['cover_image'])
         status = 'created' if created else 'updated'
-        print(f'[seed] artist {status}: {name}', flush=True)
+        _seed_log(f'[seed] artist {status}: {name}')
 
 
 def seed_launch_events_and_tickets() -> None:
     """Four official launch shows + verified listing inventory (feed requires active tickets)."""
     seller = User.objects.filter(username=QA_USER_USERNAME).first()
     if not seller:
-        print('[seed] launch inventory skipped — QA user missing', flush=True)
+        _seed_log('[seed] launch inventory skipped — QA user missing')
         return
 
     artists_by_name = {a.name: a for a in Artist.objects.all()}
@@ -363,7 +374,7 @@ def seed_launch_events_and_tickets() -> None:
         venue_obj, _ = Venue.objects.get_or_create(name=vname, city=vcity)
         artist = artists_by_name.get(row['artist_name'])
         if not artist:
-            print(f'[seed] launch event skipped (no artist): {row["name"]}', flush=True)
+            _seed_log(f'[seed] launch event skipped (no artist): {row["name"]}')
             continue
         defaults = {
             'venue': row['venue'],
@@ -385,7 +396,7 @@ def seed_launch_events_and_tickets() -> None:
         )
         _download_to_imagefield(ev, 'image', row['event_image'])
         action = 'created' if created else 'updated'
-        print(f'[seed] launch event {action}: {ev.name} @ {ev.date}', flush=True)
+        _seed_log(f'[seed] launch event {action}: {ev.name} @ {ev.date}')
 
         for price in row['prices']:
             dec_price = Decimal(price)
@@ -413,7 +424,7 @@ def seed_launch_events_and_tickets() -> None:
                 pdf_file=_launch_pdf_file(f'launch_e{ev.id}_{price}.pdf'),
             )
             t.save()
-            print(f'[seed] launch ticket: event={ev.id} price={price} NIS', flush=True)
+            _seed_log(f'[seed] launch ticket: event={ev.id} price={price} NIS')
 
 
 def seed_waitlist_events() -> None:
@@ -445,30 +456,78 @@ def seed_waitlist_events() -> None:
         if row.get('event_image'):
             _download_to_imagefield(ev, 'image', row['event_image'])
         action = 'created' if created else 'updated'
-        print(f'[seed] waitlist event {action}: {ev.name} @ {ev.date} (no tickets)', flush=True)
+        _seed_log(f'[seed] waitlist event {action}: {ev.name} @ {ev.date} (no tickets)')
+
+
+def _expected_catalog_event_names() -> frozenset:
+    return frozenset(r['name'] for r in SEED_LAUNCH_EVENTS) | frozenset(r['name'] for r in SEED_WAITLIST_EVENTS)
+
+
+def assert_catalog_event_inventory() -> None:
+    """
+    Post-condition for production catalog: exactly 7 events (4 launch + 3 waitlist),
+    launch rows have active ticket stock, waitlist rows have zero tickets and high_demand.
+    """
+    from django.db.models import Sum
+
+    expected = _expected_catalog_event_names()
+    n_ev = Event.objects.count()
+    if n_ev != 7:
+        raise RuntimeError(f'Catalog seed: expected exactly 7 events, found {n_ev}')
+    got_names = frozenset(Event.objects.values_list('name', flat=True))
+    if got_names != expected:
+        raise RuntimeError(
+            f'Catalog seed: event name set mismatch.\nExpected: {sorted(expected)}\nGot: {sorted(got_names)}'
+        )
+
+    for row in SEED_LAUNCH_EVENTS:
+        ev = Event.objects.filter(name=row['name'], date=row['date']).first()
+        if not ev:
+            raise RuntimeError(f'Catalog seed: missing launch event {row["name"]!r}')
+        listed = (
+            Ticket.objects.filter(event=ev, status='active').aggregate(s=Sum('available_quantity'))['s'] or 0
+        )
+        if listed < 1:
+            raise RuntimeError(f'Catalog seed: launch event {row["name"]!r} has no active ticket quantity')
+
+    for row in SEED_WAITLIST_EVENTS:
+        ev = Event.objects.filter(name=row['name'], date=row['date']).first()
+        if not ev:
+            raise RuntimeError(f'Catalog seed: missing waitlist event {row["name"]!r}')
+        if not ev.high_demand:
+            raise RuntimeError(f'Catalog seed: waitlist event {row["name"]!r} must have high_demand=True')
+        if Ticket.objects.filter(event=ev).exists():
+            raise RuntimeError(f'Catalog seed: waitlist event {row["name"]!r} must have zero tickets')
 
 
 @transaction.atomic
-def _seed_all() -> None:
-    prune_legacy_placeholder_events()
+def _seed_all(*, skip_prune: bool = False) -> None:
+    if not skip_prune:
+        prune_legacy_placeholder_events()
     seed_admin()
     seed_qa_user()
     seed_artists()
     seed_launch_events_and_tickets()
     seed_waitlist_events()
-    print(
-        f'[seed] done: {Artist.objects.count()} artists, {Event.objects.count()} events total in DB',
-        flush=True,
-    )
+    _seed_log(f'[seed] done: {Artist.objects.count()} artists, {Event.objects.count()} events total in DB')
+
+
+def run_after_total_wipe() -> None:
+    """
+    Rebuild catalog after all Event/Ticket rows were removed (e.g. data migration).
+    Skips prune — DB is already clean.
+    """
+    _seed_all(skip_prune=True)
+    assert_catalog_event_inventory()
 
 
 def main() -> int:
-    print('[seed] starting seed_production.py', flush=True)
+    _seed_log('[seed] starting seed_production.py')
     try:
-        _seed_all()
+        _seed_all(skip_prune=False)
     except OperationalError as e:
         # Render: transient DNS / DB cold-start must NOT prevent Gunicorn from booting (502 for all traffic).
-        print(f'[seed] WARNING: seed skipped — DB unavailable: {e}', flush=True)
+        _seed_log(f'[seed] WARNING: seed skipped — DB unavailable: {e}')
         return 0
     return 0
 
