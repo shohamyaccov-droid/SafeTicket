@@ -198,8 +198,7 @@ const EventGroupPage = () => {
               const city = extractCity(firstTicket.venue);
               const badges = getUrgencyBadges(eventGroup.tickets);
               const isExpanded = expandedDateIndex === index;
-              const ticketsCount = eventGroup.tickets.length;
-              
+
               return (
                 <div key={index} className="event-group-wrapper">
                   <div className="event-row">
@@ -237,7 +236,7 @@ const EventGroupPage = () => {
                         <svg className="ticket-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                           <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" fill="currentColor"/>
                         </svg>
-                        {eventGroup.tickets.reduce((sum, ticket) => sum + (ticket?.available_quantity || 1), 0)} כרטיסים זמינים
+                        כרטיסים זמינים
                       </div>
                     </div>
 
@@ -247,7 +246,7 @@ const EventGroupPage = () => {
                         onClick={() => handleToggleTickets(index)} 
                         className="see-tickets-button"
                       >
-                        {isExpanded ? 'הסתר כרטיסים' : `צפה בכרטיסים (${ticketsCount})`}
+                        {isExpanded ? 'הסתר כרטיסים' : 'צפה בכרטיסים'}
                       </button>
                     </div>
                   </div>
@@ -305,17 +304,12 @@ const EventGroupPage = () => {
                                 </span>
                               </div>
                             )}
-                            {ticket.available_quantity && (
+                            {ticket.available_quantity ? (
                               <div className="ticket-detail-row">
-                                <span className="ticket-label">כמות זמינה:</span>
-                                <span className="ticket-value quantity-value">
-                                  <svg className="ticket-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" fill="currentColor"/>
-                                  </svg>
-                                  {ticket.available_quantity} כרטיסים זמינים
-                                </span>
+                                <span className="ticket-label">מלאי:</span>
+                                <span className="ticket-value quantity-value">זמין למודעה זו</span>
                               </div>
-                            )}
+                            ) : null}
                           </div>
                           <button 
                             onClick={() => handleBuy(ticket)} 

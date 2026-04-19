@@ -250,9 +250,7 @@ const TicketSelectionPage = () => {
                 +
               </button>
             </div>
-            <p className="quantity-note">
-              מינימום 1, מקסימום {maxQuantity} כרטיסים זמינים
-            </p>
+            <p className="quantity-note">בחרו כמות — עד גבול המלאי הזמין למודעה</p>
             {exceedsAvailable && (
               <div className="quantity-error">
                 ⚠️ אין מספיק כרטיסים זמינים ממוכר זה

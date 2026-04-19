@@ -921,7 +921,7 @@ const EventDetailsPage = () => {
         </div>
 
         <div className="section-title-row">
-          <h2 className="section-title">כרטיסים זמינים ({ticketGroups.length})</h2>
+          <h2 className="section-title">כרטיסים זמינים</h2>
           <div className="live-refresh-controls">
             <span className="live-indicator" title="עדכון אוטומטי כל 15 שניות">
               <span className="live-dot" />
@@ -1095,7 +1095,7 @@ const EventDetailsPage = () => {
                       </div>
                       <div className="ticket-mini-tags">
                         <span className="mini-tag quantity-tag">
-                          🎟️ {group.available_count} כרטיסים
+                          🎟️ כרטיסים זמינים
                           {splitType === 'pairs' && (
                             <span className="split-badge badge-pairs">נמכר בזוגות בלבד</span>
                           )}

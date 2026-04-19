@@ -1,9 +1,9 @@
 import { getFullImageUrl } from '../utils/formatters';
 
 /**
- * Homepage / carousel event tile. Shows waitlist CTA when there is no ticket inventory.
+ * Homepage / carousel event tile. No exact inventory counts; waitlist signup only on event details.
  */
-export default function EventCard({ event, formatEventDateHe, onNavigate, onOpenWaitlist }) {
+export default function EventCard({ event, formatEventDateHe, onNavigate }) {
   const img =
     getFullImageUrl(event.image_url) ||
     getFullImageUrl(event.artist_detail?.image_url) ||
@@ -14,9 +14,7 @@ export default function EventCard({ event, formatEventDateHe, onNavigate, onOpen
   const venueLine = event.venue_detail?.name
     ? `${event.venue_detail.name}, ${event.city || ''}`.replace(/,\s*$/, '').trim()
     : [event.venue, event.city].filter(Boolean).join(', ');
-  const curSym = event.currency_symbol || '₪';
-  const ticketsCount = event?.tickets_count ?? 0;
-  const showWaitlist = ticketsCount === 0;
+  const hasInventory = (event?.tickets_count ?? 0) > 0;
 
   return (
     <article
@@ -53,24 +51,11 @@ export default function EventCard({ event, formatEventDateHe, onNavigate, onOpen
         {subtitle ? <p className="home-carousel-card__artist">{subtitle}</p> : null}
         <p className="home-carousel-card__meta">{formatEventDateHe(event.date)}</p>
         {venueLine ? <p className="home-carousel-card__venue">{venueLine}</p> : null}
-        {showWaitlist ? (
-          <>
-            <p className="home-carousel-card__tickets home-carousel-card__tickets--none">אין כרטיסים זמינים כרגע</p>
-            <button
-              type="button"
-              className="event-card-waitlist-btn"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onOpenWaitlist?.(event);
-              }}
-            >
-              קבל התראה כשמתפנה כרטיס
-            </button>
-          </>
+        {hasInventory ? (
+          <p className="home-carousel-card__tickets">לרכישת כרטיסים</p>
         ) : (
-          <p className="home-carousel-card__tickets">
-            {ticketsCount} כרטיסים זמינים ({curSym})
+          <p className="home-carousel-card__tickets home-carousel-card__tickets--none">
+            {event.high_demand ? 'אזל המלאי' : 'אין כרטיסים כרגע'}
           </p>
         )}
       </div>

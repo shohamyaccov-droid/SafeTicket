@@ -218,19 +218,6 @@ SEED_WAITLIST_EVENTS: list[dict] = [
         'tournament': None,
         'event_image': 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=1400&q=85',
     },
-    {
-        'name': 'יום הסטודנט בטכניון 2026',
-        'date': _il_dt(2026, 6, 4, 10, 0),
-        'venue': 'אחר',
-        'venue_struct': ('הטכניון', 'חיפה'),
-        'city': 'חיפה',
-        'category': 'festival',
-        'artist_name': None,
-        'home_team': None,
-        'away_team': None,
-        'tournament': None,
-        'event_image': 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1400&q=85',
-    },
 ]
 
 _LEGACY_EVENT_NAME_SUBSTRINGS = (
@@ -465,15 +452,16 @@ def _expected_catalog_event_names() -> frozenset:
 
 def assert_catalog_event_inventory() -> None:
     """
-    Post-condition for production catalog: exactly 7 events (4 launch + 3 waitlist),
+    Post-condition for production catalog: exactly 4 launch + N waitlist events,
     launch rows have active ticket stock, waitlist rows have zero tickets and high_demand.
     """
     from django.db.models import Sum
 
     expected = _expected_catalog_event_names()
+    n_expected = len(expected)
     n_ev = Event.objects.count()
-    if n_ev != 7:
-        raise RuntimeError(f'Catalog seed: expected exactly 7 events, found {n_ev}')
+    if n_ev != n_expected:
+        raise RuntimeError(f'Catalog seed: expected exactly {n_expected} events, found {n_ev}')
     got_names = frozenset(Event.objects.values_list('name', flat=True))
     if got_names != expected:
         raise RuntimeError(

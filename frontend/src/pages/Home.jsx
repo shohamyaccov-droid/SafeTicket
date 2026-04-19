@@ -5,7 +5,6 @@ import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import EmptyState from '../components/EmptyState';
 import EventCard from '../components/EventCard';
-import WaitlistSignupModal from '../components/WaitlistSignupModal';
 import { toastError } from '../utils/toast';
 import './Home.css';
 
@@ -39,8 +38,6 @@ const Home = () => {
   const [loadError, setLoadError] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') ?? '');
-  const [waitlistEvent, setWaitlistEvent] = useState(null);
-
   const qFromUrl = searchParams.get('q') ?? '';
   useEffect(() => {
     setSearchQuery(qFromUrl);
@@ -309,7 +306,6 @@ const Home = () => {
                   event={event}
                   formatEventDateHe={formatEventDateHe}
                   onNavigate={() => handleEventClick(event.id)}
-                  onOpenWaitlist={() => setWaitlistEvent(event)}
                 />
               </div>
             ))}
@@ -430,9 +426,6 @@ const Home = () => {
           <CarouselSection slug="theater" title="תיאטרון" items={theaterEvents} />
         </div>
       )}
-      {waitlistEvent ? (
-        <WaitlistSignupModal event={waitlistEvent} onClose={() => setWaitlistEvent(null)} />
-      ) : null}
     </div>
   );
 };
