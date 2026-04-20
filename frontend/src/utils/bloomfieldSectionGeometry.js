@@ -1,6 +1,7 @@
 /**
  * Bloomfield — Viagogo 3-tier bowl on a squircle (rounded rect: straight N/S/E/W, curved corners only).
  * Tier 1 (~200s): thin inner ring. Tier 2 (~300s): main bowl full loop. Tier 3 (~400s): N+S only.
+ * Straights use equal subdivision; corners are standalone annular sectors (no path merging).
  */
 
 export const VIEW_W = 1000;
@@ -16,7 +17,7 @@ export const PITCH_RX = 5;
 export const PITCH_RY = 5;
 
 const MOAT_DEFAULT = 20;
-/** Viagogo-ish radial weights: thin 200s, very deep 300s bowl, deep 400s N/S. */
+/** Thin 200s, deep 300s bowl, deep 400s N/S. */
 const D_T1 = 12;
 const G_T12 = 2;
 const D_T2 = 80;
@@ -24,7 +25,6 @@ const G_T23 = 8;
 const D_T3 = 65;
 
 const CELL_IN = 0.45;
-/** Corner wedges: full outer radius so corners sweep with the deep straights. */
 const T2_CORNER_OUTER_FRAC = 1;
 
 /** Total vertical stack beyond pitch+moat band (symmetric east/west). */
@@ -48,7 +48,7 @@ export const PITCH_H = pitchH;
 
 const wi = PITCH_W + 2 * MOAT;
 const hi = PITCH_H + 2 * MOAT;
-/** Slightly tighter fillet than before — straights read longer, corners less “puffy”. */
+/** Slightly tighter fillet — straights read longer, corners less “puffy”. */
 const ri = Math.min(34, Math.min(wi, hi) * 0.11 + 18);
 
 const xL = CX - wi / 2;
@@ -112,33 +112,10 @@ const sideFlat2i = h2i - 2 * r2i;
 const topFlat3i = w3i - 2 * r3i;
 const botFlat3i = topFlat3i;
 
-/**
- * Bell-style weights + heavier ends: end straights (301/309, 319/328, …) widen on the flat;
- * corner wedges stay narrow via T2_CORNER_SPAN_FRAC (see tier-2 corner block).
- */
-const W9 = [1.05, 0.78, 1.05, 1.35, 1.55, 1.35, 1.05, 0.78, 1.05];
-const W6 = [1.0, 1.15, 1.6, 1.6, 1.15, 1.0];
-const W10 = [0.98, 0.72, 0.88, 1.05, 1.25, 1.25, 1.05, 0.88, 0.72, 0.98];
-
-function cumFracFromWeights(weights) {
-  const sum = weights.reduce((s, w) => s + w, 0);
-  if (!Number.isFinite(sum) || sum <= 0) {
-    const n = weights.length || 1;
-    return Array.from({ length: n + 1 }, (_, i) => i / n);
-  }
-  const out = [0];
-  let acc = 0;
-  for (const w of weights) {
-    acc += w;
-    out.push(acc / sum);
-  }
-  out[out.length - 1] = 1;
-  return out;
-}
-
-/** Map fraction breaks to absolute positions on an edge from `start` with length `span` (positive along edge). */
-function breaksFromCum(start, span, cum) {
-  return cum.map((f) => start + f * span);
+/** `segments` equal slices → `segments + 1` boundary coordinates along [start, start+span]. */
+function equalBreaks(start, span, segments) {
+  if (!Number.isFinite(segments) || segments <= 0) return [start, start + span];
+  return Array.from({ length: segments + 1 }, (_, k) => start + (k / segments) * span);
 }
 
 /** Intersect [a,b] with [lo,hi] on x (order-agnostic); null if empty. */
@@ -216,13 +193,13 @@ function annularSector(cx0, cy0, rIn, rOut, a0, a1, steps = 14) {
   const pts = [];
   for (let i = 0; i <= steps; i += 1) {
     const t = i / steps;
-    const a = a0 + t * (a1 - a0);
-    pts.push({ x: cx0 + rOut * Math.cos(a), y: cy0 + rOut * Math.sin(a) });
+    const ang = a0 + t * (a1 - a0);
+    pts.push({ x: cx0 + rOut * Math.cos(ang), y: cy0 + rOut * Math.sin(ang) });
   }
   for (let i = steps; i >= 0; i -= 1) {
     const t = i / steps;
-    const a = a0 + t * (a1 - a0);
-    pts.push({ x: cx0 + rIn * Math.cos(a), y: cy0 + rIn * Math.sin(a) });
+    const ang = a0 + t * (a1 - a0);
+    pts.push({ x: cx0 + rIn * Math.cos(ang), y: cy0 + rIn * Math.sin(ang) });
   }
   let d = '';
   for (let i = 0; i < pts.length; i += 1) {
@@ -240,37 +217,15 @@ function push(list, id, faceLabel, tier, w) {
   list.push({ id, faceLabel, d: w.d, cx: w.cx, cy: w.cy, tier });
 }
 
-/** Tier-2 corners keep only this fraction of each 90° quadrant; rest is annular caps on end straights. */
-const T2_CORNER_SPAN_FRAC = 0.34;
-
-/**
- * Combine two closed SVG subpaths (same fill) for end blocks = rect + corner cap.
- * Labels/pins use the rect centroid only. Full `d` concat lets fill fuse when stroke is off (see map).
- */
-function mergePaths(rectWedge, capWedge) {
-  if (!rectWedge || typeof rectWedge.d !== 'string' || !rectWedge.d) return capWedge;
-  if (!capWedge || typeof capWedge.d !== 'string' || !capWedge.d) return rectWedge;
-  const d = `${rectWedge.d} ${capWedge.d}`;
-  return { d, cx: rectWedge.cx, cy: rectWedge.cy };
-}
-
 const TIER_1 = [];
 const TIER_2 = [];
 const TIER_3 = [];
 
-const cum9 = cumFracFromWeights(W9);
-const cum6 = cumFracFromWeights(W6);
-const cum10 = cumFracFromWeights(W10);
-
-/** Tier-2 master verticals on north (same fractions → aligned aisles T1/T2/T3). */
-const xNorthT2 = breaksFromCum(xL2i + r2i, topFlat2i, cum9);
-/** West-to-east along bottom flat (tier 2). */
-const xSouthT2 = breaksFromCum(xL2i + r2i, botFlat2i, cum10);
-/** East-to-west — use with 319+(9−i) so south reads 319…328 left-to-right. */
+/** Tier-2 master breaks: equal spacing (aligned T1 north clips + visual rhythm). */
+const xNorthT2 = equalBreaks(xL2i + r2i, topFlat2i, 9);
+const xSouthT2 = equalBreaks(xL2i + r2i, botFlat2i, 10);
 const xSouthT2Rev = xSouthT2.slice().reverse();
-/** North-to-south along west straight (tier 2). */
-const yWestT2 = breaksFromCum(yT2i + r2i, sideFlat2i, cum6);
-/** South-to-north — use with 332+i so west reads 337…332 top-to-bottom. */
+const yWestT2 = equalBreaks(yT2i + r2i, sideFlat2i, 6);
 const yWestT2Rev = yWestT2.slice().reverse();
 
 /* --- TIER 1 straights only (no 200s in corners — white negative space) --- */
@@ -309,7 +264,41 @@ for (let p = 0; p < 3; p += 1) {
   }
 }
 
-/* --- TIER 2 full bowl --- */
+/* --- TIER 2 full bowl — straights = rectCell only; corners = full 90° quarters (equal arc share) --- */
+
+for (let i = 0; i < 9; i += 1) {
+  push(
+    TIER_2,
+    String(301 + i),
+    String(301 + i),
+    't2',
+    rectCell(xNorthT2[i], yT2o, xNorthT2[i + 1], yT2i)
+  );
+}
+
+for (let i = 0; i < 10; i += 1) {
+  const x0 = xSouthT2Rev[i + 1];
+  const x1 = xSouthT2Rev[i];
+  const sid = String(319 + (9 - i));
+  push(TIER_2, sid, sid, 't2', rectCell(x0, yB2i, x1, yB2o));
+}
+
+for (let i = 0; i < 6; i += 1) {
+  const y0 = yWestT2Rev[i + 1];
+  const y1 = yWestT2Rev[i];
+  const sid = String(332 + i);
+  push(TIER_2, sid, sid, 't2', rectCell(xL2o, y0, xL2i, y1));
+}
+
+for (let i = 0; i < 6; i += 1) {
+  push(
+    TIER_2,
+    String(312 + i),
+    String(312 + i),
+    't2',
+    rectCell(xR2i, yWestT2[i], xR2o, yWestT2[i + 1])
+  );
+}
 
 const cn2 = {
   nw: { x: xL2i + r2i, y: yT2i + r2i },
@@ -321,141 +310,64 @@ const cn2 = {
 const rinC = r2i + CELL_IN;
 const routC = r2i + (r2o - r2i) * T2_CORNER_OUTER_FRAC - CELL_IN;
 
-const qu = Math.PI / 2;
-const cSpan = qu * T2_CORNER_SPAN_FRAC;
-const midNW = (-3 * Math.PI) / 4;
-const nwA0 = midNW - cSpan / 2;
-const nwA1 = midNW + cSpan / 2;
-const midNE = -Math.PI / 4;
-const neA0 = midNE - cSpan / 2;
-const neA1 = midNE + cSpan / 2;
-const neMid = (neA0 + neA1) / 2;
-const midSE = Math.PI / 4;
-const seA0 = midSE - cSpan / 2;
-const seA1 = midSE + cSpan / 2;
-const midSW = (3 * Math.PI) / 4;
-const swA0 = midSW - cSpan / 2;
-const swA1 = midSW + cSpan / 2;
-const swStep = (swA1 - swA0) / 3;
+push(TIER_2, '338', '338', 't2', annularSector(cn2.nw.x, cn2.nw.y, rinC, routC, -Math.PI / 2, -Math.PI));
+push(
+  TIER_2,
+  '310',
+  '310',
+  't2',
+  annularSector(cn2.ne.x, cn2.ne.y, rinC, routC, -Math.PI / 2, -Math.PI / 4, 8)
+);
+push(
+  TIER_2,
+  '311',
+  '311',
+  't2',
+  annularSector(cn2.ne.x, cn2.ne.y, rinC, routC, -Math.PI / 4, 0, 8)
+);
+push(TIER_2, '318', '318', 't2', annularSector(cn2.se.x, cn2.se.y, rinC, routC, 0, Math.PI / 2));
 
-for (let i = 0; i < 9; i += 1) {
-  const rect = rectCell(xNorthT2[i], yT2o, xNorthT2[i + 1], yT2i);
-  if (i === 0) {
-    const cap = annularSector(cn2.nw.x, cn2.nw.y, rinC, routC, -Math.PI / 2, nwA0, 10);
-    push(TIER_2, '301', '301', 't2', mergePaths(rect, cap));
-  } else if (i === 8) {
-    const cap = annularSector(cn2.ne.x, cn2.ne.y, rinC, routC, -Math.PI / 2, neA0, 10);
-    push(TIER_2, '309', '309', 't2', mergePaths(rect, cap));
-  } else {
-    push(TIER_2, String(301 + i), String(301 + i), 't2', rect);
-  }
-}
-
-for (let i = 0; i < 10; i += 1) {
-  const x0 = xSouthT2Rev[i + 1];
-  const x1 = xSouthT2Rev[i];
-  const sid = String(319 + (9 - i));
-  const rect = rectCell(x0, yB2i, x1, yB2o);
-  if (i === 0) {
-    const cap = annularSector(cn2.se.x, cn2.se.y, rinC, routC, 0, seA0, 10);
-    push(TIER_2, '328', '328', 't2', mergePaths(rect, cap));
-  } else if (i === 9) {
-    const cap = annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, Math.PI / 2, swA0, 10);
-    push(TIER_2, '319', '319', 't2', mergePaths(rect, cap));
-  } else {
-    push(TIER_2, sid, sid, 't2', rect);
-  }
-}
-
-for (let i = 0; i < 6; i += 1) {
-  const y0 = yWestT2Rev[i + 1];
-  const y1 = yWestT2Rev[i];
-  const sid = String(332 + i);
-  const rect = rectCell(xL2o, y0, xL2i, y1);
-  if (i === 0) {
-    const cap = annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, swA1, Math.PI, 10);
-    push(TIER_2, '332', '332', 't2', mergePaths(rect, cap));
-  } else if (i === 5) {
-    const cap = annularSector(cn2.nw.x, cn2.nw.y, rinC, routC, nwA1, -Math.PI, 10);
-    push(TIER_2, '337', '337', 't2', mergePaths(rect, cap));
-  } else {
-    push(TIER_2, sid, sid, 't2', rect);
-  }
-}
-
-for (let i = 0; i < 6; i += 1) {
-  const rect = rectCell(xR2i, yWestT2[i], xR2o, yWestT2[i + 1]);
-  if (i === 0) {
-    const cap = annularSector(cn2.ne.x, cn2.ne.y, rinC, routC, neA1, 0, 10);
-    push(TIER_2, '312', '312', 't2', mergePaths(rect, cap));
-  } else if (i === 5) {
-    const cap = annularSector(cn2.se.x, cn2.se.y, rinC, routC, seA1, Math.PI / 2, 10);
-    push(TIER_2, '317', '317', 't2', mergePaths(rect, cap));
-  } else {
-    push(TIER_2, String(312 + i), String(312 + i), 't2', rect);
-  }
-}
-
-push(TIER_2, '338', '338', 't2', annularSector(cn2.nw.x, cn2.nw.y, rinC, routC, nwA0, nwA1, 10));
-/* NE: angles run north (-π/2) → east (0); 310 = north/top of arc, 311 = toward east/bottom. */
-push(TIER_2, '310', '310', 't2', annularSector(cn2.ne.x, cn2.ne.y, rinC, routC, neA0, neMid, 8));
-push(TIER_2, '311', '311', 't2', annularSector(cn2.ne.x, cn2.ne.y, rinC, routC, neMid, neA1, 8));
-push(TIER_2, '318', '318', 't2', annularSector(cn2.se.x, cn2.se.y, rinC, routC, seA0, seA1, 10));
-/* SW: angles run south (π/2) → west (π); 329 = south/bottom-right of arc, 331 = toward west/top-left. */
+const swA = Math.PI / 2;
+const swB = Math.PI;
+const swThird = (swB - swA) / 3;
 push(
   TIER_2,
   '329',
   '329',
   't2',
-  annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, swA0, swA0 + swStep, 6)
+  annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, swA, swA + swThird, 6)
 );
 push(
   TIER_2,
   '330',
   '330',
   't2',
-  annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, swA0 + swStep, swA0 + 2 * swStep, 6)
+  annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, swA + swThird, swA + 2 * swThird, 6)
 );
 push(
   TIER_2,
   '331',
   '331',
   't2',
-  annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, swA0 + 2 * swStep, swA1, 6)
+  annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, swA + 2 * swThird, swB, 6)
 );
 
-/* --- TIER 3 north + south only — vertical aisles match tier-2 master breaks --- */
+/* --- TIER 3 north + south only — equal strips on flats --- */
 
-const xN3Lo = xL3i + r3i;
-const xN3Hi = xR3i - r3i;
+const xN3Br = equalBreaks(xL3i + r3i, topFlat3i, 3);
 for (let j = 0; j < 3; j += 1) {
-  const clip = clipSpan1D(xNorthT2[3 + j], xNorthT2[4 + j], xN3Lo, xN3Hi);
-  if (clip) push(TIER_3, String(404 + j), String(404 + j), 't3', rectCell(clip.xa, yT3o, clip.xb, yT3i));
+  push(TIER_3, String(404 + j), String(404 + j), 't3', rectCell(xN3Br[j], yT3o, xN3Br[j + 1], yT3i));
 }
 
-const xS3Lo = xL3i + r3i;
-const xS3Hi = xR3i - r3i;
-let southT3Id = 419;
-for (let k = 0; k < 10; k += 1) {
-  if (k === 3 || k === 4 || k === 5) {
-    const mid = (xSouthT2[k] + xSouthT2[k + 1]) / 2;
-    const c0 = clipSpan1D(xSouthT2[k], mid, xS3Lo, xS3Hi);
-    if (c0) {
-      push(TIER_3, String(southT3Id), String(southT3Id), 't3', rectCell(c0.xa, yB3i, c0.xb, yB3o));
-      southT3Id += 1;
-    }
-    const c1 = clipSpan1D(mid, xSouthT2[k + 1], xS3Lo, xS3Hi);
-    if (c1) {
-      push(TIER_3, String(southT3Id), String(southT3Id), 't3', rectCell(c1.xa, yB3i, c1.xb, yB3o));
-      southT3Id += 1;
-    }
-  } else {
-    const c = clipSpan1D(xSouthT2[k], xSouthT2[k + 1], xS3Lo, xS3Hi);
-    if (c) {
-      push(TIER_3, String(southT3Id), String(southT3Id), 't3', rectCell(c.xa, yB3i, c.xb, yB3o));
-      southT3Id += 1;
-    }
-  }
+const xS3Br = equalBreaks(xL3i + r3i, botFlat3i, 13);
+for (let j = 0; j < 13; j += 1) {
+  push(
+    TIER_3,
+    String(419 + j),
+    String(419 + j),
+    't3',
+    rectCell(xS3Br[j], yB3i, xS3Br[j + 1], yB3o)
+  );
 }
 
 const DRAW_ORDER = [
