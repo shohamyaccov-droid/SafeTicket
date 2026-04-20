@@ -32,9 +32,9 @@ const PIN_BODY_W = 96;
 const PIN_TRI_H = 6;
 const PIN_TRI_HALF = 6;
 const PIN_RX = 6;
-/** Crisp white separators — polygons meet; stroke paints the Viagogo-style gap. */
-const STROKE_INACTIVE_W = 3.5;
-const STROKE_HIGHLIGHT_W = 4.25;
+/** Crisp white separators; micro t-gap in geometry + stroke for Viagogo-style stands. */
+const STROKE_INACTIVE_W = 4;
+const STROKE_HIGHLIGHT_W = 4.75;
 
 /** One listing per block for map affordances: lowest displayed price wins. */
 function pickCheapestRow(list) {
@@ -186,7 +186,7 @@ export default function BloomfieldStadiumMap({
         >
           <svg
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-            className="h-full w-full max-h-[540px] select-none"
+            className="h-full w-full max-h-[540px] select-none overflow-visible"
             role="img"
             aria-label="Bloomfield stadium seating map"
           >
@@ -212,10 +212,14 @@ export default function BloomfieldStadiumMap({
                   data-section-id={sec.id}
                   d={sec.d}
                   fill={fill}
+                  fillOpacity={1}
                   stroke={isHi ? '#0ea5e9' : STROKE_SECTION}
                   strokeWidth={isHi ? STROKE_HIGHLIGHT_W : STROKE_INACTIVE_W}
                   strokeLinejoin="round"
-                  className="transition-[stroke,fill-opacity] duration-150 ease-out"
+                  vectorEffect="non-scaling-stroke"
+                  paintOrder="fill stroke"
+                  shapeRendering="geometricPrecision"
+                  className="transition-[stroke] duration-150 ease-out"
                   style={{ cursor: has ? 'pointer' : 'default' }}
                   onMouseEnter={() => handleBlockEnter(sec.id)}
                   onMouseLeave={handleBlockLeave}

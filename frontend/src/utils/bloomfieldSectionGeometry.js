@@ -1,6 +1,6 @@
 /**
  * Bloomfield schematic — inner bowl stays rounded-rect; outer stadium footprint is a smooth ellipse.
- * Adjacent blocks share exact perimeter parameter boundaries → straight radial cuts; UI gaps = SVG stroke.
+ * Outer tier: sides are rays from (CX,CY) through inner rim points to the oval. Micro t-inset separates fills; stroke paints the gap.
  */
 
 export const VIEW_W = 1000;
@@ -26,6 +26,9 @@ const TIER_CHANNEL_DEPTH = 16;
 
 /** Extra semi-axis beyond nominal wo/2, ho/2 so bowl fill extends past seat ring (px). */
 const BOWL_OVAL_MARGIN = 14;
+
+/** Uniform perimeter inset per wedge side (~0.2° of full loop as t) so adjacent fills never share an edge. */
+const T_SEP_PER_SIDE = 0.2 / 360;
 
 const wi = PITCH_W + 2 * GAP;
 const hi = PITCH_H + 2 * GAP;
@@ -110,12 +113,35 @@ function pointOnPerimeter(t, w, h, r, cx, cy) {
   };
 }
 
-/** Intersection of ray C→P with axis-aligned ellipse (same center). */
+/**
+ * Intersection of ray C → P (through inner rim) with axis-aligned ellipse.
+ * Uses unit direction so wedge sides are straight radials from the stadium center.
+ */
 function rayToEllipse(px, py, rx, ry) {
-  const dx = px - CX;
-  const dy = py - CY;
-  const inv = 1 / Math.sqrt((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry));
-  return { x: CX + dx * inv, y: CY + dy * inv };
+  let dx = px - CX;
+  let dy = py - CY;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-12) {
+    dx = 1;
+    dy = 0;
+  } else {
+    dx /= len;
+    dy /= len;
+  }
+  const t = 1 / Math.sqrt((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry));
+  return { x: CX + dx * t, y: CY + dy * t };
+}
+
+function applyMicroSep(t0, t1) {
+  const span = t1 - t0;
+  const pad = Math.min(T_SEP_PER_SIDE, span * 0.06);
+  const ta = t0 + pad;
+  const tb = t1 - pad;
+  if (tb <= ta + 1e-10) {
+    const m = (t0 + t1) / 2;
+    return { t0: m - 1e-8, t1: m + 1e-8 };
+  }
+  return { t0: ta, t1: tb };
 }
 
 function ellipseParamAngle(px, py, rx, ry) {
@@ -245,7 +271,8 @@ function normalizeRanges(specs) {
 const INNER_RANGES = normalizeRanges(INNER_SPECS);
 
 const INNER_WEDGES = INNER_RANGES.map((r) => {
-  const { d, cx, cy } = ringSlice(r.t0, r.t1, wi, hi, ri, wInnerBack, hInnerBack, rInnerBack);
+  const { t0, t1 } = applyMicroSep(r.t0, r.t1);
+  const { d, cx, cy } = ringSlice(t0, t1, wi, hi, ri, wInnerBack, hInnerBack, rInnerBack);
   return { id: r.id, faceLabel: r.faceLabel, d, cx, cy, tier: 'lower' };
 });
 
@@ -262,7 +289,7 @@ const northInnerSpan = rangeForIds(['301', '302', '303', '304', '305', '306', '3
 
 function splitSpan(t0, t1, n, i) {
   const dt = (t1 - t0) / n;
-  return { t0: t0 + dt * i, t1: t0 + dt * (i + 1) };
+  return applyMicroSep(t0 + dt * i, t0 + dt * (i + 1));
 }
 
 const OUTER_WEDGES = [];
