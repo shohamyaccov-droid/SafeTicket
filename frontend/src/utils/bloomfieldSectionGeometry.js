@@ -9,22 +9,42 @@ export const VIEW_H = 640;
 export const CX = 500;
 export const CY = 320;
 
-export const PITCH_W = Math.round(300 * 0.83);
-export const PITCH_H = Math.round(168 * 0.83);
+/** Base pitch; may be reduced slightly if outer bowl would exceed vertical fit budget. */
+let pitchW = Math.round(300 * 0.83);
+let pitchH = Math.round(168 * 0.83);
 export const PITCH_RX = 5;
 export const PITCH_RY = 5;
 
-const MOAT = 20;
-/** Viagogo-ish radial weights (~112px stand + gaps): thin 200s, massive 300s, stout 400s N/S. */
+const MOAT_DEFAULT = 20;
+/** Viagogo-ish radial weights: thin 200s, very deep 300s bowl, deep 400s N/S. */
 const D_T1 = 12;
 const G_T12 = 2;
-const D_T2 = 55;
+const D_T2 = 80;
 const G_T23 = 8;
-const D_T3 = 35;
+const D_T3 = 65;
 
 const CELL_IN = 0.45;
-/** Tier 2 corner wedges: outer arc stops short of full r2o so corners don’t bulge like straights. */
-const T2_CORNER_OUTER_FRAC = 0.87;
+/** Corner wedges: ~full outer radius so corners sweep with the deep straights (tiny epsilon for tessellation). */
+const T2_CORNER_OUTER_FRAC = 0.98;
+
+/** Total vertical stack beyond pitch+moat band (symmetric east/west). */
+const INNER_DIM =
+  2 * (D_T1 + G_T12) + 2 * D_T2 + 2 * G_T23 + 2 * D_T3;
+/** Leave ~10px margin inside VIEW_H 640; shrink moat/pitch only if depths push past this. */
+const OUTER_H_CEIL = 630;
+
+let MOAT = MOAT_DEFAULT;
+const maxBandH = OUTER_H_CEIL - INNER_DIM;
+if (pitchH + 2 * MOAT > maxBandH) {
+  MOAT = Math.max(6, Math.floor((maxBandH - pitchH) / 2));
+}
+if (pitchH + 2 * MOAT > maxBandH) {
+  pitchH = Math.max(100, maxBandH - 2 * MOAT);
+  pitchW = Math.round(pitchH * (300 / 168));
+}
+
+export const PITCH_W = pitchW;
+export const PITCH_H = pitchH;
 
 const wi = PITCH_W + 2 * MOAT;
 const hi = PITCH_H + 2 * MOAT;
