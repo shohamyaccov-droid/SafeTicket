@@ -18,10 +18,10 @@ import {
   PITCH_RY,
 } from '../utils/bloomfieldSectionGeometry';
 
-const FILL_DEFAULT = '#ebebeb';
+const FILL_DEFAULT = '#f3f4f6';
 const STROKE_SECTION = '#ffffff';
 const FILL_ACTIVE = '#9bca3e';
-const PITCH_GRASS = '#6d9048';
+const PITCH_GRASS = '#82c91e';
 const LINE_WHITE = '#ffffff';
 const PIN_INVERTED = '#222222';
 const TEXT_INACTIVE = '#999999';
@@ -141,7 +141,7 @@ export default function BloomfieldStadiumMap({
     (pinHoverId != null && String(stableId) === String(pinHoverId));
 
   return (
-    <div className="relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-[#f4f5f7] shadow-sm">
+    <div className="relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-[#f3f4f6] shadow-sm">
       <div className="absolute top-2 left-2 z-[5] flex flex-col overflow-hidden rounded-md shadow-md">
         <button
           type="button"
@@ -196,7 +196,7 @@ export default function BloomfieldStadiumMap({
               </filter>
             </defs>
 
-            <rect width={VIEW_W} height={VIEW_H} fill="#f4f5f7" />
+            <rect width={VIEW_W} height={VIEW_H} fill="#f3f4f6" />
 
             <path d={BOWL_OUTER_D} fill="#e8eaed" stroke="#d1d5db" strokeWidth="1.5" />
 
@@ -235,7 +235,11 @@ export default function BloomfieldStadiumMap({
                   fill={has ? TEXT_ACTIVE : TEXT_INACTIVE}
                   fontSize="9"
                   fontWeight={has ? '800' : '600'}
-                  style={{ pointerEvents: 'none', userSelect: 'none' }}
+                  style={{
+                    pointerEvents: 'none',
+                    userSelect: 'none',
+                    writingMode: 'horizontal-tb',
+                  }}
                 >
                   {sec.faceLabel}
                 </text>
