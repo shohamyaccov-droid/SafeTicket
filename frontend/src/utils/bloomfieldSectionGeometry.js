@@ -24,8 +24,8 @@ const G_T23 = 8;
 const D_T3 = 65;
 
 const CELL_IN = 0.45;
-/** Corner wedges: ~full outer radius so corners sweep with the deep straights (tiny epsilon for tessellation). */
-const T2_CORNER_OUTER_FRAC = 0.98;
+/** Corner wedges: full outer radius so corners sweep with the deep straights. */
+const T2_CORNER_OUTER_FRAC = 1;
 
 /** Total vertical stack beyond pitch+moat band (symmetric east/west). */
 const INNER_DIM =
