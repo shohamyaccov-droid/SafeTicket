@@ -2,80 +2,52 @@
 import { useMemo, useCallback } from 'react';
 import { useVenueMapPanZoom } from '../hooks/useVenueMapPanZoom';
 import { getTicketPrice, formatMoney, resolveTicketCurrency } from '../utils/priceFormat';
+import {
+  VIEW_W,
+  VIEW_H,
+  CX,
+  CY,
+  RX_PITCH,
+  RY_PITCH,
+  SECTION_WEDGES,
+  BOWL_RX,
+  BOWL_RY,
+} from '../utils/bloomfieldSectionGeometry';
 
-const VIEW_W = 1000;
-const VIEW_H = 640;
-
-const ZONES = {
-  north: {
-    id: 'north',
-    d: 'M 130 88 L 870 88 L 805 238 L 195 238 Z',
-    label: 'צפון',
-    lx: 500,
-    ly: 138,
-  },
-  south: {
-    id: 'south',
-    d: 'M 195 402 L 805 402 L 870 552 L 130 552 Z',
-    label: 'דרום',
-    lx: 500,
-    ly: 502,
-  },
-  west: {
-    id: 'west',
-    d: 'M 88 168 L 218 168 L 218 472 L 88 472 Z',
-    label: 'מערב',
-    lx: 148,
-    ly: 318,
-  },
-  east: {
-    id: 'east',
-    d: 'M 782 168 L 912 168 L 912 472 L 782 472 Z',
-    label: 'מזרח',
-    lx: 852,
-    ly: 318,
-  },
-};
-
-const ZONE_CENTROIDS = {
-  north: [500, 175],
-  south: [500, 465],
-  east: [847, 318],
-  west: [153, 318],
-};
-
-const AVAIL = '#a3e635';
-const UNAVAIL = '#94a3b8';
-const AVAIL_STROKE = '#65a30d';
-const UNAVAIL_STROKE = '#64748b';
+const FILL_DEFAULT = '#f3f4f6';
+const STROKE_SECTION = '#ffffff';
+const FILL_ACTIVE = '#a3e635';
+const STROKE_ACTIVE_OUTLINE = '#84cc16';
 
 function layoutPins(rows) {
-  const byZone = { north: [], south: [], east: [], west: [] };
+  const byBlock = {};
   for (const row of rows) {
-    const z = row.bloomfield?.zone;
-    if (byZone[z]) byZone[z].push(row);
+    const bid = row.bloomfield?.blockId;
+    if (!bid) continue;
+    if (!byBlock[bid]) byBlock[bid] = [];
+    byBlock[bid].push(row);
   }
   const pins = [];
-  for (const z of Object.keys(byZone)) {
-    const list = byZone[z];
-    const [cx, cy] = ZONE_CENTROIDS[z];
+  for (const bid of Object.keys(byBlock)) {
+    const list = byBlock[bid];
+    const w = SECTION_WEDGES.find((x) => x.id === bid);
+    const cx0 = w?.cx ?? CX;
+    const cy0 = w?.cy ?? CY;
     list.forEach((row, i) => {
-      const spread = list.length > 1 ? (i - (list.length - 1) / 2) * 86 : 0;
-      const stack = ((i % 3) - 1) * 26;
+      const spread = list.length > 1 ? (i - (list.length - 1) / 2) * 14 : 0;
+      const stack = ((i % 2) - 0.5) * 10;
       const t = row.firstTicket;
       const raw = parseFloat(getTicketPrice(t));
       const cur = resolveTicketCurrency(t);
       const priceLabel = formatMoney(Number.isFinite(raw) ? raw : 0, cur);
+      const n = row.group.available_count ?? 0;
       pins.push({
         stableId: row.stableId,
-        x: cx + spread,
-        y: cy + stack,
+        blockId: bid,
+        x: cx0 + spread,
+        y: cy0 + stack - 28,
         priceLabel,
-        urgency:
-          row.group.available_count <= 3
-            ? `${row.group.available_count} נשארו`
-            : null,
-        zone: z,
+        urgency: n > 0 && n < 5 ? `${n} left` : null,
       });
     });
   }
@@ -90,43 +62,46 @@ export default function BloomfieldStadiumMap({
 }) {
   const panZoom = useVenueMapPanZoom({ minScale: 0.65, maxScale: 2.8, zoomStep: 0.14 });
 
-  const zonesWithListings = useMemo(() => {
+  const blocksWithListings = useMemo(() => {
     const s = new Set();
     for (const r of rows) {
-      if (r.bloomfield?.zone) s.add(r.bloomfield.zone);
+      if (r.bloomfield?.blockId) s.add(r.bloomfield.blockId);
     }
     return s;
   }, [rows]);
 
-  const highlightZone = useMemo(() => {
+  const highlightBlockId = useMemo(() => {
     if (highlightStableId == null || highlightStableId === '') return null;
     const hit = rows.find((r) => String(r.stableId) === String(highlightStableId));
-    return hit?.bloomfield?.zone ?? null;
+    return hit?.bloomfield?.blockId ?? null;
   }, [rows, highlightStableId]);
 
   const pins = useMemo(() => layoutPins(rows), [rows]);
 
-  const firstRowInZone = useCallback(
-    (zoneId) => rows.find((r) => r.bloomfield?.zone === zoneId),
+  const firstRowInBlock = useCallback(
+    (blockId) => rows.find((r) => r.bloomfield?.blockId === blockId),
     [rows]
   );
 
-  const handleZoneEnter = (zoneId) => {
-    const first = firstRowInZone(zoneId);
+  const handleBlockEnter = (blockId) => {
+    const has = blocksWithListings.has(blockId);
+    if (!has) return;
+    const first = firstRowInBlock(blockId);
     onHoverGroup?.(first?.stableId ?? null);
   };
 
-  const handleZoneLeave = () => {
+  const handleBlockLeave = () => {
     onHoverGroup?.(null);
   };
 
-  const handleZoneClick = (zoneId) => {
-    const first = firstRowInZone(zoneId);
+  const handleBlockClick = (blockId) => {
+    if (!blocksWithListings.has(blockId)) return;
+    const first = firstRowInBlock(blockId);
     if (first) onSelectGroup?.(first.stableId);
   };
 
   return (
-    <div className="relative w-full aspect-[10/7] max-h-[min(520px,72vh)] min-h-[260px] rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm">
+    <div className="relative w-full aspect-[1000/636] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-sm">
       <div className="absolute top-2 left-2 z-[5] flex flex-col overflow-hidden rounded-md shadow-md">
         <button
           type="button"
@@ -152,7 +127,7 @@ export default function BloomfieldStadiumMap({
           onClick={panZoom.resetView}
           className="rounded-full bg-white/95 px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-md ring-1 ring-slate-200/80 hover:bg-white"
         >
-          חיפוש באזור זה
+          Search this area
         </button>
       </div>
 
@@ -163,7 +138,7 @@ export default function BloomfieldStadiumMap({
         onPointerUp={panZoom.onPointerUp}
         onPointerCancel={panZoom.onPointerUp}
         role="application"
-        aria-label="מפת אצטדיון בלומפילד — גרירה להזזה, כפתורי +/- להתקרבות"
+        aria-label="Bloomfield seating map — drag to pan, use plus and minus to zoom"
       >
         <div
           className="flex h-full w-full items-center justify-center will-change-transform"
@@ -171,105 +146,103 @@ export default function BloomfieldStadiumMap({
         >
           <svg
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-            className="h-full w-full max-h-[520px] select-none"
+            className="h-full w-full max-h-[540px] select-none"
             role="img"
-            aria-label="מפת ישיבה סכמטית — בלומפילד"
+            aria-label="Bloomfield stadium seating map"
           >
             <defs>
-              <filter id="bf-pin-shadow" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="1" stdDeviation="2" floodOpacity="0.12" />
+              <filter id="bf-pin-shadow-md" x="-35%" y="-35%" width="170%" height="170%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.14" />
               </filter>
             </defs>
 
-            {/* Outer bowl */}
-            <path
-              d="M 72 320 Q 72 96 500 72 T 928 320 T 500 568 T 72 320 Z"
-              fill="#e2e8f0"
-              stroke="#cbd5e1"
-              strokeWidth="3"
+            {/* Bowl shell */}
+            <ellipse
+              cx={CX}
+              cy={CY}
+              rx={BOWL_RX}
+              ry={BOWL_RY}
+              fill="#e8eaed"
+              stroke="#d1d5db"
+              strokeWidth="2.5"
             />
 
-            {/* Zones */}
-            {Object.values(ZONES).map((z) => {
-              const has = zonesWithListings.has(z.id);
-              const isHi = highlightZone === z.id;
-              const fill = has ? AVAIL : UNAVAIL;
-              const stroke = has ? AVAIL_STROKE : UNAVAIL_STROKE;
+            {/* Per-section wedges */}
+            {SECTION_WEDGES.map((sec) => {
+              const has = blocksWithListings.has(sec.id);
+              const isHi = highlightBlockId === sec.id;
+              const fill = has ? FILL_ACTIVE : FILL_DEFAULT;
+              const stroke = has ? STROKE_ACTIVE_OUTLINE : STROKE_SECTION;
               return (
                 <path
-                  key={z.id}
-                  d={z.d}
+                  key={sec.id}
+                  data-section-id={sec.id}
+                  d={sec.d}
                   fill={fill}
-                  fillOpacity={isHi ? 0.95 : has ? 0.88 : 0.55}
+                  fillOpacity={isHi ? 1 : has ? 0.98 : 1}
                   stroke={isHi ? '#0ea5e9' : stroke}
-                  strokeWidth={isHi ? 3.2 : 1.4}
-                  className="transition-[stroke,fill-opacity] duration-150"
+                  strokeWidth={isHi ? 2.75 : has ? 1.15 : 1.05}
+                  className="transition-[stroke,fill-opacity] duration-150 ease-out"
                   style={{ cursor: has ? 'pointer' : 'default' }}
-                  onMouseEnter={() => has && handleZoneEnter(z.id)}
-                  onMouseLeave={handleZoneLeave}
-                  onClick={() => has && handleZoneClick(z.id)}
+                  onMouseEnter={() => handleBlockEnter(sec.id)}
+                  onMouseLeave={handleBlockLeave}
+                  onClick={() => handleBlockClick(sec.id)}
                 />
               );
             })}
 
-            {/* Pitch */}
-            <rect
-              x="335"
-              y="248"
-              width="330"
-              height="144"
-              rx="14"
+            {/* Pitch (covers wedge inner hole visually) */}
+            <ellipse
+              cx={CX}
+              cy={CY}
+              rx={RX_PITCH}
+              ry={RY_PITCH}
               fill="#4ade80"
               stroke="#15803d"
               strokeWidth="2.5"
             />
             <line
-              x1="500"
-              y1="248"
-              x2="500"
-              y2="392"
-              stroke="#ecfccb"
+              x1={CX}
+              y1={CY - RY_PITCH}
+              x2={CX}
+              y2={CY + RY_PITCH}
+              stroke="#bbf7d0"
               strokeWidth="2"
-              opacity="0.85"
+              opacity="0.9"
             />
-            <circle cx="500" cy="320" r="42" fill="none" stroke="#ecfccb" strokeWidth="2" opacity="0.85" />
-
-            {/* Stand labels */}
-            {Object.values(ZONES).map((z) => (
-              <text
-                key={`lbl-${z.id}`}
-                x={z.lx}
-                y={z.ly}
-                textAnchor="middle"
-                fill="#1e293b"
-                fontSize="15"
-                fontWeight="700"
-                style={{ pointerEvents: 'none', userSelect: 'none' }}
-              >
-                {z.label}
-              </text>
-            ))}
+            <ellipse
+              cx={CX}
+              cy={CY}
+              rx="38"
+              ry="24"
+              fill="none"
+              stroke="#bbf7d0"
+              strokeWidth="1.75"
+              opacity="0.95"
+            />
 
             <text
-              x="500"
-              y="326"
+              x={CX}
+              y={CY + 5}
               textAnchor="middle"
               fill="#14532d"
-              fontSize="18"
+              fontSize="17"
               fontWeight="800"
               style={{ pointerEvents: 'none', userSelect: 'none' }}
             >
-              מגרש
+              Pitch
             </text>
 
-            {/* Pins */}
+            {/* Price pins */}
             {pins.map((p) => {
               const active =
                 highlightStableId != null &&
                 String(p.stableId) === String(highlightStableId);
+              const h = p.urgency ? 56 : 40;
+              const w = 96;
               return (
                 <g
-                  key={p.stableId}
+                  key={`${p.stableId}-${p.blockId}`}
                   transform={`translate(${p.x}, ${p.y})`}
                   style={{ cursor: 'pointer' }}
                   onMouseEnter={() => onHoverGroup?.(p.stableId)}
@@ -280,19 +253,19 @@ export default function BloomfieldStadiumMap({
                   }}
                 >
                   <rect
-                    x="-52"
-                    y="-22"
-                    width="104"
-                    height="44"
-                    rx="10"
+                    x={-w / 2}
+                    y={-h / 2}
+                    width={w}
+                    height={h}
+                    rx={h / 2}
                     fill="white"
-                    stroke={active ? '#0284c7' : '#e2e8f0'}
-                    strokeWidth={active ? 2.5 : 1}
-                    filter="url(#bf-pin-shadow)"
+                    stroke={active ? '#0284c7' : '#e5e7eb'}
+                    strokeWidth={active ? 2.25 : 1}
+                    filter="url(#bf-pin-shadow-md)"
                   />
                   <text
                     x="0"
-                    y="4"
+                    y={p.urgency ? -6 : 4}
                     textAnchor="middle"
                     fill="#0f172a"
                     fontSize="15"
@@ -301,28 +274,28 @@ export default function BloomfieldStadiumMap({
                   >
                     {p.priceLabel}
                   </text>
-                  <text
-                    x="34"
-                    y="-10"
-                    textAnchor="middle"
-                    fontSize="14"
-                    style={{ pointerEvents: 'none' }}
-                  >
-                    🎟
-                  </text>
                   {p.urgency ? (
                     <text
                       x="0"
-                      y="38"
+                      y="12"
                       textAnchor="middle"
                       fill="#e11d48"
-                      fontSize="11"
+                      fontSize="11.5"
                       fontWeight="700"
                       style={{ pointerEvents: 'none' }}
                     >
                       {p.urgency}
                     </text>
                   ) : null}
+                  <text
+                    x="34"
+                    y={p.urgency ? -14 : -8}
+                    textAnchor="middle"
+                    fontSize="13"
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    🎟
+                  </text>
                 </g>
               );
             })}

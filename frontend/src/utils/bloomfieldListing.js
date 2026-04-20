@@ -2,6 +2,8 @@
  * Bloomfield stadium listing helpers: section → zone, mock rating/features, quantity filter.
  */
 
+import { blockIdFromSectionNumber } from './bloomfieldSectionGeometry';
+
 function simpleHash(str) {
   let h = 0;
   for (let i = 0; i < str.length; i += 1) {
@@ -37,10 +39,10 @@ export function mockListingRating(stableKey) {
   const h = simpleHash(String(stableKey ?? '0'));
   const score = Math.min(10, 8 + (h % 20) / 10);
   const rounded = Math.round(score * 10) / 10;
-  let label = 'מעולה';
-  if (rounded >= 9.8) label = 'מדהים';
-  else if (rounded >= 9.2) label = 'מצוין';
-  else if (rounded >= 8.7) label = 'טוב מאוד';
+  let label = 'Great';
+  if (rounded >= 9.8) label = 'Amazing';
+  else if (rounded >= 9.2) label = 'Excellent';
+  else if (rounded >= 8.7) label = 'Very good';
   return { score: rounded, label };
 }
 
@@ -67,6 +69,7 @@ export function enrichBloomfieldGroup(group, stableGroupKey) {
   const t = group?.tickets?.[0];
   const sectionId = extractBloomfieldSectionNumber(t);
   const zone = bloomfieldZoneFromSectionNumber(sectionId);
+  const blockId = blockIdFromSectionNumber(sectionId || '301');
   const row = t?.row || t?.seat_row || '—';
   const splitRaw = t?.split_type || t?.split_option || group?.split_type || '';
   const splitType = normalizeSplitType(splitRaw);
@@ -77,18 +80,19 @@ export function enrichBloomfieldGroup(group, stableGroupKey) {
   const rating = mockListingRating(stableGroupKey);
   const features = [];
   if (together) {
-    features.push({ key: 'together', label: `${Math.min(2, avail)} כרטיסים יחד` });
+    features.push({ key: 'together', label: '2 tickets together' });
   }
   if (clearView) {
-    features.push({ key: 'view', label: 'נוף פתוח' });
+    features.push({ key: 'view', label: 'Clear view' });
   }
   const urgencyNote =
-    avail > 0 && avail <= 3
-      ? `${avail} כרטיסים נותרו במודעה זו`
+    avail > 0 && avail < 5
+      ? `${avail} ticket${avail === 1 ? '' : 's'} remaining in this listing`
       : null;
   return {
     sectionId: sectionId || '—',
     zone,
+    blockId,
     row: String(row),
     rating,
     features,
