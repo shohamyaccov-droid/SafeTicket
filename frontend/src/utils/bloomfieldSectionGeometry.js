@@ -92,6 +92,42 @@ const sideFlat2i = h2i - 2 * r2i;
 const topFlat3i = w3i - 2 * r3i;
 const botFlat3i = topFlat3i;
 
+/** Bell-style weights: wider mid-stand, narrower near corners (Viagogo). */
+const W9 = [0.6, 0.8, 1.1, 1.4, 1.6, 1.4, 1.1, 0.8, 0.6];
+const W6 = [0.6, 1.2, 1.6, 1.6, 1.2, 0.6];
+const W10 = [0.55, 0.75, 0.9, 1.1, 1.3, 1.3, 1.1, 0.9, 0.75, 0.55];
+
+function cumFracFromWeights(weights) {
+  const sum = weights.reduce((s, w) => s + w, 0);
+  if (!Number.isFinite(sum) || sum <= 0) {
+    const n = weights.length || 1;
+    return Array.from({ length: n + 1 }, (_, i) => i / n);
+  }
+  const out = [0];
+  let acc = 0;
+  for (const w of weights) {
+    acc += w;
+    out.push(acc / sum);
+  }
+  out[out.length - 1] = 1;
+  return out;
+}
+
+/** Map fraction breaks to absolute positions on an edge from `start` with length `span` (positive along edge). */
+function breaksFromCum(start, span, cum) {
+  return cum.map((f) => start + f * span);
+}
+
+/** Intersect [a,b] with [lo,hi] on x (order-agnostic); null if empty. */
+function clipSpan1D(a, b, lo, hi) {
+  const t0 = Math.min(a, b);
+  const t1 = Math.max(a, b);
+  const xa = Math.max(lo, t0);
+  const xb = Math.min(hi, t1);
+  if (xb <= xa + 1e-9) return null;
+  return { xa, xb };
+}
+
 function fmt(n) {
   const v = Number(n);
   if (!Number.isFinite(v)) return 0;
@@ -185,56 +221,93 @@ const TIER_1 = [];
 const TIER_2 = [];
 const TIER_3 = [];
 
+const cum9 = cumFracFromWeights(W9);
+const cum6 = cumFracFromWeights(W6);
+const cum10 = cumFracFromWeights(W10);
+
+/** Tier-2 master verticals on north (same fractions → aligned aisles T1/T2/T3). */
+const xNorthT2 = breaksFromCum(xL2i + r2i, topFlat2i, cum9);
+/** West-to-east along bottom flat (tier 2). */
+const xSouthT2 = breaksFromCum(xL2i + r2i, botFlat2i, cum10);
+/** North-to-south along west straight (tier 2). */
+const yWestT2 = breaksFromCum(yT2i + r2i, sideFlat2i, cum6);
+
 /* --- TIER 1 straights only (no 200s in corners — white negative space) --- */
 
+const xN1Lo = xL1 + r1;
+const xN1Hi = xR1 - r1;
 for (let i = 0; i < 9; i += 1) {
-  const xa = xL1 + r1 + (i / 9) * topFlat1;
-  const xb = xL1 + r1 + ((i + 1) / 9) * topFlat1;
-  push(TIER_1, String(201 + i), String(201 + i), 't1', rectCell(xa, yT1, xb, yT));
+  const clip = clipSpan1D(xNorthT2[i], xNorthT2[i + 1], xN1Lo, xN1Hi);
+  if (clip) push(TIER_1, String(201 + i), String(201 + i), 't1', rectCell(clip.xa, yT1, clip.xb, yT));
 }
 
-for (let i = 0; i < 9; i += 1) {
-  const xa = xR1 - r1 - (i / 9) * botFlat1;
-  const xb = xR1 - r1 - ((i + 1) / 9) * botFlat1;
-  push(TIER_1, String(229 - i), String(229 - i), 't1', rectCell(xb, yB, xa, yB1));
+const xS1Lo = xL1 + r1;
+const xS1Hi = xR1 - r1;
+for (let i = 0; i < 8; i += 1) {
+  const clip = clipSpan1D(xSouthT2[i], xSouthT2[i + 1], xS1Lo, xS1Hi);
+  if (clip) push(TIER_1, String(221 + i), String(221 + i), 't1', rectCell(clip.xa, yB, clip.xb, yB1));
+}
+{
+  const clip = clipSpan1D(xSouthT2[8], xSouthT2[10], xS1Lo, xS1Hi);
+  if (clip) push(TIER_1, '229', '229', 't1', rectCell(clip.xa, yB, clip.xb, yB1));
 }
 
-for (let i = 0; i < 3; i += 1) {
-  const ya = yT1 + r1 + (i / 3) * sideFlat1;
-  const yb = yT1 + r1 + ((i + 1) / 3) * sideFlat1;
-  push(TIER_1, String(236 - i), String(236 - i), 't1', rectCell(xL1, ya, xL, yb));
+const yW1Lo = yT1 + r1;
+const yW1Hi = yB1 - r1;
+for (let p = 0; p < 3; p += 1) {
+  const yClip = clipSpan1D(yWestT2[p * 2], yWestT2[p * 2 + 2], yW1Lo, yW1Hi);
+  if (yClip) {
+    push(TIER_1, String(236 - p), String(236 - p), 't1', rectCell(xL1, yClip.xa, xL, yClip.xb));
+  }
 }
 
-for (let i = 0; i < 3; i += 1) {
-  const ya = yT1 + r1 + (i / 3) * sideFlat1;
-  const yb = yT1 + r1 + ((i + 1) / 3) * sideFlat1;
-  push(TIER_1, String(214 + i), String(214 + i), 't1', rectCell(xR, ya, xR1, yb));
+for (let p = 0; p < 3; p += 1) {
+  const yClip = clipSpan1D(yWestT2[p * 2], yWestT2[p * 2 + 2], yW1Lo, yW1Hi);
+  if (yClip) {
+    push(TIER_1, String(214 + p), String(214 + p), 't1', rectCell(xR, yClip.xa, xR1, yClip.xb));
+  }
 }
 
 /* --- TIER 2 full bowl --- */
 
 for (let i = 0; i < 9; i += 1) {
-  const xa = xL2i + r2i + (i / 9) * topFlat2i;
-  const xb = xL2i + r2i + ((i + 1) / 9) * topFlat2i;
-  push(TIER_2, String(301 + i), String(301 + i), 't2', rectCell(xa, yT2o, xb, yT2i));
+  push(
+    TIER_2,
+    String(301 + i),
+    String(301 + i),
+    't2',
+    rectCell(xNorthT2[i], yT2o, xNorthT2[i + 1], yT2i)
+  );
 }
 
 for (let i = 0; i < 10; i += 1) {
-  const xa = xR2i - r2i - (i / 10) * botFlat2i;
-  const xb = xR2i - r2i - ((i + 1) / 10) * botFlat2i;
-  push(TIER_2, String(328 - i), String(328 - i), 't2', rectCell(xb, yB2i, xa, yB2o));
+  push(
+    TIER_2,
+    String(319 + i),
+    String(319 + i),
+    't2',
+    rectCell(xSouthT2[i], yB2i, xSouthT2[i + 1], yB2o)
+  );
 }
 
 for (let i = 0; i < 6; i += 1) {
-  const ya = yT2i + r2i + (i / 6) * sideFlat2i;
-  const yb = yT2i + r2i + ((i + 1) / 6) * sideFlat2i;
-  push(TIER_2, String(332 + i), String(332 + i), 't2', rectCell(xL2o, ya, xL2i, yb));
+  push(
+    TIER_2,
+    String(337 - i),
+    String(337 - i),
+    't2',
+    rectCell(xL2o, yWestT2[i], xL2i, yWestT2[i + 1])
+  );
 }
 
 for (let i = 0; i < 6; i += 1) {
-  const ya = yT2i + r2i + (i / 6) * sideFlat2i;
-  const yb = yT2i + r2i + ((i + 1) / 6) * sideFlat2i;
-  push(TIER_2, String(312 + i), String(312 + i), 't2', rectCell(xR2i, ya, xR2o, yb));
+  push(
+    TIER_2,
+    String(312 + i),
+    String(312 + i),
+    't2',
+    rectCell(xR2i, yWestT2[i], xR2o, yWestT2[i + 1])
+  );
 }
 
 const cn2 = {
@@ -289,31 +362,48 @@ push(
   annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, swA + 2 * swThird, swB, 6)
 );
 
-/* --- TIER 3 north + south only (uniform shell; cells on flats only) --- */
+/* --- TIER 3 north + south only — vertical aisles match tier-2 master breaks --- */
 
-const northT3Frac = 0.38;
-const nx0 = xL3i + r3i + topFlat3i * (0.5 - northT3Frac / 2);
-const nx1 = xL3i + r3i + topFlat3i * (0.5 + northT3Frac / 2);
-for (let i = 0; i < 3; i += 1) {
-  const xa = nx0 + (i / 3) * (nx1 - nx0);
-  const xb = nx0 + ((i + 1) / 3) * (nx1 - nx0);
-  push(TIER_3, String(404 + i), String(404 + i), 't3', rectCell(xa, yT3o, xb, yT3i));
+const xN3Lo = xL3i + r3i;
+const xN3Hi = xR3i - r3i;
+for (let j = 0; j < 3; j += 1) {
+  const clip = clipSpan1D(xNorthT2[3 + j], xNorthT2[4 + j], xN3Lo, xN3Hi);
+  if (clip) push(TIER_3, String(404 + j), String(404 + j), 't3', rectCell(clip.xa, yT3o, clip.xb, yT3i));
 }
 
-for (let i = 0; i < 13; i += 1) {
-  const xa = xR3i - r3i - (i / 13) * botFlat3i;
-  const xb = xR3i - r3i - ((i + 1) / 13) * botFlat3i;
-  push(TIER_3, String(431 - i), String(431 - i), 't3', rectCell(xb, yB3i, xa, yB3o));
+const xS3Lo = xL3i + r3i;
+const xS3Hi = xR3i - r3i;
+let southT3Id = 431;
+for (let k = 0; k < 10; k += 1) {
+  if (k === 3 || k === 4 || k === 5) {
+    const mid = (xSouthT2[k] + xSouthT2[k + 1]) / 2;
+    const c0 = clipSpan1D(xSouthT2[k], mid, xS3Lo, xS3Hi);
+    if (c0) {
+      push(TIER_3, String(southT3Id), String(southT3Id), 't3', rectCell(c0.xa, yB3i, c0.xb, yB3o));
+      southT3Id -= 1;
+    }
+    const c1 = clipSpan1D(mid, xSouthT2[k + 1], xS3Lo, xS3Hi);
+    if (c1) {
+      push(TIER_3, String(southT3Id), String(southT3Id), 't3', rectCell(c1.xa, yB3i, c1.xb, yB3o));
+      southT3Id -= 1;
+    }
+  } else {
+    const c = clipSpan1D(xSouthT2[k], xSouthT2[k + 1], xS3Lo, xS3Hi);
+    if (c) {
+      push(TIER_3, String(southT3Id), String(southT3Id), 't3', rectCell(c.xa, yB3i, c.xb, yB3o));
+      southT3Id -= 1;
+    }
+  }
 }
 
 const DRAW_ORDER = [
   ...[201, 202, 203, 204, 205, 206, 207, 208, 209].map(String),
-  ...[229, 228, 227, 226, 225, 224, 223, 222, 221].map(String),
+  ...[221, 222, 223, 224, 225, 226, 227, 228, 229].map(String),
   ...[236, 235, 234].map(String),
   ...[214, 215, 216].map(String),
   ...[301, 302, 303, 304, 305, 306, 307, 308, 309].map(String),
-  ...[328, 327, 326, 325, 324, 323, 322, 321, 320, 319].map(String),
-  ...[332, 333, 334, 335, 336, 337].map(String),
+  ...[319, 320, 321, 322, 323, 324, 325, 326, 327, 328].map(String),
+  ...[337, 336, 335, 334, 333, 332].map(String),
   ...[312, 313, 314, 315, 316, 317].map(String),
   '338',
   '310',
