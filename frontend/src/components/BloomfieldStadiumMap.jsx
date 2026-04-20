@@ -18,17 +18,21 @@ import {
   PITCH_RY,
 } from '../utils/bloomfieldSectionGeometry';
 
-const FILL_DEFAULT = '#f0f0f0';
+const FILL_DEFAULT = '#ebebeb';
 const STROKE_SECTION = '#ffffff';
-const FILL_ACTIVE = '#a3e635';
-const PITCH_GRASS = '#7cb342';
+const FILL_ACTIVE = '#9bca3e';
+const PITCH_GRASS = '#6d9048';
 const LINE_WHITE = '#ffffff';
 const PIN_INVERTED = '#222222';
+const TEXT_INACTIVE = '#999999';
+const TEXT_ACTIVE = '#000000';
+const ROSE_600 = '#e11d48';
 
-const PIN_BODY_W = 86;
-const PIN_TRI_H = 8;
-const PIN_TRI_HALF = 9;
-const PIN_RX = 8;
+const PIN_BODY_W = 72;
+const PIN_TRI_H = 6;
+const PIN_TRI_HALF = 6;
+const PIN_RX = 6;
+const STROKE_INACTIVE_W = 1.5;
 
 function layoutPins(rows) {
   const byBlock = {};
@@ -170,8 +174,8 @@ export default function BloomfieldStadiumMap({
             aria-label="Bloomfield stadium seating map"
           >
             <defs>
-              <filter id="bf-bubble-shadow" x="-45%" y="-45%" width="190%" height="190%">
-                <feDropShadow dx="0" dy="2" stdDeviation="4" floodOpacity="0.18" />
+              <filter id="bf-bubble-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                <feDropShadow dx="0" dy="1.5" stdDeviation="3.2" floodOpacity="0.14" />
               </filter>
             </defs>
 
@@ -192,7 +196,7 @@ export default function BloomfieldStadiumMap({
                   d={sec.d}
                   fill={fill}
                   stroke={isHi ? '#0ea5e9' : STROKE_SECTION}
-                  strokeWidth={isHi ? 2.25 : 1.15}
+                  strokeWidth={isHi ? 2.25 : STROKE_INACTIVE_W}
                   className="transition-[stroke,fill-opacity] duration-150 ease-out"
                   style={{ cursor: has ? 'pointer' : 'default' }}
                   onMouseEnter={() => handleBlockEnter(sec.id)}
@@ -208,11 +212,12 @@ export default function BloomfieldStadiumMap({
                 <text
                   key={`lbl-${sec.id}`}
                   x={sec.cx}
-                  y={sec.cy + 3}
+                  y={sec.cy}
                   textAnchor="middle"
-                  fill={has ? '#111111' : '#b0b0b0'}
+                  dominantBaseline="middle"
+                  fill={has ? TEXT_ACTIVE : TEXT_INACTIVE}
                   fontSize="9"
-                  fontWeight="700"
+                  fontWeight={has ? '800' : '600'}
                   style={{ pointerEvents: 'none', userSelect: 'none' }}
                 >
                   {sec.faceLabel}
@@ -271,14 +276,17 @@ export default function BloomfieldStadiumMap({
 
             {pins.map((p) => {
               const hasUrgency = Boolean(p.urgency);
-              const bodyH = hasUrgency ? 40 : 30;
+              const bodyH = hasUrgency ? 30 : 24;
               const bodyTop = -(bodyH + PIN_TRI_H);
               const inverted = pinInverted(p.stableId);
               const bg = inverted ? PIN_INVERTED : '#ffffff';
-              const stroke = inverted ? '#333333' : '#e5e7eb';
-              const sw = inverted ? 1 : 1;
-              const priceFill = inverted ? '#ffffff' : '#0f172a';
-              const urgentFill = inverted ? '#fda4af' : '#e11d48';
+              const stroke = inverted ? '#404040' : '#e5e7eb';
+              const sw = 1;
+              const priceFill = inverted ? '#ffffff' : '#111827';
+              const urgentFill = inverted ? '#fda4af' : ROSE_600;
+
+              const priceY = hasUrgency ? bodyTop + 10 : bodyTop + bodyH / 2;
+              const urgentY = bodyTop + 20;
 
               return (
                 <g
@@ -313,17 +321,16 @@ export default function BloomfieldStadiumMap({
                     <polygon
                       points={`0,0 ${-PIN_TRI_HALF},${-PIN_TRI_H} ${PIN_TRI_HALF},${-PIN_TRI_H}`}
                       fill={bg}
-                      stroke={stroke}
-                      strokeWidth={sw}
-                      strokeLinejoin="miter"
+                      stroke="none"
                     />
                   </g>
                   <text
                     x="0"
-                    y={bodyTop + bodyH / 2 + (hasUrgency ? -5 : 3)}
+                    y={priceY}
                     textAnchor="middle"
+                    dominantBaseline="middle"
                     fill={priceFill}
-                    fontSize="13"
+                    fontSize="11.5"
                     fontWeight="800"
                     style={{ pointerEvents: 'none' }}
                   >
@@ -332,12 +339,13 @@ export default function BloomfieldStadiumMap({
                   {hasUrgency ? (
                     <text
                       x="0"
-                      y={bodyTop + bodyH - 7}
+                      y={urgentY}
                       textAnchor="middle"
+                      dominantBaseline="middle"
                       fill={urgentFill}
-                      fontSize="8.5"
-                      fontWeight="700"
-                      style={{ pointerEvents: 'none' }}
+                      fontSize="10"
+                      fontWeight="600"
+                      style={{ pointerEvents: 'none', lineHeight: 1 }}
                     >
                       {p.urgency}
                     </text>
