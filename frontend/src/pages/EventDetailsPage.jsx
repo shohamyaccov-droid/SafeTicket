@@ -15,6 +15,7 @@ import {
   enrichBloomfieldGroup,
   groupMatchesTicketQuantity,
 } from '../utils/bloomfieldListing';
+import { enrichJerusalemGroup } from '../utils/jerusalemListing';
 import {
   getTicketPrice,
   iso4217FromCountry,
@@ -90,6 +91,7 @@ const EventDetailsPage = () => {
   const [activeTicketId, setActiveTicketId] = useState(null);
   const [listingQuantityFilter, setListingQuantityFilter] = useState(1);
   const [bloomfieldHoverId, setBloomfieldHoverId] = useState(null);
+  const [jerusalemHoverId, setJerusalemHoverId] = useState(null);
   const [artists, setArtists] = useState([]);
   /** Prevents double-opens / race when Buy Now refetches listings before showing checkout. */
   const buyOpeningRef = useRef(false);
@@ -729,8 +731,16 @@ const EventDetailsPage = () => {
     : 'מנורה מבטחים';
   const isMenoraVenue =
     finalVenueNameForMap.includes('מנורה') || finalVenueNameForMap.includes('מבטחים');
-  const isJerusalemArenaVenue =
-    venueHaystackForMap.includes('ארנה') || venueHaystackForMap.includes('פיס ארנה');
+  const isJerusalemArenaVenue = useMemo(
+    () =>
+      venueHaystackForMap.includes('פיס ארנה') ||
+      venueHaystackForMap.includes('ארנה ירושלים') ||
+      /Pais\s*Arena/i.test(venueHaystackForMap) ||
+      /Arena\s+Jerusalem/i.test(venueHaystackForMap) ||
+      (venueHaystackForMap.includes('ירושלים') &&
+        (venueHaystackForMap.includes('ארנה') || venueHaystackForMap.includes('פיס'))),
+    [venueHaystackForMap]
+  );
 
   const bloomfieldFilteredGroups = useMemo(() => {
     if (!isBloomfieldVenue) return ticketGroups;
@@ -776,6 +786,48 @@ const EventDetailsPage = () => {
       }, 80);
     },
     [bloomfieldRows]
+  );
+
+  const jerusalemRows = useMemo(() => {
+    if (!isJerusalemArenaVenue) return [];
+    return ticketGroups.map((g) => {
+      const stableId = stableListingGroupKey(g);
+      return {
+        stableId,
+        group: g,
+        firstTicket: g.tickets[0],
+        jerusalem: enrichJerusalemGroup(g),
+      };
+    });
+  }, [isJerusalemArenaVenue, ticketGroups]);
+
+  const jerusalemMapHighlight = useMemo(() => {
+    if (jerusalemHoverId) return String(jerusalemHoverId);
+    if (activeTicketId == null) return null;
+    const g = ticketGroups.find(
+      (x) => String(x.listing_group_id ?? x.id) === String(activeTicketId)
+    );
+    return g ? stableListingGroupKey(g) : String(activeTicketId);
+  }, [jerusalemHoverId, activeTicketId, ticketGroups]);
+
+  const handleJerusalemMapSelect = useCallback(
+    (stableId) => {
+      const row = jerusalemRows.find((r) => String(r.stableId) === String(stableId));
+      if (!row) return;
+      const gid = row.group.listing_group_id ?? row.group.id;
+      setActiveTicketId(gid);
+      setJerusalemHoverId(null);
+      setTimeout(() => {
+        try {
+          document
+            .querySelector(`[data-ticket-group-id="${gid}"]`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch {
+          /* ignore */
+        }
+      }, 80);
+    },
+    [jerusalemRows]
   );
 
   if (loading) {
@@ -1024,7 +1076,7 @@ const EventDetailsPage = () => {
         </div>
         <div
           className={`tickets-split-container${
-            isBloomfieldVenue ? ' tickets-split-container--bloomfield' : ''
+            isBloomfieldVenue || isJerusalemArenaVenue ? ' tickets-split-container--bloomfield' : ''
           }`}
         >
           {/* Sticky Map Container (Left side in RTL) */}
@@ -1079,7 +1131,14 @@ const EventDetailsPage = () => {
                     }
 
                     if (isJerusalemArenaVenue) {
-                      return <JerusalemArenaMap />;
+                      return (
+                        <JerusalemArenaMap
+                          rows={jerusalemRows}
+                          highlightStableId={jerusalemMapHighlight}
+                          onSelectGroup={handleJerusalemMapSelect}
+                          onHoverGroup={setJerusalemHoverId}
+                        />
+                      );
                     }
 
                     return (

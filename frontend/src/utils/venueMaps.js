@@ -78,6 +78,11 @@ export const VENUE_MAPS = {
       'שער 11': { x: 75, y: 40 },
     }
   },
+  // פיס ארנה ירושלים — interactive SVG map (see JerusalemArenaMap.jsx)
+  'פיס ארנה ירושלים': {
+    imageUrl: 'https://www.leaan.co.il/he-IL/images/menora_map.png',
+    sections: {},
+  },
   // מנורה תל אביב - Alias for מנורה מבטחים
   'מנורה תל אביב': {
     imageUrl: 'https://www.leaan.co.il/he-IL/images/menora_map.png',
@@ -194,7 +199,14 @@ export const getVenueConfig = (venueName) => {
   if (VENUE_MAPS[normalized]) {
     return { config: VENUE_MAPS[normalized], matchedName: normalized };
   }
-  
+
+  if (
+    /פיס\s*ארנה|ארנה\s*ירושלים|pais\s*arena|arena\s+jerusalem/i.test(normalized) ||
+    (normalized.includes('ירושלים') && normalized.includes('ארנה'))
+  ) {
+    return { config: VENUE_MAPS['פיס ארנה ירושלים'], matchedName: 'פיס ארנה ירושלים' };
+  }
+
   // Keyword-based flexible matching
   const venueKeywords = {
     'מנורה': 'מנורה מבטחים', // Map to מנורה מבטחים (has accurate coordinates)
