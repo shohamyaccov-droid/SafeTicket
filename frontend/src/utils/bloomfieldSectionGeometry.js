@@ -29,7 +29,7 @@ const TIER_CHANNEL_DEPTH = 44;
 const BOWL_OVAL_MARGIN = 14;
 
 /** Perimeter t inset per side — negative space between blocks (capped vs. tiny spans). */
-const T_INSET_PER_SIDE = 0.02;
+const T_INSET_PER_SIDE = 0.015;
 
 const wi = PITCH_W + 2 * GAP;
 const hi = PITCH_H + 2 * GAP;

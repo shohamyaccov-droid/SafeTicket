@@ -139,7 +139,7 @@ export default function BloomfieldStadiumMap({
     (pinHoverId != null && String(stableId) === String(pinHoverId));
 
   return (
-    <div className="relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-[#ffffff] shadow-sm">
+    <div className="relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="absolute top-2 left-2 z-[5] flex flex-col overflow-hidden rounded-md shadow-md">
         <button
           type="button"
@@ -211,14 +211,10 @@ export default function BloomfieldStadiumMap({
                   d={sec.d}
                   fill={fill}
                   fillOpacity={1}
+                  stroke={isHi ? '#0ea5e9' : 'none'}
+                  strokeWidth={isHi ? HIGHLIGHT_STROKE_W : 0}
+                  strokeLinejoin={isHi ? 'round' : 'miter'}
                   shapeRendering="geometricPrecision"
-                  {...(isHi
-                    ? {
-                        stroke: '#0ea5e9',
-                        strokeWidth: HIGHLIGHT_STROKE_W,
-                        strokeLinejoin: 'round',
-                      }
-                    : {})}
                   className="transition-[fill,stroke-width] duration-150 ease-out"
                   style={{ cursor: has ? 'pointer' : 'default' }}
                   onMouseEnter={() => handleBlockEnter(sec.id)}
