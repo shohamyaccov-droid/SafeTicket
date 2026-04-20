@@ -31,8 +31,8 @@ const PIN_BODY_W = 96;
 const PIN_TRI_H = 6;
 const PIN_TRI_HALF = 6;
 const PIN_RX = 6;
-/** Crisp edge on blocks; angular channels from geometry carry most separation. */
-const SECTION_STROKE_WIDTH = 3;
+/** Outline only when a listing highlights this section (no stroke for inactive — gaps are true negative space). */
+const HIGHLIGHT_STROKE_W = 3;
 
 /** One listing per block for map affordances: lowest displayed price wins. */
 function pickCheapestRow(list) {
@@ -139,7 +139,7 @@ export default function BloomfieldStadiumMap({
     (pinHoverId != null && String(stableId) === String(pinHoverId));
 
   return (
-    <div className="relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-[#f3f4f6] shadow-sm">
+    <div className="relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-[#ffffff] shadow-sm">
       <div className="absolute top-2 left-2 z-[5] flex flex-col overflow-hidden rounded-md shadow-md">
         <button
           type="button"
@@ -211,16 +211,12 @@ export default function BloomfieldStadiumMap({
                   d={sec.d}
                   fill={fill}
                   fillOpacity={1}
-                  stroke={isHi ? '#0ea5e9' : '#ffffff'}
-                  strokeWidth={SECTION_STROKE_WIDTH}
+                  stroke={isHi ? '#0ea5e9' : 'none'}
+                  strokeWidth={isHi ? HIGHLIGHT_STROKE_W : 0}
                   strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
                   shapeRendering="geometricPrecision"
-                  className="transition-[stroke] duration-150 ease-out"
-                  style={{
-                    cursor: has ? 'pointer' : 'default',
-                    paintOrder: 'stroke fill',
-                  }}
+                  className="transition-[fill,stroke-width] duration-150 ease-out"
+                  style={{ cursor: has ? 'pointer' : 'default' }}
                   onMouseEnter={() => handleBlockEnter(sec.id)}
                   onMouseLeave={handleBlockLeave}
                   onClick={() => handleBlockClick(sec.id)}

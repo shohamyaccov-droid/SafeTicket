@@ -1,6 +1,6 @@
 /**
  * Bloomfield schematic — inner bowl stays rounded-rect; outer stadium footprint is a smooth ellipse.
- * Outer tier: sides are rays from (CX,CY) through inner rim points to the oval. Large t-inset cuts real channels; stroke is a light edge.
+ * Outer tier: rays from (CX,CY) to oval. White background shows through t-inset channels (no grid stroke).
  */
 
 export const VIEW_W = 1000;
@@ -14,21 +14,22 @@ export const PITCH_H = Math.round(168 * 0.83);
 export const PITCH_RX = 5;
 export const PITCH_RY = 5;
 
-const GAP = 22;
+/** White concourse band between pitch edge and inner stand ring (viewBox px per side). */
+const GAP = 40;
 const STAND_DEPTH_LOWER = 48;
 /** Thicker upper tier (radial depth) vs inner — Viagogo-like proportion */
 const STAND_DEPTH_UPPER = 66;
 
-/** Pull inner tier outer edge inward (px in viewBox) — opens the inter-tier channel. */
-const RADIAL_INNER_BACK_TRIM = 5;
-/** Constant radial depth (px) of the lower/upper tier channel (lower bowl back → upper bowl front). */
-const TIER_CHANNEL_DEPTH = 30;
+/** Widen the radial channel: lower-bowl back stops short of nominal mid ring. */
+const RADIAL_INNER_BACK_TRIM = 10;
+/** Large lower↔upper tier gap (px depth from inner-back to outer-front). */
+const TIER_CHANNEL_DEPTH = 44;
 
 /** Extra semi-axis beyond nominal wo/2, ho/2 so bowl fill extends past seat ring (px). */
 const BOWL_OVAL_MARGIN = 14;
 
-/** Aggressive perimeter t inset per side — physical channels between blocks (capped vs. tiny spans). */
-const T_INSET_PER_SIDE = 0.012;
+/** Perimeter t inset per side — negative space between blocks (capped vs. tiny spans). */
+const T_INSET_PER_SIDE = 0.02;
 
 const wi = PITCH_W + 2 * GAP;
 const hi = PITCH_H + 2 * GAP;
