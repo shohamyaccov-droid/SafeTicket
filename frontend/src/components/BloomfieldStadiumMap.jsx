@@ -20,7 +20,8 @@ import {
 
 const FILL_DEFAULT = '#e5e7eb';
 const FILL_ACTIVE = '#9bca3e';
-const PITCH_GRASS = '#82c91e';
+/** Tracer: bright blue to verify live bundle (revert to grass green after deploy check). */
+const PITCH_GRASS = '#3b82f6';
 const LINE_WHITE = '#ffffff';
 const PIN_INVERTED = '#222222';
 const TEXT_INACTIVE = '#999999';
@@ -140,6 +141,13 @@ export default function BloomfieldStadiumMap({
 
   return (
     <div className="relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div
+        className="pointer-events-none absolute top-2 right-2 z-50 rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
+        style={{ backgroundColor: '#ff0000' }}
+        aria-hidden
+      >
+        v2.0-TEST
+      </div>
       <div className="absolute top-2 left-2 z-[5] flex flex-col overflow-hidden rounded-md shadow-md">
         <button
           type="button"
