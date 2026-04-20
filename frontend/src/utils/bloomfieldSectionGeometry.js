@@ -1,6 +1,6 @@
 /**
- * Bloomfield — 4-stand “squircle” model: N/S/E/W rectangular bands + 4 corner arc wedges.
- * Inner/outer tiers flush; east is inner-only. Clockwise from north-west: 301 (north-left) … 337 (west bottom).
+ * Bloomfield — Viagogo 3-tier bowl on a squircle (rounded rect: straight N/S/E/W, curved corners only).
+ * Tier 1 (~200s): thin inner ring. Tier 2 (~300s): main bowl full loop. Tier 3 (~400s): N+S only.
  */
 
 export const VIEW_W = 1000;
@@ -14,28 +14,75 @@ export const PITCH_H = Math.round(168 * 0.83);
 export const PITCH_RX = 5;
 export const PITCH_RY = 5;
 
-const GAP = 32;
-/** Inner tier radial depth (hole → inner-back). */
-const dInner = 52;
-/** Outer tier depth (inner-back → outer-back). */
-const dOuter = 48;
+const MOAT = 20;
+const D_T1 = 15;
+const G_T12 = 5;
+const D_T2 = 45;
+const G_T23 = 15;
+const D_T3 = 45;
 
-const wi = PITCH_W + 2 * GAP;
-const hi = PITCH_H + 2 * GAP;
-/** Hole / moat corner radius — moderate squircle (not a circle). */
-const ri = Math.min(40, Math.min(wi, hi) * 0.14 + 18);
+const CELL_IN = 0.45;
+
+const wi = PITCH_W + 2 * MOAT;
+const hi = PITCH_H + 2 * MOAT;
+const ri = Math.min(38, Math.min(wi, hi) * 0.13 + 20);
 
 const xL = CX - wi / 2;
 const xR = CX + wi / 2;
 const yT = CY - hi / 2;
 const yB = CY + hi / 2;
 
-const topFlatW = wi - 2 * ri;
-const bottomFlatW = topFlatW;
-const westFlatH = hi - 2 * ri;
+/** Tier 1 outer */
+const w1 = wi + 2 * D_T1;
+const h1 = hi + 2 * D_T1;
+const r1 = ri + D_T1;
+const xL1 = CX - w1 / 2;
+const xR1 = CX + w1 / 2;
+const yT1 = CY - h1 / 2;
+const yB1 = CY + h1 / 2;
 
-/** Inset between cells so white strokes read as aisles (half of ~1px gap in user space). */
-const CELL_IN = 0.45;
+/** Tier 2 inner (after channel from T1) */
+const w2i = wi + 2 * (D_T1 + G_T12);
+const h2i = hi + 2 * (D_T1 + G_T12);
+const r2i = ri + D_T1 + G_T12;
+const xL2i = CX - w2i / 2;
+const xR2i = CX + w2i / 2;
+const yT2i = CY - h2i / 2;
+const yB2i = CY + h2i / 2;
+
+/** Tier 2 outer */
+const w2o = w2i + 2 * D_T2;
+const h2o = h2i + 2 * D_T2;
+const r2o = r2i + D_T2;
+const xL2o = CX - w2o / 2;
+const xR2o = CX + w2o / 2;
+const yT2o = CY - h2o / 2;
+const yB2o = CY + h2o / 2;
+
+/** Tier 3 inner edge (full ring — channel after T2) */
+const w3i = w2o + 2 * G_T23;
+const h3i = h2o + 2 * G_T23;
+const r3i = r2o + G_T23;
+const xL3i = CX - w3i / 2;
+const xR3i = CX + w3i / 2;
+const yT3i = CY - h3i / 2;
+const yB3i = CY + h3i / 2;
+
+/** Tier 3 outer (squircle shell) */
+const w3o = w3i + 2 * D_T3;
+const h3o = h3i + 2 * D_T3;
+const r3o = r3i + D_T3;
+
+const topFlat1 = w1 - 2 * r1;
+const botFlat1 = topFlat1;
+const sideFlat1 = h1 - 2 * r1;
+
+const topFlat2i = w2i - 2 * r2i;
+const botFlat2i = topFlat2i;
+const sideFlat2i = h2i - 2 * r2i;
+
+const topFlat3i = w3i - 2 * r3i;
+const botFlat3i = topFlat3i;
 
 function fmt(n) {
   return Number(n.toFixed(4));
@@ -94,8 +141,7 @@ function polygonCentroid(pts) {
   return { cx: cx / (6 * a), cy: cy / (6 * a) };
 }
 
-/** Annular sector: sweep angle a0 → a1 (radians), CCW in standard math with y right/x; works with SVG sin/cos. */
-function annularSector(cx0, cy0, rIn, rOut, a0, a1, steps = 16) {
+function annularSector(cx0, cy0, rIn, rOut, a0, a1, steps = 14) {
   const pts = [];
   for (let i = 0; i <= steps; i += 1) {
     const t = i / steps;
@@ -117,122 +163,140 @@ function annularSector(cx0, cy0, rIn, rOut, a0, a1, steps = 16) {
   return { d, cx, cy };
 }
 
-function pushWedge(list, id, faceLabel, tier, wedge) {
-  if (wedge && wedge.d) list.push({ id, faceLabel, d: wedge.d, cx: wedge.cx, cy: wedge.cy, tier });
+function push(list, id, faceLabel, tier, w) {
+  if (w && w.d) list.push({ id, faceLabel, d: w.d, cx: w.cx, cy: w.cy, tier });
 }
 
-const SECTION_WEDGES_BUILD = [];
+const TIER_1 = [];
+const TIER_2 = [];
+const TIER_3 = [];
 
-/* --- Inner tier: straight stands --- */
+/* --- TIER 1 straights only (no 200s in corners — white negative space) --- */
 
-const yInnerN0 = yT - dInner;
-const yInnerN1 = yT;
 for (let i = 0; i < 9; i += 1) {
-  const xa = xL + ri + (i / 9) * topFlatW;
-  const xb = xL + ri + ((i + 1) / 9) * topFlatW;
-  const w = rectCell(xa, yInnerN0, xb, yInnerN1);
-  pushWedge(SECTION_WEDGES_BUILD, String(301 + i), String(301 + i), 'lower', w);
+  const xa = xL1 + r1 + (i / 9) * topFlat1;
+  const xb = xL1 + r1 + ((i + 1) / 9) * topFlat1;
+  push(TIER_1, String(201 + i), String(201 + i), 't1', rectCell(xa, yT1, xb, yT));
 }
 
-const yInnerS0 = yB;
-const yInnerS1 = yB + dInner;
+for (let i = 0; i < 9; i += 1) {
+  const xa = xR1 - r1 - (i / 9) * botFlat1;
+  const xb = xR1 - r1 - ((i + 1) / 9) * botFlat1;
+  push(TIER_1, String(229 - i), String(229 - i), 't1', rectCell(xb, yB, xa, yB1));
+}
+
+for (let i = 0; i < 3; i += 1) {
+  const ya = yT1 + r1 + (i / 3) * sideFlat1;
+  const yb = yT1 + r1 + ((i + 1) / 3) * sideFlat1;
+  push(TIER_1, String(236 - i), String(236 - i), 't1', rectCell(xL1, ya, xL, yb));
+}
+
+for (let i = 0; i < 3; i += 1) {
+  const ya = yT1 + r1 + (i / 3) * sideFlat1;
+  const yb = yT1 + r1 + ((i + 1) / 3) * sideFlat1;
+  push(TIER_1, String(214 + i), String(214 + i), 't1', rectCell(xR, ya, xR1, yb));
+}
+
+/* --- TIER 2 full bowl --- */
+
+for (let i = 0; i < 9; i += 1) {
+  const xa = xL2i + r2i + (i / 9) * topFlat2i;
+  const xb = xL2i + r2i + ((i + 1) / 9) * topFlat2i;
+  push(TIER_2, String(301 + i), String(301 + i), 't2', rectCell(xa, yT2o, xb, yT2i));
+}
+
 for (let i = 0; i < 10; i += 1) {
-  const xa = xR - ri - (i / 10) * bottomFlatW;
-  const xb = xR - ri - ((i + 1) / 10) * bottomFlatW;
-  const w = rectCell(xb, yInnerS0, xa, yInnerS1);
-  pushWedge(SECTION_WEDGES_BUILD, String(328 - i), String(328 - i), 'lower', w);
+  const xa = xR2i - r2i - (i / 10) * botFlat2i;
+  const xb = xR2i - r2i - ((i + 1) / 10) * botFlat2i;
+  push(TIER_2, String(328 - i), String(328 - i), 't2', rectCell(xb, yB2i, xa, yB2o));
 }
 
-const xInnerW0 = xL - dInner;
-const xInnerW1 = xL;
 for (let i = 0; i < 6; i += 1) {
-  const ya = yT + ri + (i / 6) * westFlatH;
-  const yb = yT + ri + ((i + 1) / 6) * westFlatH;
-  const w = rectCell(xInnerW0, ya, xInnerW1, yb);
-  pushWedge(SECTION_WEDGES_BUILD, String(332 + i), String(332 + i), 'lower', w);
+  const ya = yT2i + r2i + (i / 6) * sideFlat2i;
+  const yb = yT2i + r2i + ((i + 1) / 6) * sideFlat2i;
+  push(TIER_2, String(332 + i), String(332 + i), 't2', rectCell(xL2o, ya, xL2i, yb));
 }
 
-const xInnerE0 = xR;
-const xInnerE1 = xR + dInner;
 for (let i = 0; i < 6; i += 1) {
-  const ya = yT + ri + (i / 6) * westFlatH;
-  const yb = yT + ri + ((i + 1) / 6) * westFlatH;
-  const w = rectCell(xInnerE0, ya, xInnerE1, yb);
-  pushWedge(SECTION_WEDGES_BUILD, String(312 + i), String(312 + i), 'lower', w);
+  const ya = yT2i + r2i + (i / 6) * sideFlat2i;
+  const yb = yT2i + r2i + ((i + 1) / 6) * sideFlat2i;
+  push(TIER_2, String(312 + i), String(312 + i), 't2', rectCell(xR2i, ya, xR2o, yb));
 }
 
-/* --- Inner tier: corners (annular sectors around hole fillet centers) --- */
+const cn2 = {
+  nw: { x: xL2i + r2i, y: yT2i + r2i },
+  ne: { x: xR2i - r2i, y: yT2i + r2i },
+  se: { x: xR2i - r2i, y: yB2i - r2i },
+  sw: { x: xL2i + r2i, y: yB2i - r2i },
+};
 
-const cnw = { x: xL + ri, y: yT + ri };
-const cne = { x: xR - ri, y: yT + ri };
-const cse = { x: xR - ri, y: yB - ri };
-const csw = { x: xL + ri, y: yB - ri };
+const rinC = r2i + CELL_IN;
+const routC = r2o - CELL_IN;
 
-pushWedge(
-  SECTION_WEDGES_BUILD,
-  '338',
-  '338',
-  'lower',
-  annularSector(cnw.x, cnw.y, ri + CELL_IN, ri + dInner - CELL_IN, -Math.PI / 2, -Math.PI)
+push(TIER_2, '338', '338', 't2', annularSector(cn2.nw.x, cn2.nw.y, rinC, routC, -Math.PI / 2, -Math.PI));
+push(
+  TIER_2,
+  '310',
+  '310',
+  't2',
+  annularSector(cn2.ne.x, cn2.ne.y, rinC, routC, -Math.PI / 2, -Math.PI / 4, 8)
 );
-
-const ne310a = annularSector(cne.x, cne.y, ri + CELL_IN, ri + dInner - CELL_IN, -Math.PI / 2, -Math.PI / 4, 8);
-const ne311a = annularSector(cne.x, cne.y, ri + CELL_IN, ri + dInner - CELL_IN, -Math.PI / 4, 0, 8);
-pushWedge(SECTION_WEDGES_BUILD, '310', '310', 'lower', ne310a);
-pushWedge(SECTION_WEDGES_BUILD, '311', '311', 'lower', ne311a);
-
-pushWedge(
-  SECTION_WEDGES_BUILD,
-  '318',
-  '318',
-  'lower',
-  annularSector(cse.x, cse.y, ri + CELL_IN, ri + dInner - CELL_IN, 0, Math.PI / 2)
+push(
+  TIER_2,
+  '311',
+  '311',
+  't2',
+  annularSector(cn2.ne.x, cn2.ne.y, rinC, routC, -Math.PI / 4, 0, 8)
 );
+push(TIER_2, '318', '318', 't2', annularSector(cn2.se.x, cn2.se.y, rinC, routC, 0, Math.PI / 2));
 
 const swA = Math.PI / 2;
 const swB = Math.PI;
 const swThird = (swB - swA) / 3;
-const sw1 = annularSector(csw.x, csw.y, ri + CELL_IN, ri + dInner - CELL_IN, swA, swA + swThird, 6);
-const sw2 = annularSector(csw.x, csw.y, ri + CELL_IN, ri + dInner - CELL_IN, swA + swThird, swA + 2 * swThird, 6);
-const sw3 = annularSector(csw.x, csw.y, ri + CELL_IN, ri + dInner - CELL_IN, swA + 2 * swThird, swB, 6);
-pushWedge(SECTION_WEDGES_BUILD, '329', '329', 'lower', sw1);
-pushWedge(SECTION_WEDGES_BUILD, '330', '330', 'lower', sw2);
-pushWedge(SECTION_WEDGES_BUILD, '331', '331', 'lower', sw3);
+push(
+  TIER_2,
+  '329',
+  '329',
+  't2',
+  annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, swA, swA + swThird, 6)
+);
+push(
+  TIER_2,
+  '330',
+  '330',
+  't2',
+  annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, swA + swThird, swA + 2 * swThird, 6)
+);
+push(
+  TIER_2,
+  '331',
+  '331',
+  't2',
+  annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, swA + 2 * swThird, swB, 6)
+);
 
-/* --- Outer tier: flush behind inner --- */
+/* --- TIER 3 north + south only (uniform shell; cells on flats only) --- */
 
-const yOutN0 = yT - dInner - dOuter;
-const yOutN1 = yT - dInner;
-const northOuterFrac = 0.38;
-const nx0 = xL + ri + topFlatW * (0.5 - northOuterFrac / 2);
-const nx1 = xL + ri + topFlatW * (0.5 + northOuterFrac / 2);
+const northT3Frac = 0.38;
+const nx0 = xL3i + r3i + topFlat3i * (0.5 - northT3Frac / 2);
+const nx1 = xL3i + r3i + topFlat3i * (0.5 + northT3Frac / 2);
 for (let i = 0; i < 3; i += 1) {
   const xa = nx0 + (i / 3) * (nx1 - nx0);
   const xb = nx0 + ((i + 1) / 3) * (nx1 - nx0);
-  const w = rectCell(xa, yOutN0, xb, yOutN1);
-  pushWedge(SECTION_WEDGES_BUILD, String(404 + i), String(404 + i), 'upper', w);
+  push(TIER_3, String(404 + i), String(404 + i), 't3', rectCell(xa, yT3o, xb, yT3i));
 }
 
-const yOutS0 = yB + dInner;
-const yOutS1 = yB + dInner + dOuter;
-for (let i = 0; i < 9; i += 1) {
-  const xa = xR - ri - (i / 9) * bottomFlatW;
-  const xb = xR - ri - ((i + 1) / 9) * bottomFlatW;
-  const w = rectCell(xb, yOutS0, xa, yOutS1);
-  pushWedge(SECTION_WEDGES_BUILD, String(221 + i), String(221 + i), 'upper', w);
+for (let i = 0; i < 13; i += 1) {
+  const xa = xR3i - r3i - (i / 13) * botFlat3i;
+  const xb = xR3i - r3i - ((i + 1) / 13) * botFlat3i;
+  push(TIER_3, String(431 - i), String(431 - i), 't3', rectCell(xb, yB3i, xa, yB3o));
 }
 
-const xOutW0 = xL - dInner - dOuter;
-const xOutW1 = xL - dInner;
-for (let i = 0; i < 12; i += 1) {
-  const ya = yT + ri + (i / 12) * westFlatH;
-  const yb = yT + ri + ((i + 1) / 12) * westFlatH;
-  const w = rectCell(xOutW0, ya, xOutW1, yb);
-  pushWedge(SECTION_WEDGES_BUILD, String(420 + i), String(420 + i), 'upper', w);
-}
-
-/** Stable draw + hit order: lower straights by edge, corners, upper — reorder for cleaner overlap. */
-const ORDER_IDS = [
+const DRAW_ORDER = [
+  ...[201, 202, 203, 204, 205, 206, 207, 208, 209].map(String),
+  ...[229, 228, 227, 226, 225, 224, 223, 222, 221].map(String),
+  ...[236, 235, 234].map(String),
+  ...[214, 215, 216].map(String),
   ...[301, 302, 303, 304, 305, 306, 307, 308, 309].map(String),
   ...[328, 327, 326, 325, 324, 323, 322, 321, 320, 319].map(String),
   ...[332, 333, 334, 335, 336, 337].map(String),
@@ -245,17 +309,16 @@ const ORDER_IDS = [
   '330',
   '331',
   ...[404, 405, 406].map(String),
-  ...[221, 222, 223, 224, 225, 226, 227, 228, 229].map(String),
-  ...[420, 421, 422, 423, 424, 425, 426, 427, 428, 429, 430, 431].map(String),
+  ...[431, 430, 429, 428, 427, 426, 425, 424, 423, 422, 421, 420, 419].map(String),
 ];
 
-const byId = Object.fromEntries(SECTION_WEDGES_BUILD.map((s) => [s.id, s]));
-export const SECTION_WEDGES = ORDER_IDS.map((id) => byId[id]).filter(Boolean);
+const byId = Object.fromEntries([...TIER_1, ...TIER_2, ...TIER_3].map((s) => [s.id, s]));
+export const SECTION_WEDGES = DRAW_ORDER.map((id) => byId[id]).filter(Boolean);
 
 const ALL_BLOCK_IDS = new Set(SECTION_WEDGES.map((s) => s.id));
 
-export const LOWER_WEDGE_IDS = SECTION_WEDGES.filter((s) => s.tier === 'lower').map((s) => s.id);
-export const UPPER_WEDGE_IDS = SECTION_WEDGES.filter((s) => s.tier === 'upper').map((s) => s.id);
+export const LOWER_WEDGE_IDS = SECTION_WEDGES.filter((s) => s.tier === 't1' || s.tier === 't2').map((s) => s.id);
+export const UPPER_WEDGE_IDS = SECTION_WEDGES.filter((s) => s.tier === 't3').map((s) => s.id);
 export const WEDGE_IDS = LOWER_WEDGE_IDS;
 
 export function blockIdFromSectionNumber(numStr) {
@@ -272,8 +335,4 @@ export const GAP_ROUNDRECT_D = roundedRectPathD(CX, CY, wi, hi, ri);
 export const PITCH_X = CX - PITCH_W / 2;
 export const PITCH_Y = CY - PITCH_H / 2;
 
-const depthTotal = dInner + dOuter;
-const Wo = wi + 2 * depthTotal;
-const Ho = hi + 2 * depthTotal;
-const Ro = Math.min(ri + depthTotal, Wo / 2 - 2, Ho / 2 - 2);
-export const BOWL_OUTER_D = roundedRectPathD(CX, CY, Wo, Ho, Ro);
+export const BOWL_OUTER_D = roundedRectPathD(CX, CY, w3o, h3o, r3o);
