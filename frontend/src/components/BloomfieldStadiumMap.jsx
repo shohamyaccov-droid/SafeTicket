@@ -18,12 +18,10 @@ import {
   PITCH_RY,
 } from '../utils/bloomfieldSectionGeometry';
 
-const FILL_DEFAULT = '#d1d5db';
+const FILL_DEFAULT = '#ebebeb';
+const STROKE_SECTION = '#ffffff';
 const FILL_ACTIVE = '#9bca3e';
-/** Viagogo-style pitch; grid is white void between grey wedges, not strokes. */
-const PITCH_GRASS = '#82c91e';
-/** Must match gaps between polygons — any grey here reads as “muddy grid”. */
-const STADIUM_BASE_FILL = '#ffffff';
+const PITCH_GRASS = '#6d9048';
 const LINE_WHITE = '#ffffff';
 const PIN_INVERTED = '#222222';
 const TEXT_INACTIVE = '#999999';
@@ -34,8 +32,9 @@ const PIN_BODY_W = 96;
 const PIN_TRI_H = 6;
 const PIN_TRI_HALF = 6;
 const PIN_RX = 6;
-/** Outline only when a listing highlights this section (no stroke for inactive — gaps are true negative space). */
-const HIGHLIGHT_STROKE_W = 3;
+/** Slightly heavier so gaps + stroke read as separate “islands” (Viagogo-like). */
+const STROKE_INACTIVE_W = 2.05;
+const STROKE_HIGHLIGHT_W = 2.85;
 
 /** One listing per block for map affordances: lowest displayed price wins. */
 function pickCheapestRow(list) {
@@ -142,7 +141,7 @@ export default function BloomfieldStadiumMap({
     (pinHoverId != null && String(stableId) === String(pinHoverId));
 
   return (
-    <div className="bloomfield-map-root relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="bloomfield-map-root relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-[#f4f5f7] shadow-sm">
       <div className="absolute top-2 left-2 z-[5] flex flex-col overflow-hidden rounded-md shadow-md">
         <button
           type="button"
@@ -173,7 +172,7 @@ export default function BloomfieldStadiumMap({
       </div>
 
       <div
-        className="absolute inset-0 cursor-grab touch-none bg-white active:cursor-grabbing"
+        className="absolute inset-0 cursor-grab touch-none active:cursor-grabbing"
         onPointerDown={panZoom.onPointerDown}
         onPointerMove={panZoom.onPointerMove}
         onPointerUp={panZoom.onPointerUp}
@@ -182,7 +181,7 @@ export default function BloomfieldStadiumMap({
         aria-label="Bloomfield seating map — drag to pan, use plus and minus to zoom"
       >
         <div
-          className="flex h-full w-full items-center justify-center bg-white will-change-transform"
+          className="flex h-full w-full items-center justify-center will-change-transform"
           style={panZoom.transformStyle}
         >
           <svg
@@ -197,11 +196,11 @@ export default function BloomfieldStadiumMap({
               </filter>
             </defs>
 
-            <rect width={VIEW_W} height={VIEW_H} fill={STADIUM_BASE_FILL} />
+            <rect width={VIEW_W} height={VIEW_H} fill="#f4f5f7" />
 
-            <path d={BOWL_OUTER_D} fill={STADIUM_BASE_FILL} />
+            <path d={BOWL_OUTER_D} fill="#e8eaed" stroke="#d1d5db" strokeWidth="1.5" />
 
-            <path d={GAP_ROUNDRECT_D} fill={STADIUM_BASE_FILL} />
+            <path d={GAP_ROUNDRECT_D} fill="#e5e7eb" stroke="none" />
 
             {SECTION_WEDGES.map((sec) => {
               const has = blocksWithListings.has(sec.id);
@@ -215,14 +214,10 @@ export default function BloomfieldStadiumMap({
                   fill={fill}
                   fillOpacity={1}
                   shapeRendering="geometricPrecision"
-                  {...(isHi
-                    ? {
-                        stroke: '#0ea5e9',
-                        strokeWidth: HIGHLIGHT_STROKE_W,
-                        strokeLinejoin: 'round',
-                      }
-                    : {})}
-                  className="transition-[fill,stroke-width] duration-150 ease-out"
+                  stroke={isHi ? '#0ea5e9' : STROKE_SECTION}
+                  strokeWidth={isHi ? STROKE_HIGHLIGHT_W : STROKE_INACTIVE_W}
+                  strokeLinejoin={isHi ? 'round' : 'miter'}
+                  className="transition-[stroke,fill-opacity] duration-150 ease-out"
                   style={{ cursor: has ? 'pointer' : 'default' }}
                   onMouseEnter={() => handleBlockEnter(sec.id)}
                   onMouseLeave={handleBlockLeave}
