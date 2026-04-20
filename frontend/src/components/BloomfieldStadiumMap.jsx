@@ -33,6 +33,18 @@ const BEST_BADGE_FILL = '#14532d';
 const STROKE_INACTIVE_W = 1.5;
 const STROKE_HIGHLIGHT_W = 2.75;
 
+function isRenderableWedge(sec) {
+  return (
+    sec &&
+    typeof sec.id === 'string' &&
+    typeof sec.d === 'string' &&
+    sec.d.length > 0 &&
+    !sec.d.includes('NaN') &&
+    Number.isFinite(sec.cx) &&
+    Number.isFinite(sec.cy)
+  );
+}
+
 /** One listing per block for map affordances: lowest displayed price wins. */
 function pickCheapestRow(list) {
   if (!list.length) return null;
@@ -65,16 +77,18 @@ function layoutPins(rows) {
   const byBlock = {};
   for (const row of rows) {
     const bid = row.bloomfield?.blockId;
-    if (!bid) continue;
-    if (!byBlock[bid]) byBlock[bid] = [];
-    byBlock[bid].push(row);
+    if (bid == null || bid === '') continue;
+    const k = String(bid);
+    if (!byBlock[k]) byBlock[k] = [];
+    byBlock[k].push(row);
   }
   const pins = [];
   for (const bid of Object.keys(byBlock)) {
     const list = byBlock[bid];
     const rep = pickCheapestRow(list);
     if (!rep) continue;
-    const w = SECTION_WEDGES.find((x) => x.id === bid);
+    const sid = String(bid);
+    const w = SECTION_WEDGES.find((x) => String(x.id) === sid);
     const cx0 = w?.cx ?? CX;
     const cy0 = w?.cy ?? CY;
     const t = rep.firstTicket;
@@ -88,7 +102,7 @@ function layoutPins(rows) {
       Math.abs(raw - floorPrice) < 0.005;
     pins.push({
       stableId: rep.stableId,
-      blockId: bid,
+      blockId: sid,
       x: cx0,
       y: cy0 - 6,
       priceLine: priceLabel,
@@ -111,26 +125,34 @@ export default function BloomfieldStadiumMap({
   const blocksWithListings = useMemo(() => {
     const s = new Set();
     for (const r of rows) {
-      if (r.bloomfield?.blockId) s.add(r.bloomfield.blockId);
+      const bid = r.bloomfield?.blockId;
+      if (bid != null && bid !== '') s.add(String(bid));
     }
     return s;
   }, [rows]);
 
+  const safeSectionWedges = useMemo(
+    () => (Array.isArray(SECTION_WEDGES) ? SECTION_WEDGES.filter(isRenderableWedge) : []),
+    []
+  );
+
   const highlightBlockId = useMemo(() => {
     if (highlightStableId == null || highlightStableId === '') return null;
     const hit = rows.find((r) => String(r.stableId) === String(highlightStableId));
-    return hit?.bloomfield?.blockId ?? null;
+    const raw = hit?.bloomfield?.blockId;
+    return raw != null && raw !== '' ? String(raw) : null;
   }, [rows, highlightStableId]);
 
   const pins = useMemo(() => layoutPins(rows), [rows]);
 
   const firstRowInBlock = useCallback((blockId) => {
-    const list = rows.filter((r) => r.bloomfield?.blockId === blockId);
+    const b = String(blockId);
+    const list = rows.filter((r) => String(r.bloomfield?.blockId ?? '') === b);
     return pickCheapestRow(list) ?? undefined;
   }, [rows]);
 
   const handleBlockEnter = (blockId) => {
-    const has = blocksWithListings.has(blockId);
+    const has = blocksWithListings.has(String(blockId));
     if (!has) return;
     const first = firstRowInBlock(blockId);
     onHoverGroup?.(first?.stableId ?? null);
@@ -141,7 +163,7 @@ export default function BloomfieldStadiumMap({
   };
 
   const handleBlockClick = (blockId) => {
-    if (!blocksWithListings.has(blockId)) return;
+    if (!blocksWithListings.has(String(blockId))) return;
     const first = firstRowInBlock(blockId);
     if (first) onSelectGroup?.(first.stableId);
   };
@@ -217,14 +239,16 @@ export default function BloomfieldStadiumMap({
 
             <path d={GAP_ROUNDRECT_D} fill="#ffffff" stroke="none" />
 
-            {SECTION_WEDGES.map((sec) => {
-              const has = blocksWithListings.has(sec.id);
-              const isHi = highlightBlockId === sec.id;
+            {safeSectionWedges.map((sec) => {
+              if (!isRenderableWedge(sec)) return null;
+              const sid = String(sec.id);
+              const has = blocksWithListings.has(sid);
+              const isHi = highlightBlockId === sid;
               const fill = has ? FILL_ACTIVE : FILL_DEFAULT;
               return (
                 <path
-                  key={sec.id}
-                  data-section-id={sec.id}
+                  key={sid}
+                  data-section-id={sid}
                   d={sec.d}
                   fill={fill}
                   fillOpacity={1}
@@ -234,18 +258,20 @@ export default function BloomfieldStadiumMap({
                   strokeLinejoin={isHi ? 'round' : 'miter'}
                   className="transition-[stroke,fill-opacity] duration-150 ease-out"
                   style={{ cursor: has ? 'pointer' : 'default' }}
-                  onMouseEnter={() => handleBlockEnter(sec.id)}
+                  onMouseEnter={() => handleBlockEnter(sid)}
                   onMouseLeave={handleBlockLeave}
-                  onClick={() => handleBlockClick(sec.id)}
+                  onClick={() => handleBlockClick(sid)}
                 />
               );
             })}
 
-            {SECTION_WEDGES.map((sec) => {
-              const has = blocksWithListings.has(sec.id);
+            {safeSectionWedges.map((sec) => {
+              if (!isRenderableWedge(sec)) return null;
+              const sid = String(sec.id);
+              const has = blocksWithListings.has(sid);
               return (
                 <text
-                  key={`lbl-${sec.id}`}
+                  key={`lbl-${sid}`}
                   x={sec.cx}
                   y={sec.cy}
                   textAnchor="middle"

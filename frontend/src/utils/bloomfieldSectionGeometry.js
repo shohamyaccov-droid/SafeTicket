@@ -73,6 +73,10 @@ const w3o = w3i + 2 * D_T3;
 const h3o = h3i + 2 * D_T3;
 const r3o = r3i + D_T3;
 
+/** Tier 3 outer face (north/south 400s bands) */
+const yT3o = CY - h3o / 2;
+const yB3o = CY + h3o / 2;
+
 const topFlat1 = w1 - 2 * r1;
 const botFlat1 = topFlat1;
 const sideFlat1 = h1 - 2 * r1;
@@ -85,7 +89,9 @@ const topFlat3i = w3i - 2 * r3i;
 const botFlat3i = topFlat3i;
 
 function fmt(n) {
-  return Number(n.toFixed(4));
+  const v = Number(n);
+  if (!Number.isFinite(v)) return 0;
+  return Number(v.toFixed(4));
 }
 
 export function roundedRectPathD(cx, cy, w, h, r) {
@@ -142,6 +148,7 @@ function polygonCentroid(pts) {
 }
 
 function annularSector(cx0, cy0, rIn, rOut, a0, a1, steps = 14) {
+  if (!Number.isFinite(rIn) || !Number.isFinite(rOut) || rOut <= rIn + 1e-3) return null;
   const pts = [];
   for (let i = 0; i <= steps; i += 1) {
     const t = i / steps;
@@ -164,7 +171,9 @@ function annularSector(cx0, cy0, rIn, rOut, a0, a1, steps = 14) {
 }
 
 function push(list, id, faceLabel, tier, w) {
-  if (w && w.d) list.push({ id, faceLabel, d: w.d, cx: w.cx, cy: w.cy, tier });
+  if (!w || typeof w.d !== 'string' || !w.d) return;
+  if (!Number.isFinite(w.cx) || !Number.isFinite(w.cy)) return;
+  list.push({ id, faceLabel, d: w.d, cx: w.cx, cy: w.cy, tier });
 }
 
 const TIER_1 = [];
@@ -313,7 +322,18 @@ const DRAW_ORDER = [
 ];
 
 const byId = Object.fromEntries([...TIER_1, ...TIER_2, ...TIER_3].map((s) => [s.id, s]));
-export const SECTION_WEDGES = DRAW_ORDER.map((id) => byId[id]).filter(Boolean);
+function isValidWedge(s) {
+  return (
+    s &&
+    typeof s.id === 'string' &&
+    typeof s.d === 'string' &&
+    s.d.length > 0 &&
+    !s.d.includes('NaN') &&
+    Number.isFinite(s.cx) &&
+    Number.isFinite(s.cy)
+  );
+}
+export const SECTION_WEDGES = DRAW_ORDER.map((id) => byId[id]).filter(isValidWedge);
 
 const ALL_BLOCK_IDS = new Set(SECTION_WEDGES.map((s) => s.id));
 
