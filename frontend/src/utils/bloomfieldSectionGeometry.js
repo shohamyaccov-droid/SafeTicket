@@ -1,6 +1,7 @@
 /**
  * Bloomfield schematic — Viagogo-style asymmetric sections on a rounded-rect bowl.
- * Inner ring: wi→wm. Outer tier (west, north center, south only): wm→wo. East has no outer tier.
+ * Inner tier: wi → inner-back rect (short of old wm). Outer tier: outer-front rect → wo (past inner-back).
+ * Angular insets create true gaps between adjacent blocks; radial offset separates the tiers.
  */
 
 export const VIEW_W = 1000;
@@ -18,6 +19,17 @@ const GAP = 22;
 const STAND_DEPTH_LOWER = 48;
 const STAND_DEPTH_UPPER = 48;
 
+/** Pull inner tier outer edge inward (px in viewBox) — leaves channel before outer tier. */
+const RADIAL_INNER_BACK_TRIM = 5;
+/** Outer tier inner edge sits this far beyond nominal lower-bowl depth (px) — clear radial gap vs inner-back. */
+const RADIAL_OUTER_FRONT_EXTRA = 11;
+
+/**
+ * Normalized perimeter padding per wedge side (t ∈ [0,1)). ~0.00055 → ~0.11% of loop each side.
+ * Caps relative to wedge span so tiny corners do not invert.
+ */
+const ANGULAR_PAD_T = 0.00052;
+
 const wi = PITCH_W + 2 * GAP;
 const hi = PITCH_H + 2 * GAP;
 const ri = Math.min(36, Math.min(wi, hi) * 0.11 + 24);
@@ -25,6 +37,16 @@ const ri = Math.min(36, Math.min(wi, hi) * 0.11 + 24);
 const wm = wi + 2 * STAND_DEPTH_LOWER;
 const hm = hi + 2 * STAND_DEPTH_LOWER;
 const rm = Math.min(ri + STAND_DEPTH_LOWER, wm / 2 - 8, hm / 2 - 8);
+
+const innerBackDepth = STAND_DEPTH_LOWER - RADIAL_INNER_BACK_TRIM;
+const wInnerBack = wi + 2 * innerBackDepth;
+const hInnerBack = hi + 2 * innerBackDepth;
+const rInnerBack = Math.min(ri + innerBackDepth, wInnerBack / 2 - 8, hInnerBack / 2 - 8);
+
+const outerFrontDepth = STAND_DEPTH_LOWER + RADIAL_OUTER_FRONT_EXTRA;
+const wOuterFront = wi + 2 * outerFrontDepth;
+const hOuterFront = hi + 2 * outerFrontDepth;
+const rOuterFront = Math.min(ri + outerFrontDepth, wOuterFront / 2 - 8, hOuterFront / 2 - 8);
 
 const wo = wm + 2 * STAND_DEPTH_UPPER;
 const ho = hm + 2 * STAND_DEPTH_UPPER;
@@ -126,6 +148,19 @@ function ringSlice(t0, t1, innerW, innerH, innerR, outerW, outerH, outerR) {
   return { d, cx, cy };
 }
 
+/** Shrink [t0,t1] from both ends so adjacent wedges leave visible angular channel. */
+function applyAngularGap(t0, t1) {
+  const span = t1 - t0;
+  const pad = Math.min(ANGULAR_PAD_T, span * 0.12);
+  const ta = t0 + pad;
+  const tb = t1 - pad;
+  if (tb <= ta + 1e-8) {
+    const mid = (t0 + t1) / 2;
+    return { t0: mid - 1e-6, t1: mid + 1e-6 };
+  }
+  return { t0: ta, t1: tb };
+}
+
 /**
  * Order matches pointOnPerimeter: t=0 at west end of north (top) edge, then CW:
  * north inner → NE → east → SE → south → SW → west → NW.
@@ -159,7 +194,8 @@ function normalizeRanges(specs) {
 const INNER_RANGES = normalizeRanges(INNER_SPECS);
 
 const INNER_WEDGES = INNER_RANGES.map((r) => {
-  const { d, cx, cy } = ringSlice(r.t0, r.t1, wi, hi, ri, wm, hm, rm);
+  const { t0, t1 } = applyAngularGap(r.t0, r.t1);
+  const { d, cx, cy } = ringSlice(t0, t1, wi, hi, ri, wInnerBack, hInnerBack, rInnerBack);
   return { id: r.id, faceLabel: r.faceLabel, d, cx, cy, tier: 'lower' };
 });
 
@@ -179,7 +215,9 @@ const northInnerSpan = rangeForIds(['301', '302', '303', '304', '305', '306', '3
 
 function splitSpan(t0, t1, n, i) {
   const dt = (t1 - t0) / n;
-  return { t0: t0 + dt * i, t1: t0 + dt * (i + 1) };
+  const raw0 = t0 + dt * i;
+  const raw1 = t0 + dt * (i + 1);
+  return applyAngularGap(raw0, raw1);
 }
 
 const OUTER_WEDGES = [];
@@ -188,7 +226,7 @@ const OUTER_WEDGES = [];
 for (let i = 0; i < 12; i += 1) {
   const id = String(420 + i);
   const { t0, t1 } = splitSpan(westInnerSpan.t0, westInnerSpan.t1, 12, i);
-  const { d, cx, cy } = ringSlice(t0, t1, wm, hm, rm, wo, ho, ro);
+  const { d, cx, cy } = ringSlice(t0, t1, wOuterFront, hOuterFront, rOuterFront, wo, ho, ro);
   OUTER_WEDGES.push({ id, faceLabel: id, d, cx, cy, tier: 'upper' });
 }
 
@@ -200,7 +238,7 @@ const northOuterT1 = northMid + northHalfW / 2;
 for (let i = 0; i < 3; i += 1) {
   const id = String(404 + i);
   const { t0, t1 } = splitSpan(northOuterT0, northOuterT1, 3, i);
-  const { d, cx, cy } = ringSlice(t0, t1, wm, hm, rm, wo, ho, ro);
+  const { d, cx, cy } = ringSlice(t0, t1, wOuterFront, hOuterFront, rOuterFront, wo, ho, ro);
   OUTER_WEDGES.push({ id, faceLabel: id, d, cx, cy, tier: 'upper' });
 }
 
@@ -208,7 +246,7 @@ for (let i = 0; i < 3; i += 1) {
 for (let i = 0; i < 9; i += 1) {
   const id = String(221 + i);
   const { t0, t1 } = splitSpan(southInnerSpan.t0, southInnerSpan.t1, 9, i);
-  const { d, cx, cy } = ringSlice(t0, t1, wm, hm, rm, wo, ho, ro);
+  const { d, cx, cy } = ringSlice(t0, t1, wOuterFront, hOuterFront, rOuterFront, wo, ho, ro);
   OUTER_WEDGES.push({ id, faceLabel: id, d, cx, cy, tier: 'upper' });
 }
 
