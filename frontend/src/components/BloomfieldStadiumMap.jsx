@@ -250,8 +250,8 @@ export default function BloomfieldStadiumMap({
                   textAnchor="middle"
                   dominantBaseline="central"
                   fill={has ? TEXT_ON_GREEN : TEXT_SECTION_MUTED}
-                  fontSize="9"
-                  fontWeight="600"
+                  fontSize="8.5"
+                  fontWeight={has ? '800' : '500'}
                   fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
                   style={{
                     pointerEvents: 'none',
