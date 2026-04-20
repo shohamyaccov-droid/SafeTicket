@@ -243,15 +243,123 @@ function push(list, id, faceLabel, tier, w) {
 /** Tier-2 corners keep only this fraction of each 90° quadrant; rest is annular caps on end straights. */
 const T2_CORNER_SPAN_FRAC = 0.34;
 
+/** Inset band matching `rectCell` (for building one-piece paths). */
+function insetBand(x0, x1, y0, y1) {
+  const xa = Math.min(x0, x1) + CELL_IN;
+  const xb = Math.max(x0, x1) - CELL_IN;
+  const ya = Math.min(y0, y1) + CELL_IN;
+  const yb = Math.max(y0, y1) - CELL_IN;
+  if (xb <= xa || yb <= ya) return null;
+  return { xa, xb, ya, yb };
+}
+
 /**
- * Combine two closed SVG subpaths (same fill) for end blocks = rect + corner cap.
- * Labels/pins use the first path's centroid only (the wide flat), never the annular cap.
+ * Single closed path: north-row west end (301) — rect + outer corner arc only (no second Z → no inner seam).
+ * Arc from a1 → a0 with a1 < a0 (e.g. nwA0 → -π/2).
  */
-function mergePaths(rectWedge, capWedge) {
-  if (!rectWedge || typeof rectWedge.d !== 'string' || !rectWedge.d) return capWedge;
-  if (!capWedge || typeof capWedge.d !== 'string' || !capWedge.d) return rectWedge;
-  const d = `${rectWedge.d.replace(/\s*Z\s*$/i, '')} ${capWedge.d}`;
-  return { d, cx: rectWedge.cx, cy: rectWedge.cy };
+function endBlockNorthWestTop(x0, x1, y0, y1, cx, cy, rout, a0, a1, steps = 12) {
+  const r = insetBand(x0, x1, y0, y1);
+  if (!r) return null;
+  const { xa, xb, ya, yb } = r;
+  let d = `M ${fmt(xb)} ${fmt(ya)} L ${fmt(xb)} ${fmt(yb)} L ${fmt(xa)} ${fmt(yb)}`;
+  for (let s = 1; s <= steps; s += 1) {
+    const t = s / steps;
+    const ang = a1 + t * (a0 - a1);
+    d += ` L ${fmt(cx + rout * Math.cos(ang))} ${fmt(cy + rout * Math.sin(ang))}`;
+  }
+  d += ` L ${fmt(xa)} ${fmt(ya)} Z`;
+  const rect = rectCell(x0, x1, y0, y1);
+  return rect ? { d, cx: rect.cx, cy: rect.cy } : null;
+}
+
+/** North-row east end (309). Arc -π/2 → a1 with a1 > a0. */
+function endBlockNorthEastTop(x0, x1, y0, y1, cx, cy, rout, a0, a1, steps = 12) {
+  const r = insetBand(x0, x1, y0, y1);
+  if (!r) return null;
+  const { xa, xb, ya, yb } = r;
+  let d = `M ${fmt(xa)} ${fmt(ya)} L ${fmt(xb)} ${fmt(ya)} L ${fmt(xb)} ${fmt(yb)}`;
+  for (let s = 1; s <= steps; s += 1) {
+    const t = s / steps;
+    const ang = a0 + t * (a1 - a0);
+    d += ` L ${fmt(cx + rout * Math.cos(ang))} ${fmt(cy + rout * Math.sin(ang))}`;
+  }
+  d += ` L ${fmt(xa)} ${fmt(yb)} Z`;
+  const rect = rectCell(x0, x1, y0, y1);
+  return rect ? { d, cx: rect.cx, cy: rect.cy } : null;
+}
+
+/** South-row west end (319). Arc π/2 → swA (increasing); passes (aHi, aLo) = (swA0, π/2) into north-west template. */
+function endBlockSouthWestBot(x0, x1, y0, y1, cx, cy, rout, aHi, aLo, steps = 12) {
+  return endBlockNorthWestTop(x0, x1, y0, y1, cx, cy, rout, aHi, aLo, steps);
+}
+
+/** South-row east end (328). Arc 0 → a1 with a1 > a0. */
+function endBlockSouthEastBot(x0, x1, y0, y1, cx, cy, rout, a0, a1, steps = 12) {
+  return endBlockNorthEastTop(x0, x1, y0, y1, cx, cy, rout, a0, a1, steps);
+}
+
+/** West column north end (337). Arc nwA1 → -π with a1 < a0. */
+function endBlockWestNorthOut(x0, x1, y0, y1, cx, cy, rout, a0, a1, steps = 12) {
+  const r = insetBand(x0, x1, y0, y1);
+  if (!r) return null;
+  const { xa, xb, ya, yb } = r;
+  let d = `M ${fmt(xb)} ${fmt(yb)} L ${fmt(xa)} ${fmt(yb)} L ${fmt(xa)} ${fmt(ya)}`;
+  for (let s = 1; s <= steps; s += 1) {
+    const t = s / steps;
+    const ang = a0 + t * (a1 - a0);
+    d += ` L ${fmt(cx + rout * Math.cos(ang))} ${fmt(cy + rout * Math.sin(ang))}`;
+  }
+  d += ` L ${fmt(xb)} ${fmt(ya)} Z`;
+  const rect = rectCell(x0, x1, y0, y1);
+  return rect ? { d, cx: rect.cx, cy: rect.cy } : null;
+}
+
+/** West column south end (332). Arc swA1 → π with a1 > a0. */
+function endBlockWestSouthOut(x0, x1, y0, y1, cx, cy, rout, a0, a1, steps = 12) {
+  const r = insetBand(x0, x1, y0, y1);
+  if (!r) return null;
+  const { xa, xb, ya, yb } = r;
+  let d = `M ${fmt(xb)} ${fmt(ya)} L ${fmt(xa)} ${fmt(ya)} L ${fmt(xa)} ${fmt(yb)}`;
+  for (let s = 1; s <= steps; s += 1) {
+    const t = s / steps;
+    const ang = a0 + t * (a1 - a0);
+    d += ` L ${fmt(cx + rout * Math.cos(ang))} ${fmt(cy + rout * Math.sin(ang))}`;
+  }
+  d += ` L ${fmt(xb)} ${fmt(yb)} Z`;
+  const rect = rectCell(x0, x1, y0, y1);
+  return rect ? { d, cx: rect.cx, cy: rect.cy } : null;
+}
+
+/** East column north end (312). Arc neA1 → 0 with a1 > a0. */
+function endBlockEastNorthOut(x0, x1, y0, y1, cx, cy, rout, a0, a1, steps = 12) {
+  const r = insetBand(x0, x1, y0, y1);
+  if (!r) return null;
+  const { xa, xb, ya, yb } = r;
+  let d = `M ${fmt(xa)} ${fmt(yb)} L ${fmt(xb)} ${fmt(yb)} L ${fmt(xb)} ${fmt(ya)}`;
+  for (let s = 1; s <= steps; s += 1) {
+    const t = s / steps;
+    const ang = a0 + t * (a1 - a0);
+    d += ` L ${fmt(cx + rout * Math.cos(ang))} ${fmt(cy + rout * Math.sin(ang))}`;
+  }
+  d += ` L ${fmt(xa)} ${fmt(ya)} Z`;
+  const rect = rectCell(x0, x1, y0, y1);
+  return rect ? { d, cx: rect.cx, cy: rect.cy } : null;
+}
+
+/** East column south end (317). Arc seA1 → π/2 with a1 > a0. */
+function endBlockEastSouthOut(x0, x1, y0, y1, cx, cy, rout, a0, a1, steps = 12) {
+  const r = insetBand(x0, x1, y0, y1);
+  if (!r) return null;
+  const { xa, xb, ya, yb } = r;
+  let d = `M ${fmt(xa)} ${fmt(ya)} L ${fmt(xb)} ${fmt(ya)} L ${fmt(xb)} ${fmt(yb)}`;
+  for (let s = 1; s <= steps; s += 1) {
+    const t = s / steps;
+    const ang = a0 + t * (a1 - a0);
+    d += ` L ${fmt(cx + rout * Math.cos(ang))} ${fmt(cy + rout * Math.sin(ang))}`;
+  }
+  d += ` L ${fmt(xa)} ${fmt(yb)} Z`;
+  const rect = rectCell(x0, x1, y0, y1);
+  return rect ? { d, cx: rect.cx, cy: rect.cy } : null;
 }
 
 const TIER_1 = [];
@@ -266,8 +374,12 @@ const cum10 = cumFracFromWeights(W10);
 const xNorthT2 = breaksFromCum(xL2i + r2i, topFlat2i, cum9);
 /** West-to-east along bottom flat (tier 2). */
 const xSouthT2 = breaksFromCum(xL2i + r2i, botFlat2i, cum10);
+/** East-to-west (reversed breaks) — use with 319+(9−i) so labels read 319…328 left-to-right on the map. */
+const xSouthT2Rev = xSouthT2.slice().reverse();
 /** North-to-south along west straight (tier 2). */
 const yWestT2 = breaksFromCum(yT2i + r2i, sideFlat2i, cum6);
+/** South-to-north — use with 332+i so labels read 337…332 top-to-bottom. */
+const yWestT2Rev = yWestT2.slice().reverse();
 
 /* --- TIER 1 straights only (no 200s in corners — white negative space) --- */
 
@@ -281,11 +393,11 @@ for (let i = 0; i < 9; i += 1) {
 const xS1Lo = xL1 + r1;
 const xS1Hi = xR1 - r1;
 for (let i = 0; i < 8; i += 1) {
-  const clip = clipSpan1D(xSouthT2[i], xSouthT2[i + 1], xS1Lo, xS1Hi);
+  const clip = clipSpan1D(xSouthT2Rev[10 - i], xSouthT2Rev[9 - i], xS1Lo, xS1Hi);
   if (clip) push(TIER_1, String(221 + i), String(221 + i), 't1', rectCell(clip.xa, yB, clip.xb, yB1));
 }
 {
-  const clip = clipSpan1D(xSouthT2[8], xSouthT2[10], xS1Lo, xS1Hi);
+  const clip = clipSpan1D(xSouthT2Rev[0], xSouthT2Rev[2], xS1Lo, xS1Hi);
   if (clip) push(TIER_1, '229', '229', 't1', rectCell(clip.xa, yB, clip.xb, yB1));
 }
 
@@ -337,50 +449,140 @@ const swStep = (swA1 - swA0) / 3;
 for (let i = 0; i < 9; i += 1) {
   const rect = rectCell(xNorthT2[i], yT2o, xNorthT2[i + 1], yT2i);
   if (i === 0) {
-    const cap = annularSector(cn2.nw.x, cn2.nw.y, rinC, routC, -Math.PI / 2, nwA0, 10);
-    push(TIER_2, '301', '301', 't2', mergePaths(rect, cap));
+    push(
+      TIER_2,
+      '301',
+      '301',
+      't2',
+      endBlockNorthWestTop(
+        xNorthT2[0],
+        xNorthT2[1],
+        yT2o,
+        yT2i,
+        cn2.nw.x,
+        cn2.nw.y,
+        routC,
+        -Math.PI / 2,
+        nwA0,
+        12
+      )
+    );
   } else if (i === 8) {
-    const cap = annularSector(cn2.ne.x, cn2.ne.y, rinC, routC, -Math.PI / 2, neA0, 10);
-    push(TIER_2, '309', '309', 't2', mergePaths(rect, cap));
+    push(
+      TIER_2,
+      '309',
+      '309',
+      't2',
+      endBlockNorthEastTop(
+        xNorthT2[8],
+        xNorthT2[9],
+        yT2o,
+        yT2i,
+        cn2.ne.x,
+        cn2.ne.y,
+        routC,
+        -Math.PI / 2,
+        neA0,
+        12
+      )
+    );
   } else {
     push(TIER_2, String(301 + i), String(301 + i), 't2', rect);
   }
 }
 
 for (let i = 0; i < 10; i += 1) {
-  const rect = rectCell(xSouthT2[i], yB2i, xSouthT2[i + 1], yB2o);
+  const x0 = xSouthT2Rev[i + 1];
+  const x1 = xSouthT2Rev[i];
+  const sid = String(319 + (9 - i));
+  const rect = rectCell(x0, yB2i, x1, yB2o);
   if (i === 0) {
-    const cap = annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, Math.PI / 2, swA0, 10);
-    push(TIER_2, '319', '319', 't2', mergePaths(rect, cap));
+    push(
+      TIER_2,
+      '328',
+      '328',
+      't2',
+      endBlockSouthEastBot(x0, x1, yB2i, yB2o, cn2.se.x, cn2.se.y, routC, 0, seA0, 12)
+    );
   } else if (i === 9) {
-    const cap = annularSector(cn2.se.x, cn2.se.y, rinC, routC, 0, seA0, 10);
-    push(TIER_2, '328', '328', 't2', mergePaths(rect, cap));
+    push(
+      TIER_2,
+      '319',
+      '319',
+      't2',
+      endBlockSouthWestBot(x0, x1, yB2i, yB2o, cn2.sw.x, cn2.sw.y, routC, swA0, Math.PI / 2, 12)
+    );
   } else {
-    push(TIER_2, String(319 + i), String(319 + i), 't2', rect);
+    push(TIER_2, sid, sid, 't2', rect);
   }
 }
 
 for (let i = 0; i < 6; i += 1) {
-  const rect = rectCell(xL2o, yWestT2[i], xL2i, yWestT2[i + 1]);
+  const y0 = yWestT2Rev[i + 1];
+  const y1 = yWestT2Rev[i];
+  const sid = String(332 + i);
+  const rect = rectCell(xL2o, y0, xL2i, y1);
   if (i === 0) {
-    const cap = annularSector(cn2.nw.x, cn2.nw.y, rinC, routC, nwA1, -Math.PI, 10);
-    push(TIER_2, '337', '337', 't2', mergePaths(rect, cap));
+    push(
+      TIER_2,
+      '332',
+      '332',
+      't2',
+      endBlockWestSouthOut(xL2o, xL2i, y0, y1, cn2.sw.x, cn2.sw.y, routC, swA1, Math.PI, 12)
+    );
   } else if (i === 5) {
-    const cap = annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, swA1, Math.PI, 10);
-    push(TIER_2, '332', '332', 't2', mergePaths(rect, cap));
+    push(
+      TIER_2,
+      '337',
+      '337',
+      't2',
+      endBlockWestNorthOut(xL2o, xL2i, y0, y1, cn2.nw.x, cn2.nw.y, routC, nwA1, -Math.PI, 12)
+    );
   } else {
-    push(TIER_2, String(337 - i), String(337 - i), 't2', rect);
+    push(TIER_2, sid, sid, 't2', rect);
   }
 }
 
 for (let i = 0; i < 6; i += 1) {
   const rect = rectCell(xR2i, yWestT2[i], xR2o, yWestT2[i + 1]);
   if (i === 0) {
-    const cap = annularSector(cn2.ne.x, cn2.ne.y, rinC, routC, neA1, 0, 10);
-    push(TIER_2, '312', '312', 't2', mergePaths(rect, cap));
+    push(
+      TIER_2,
+      '312',
+      '312',
+      't2',
+      endBlockEastNorthOut(
+        xR2i,
+        xR2o,
+        yWestT2[0],
+        yWestT2[1],
+        cn2.ne.x,
+        cn2.ne.y,
+        routC,
+        neA1,
+        0,
+        12
+      )
+    );
   } else if (i === 5) {
-    const cap = annularSector(cn2.se.x, cn2.se.y, rinC, routC, seA1, Math.PI / 2, 10);
-    push(TIER_2, '317', '317', 't2', mergePaths(rect, cap));
+    push(
+      TIER_2,
+      '317',
+      '317',
+      't2',
+      endBlockEastSouthOut(
+        xR2i,
+        xR2o,
+        yWestT2[5],
+        yWestT2[6],
+        cn2.se.x,
+        cn2.se.y,
+        routC,
+        seA1,
+        Math.PI / 2,
+        12
+      )
+    );
   } else {
     push(TIER_2, String(312 + i), String(312 + i), 't2', rect);
   }
@@ -425,25 +627,25 @@ for (let j = 0; j < 3; j += 1) {
 
 const xS3Lo = xL3i + r3i;
 const xS3Hi = xR3i - r3i;
-let southT3Id = 431;
+let southT3Id = 419;
 for (let k = 0; k < 10; k += 1) {
   if (k === 3 || k === 4 || k === 5) {
     const mid = (xSouthT2[k] + xSouthT2[k + 1]) / 2;
     const c0 = clipSpan1D(xSouthT2[k], mid, xS3Lo, xS3Hi);
     if (c0) {
       push(TIER_3, String(southT3Id), String(southT3Id), 't3', rectCell(c0.xa, yB3i, c0.xb, yB3o));
-      southT3Id -= 1;
+      southT3Id += 1;
     }
     const c1 = clipSpan1D(mid, xSouthT2[k + 1], xS3Lo, xS3Hi);
     if (c1) {
       push(TIER_3, String(southT3Id), String(southT3Id), 't3', rectCell(c1.xa, yB3i, c1.xb, yB3o));
-      southT3Id -= 1;
+      southT3Id += 1;
     }
   } else {
     const c = clipSpan1D(xSouthT2[k], xSouthT2[k + 1], xS3Lo, xS3Hi);
     if (c) {
       push(TIER_3, String(southT3Id), String(southT3Id), 't3', rectCell(c.xa, yB3i, c.xb, yB3o));
-      southT3Id -= 1;
+      southT3Id += 1;
     }
   }
 }
@@ -465,7 +667,7 @@ const DRAW_ORDER = [
   '330',
   '331',
   ...[404, 405, 406].map(String),
-  ...[431, 430, 429, 428, 427, 426, 425, 424, 423, 422, 421, 420, 419].map(String),
+  ...[419, 420, 421, 422, 423, 424, 425, 426, 427, 428, 429, 430, 431].map(String),
 ];
 
 const byId = Object.fromEntries([...TIER_1, ...TIER_2, ...TIER_3].map((s) => [s.id, s]));
