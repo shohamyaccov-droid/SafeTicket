@@ -18,7 +18,7 @@ import {
   PITCH_RY,
 } from '../utils/bloomfieldSectionGeometry';
 
-const FILL_DEFAULT = '#e5e7eb';
+const FILL_DEFAULT = '#d1d5db';
 const FILL_ACTIVE = '#9bca3e';
 /** Viagogo-style pitch; grid is white void between grey wedges, not strokes. */
 const PITCH_GRASS = '#82c91e';

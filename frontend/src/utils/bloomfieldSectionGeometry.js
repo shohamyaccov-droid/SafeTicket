@@ -14,8 +14,8 @@ export const PITCH_H = Math.round(168 * 0.83);
 export const PITCH_RX = 5;
 export const PITCH_RY = 5;
 
-/** White concourse band between pitch edge and inner stand ring (viewBox px per side). */
-const GAP = 40;
+/** White “moat” between pitch edge and inner stand ring (viewBox px per side; ~20px at 1:1). */
+const GAP = 20;
 const STAND_DEPTH_LOWER = 48;
 /** Thicker upper tier (radial depth) vs inner — Viagogo-like proportion */
 const STAND_DEPTH_UPPER = 66;
@@ -136,7 +136,7 @@ function rayToEllipse(px, py, rx, ry) {
 
 function applyMicroSep(t0, t1) {
   const span = t1 - t0;
-  const pad = Math.min(T_INSET_PER_SIDE, span * 0.42);
+  const pad = Math.min(T_INSET_PER_SIDE, span * 0.49);
   const ta = t0 + pad;
   const tb = t1 - pad;
   if (tb <= ta + 1e-10) {
