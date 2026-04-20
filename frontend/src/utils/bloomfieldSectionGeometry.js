@@ -243,12 +243,15 @@ function push(list, id, faceLabel, tier, w) {
 /** Tier-2 corners keep only this fraction of each 90° quadrant; rest is annular caps on end straights. */
 const T2_CORNER_SPAN_FRAC = 0.34;
 
-/** Combine two closed SVG subpaths (same fill) for end blocks = rect + corner cap. */
-function mergePaths(wA, wB) {
-  if (!wA || typeof wA.d !== 'string' || !wA.d) return wB;
-  if (!wB || typeof wB.d !== 'string' || !wB.d) return wA;
-  const d = `${wA.d.replace(/\s*Z\s*$/i, '')} ${wB.d}`;
-  return { d, cx: (wA.cx + wB.cx) / 2, cy: (wA.cy + wB.cy) / 2 };
+/**
+ * Combine two closed SVG subpaths (same fill) for end blocks = rect + corner cap.
+ * Labels/pins use the first path's centroid only (the wide flat), never the annular cap.
+ */
+function mergePaths(rectWedge, capWedge) {
+  if (!rectWedge || typeof rectWedge.d !== 'string' || !rectWedge.d) return capWedge;
+  if (!capWedge || typeof capWedge.d !== 'string' || !capWedge.d) return rectWedge;
+  const d = `${rectWedge.d.replace(/\s*Z\s*$/i, '')} ${capWedge.d}`;
+  return { d, cx: rectWedge.cx, cy: rectWedge.cy };
 }
 
 const TIER_1 = [];
@@ -384,9 +387,11 @@ for (let i = 0; i < 6; i += 1) {
 }
 
 push(TIER_2, '338', '338', 't2', annularSector(cn2.nw.x, cn2.nw.y, rinC, routC, nwA0, nwA1, 10));
+/* NE: angles run north (-π/2) → east (0); 310 = north/top of arc, 311 = toward east/bottom. */
 push(TIER_2, '310', '310', 't2', annularSector(cn2.ne.x, cn2.ne.y, rinC, routC, neA0, neMid, 8));
 push(TIER_2, '311', '311', 't2', annularSector(cn2.ne.x, cn2.ne.y, rinC, routC, neMid, neA1, 8));
 push(TIER_2, '318', '318', 't2', annularSector(cn2.se.x, cn2.se.y, rinC, routC, seA0, seA1, 10));
+/* SW: angles run south (π/2) → west (π); 329 = south/bottom-right of arc, 331 = toward west/top-left. */
 push(
   TIER_2,
   '329',

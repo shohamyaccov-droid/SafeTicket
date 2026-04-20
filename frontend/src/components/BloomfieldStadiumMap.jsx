@@ -104,7 +104,7 @@ function layoutPins(rows) {
       stableId: rep.stableId,
       blockId: sid,
       x: cx0,
-      y: cy0 - 6,
+      y: cy0,
       priceLine: priceLabel,
       urgency: n > 0 && n < 5 ? `${n} left` : null,
       isBestPrice,
