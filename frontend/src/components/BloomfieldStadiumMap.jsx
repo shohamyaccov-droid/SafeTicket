@@ -214,7 +214,7 @@ export default function BloomfieldStadiumMap({
                   d={sec.d}
                   fill={fill}
                   fillOpacity={1}
-                  shapeRendering={isHi ? 'geometricPrecision' : 'crispEdges'}
+                  shapeRendering="geometricPrecision"
                   {...(isHi
                     ? {
                         stroke: '#0ea5e9',

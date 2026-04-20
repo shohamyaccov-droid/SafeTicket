@@ -55,8 +55,9 @@ const ho = hm + 2 * STAND_DEPTH_UPPER;
 const OVAL_RX = wo / 2 + BOWL_OVAL_MARGIN;
 const OVAL_RY = ho / 2 + BOWL_OVAL_MARGIN;
 
+/** Enough precision that adjacent wedge vertices do not collapse to identical path tokens after rounding. */
 function fmt(n) {
-  return Number(n.toFixed(2));
+  return Number(n.toFixed(4));
 }
 
 /**
