@@ -39,6 +39,13 @@ Production refresh (Render, after deploy)
    shows + QA inventory, and upserts two high_demand waitlist events (no tickets).
 3. Optional: verify in Django admin → Events / Ticket alerts.
 
+**Stadium geometry refresh (Bloomfield / Menora / Eyal Golan rows)** — one-off; does **not** run on every boot:
+
+    cd backend && python manage.py prune_stadium_catalog --reseed
+
+Deletes events whose artist is אייל גולן or whose name/venue mentions בלומפילד or מנורה, clears Django cache,
+then runs the same catalog seed as below (`_seed_all(skip_prune=True)` + inventory assertions).
+
 This does **not** delete user accounts or paid orders; it **does** delete Events (and cascaded tickets)
 that match the prune rules — take a DB backup before running if you have custom events you need to keep.
 """
@@ -238,6 +245,66 @@ _LEGACY_EVENT_NAMES_EXACT = {
     'פסטיבל קיץ תל אביב — ליין אמנים',
     'סטנדאפ: לילה של צחוק',
 }
+
+
+def prune_stadium_catalog_refresh_targets(*, dry_run: bool = False) -> list[dict]:
+    """
+    One-off catalog reset: remove events tied to Eyal Golan, Bloomfield, or Menora so the next
+    seed_production / launch seed recreates rows with fresh ticket listing_group_ids and UI mapping.
+
+    Does NOT run automatically on every seed — use management command `prune_stadium_catalog` on Render shell.
+
+    Tickets and TicketAlerts CASCADE with Event. Clears Django cache after delete (LocMem in default settings).
+    """
+    from django.core.cache import cache
+
+    matches: list[dict] = []
+    for ev in Event.objects.select_related('artist', 'venue_place').all().iterator():
+        artist = (ev.artist.name if ev.artist else '') or ''
+        name = (ev.name or '') or ''
+        venue = (ev.venue or '') or ''
+        vp_name = (ev.venue_place.name if ev.venue_place else '') or ''
+        blob_lower = f'{artist} {name} {venue} {vp_name}'.lower()
+        hay_he = f'{artist} {name} {venue} {vp_name}'
+        hit = False
+        reasons: list[str] = []
+        if 'אייל גולן' in artist or 'eyal golan' in blob_lower:
+            hit = True
+            reasons.append('artist_eyal_golan')
+        if 'בלומפילד' in hay_he or 'bloomfield' in blob_lower:
+            hit = True
+            reasons.append('venue_bloomfield')
+        if 'מנורה' in hay_he or 'menora' in blob_lower or 'מבטחים' in hay_he:
+            hit = True
+            reasons.append('venue_menora')
+        if hit:
+            matches.append(
+                {
+                    'id': ev.pk,
+                    'name': name,
+                    'date': ev.date,
+                    'reasons': reasons,
+                }
+            )
+
+    if dry_run:
+        _seed_log(f'[seed] stadium prune (dry-run): would delete {len(matches)} events: {[m["id"] for m in matches]}')
+        return matches
+
+    deleted_ids = [m['id'] for m in matches]
+    if deleted_ids:
+        Event.objects.filter(pk__in=deleted_ids).delete()
+        _seed_log(f'[seed] stadium prune: deleted {len(deleted_ids)} events (ids={deleted_ids})')
+    else:
+        _seed_log('[seed] stadium prune: no matching events')
+
+    try:
+        cache.clear()
+        _seed_log('[seed] Django cache cleared after stadium prune')
+    except Exception as ex:
+        _seed_log(f'[seed] cache.clear() skipped: {ex!r}')
+
+    return matches
 
 
 def prune_legacy_placeholder_events() -> None:
