@@ -19,7 +19,6 @@ import {
 } from '../utils/bloomfieldSectionGeometry';
 
 const FILL_DEFAULT = '#f3f4f6';
-const STROKE_SECTION = '#ffffff';
 const FILL_ACTIVE = '#a3e635';
 const PITCH_GRASS = '#82c91e';
 const LINE_WHITE = '#ffffff';
@@ -30,7 +29,6 @@ const TEXT_ON_GREEN = '#14532d';
 const ROSE_600 = '#e11d48';
 const BEST_BADGE_FILL = '#14532d';
 
-const STROKE_INACTIVE_W = 1.5;
 const STROKE_HIGHLIGHT_W = 2.75;
 
 function isRenderableWedge(sec) {
@@ -251,10 +249,10 @@ export default function BloomfieldStadiumMap({
                   data-section-id={sid}
                   d={sec.d}
                   fill={fill}
-                  fillOpacity={1}
+                  fillOpacity={0.99}
                   shapeRendering="geometricPrecision"
-                  stroke={isHi ? '#0ea5e9' : STROKE_SECTION}
-                  strokeWidth={isHi ? STROKE_HIGHLIGHT_W : STROKE_INACTIVE_W}
+                  stroke={isHi ? '#0ea5e9' : 'none'}
+                  strokeWidth={isHi ? STROKE_HIGHLIGHT_W : 0}
                   strokeLinejoin={isHi ? 'round' : 'miter'}
                   className="transition-[stroke,fill-opacity] duration-150 ease-out"
                   style={{ cursor: has ? 'pointer' : 'default' }}
