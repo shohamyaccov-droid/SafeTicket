@@ -28,7 +28,7 @@ const TEXT_INACTIVE = '#999999';
 const TEXT_ACTIVE = '#000000';
 const ROSE_600 = '#e11d48';
 
-const PIN_BODY_W = 72;
+const PIN_BODY_W = 96;
 const PIN_TRI_H = 6;
 const PIN_TRI_HALF = 6;
 const PIN_RX = 6;
@@ -76,9 +76,8 @@ function layoutPins(rows) {
       blockId: bid,
       x: cx0,
       y: cy0 - 6,
-      priceLabel,
+      priceLine: `מ- ${priceLabel}`,
       urgency: n > 0 && n < 5 ? `${n} left` : null,
-      showFrom: true,
     });
   }
   return pins;
@@ -292,34 +291,17 @@ export default function BloomfieldStadiumMap({
 
             {pins.map((p) => {
               const hasUrgency = Boolean(p.urgency);
-              const hasFrom = Boolean(p.showFrom);
-              let bodyH = 24;
-              if (hasFrom && hasUrgency) bodyH = 38;
-              else if (hasFrom) bodyH = 30;
-              else if (hasUrgency) bodyH = 30;
+              const bodyH = hasUrgency ? 32 : 26;
               const bodyTop = -(bodyH + PIN_TRI_H);
               const inverted = pinInverted(p.stableId);
               const bg = inverted ? PIN_INVERTED : '#ffffff';
               const stroke = inverted ? '#404040' : '#e5e7eb';
               const sw = 1;
-              const priceFill = inverted ? '#ffffff' : '#111827';
-              const fromFill = inverted ? '#d1d5db' : '#6b7280';
+              const lineFill = inverted ? '#ffffff' : '#000000';
               const urgentFill = inverted ? '#fda4af' : ROSE_600;
 
-              let fromY = bodyTop + bodyH / 2;
-              let priceY = bodyTop + bodyH / 2;
-              let urgentY = bodyTop + bodyH / 2;
-              if (hasFrom && hasUrgency) {
-                fromY = bodyTop + 9;
-                priceY = bodyTop + 22;
-                urgentY = bodyTop + 33;
-              } else if (hasFrom) {
-                fromY = bodyTop + 9;
-                priceY = bodyTop + 21;
-              } else if (hasUrgency) {
-                priceY = bodyTop + 10;
-                urgentY = bodyTop + 20;
-              }
+              const priceY = hasUrgency ? bodyTop + 11 : bodyTop + bodyH / 2;
+              const urgentY = bodyTop + 23;
 
               return (
                 <g
@@ -357,31 +339,21 @@ export default function BloomfieldStadiumMap({
                       stroke="none"
                     />
                   </g>
-                  {hasFrom ? (
-                    <text
-                      x="0"
-                      y={fromY}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fill={fromFill}
-                      fontSize="8.5"
-                      fontWeight="700"
-                      style={{ pointerEvents: 'none' }}
-                    >
-                      מ-
-                    </text>
-                  ) : null}
                   <text
                     x="0"
                     y={priceY}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    fill={priceFill}
+                    fill={lineFill}
                     fontSize="11.5"
                     fontWeight="800"
-                    style={{ pointerEvents: 'none' }}
+                    style={{
+                      pointerEvents: 'none',
+                      direction: 'ltr',
+                      unicodeBidi: 'isolate',
+                    }}
                   >
-                    {p.priceLabel}
+                    {p.priceLine}
                   </text>
                   {hasUrgency ? (
                     <text

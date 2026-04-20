@@ -1,5 +1,6 @@
 /**
- * Bloomfield schematic — rounded-rect bowl with lower + upper tier wedges.
+ * Bloomfield schematic — Viagogo-style asymmetric sections on a rounded-rect bowl.
+ * Inner ring: wi→wm. Outer tier (west, north center, south only): wm→wo. East has no outer tier.
  */
 
 export const VIEW_W = 1000;
@@ -8,14 +9,12 @@ export const VIEW_H = 640;
 export const CX = 500;
 export const CY = 320;
 
-/** Pitch ~17% smaller → more concourse between pitch and stands */
 export const PITCH_W = Math.round(300 * 0.83);
 export const PITCH_H = Math.round(168 * 0.83);
 export const PITCH_RX = 5;
 export const PITCH_RY = 5;
 
 const GAP = 22;
-/** Lower bowl depth + upper tier depth (total ring thickness ≈ prior single ring) */
 const STAND_DEPTH_LOWER = 48;
 const STAND_DEPTH_UPPER = 48;
 
@@ -30,8 +29,6 @@ const rm = Math.min(ri + STAND_DEPTH_LOWER, wm / 2 - 8, hm / 2 - 8);
 const wo = wm + 2 * STAND_DEPTH_UPPER;
 const ho = hm + 2 * STAND_DEPTH_UPPER;
 const ro = Math.min(rm + STAND_DEPTH_UPPER, wo / 2 - 6, ho / 2 - 6);
-
-const WEDGE_COUNT = 36;
 
 function fmt(n) {
   return Number(n.toFixed(2));
@@ -114,105 +111,130 @@ export function roundedRectPathD(cx, cy, w, h, r) {
   ].join(' ');
 }
 
-/** Lower tier ids (inner bowl): 301…336 */
-export const LOWER_WEDGE_IDS = (() => {
-  const ids = [];
-  for (let i = 0; i < 10; i += 1) ids.push(String(301 + i));
-  for (let i = 0; i < 8; i += 1) ids.push(String(311 + i));
-  for (let i = 0; i < 10; i += 1) ids.push(String(319 + i));
-  for (let i = 0; i < 8; i += 1) ids.push(String(329 + i));
-  return ids;
-})();
-
-/** Upper tier ids (outer ring): 401…436 */
-export const UPPER_WEDGE_IDS = (() => {
-  const ids = [];
-  for (let i = 0; i < 10; i += 1) ids.push(String(401 + i));
-  for (let i = 0; i < 8; i += 1) ids.push(String(411 + i));
-  for (let i = 0; i < 10; i += 1) ids.push(String(419 + i));
-  for (let i = 0; i < 8; i += 1) ids.push(String(429 + i));
-  return ids;
-})();
-
-/** @deprecated use LOWER_WEDGE_IDS */
-export const WEDGE_IDS = LOWER_WEDGE_IDS;
-
-function wedgeIndexFromSectionNumber(n) {
-  return ((n % 100) + 35) % WEDGE_COUNT;
-}
-
-/**
- * Map ticket section number to a wedge id. Section numbers 400–499 → upper tier; else lower.
- */
-export function blockIdFromSectionNumber(numStr) {
-  if (!numStr || numStr === '—') return LOWER_WEDGE_IDS[0];
-  const n = parseInt(String(numStr), 10);
-  if (Number.isNaN(n)) return LOWER_WEDGE_IDS[0];
-  const idx = wedgeIndexFromSectionNumber(n);
-  if (n >= 400 && n < 500) {
-    return UPPER_WEDGE_IDS[idx];
-  }
-  return LOWER_WEDGE_IDS[idx];
-}
-
-const LOWER_FACE_LABELS = [
-  '118', '124', '129', '134', '138', '142', '148', '152', '156', '162',
-  '215', '222', '229', '238', '245', '251', '258', '265',
-  '301', '308', '315', '322', '329', '334', '338', '345', '352', '358',
-  '401', '408', '415', '421', '426', '429', '433', '438',
-];
-
-const UPPER_FACE_LABELS = [
-  '402', '406', '412', '418', '424', '428', '432', '436', '440', '444',
-  '448', '452', '456', '460', '464', '468', '472', '476',
-  '480', '484', '488', '492', '496', '500', '504', '508', '512', '516',
-  '520', '524', '528', '532', '536', '540', '544', '548',
-];
-
 function quadPath(o1, o2, i2, i1) {
   return `M ${fmt(o1.x)} ${fmt(o1.y)} L ${fmt(o2.x)} ${fmt(o2.y)} L ${fmt(i2.x)} ${fmt(i2.y)} L ${fmt(i1.x)} ${fmt(i1.y)} Z`;
 }
 
-function buildTierWedge(ids, faceLabels, outerW, outerH, outerR, innerW, innerH, innerR) {
-  return ids.map((id, i) => {
-    const t1 = i / WEDGE_COUNT;
-    const t2 = (i + 1) / WEDGE_COUNT;
-    const o1 = pointOnPerimeter(t1, outerW, outerH, outerR, CX, CY);
-    const o2 = pointOnPerimeter(t2, outerW, outerH, outerR, CX, CY);
-    const i1 = pointOnPerimeter(t1, innerW, innerH, innerR, CX, CY);
-    const i2 = pointOnPerimeter(t2, innerW, innerH, innerR, CX, CY);
-    const d = quadPath(o1, o2, i2, i1);
-    const tcx = (o1.x + o2.x + i1.x + i2.x) / 4;
-    const tcy = (o1.y + o2.y + i1.y + i2.y) / 4;
-    const faceLabel = faceLabels[i] ?? id;
-    return { id, faceLabel, d, cx: tcx, cy: tcy, tier: outerW === wo ? 'upper' : 'lower' };
+function ringSlice(t0, t1, innerW, innerH, innerR, outerW, outerH, outerR) {
+  const o1 = pointOnPerimeter(t0, outerW, outerH, outerR, CX, CY);
+  const o2 = pointOnPerimeter(t1, outerW, outerH, outerR, CX, CY);
+  const i1 = pointOnPerimeter(t0, innerW, innerH, innerR, CX, CY);
+  const i2 = pointOnPerimeter(t1, innerW, innerH, innerR, CX, CY);
+  const d = quadPath(o1, o2, i2, i1);
+  const cx = (o1.x + o2.x + i1.x + i2.x) / 4;
+  const cy = (o1.y + o2.y + i1.y + i2.y) / 4;
+  return { d, cx, cy };
+}
+
+/**
+ * Order matches pointOnPerimeter: t=0 at west end of north (top) edge, then CW:
+ * north inner → NE → east → SE → south → SW → west → NW.
+ * Weights: west/east inner (touchlines) wider than north/south inner.
+ */
+const INNER_SPECS = [
+  ...[301, 302, 303, 304, 305, 306, 307, 308, 309].map((n) => ({ id: String(n), faceLabel: String(n), w: 1.12 })),
+  { id: '310', faceLabel: '310', w: 0.74 },
+  { id: '311', faceLabel: '311', w: 0.74 },
+  ...[312, 313, 314, 315, 316, 317].map((n) => ({ id: String(n), faceLabel: String(n), w: 2.15 })),
+  { id: '318', faceLabel: '318', w: 0.88 },
+  ...[328, 327, 326, 325, 324, 323, 322, 321, 320, 319].map((n) => ({ id: String(n), faceLabel: String(n), w: 1.12 })),
+  { id: '329', faceLabel: '329', w: 0.74 },
+  { id: '330', faceLabel: '330', w: 0.74 },
+  { id: '331', faceLabel: '331', w: 0.74 },
+  ...[332, 333, 334, 335, 336, 337].map((n) => ({ id: String(n), faceLabel: String(n), w: 2.15 })),
+  { id: '338', faceLabel: '338', w: 0.88 },
+];
+
+function normalizeRanges(specs) {
+  const sum = specs.reduce((a, s) => a + s.w, 0);
+  let acc = 0;
+  return specs.map((s) => {
+    const t0 = acc / sum;
+    acc += s.w;
+    const t1 = acc / sum;
+    return { ...s, t0, t1 };
   });
 }
 
-const LOWER_WEDGES = buildTierWedge(
-  LOWER_WEDGE_IDS,
-  LOWER_FACE_LABELS,
-  wm,
-  hm,
-  rm,
-  wi,
-  hi,
-  ri
-);
+const INNER_RANGES = normalizeRanges(INNER_SPECS);
 
-const UPPER_WEDGES = buildTierWedge(
-  UPPER_WEDGE_IDS,
-  UPPER_FACE_LABELS,
-  wo,
-  ho,
-  ro,
-  wm,
-  hm,
-  rm
-);
+const INNER_WEDGES = INNER_RANGES.map((r) => {
+  const { d, cx, cy } = ringSlice(r.t0, r.t1, wi, hi, ri, wm, hm, rm);
+  return { id: r.id, faceLabel: r.faceLabel, d, cx, cy, tier: 'lower' };
+});
 
-/** All wedges: lower (inner bowl) first, then upper (outer ring) */
-export const SECTION_WEDGES = [...LOWER_WEDGES, ...UPPER_WEDGES];
+function rangeForIds(ids) {
+  const set = new Set(ids.map(String));
+  const hits = INNER_RANGES.filter((x) => set.has(x.id));
+  if (!hits.length) return { t0: 0, t1: 0 };
+  return { t0: hits[0].t0, t1: hits[hits.length - 1].t1 };
+}
+
+/** West inner 332–337: shared span for outer 420–431 */
+const westInnerSpan = rangeForIds(['332', '333', '334', '335', '336', '337']);
+/** South inner 319–328 → south outer 221–229 */
+const southInnerSpan = rangeForIds(['319', '320', '321', '322', '323', '324', '325', '326', '327', '328']);
+/** North inner 301–309 → center strip for 404–406 */
+const northInnerSpan = rangeForIds(['301', '302', '303', '304', '305', '306', '307', '308', '309']);
+
+function splitSpan(t0, t1, n, i) {
+  const dt = (t1 - t0) / n;
+  return { t0: t0 + dt * i, t1: t0 + dt * (i + 1) };
+}
+
+const OUTER_WEDGES = [];
+
+/** West outer 420–431 (12), north → south */
+for (let i = 0; i < 12; i += 1) {
+  const id = String(420 + i);
+  const { t0, t1 } = splitSpan(westInnerSpan.t0, westInnerSpan.t1, 12, i);
+  const { d, cx, cy } = ringSlice(t0, t1, wm, hm, rm, wo, ho, ro);
+  OUTER_WEDGES.push({ id, faceLabel: id, d, cx, cy, tier: 'upper' });
+}
+
+/** North outer center only: 404, 405, 406 */
+const northMid = (northInnerSpan.t0 + northInnerSpan.t1) / 2;
+const northHalfW = (northInnerSpan.t1 - northInnerSpan.t0) * 0.34;
+const northOuterT0 = northMid - northHalfW / 2;
+const northOuterT1 = northMid + northHalfW / 2;
+for (let i = 0; i < 3; i += 1) {
+  const id = String(404 + i);
+  const { t0, t1 } = splitSpan(northOuterT0, northOuterT1, 3, i);
+  const { d, cx, cy } = ringSlice(t0, t1, wm, hm, rm, wo, ho, ro);
+  OUTER_WEDGES.push({ id, faceLabel: id, d, cx, cy, tier: 'upper' });
+}
+
+/** South outer 221–229 (9), east → west along bottom */
+for (let i = 0; i < 9; i += 1) {
+  const id = String(221 + i);
+  const { t0, t1 } = splitSpan(southInnerSpan.t0, southInnerSpan.t1, 9, i);
+  const { d, cx, cy } = ringSlice(t0, t1, wm, hm, rm, wo, ho, ro);
+  OUTER_WEDGES.push({ id, faceLabel: id, d, cx, cy, tier: 'upper' });
+}
+
+/** Inner first (draw order), then outer; labels render on top in map component */
+export const SECTION_WEDGES = [...INNER_WEDGES, ...OUTER_WEDGES];
+
+const ALL_BLOCK_IDS = new Set(SECTION_WEDGES.map((s) => s.id));
+
+/** @deprecated */
+export const LOWER_WEDGE_IDS = INNER_WEDGES.map((w) => w.id);
+/** @deprecated */
+export const UPPER_WEDGE_IDS = OUTER_WEDGES.map((w) => w.id);
+/** @deprecated */
+export const WEDGE_IDS = LOWER_WEDGE_IDS;
+
+/**
+ * Map API section number to schematic block id (exact Viagogo ids only).
+ */
+export function blockIdFromSectionNumber(numStr) {
+  if (!numStr || numStr === '—') return '301';
+  const n = parseInt(String(numStr), 10);
+  if (Number.isNaN(n)) return '301';
+  const s = String(n);
+  if (ALL_BLOCK_IDS.has(s)) return s;
+  return '301';
+}
 
 export const GAP_ROUNDRECT_D = roundedRectPathD(CX, CY, wi, hi, ri);
 

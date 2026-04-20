@@ -20,7 +20,7 @@ export function extractBloomfieldSectionNumber(ticket) {
   return m ? m[1] : null;
 }
 
-/** @returns {'north'|'south'|'east'|'west'} */
+/** @returns {'north'|'south'|'east'|'west'} — Viagogo Bloomfield layout */
 export function bloomfieldZoneFromSectionNumber(numStr) {
   if (!numStr) return 'south';
   const n = parseInt(numStr, 10);
@@ -28,6 +28,12 @@ export function bloomfieldZoneFromSectionNumber(numStr) {
   if (n >= 500) {
     return ['north', 'east', 'south', 'west'][n % 4];
   }
+  if ((n >= 420 && n <= 431) || (n >= 332 && n <= 337) || (n >= 329 && n <= 331) || n === 338) {
+    return 'west';
+  }
+  if ((n >= 404 && n <= 406) || (n >= 301 && n <= 309)) return 'north';
+  if (n === 310 || n === 311 || (n >= 312 && n <= 317)) return 'east';
+  if ((n >= 319 && n <= 328) || n === 318 || (n >= 221 && n <= 229)) return 'south';
   if (n >= 400 && n < 500) return 'west';
   if (n >= 300 && n < 400) return 'east';
   if (n >= 200 && n < 300) return 'north';
