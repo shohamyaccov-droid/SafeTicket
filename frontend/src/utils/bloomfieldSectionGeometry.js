@@ -15,17 +15,21 @@ export const PITCH_RX = 5;
 export const PITCH_RY = 5;
 
 const MOAT = 20;
-const D_T1 = 15;
-const G_T12 = 5;
-const D_T2 = 45;
-const G_T23 = 15;
-const D_T3 = 45;
+/** Viagogo-ish radial weights (~112px stand + gaps): thin 200s, massive 300s, stout 400s N/S. */
+const D_T1 = 12;
+const G_T12 = 2;
+const D_T2 = 55;
+const G_T23 = 8;
+const D_T3 = 35;
 
 const CELL_IN = 0.45;
+/** Tier 2 corner wedges: outer arc stops short of full r2o so corners don’t bulge like straights. */
+const T2_CORNER_OUTER_FRAC = 0.87;
 
 const wi = PITCH_W + 2 * MOAT;
 const hi = PITCH_H + 2 * MOAT;
-const ri = Math.min(38, Math.min(wi, hi) * 0.13 + 20);
+/** Slightly tighter fillet than before — straights read longer, corners less “puffy”. */
+const ri = Math.min(34, Math.min(wi, hi) * 0.11 + 18);
 
 const xL = CX - wi / 2;
 const xR = CX + wi / 2;
@@ -116,6 +120,7 @@ export function roundedRectPathD(cx, cy, w, h, r) {
   ].join(' ');
 }
 
+/** Axis-aligned band slice; cx/cy = center of inset rect (matches 8px labels, any tier depth). */
 function rectCell(x0, y0, x1, y1) {
   const xa = Math.min(x0, x1) + CELL_IN;
   const xb = Math.max(x0, x1) - CELL_IN;
@@ -240,7 +245,7 @@ const cn2 = {
 };
 
 const rinC = r2i + CELL_IN;
-const routC = r2o - CELL_IN;
+const routC = r2i + (r2o - r2i) * T2_CORNER_OUTER_FRAC - CELL_IN;
 
 push(TIER_2, '338', '338', 't2', annularSector(cn2.nw.x, cn2.nw.y, rinC, routC, -Math.PI / 2, -Math.PI));
 push(
