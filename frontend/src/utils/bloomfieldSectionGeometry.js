@@ -1,7 +1,6 @@
 /**
  * Bloomfield — Viagogo 3-tier bowl on a squircle (rounded rect: straight N/S/E/W, curved corners only).
  * Tier 1 (~200s): thin inner ring. Tier 2 (~300s): main bowl full loop. Tier 3 (~400s): N+S only.
- * Straights use equal subdivision; corners are standalone annular sectors (no path merging).
  */
 
 export const VIEW_W = 1000;
@@ -10,45 +9,26 @@ export const VIEW_H = 640;
 export const CX = 500;
 export const CY = 320;
 
-/** Base pitch; may be reduced slightly if outer bowl would exceed vertical fit budget. */
-let pitchW = Math.round(300 * 0.83);
-let pitchH = Math.round(168 * 0.83);
+export const PITCH_W = Math.round(300 * 0.83);
+export const PITCH_H = Math.round(168 * 0.83);
 export const PITCH_RX = 5;
 export const PITCH_RY = 5;
 
-const MOAT_DEFAULT = 20;
-/** Thin 200s, deep 300s bowl, deep 400s N/S. */
+const MOAT = 20;
+/** Viagogo-ish radial weights (~112px stand + gaps): thin 200s, massive 300s, stout 400s N/S. */
 const D_T1 = 12;
 const G_T12 = 2;
-const D_T2 = 80;
+const D_T2 = 55;
 const G_T23 = 8;
-const D_T3 = 65;
+const D_T3 = 35;
 
 const CELL_IN = 0.45;
+/** Tier 2 corner wedges: full annular depth to r2o (standalone sectors; grid gap from CELL_IN only). */
 const T2_CORNER_OUTER_FRAC = 1;
-
-/** Total vertical stack beyond pitch+moat band (symmetric east/west). */
-const INNER_DIM =
-  2 * (D_T1 + G_T12) + 2 * D_T2 + 2 * G_T23 + 2 * D_T3;
-/** Leave ~10px margin inside VIEW_H 640; shrink moat/pitch only if depths push past this. */
-const OUTER_H_CEIL = 630;
-
-let MOAT = MOAT_DEFAULT;
-const maxBandH = OUTER_H_CEIL - INNER_DIM;
-if (pitchH + 2 * MOAT > maxBandH) {
-  MOAT = Math.max(6, Math.floor((maxBandH - pitchH) / 2));
-}
-if (pitchH + 2 * MOAT > maxBandH) {
-  pitchH = Math.max(100, maxBandH - 2 * MOAT);
-  pitchW = Math.round(pitchH * (300 / 168));
-}
-
-export const PITCH_W = pitchW;
-export const PITCH_H = pitchH;
 
 const wi = PITCH_W + 2 * MOAT;
 const hi = PITCH_H + 2 * MOAT;
-/** Slightly tighter fillet — straights read longer, corners less “puffy”. */
+/** Slightly tighter fillet than before — straights read longer, corners less “puffy”. */
 const ri = Math.min(34, Math.min(wi, hi) * 0.11 + 18);
 
 const xL = CX - wi / 2;
@@ -111,22 +91,6 @@ const sideFlat2i = h2i - 2 * r2i;
 
 const topFlat3i = w3i - 2 * r3i;
 const botFlat3i = topFlat3i;
-
-/** `segments` equal slices → `segments + 1` boundary coordinates along [start, start+span]. */
-function equalBreaks(start, span, segments) {
-  if (!Number.isFinite(segments) || segments <= 0) return [start, start + span];
-  return Array.from({ length: segments + 1 }, (_, k) => start + (k / segments) * span);
-}
-
-/** Intersect [a,b] with [lo,hi] on x (order-agnostic); null if empty. */
-function clipSpan1D(a, b, lo, hi) {
-  const t0 = Math.min(a, b);
-  const t1 = Math.max(a, b);
-  const xa = Math.max(lo, t0);
-  const xb = Math.min(hi, t1);
-  if (xb <= xa + 1e-9) return null;
-  return { xa, xb };
-}
 
 function fmt(n) {
   const v = Number(n);
@@ -193,13 +157,13 @@ function annularSector(cx0, cy0, rIn, rOut, a0, a1, steps = 14) {
   const pts = [];
   for (let i = 0; i <= steps; i += 1) {
     const t = i / steps;
-    const ang = a0 + t * (a1 - a0);
-    pts.push({ x: cx0 + rOut * Math.cos(ang), y: cy0 + rOut * Math.sin(ang) });
+    const a = a0 + t * (a1 - a0);
+    pts.push({ x: cx0 + rOut * Math.cos(a), y: cy0 + rOut * Math.sin(a) });
   }
   for (let i = steps; i >= 0; i -= 1) {
     const t = i / steps;
-    const ang = a0 + t * (a1 - a0);
-    pts.push({ x: cx0 + rIn * Math.cos(ang), y: cy0 + rIn * Math.sin(ang) });
+    const a = a0 + t * (a1 - a0);
+    pts.push({ x: cx0 + rIn * Math.cos(a), y: cy0 + rIn * Math.sin(a) });
   }
   let d = '';
   for (let i = 0; i < pts.length; i += 1) {
@@ -221,83 +185,57 @@ const TIER_1 = [];
 const TIER_2 = [];
 const TIER_3 = [];
 
-/** Tier-2 master breaks: equal spacing (aligned T1 north clips + visual rhythm). */
-const xNorthT2 = equalBreaks(xL2i + r2i, topFlat2i, 9);
-const xSouthT2 = equalBreaks(xL2i + r2i, botFlat2i, 10);
-const xSouthT2Rev = xSouthT2.slice().reverse();
-const yWestT2 = equalBreaks(yT2i + r2i, sideFlat2i, 6);
-const yWestT2Rev = yWestT2.slice().reverse();
-
 /* --- TIER 1 straights only (no 200s in corners — white negative space) --- */
 
-const xN1Lo = xL1 + r1;
-const xN1Hi = xR1 - r1;
 for (let i = 0; i < 9; i += 1) {
-  const clip = clipSpan1D(xNorthT2[i], xNorthT2[i + 1], xN1Lo, xN1Hi);
-  if (clip) push(TIER_1, String(201 + i), String(201 + i), 't1', rectCell(clip.xa, yT1, clip.xb, yT));
+  const xa = xL1 + r1 + (i / 9) * topFlat1;
+  const xb = xL1 + r1 + ((i + 1) / 9) * topFlat1;
+  push(TIER_1, String(201 + i), String(201 + i), 't1', rectCell(xa, yT1, xb, yT));
 }
-
-const xS1Lo = xL1 + r1;
-const xS1Hi = xR1 - r1;
-for (let i = 0; i < 8; i += 1) {
-  const clip = clipSpan1D(xSouthT2Rev[10 - i], xSouthT2Rev[9 - i], xS1Lo, xS1Hi);
-  if (clip) push(TIER_1, String(221 + i), String(221 + i), 't1', rectCell(clip.xa, yB, clip.xb, yB1));
-}
-{
-  const clip = clipSpan1D(xSouthT2Rev[0], xSouthT2Rev[2], xS1Lo, xS1Hi);
-  if (clip) push(TIER_1, '229', '229', 't1', rectCell(clip.xa, yB, clip.xb, yB1));
-}
-
-const yW1Lo = yT1 + r1;
-const yW1Hi = yB1 - r1;
-for (let p = 0; p < 3; p += 1) {
-  const yClip = clipSpan1D(yWestT2[p * 2], yWestT2[p * 2 + 2], yW1Lo, yW1Hi);
-  if (yClip) {
-    push(TIER_1, String(236 - p), String(236 - p), 't1', rectCell(xL1, yClip.xa, xL, yClip.xb));
-  }
-}
-
-for (let p = 0; p < 3; p += 1) {
-  const yClip = clipSpan1D(yWestT2[p * 2], yWestT2[p * 2 + 2], yW1Lo, yW1Hi);
-  if (yClip) {
-    push(TIER_1, String(214 + p), String(214 + p), 't1', rectCell(xR, yClip.xa, xR1, yClip.xb));
-  }
-}
-
-/* --- TIER 2 full bowl — straights = rectCell only; corners = full 90° quarters (equal arc share) --- */
 
 for (let i = 0; i < 9; i += 1) {
-  push(
-    TIER_2,
-    String(301 + i),
-    String(301 + i),
-    't2',
-    rectCell(xNorthT2[i], yT2o, xNorthT2[i + 1], yT2i)
-  );
+  const xa = xR1 - r1 - (i / 9) * botFlat1;
+  const xb = xR1 - r1 - ((i + 1) / 9) * botFlat1;
+  push(TIER_1, String(229 - i), String(229 - i), 't1', rectCell(xb, yB, xa, yB1));
+}
+
+for (let i = 0; i < 3; i += 1) {
+  const ya = yT1 + r1 + (i / 3) * sideFlat1;
+  const yb = yT1 + r1 + ((i + 1) / 3) * sideFlat1;
+  push(TIER_1, String(236 - i), String(236 - i), 't1', rectCell(xL1, ya, xL, yb));
+}
+
+for (let i = 0; i < 3; i += 1) {
+  const ya = yT1 + r1 + (i / 3) * sideFlat1;
+  const yb = yT1 + r1 + ((i + 1) / 3) * sideFlat1;
+  push(TIER_1, String(214 + i), String(214 + i), 't1', rectCell(xR, ya, xR1, yb));
+}
+
+/* --- TIER 2 full bowl --- */
+
+for (let i = 0; i < 9; i += 1) {
+  const xa = xL2i + r2i + (i / 9) * topFlat2i;
+  const xb = xL2i + r2i + ((i + 1) / 9) * topFlat2i;
+  push(TIER_2, String(301 + i), String(301 + i), 't2', rectCell(xa, yT2o, xb, yT2i));
 }
 
 for (let i = 0; i < 10; i += 1) {
-  const x0 = xSouthT2Rev[i + 1];
-  const x1 = xSouthT2Rev[i];
-  const sid = String(319 + (9 - i));
-  push(TIER_2, sid, sid, 't2', rectCell(x0, yB2i, x1, yB2o));
+  const xa = xR2i - r2i - (i / 10) * botFlat2i;
+  const xb = xR2i - r2i - ((i + 1) / 10) * botFlat2i;
+  push(TIER_2, String(328 - i), String(328 - i), 't2', rectCell(xb, yB2i, xa, yB2o));
 }
 
 for (let i = 0; i < 6; i += 1) {
-  const y0 = yWestT2Rev[i + 1];
-  const y1 = yWestT2Rev[i];
-  const sid = String(332 + i);
-  push(TIER_2, sid, sid, 't2', rectCell(xL2o, y0, xL2i, y1));
+  const ya = yT2i + r2i + (i / 6) * sideFlat2i;
+  const yb = yT2i + r2i + ((i + 1) / 6) * sideFlat2i;
+  /** West reads top→bottom: 337 … 332 (i=0 is top). */
+  push(TIER_2, String(337 - i), String(337 - i), 't2', rectCell(xL2o, ya, xL2i, yb));
 }
 
 for (let i = 0; i < 6; i += 1) {
-  push(
-    TIER_2,
-    String(312 + i),
-    String(312 + i),
-    't2',
-    rectCell(xR2i, yWestT2[i], xR2o, yWestT2[i + 1])
-  );
+  const ya = yT2i + r2i + (i / 6) * sideFlat2i;
+  const yb = yT2i + r2i + ((i + 1) / 6) * sideFlat2i;
+  push(TIER_2, String(312 + i), String(312 + i), 't2', rectCell(xR2i, ya, xR2o, yb));
 }
 
 const cn2 = {
@@ -352,31 +290,27 @@ push(
   annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, swA + 2 * swThird, swB, 6)
 );
 
-/* --- TIER 3 north + south only — equal strips on flats --- */
+/* --- TIER 3 north + south only (uniform shell; cells on flats only) --- */
 
-const xN3Br = equalBreaks(xL3i + r3i, topFlat3i, 3);
-for (let j = 0; j < 3; j += 1) {
-  push(TIER_3, String(404 + j), String(404 + j), 't3', rectCell(xN3Br[j], yT3o, xN3Br[j + 1], yT3i));
+for (let i = 0; i < 3; i += 1) {
+  const xa = xL3i + r3i + (i / 3) * topFlat3i;
+  const xb = xL3i + r3i + ((i + 1) / 3) * topFlat3i;
+  push(TIER_3, String(404 + i), String(404 + i), 't3', rectCell(xa, yT3o, xb, yT3i));
 }
 
-const xS3Br = equalBreaks(xL3i + r3i, botFlat3i, 13);
-for (let j = 0; j < 13; j += 1) {
-  push(
-    TIER_3,
-    String(419 + j),
-    String(419 + j),
-    't3',
-    rectCell(xS3Br[j], yB3i, xS3Br[j + 1], yB3o)
-  );
+for (let i = 0; i < 13; i += 1) {
+  const xa = xR3i - r3i - (i / 13) * botFlat3i;
+  const xb = xR3i - r3i - ((i + 1) / 13) * botFlat3i;
+  push(TIER_3, String(431 - i), String(431 - i), 't3', rectCell(xb, yB3i, xa, yB3o));
 }
 
 const DRAW_ORDER = [
   ...[201, 202, 203, 204, 205, 206, 207, 208, 209].map(String),
-  ...[221, 222, 223, 224, 225, 226, 227, 228, 229].map(String),
+  ...[229, 228, 227, 226, 225, 224, 223, 222, 221].map(String),
   ...[236, 235, 234].map(String),
   ...[214, 215, 216].map(String),
   ...[301, 302, 303, 304, 305, 306, 307, 308, 309].map(String),
-  ...[319, 320, 321, 322, 323, 324, 325, 326, 327, 328].map(String),
+  ...[328, 327, 326, 325, 324, 323, 322, 321, 320, 319].map(String),
   ...[337, 336, 335, 334, 333, 332].map(String),
   ...[312, 313, 314, 315, 316, 317].map(String),
   '338',
@@ -387,7 +321,7 @@ const DRAW_ORDER = [
   '330',
   '331',
   ...[404, 405, 406].map(String),
-  ...[419, 420, 421, 422, 423, 424, 425, 426, 427, 428, 429, 430, 431].map(String),
+  ...[431, 430, 429, 428, 427, 426, 425, 424, 423, 422, 421, 420, 419].map(String),
 ];
 
 const byId = Object.fromEntries([...TIER_1, ...TIER_2, ...TIER_3].map((s) => [s.id, s]));
