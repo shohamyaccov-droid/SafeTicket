@@ -1,5 +1,6 @@
 /* eslint-disable react/prop-types -- project does not use PropTypes consistently */
-import { Users, Eye, Filter, Trophy } from 'lucide-react';
+import { useMemo } from 'react';
+import { Filter, Trophy, Ticket, Gem, CheckSquare } from 'lucide-react';
 import BuyerListingPrice from './BuyerListingPrice';
 
 export default function BloomfieldTicketListPanel({
@@ -16,7 +17,18 @@ export default function BloomfieldTicketListPanel({
   user,
   isSellerFn,
   totalListingsBeforeQuantityFilter = 0,
+  cheapestTicketPrice = null,
 }) {
+  const resolvedCheapest = useMemo(() => {
+    if (cheapestTicketPrice != null && !Number.isNaN(Number(cheapestTicketPrice))) {
+      return Number(cheapestTicketPrice);
+    }
+    const nums = rows
+      .map((r) => parseFloat(r.group?.price))
+      .filter((n) => !Number.isNaN(n));
+    if (nums.length === 0) return null;
+    return Math.min(...nums);
+  }, [rows, cheapestTicketPrice]);
   return (
     <div className="flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm" dir="rtl">
       {totalListingsBeforeQuantityFilter > 0 && totalListingsBeforeQuantityFilter <= 8 ? (
@@ -62,7 +74,7 @@ export default function BloomfieldTicketListPanel({
       </div>
 
       <div
-        className="max-h-[min(68vh,640px)] overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-width:thin] [scrollbar-color:rgb(203_213_225)_transparent] [color-scheme:light] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/90"
+        className="max-h-[min(68vh,640px)] space-y-3 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-3 [scrollbar-width:thin] [scrollbar-color:rgb(203_213_225)_transparent] [color-scheme:light] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/90"
       >
         {rows.length === 0 ? (
           <div className="px-4 py-10 text-center text-sm text-slate-600">
@@ -70,14 +82,26 @@ export default function BloomfieldTicketListPanel({
             clearing filters.
           </div>
         ) : (
-          rows.map(({ stableId, group, bloomfield, firstTicket }, idx) => {
+          rows.map(({ stableId, group, bloomfield, firstTicket }) => {
             const groupId = group.listing_group_id ?? group.id;
             const isExpanded =
               activeTicketId != null && String(activeTicketId) === String(groupId);
             const isHi =
               highlightStableId != null && String(highlightStableId) === String(stableId);
             const sellerOwns = isSellerFn(user, firstTicket, group);
-            const isLast = idx === rows.length - 1;
+            const hasPdf = (group.tickets || []).some((t) => t.has_pdf_file || t.pdf_file_url);
+            const groupPrice = parseFloat(group.price);
+            const isBestValue =
+              resolvedCheapest != null && !Number.isNaN(groupPrice) && groupPrice === resolvedCheapest;
+
+            const rawSection =
+              firstTicket?.section != null ? String(firstTicket.section).trim() : '';
+            const detailTitle =
+              rawSection.length > 0
+                ? bloomfield.row && bloomfield.row !== '—'
+                  ? `${rawSection} — row ${bloomfield.row}`
+                  : rawSection
+                : `${bloomfield.zone}-tier-${bloomfield.sectionId}`;
 
             return (
               <article
@@ -85,9 +109,9 @@ export default function BloomfieldTicketListPanel({
                 data-ticket-group-id={groupId}
                 data-e2e-ticket-id={firstTicket?.id}
                 data-bloomfield-block={bloomfield.blockId}
-                className={`border-b border-gray-200 shadow-none transition-colors hover:bg-gray-50 ${
-                  isHi ? 'bg-gray-50' : 'bg-white'
-                } ${isLast ? 'border-b-0' : ''}`}
+                className={`overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-sm transition-shadow hover:shadow-md ${
+                  isHi ? 'ring-2 ring-emerald-400 ring-offset-2' : ''
+                }`}
                 onMouseEnter={() => onHoverRow(stableId)}
                 onMouseLeave={() => onHoverRow(null)}
               >
@@ -100,58 +124,42 @@ export default function BloomfieldTicketListPanel({
                 <div dir="ltr" lang="en" className="text-left">
                   <button
                     type="button"
-                    className="flex w-full min-w-0 flex-col gap-3 border-0 bg-transparent px-4 py-3.5 text-left font-sans shadow-none outline-none ring-0 focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                    className="flex w-full min-w-0 flex-row items-center justify-between gap-4 border-0 bg-transparent px-4 py-4 text-left font-sans shadow-none outline-none ring-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/40"
                     onClick={() => onToggleRow(groupId)}
                   >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1 pr-2">
-                        <h3 className="text-base font-semibold leading-snug tracking-tight text-gray-900">
-                          Section {bloomfield.sectionId}
-                        </h3>
-                        <p className="mt-0.5 text-sm font-medium text-gray-600">
-                          Row {bloomfield.row}
-                        </p>
-                        {bloomfield.features.length > 0 ? (
-                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium text-slate-600">
-                            {bloomfield.features.map((f) => (
-                              <span key={f.key} className="inline-flex items-center gap-1.5">
-                                {f.key === 'together' ? (
-                                  <Users className="h-3.5 w-3.5 shrink-0 text-slate-500" strokeWidth={2} />
-                                ) : (
-                                  <Eye className="h-3.5 w-3.5 shrink-0 text-slate-500" strokeWidth={2} />
-                                )}
-                                {f.label}
-                              </span>
-                            ))}
-                          </div>
+                    <div
+                      className="min-w-0 shrink-0 [&_.buyer-listing-price]:items-start [&_.buyer-listing-price]:text-left [&_.buyer-listing-price-main]:text-3xl [&_.buyer-listing-price-main]:font-bold [&_.buyer-listing-price-main]:leading-none [&_.buyer-listing-price-main]:tracking-tight [&_.buyer-listing-price-fee]:mt-1 [&_.buyer-listing-price-fee]:text-xs [&_.buyer-listing-price-fee]:text-slate-500"
+                    >
+                      <BuyerListingPrice ticket={firstTicket} />
+                    </div>
+                    <div className="flex min-w-0 flex-1 flex-col items-end text-right">
+                      <h3 className="text-sm font-semibold leading-snug text-slate-800">{detailTitle}</h3>
+                      <div className="mt-2 flex flex-wrap justify-end gap-2">
+                        {group.available_count > 0 ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                            <Ticket className="h-3.5 w-3.5 shrink-0 text-pink-500" strokeWidth={2} aria-hidden />
+                            כרטיסים זמינים
+                          </span>
+                        ) : null}
+                        {isBestValue ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-cyan-100/90 px-2.5 py-1 text-xs font-semibold text-teal-900">
+                            <Gem className="h-3.5 w-3.5 shrink-0 text-teal-600" strokeWidth={2} aria-hidden />
+                            מחיר משתלם
+                          </span>
+                        ) : null}
+                        {hasPdf ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-900">
+                            <CheckSquare className="h-3.5 w-3.5 shrink-0 text-green-600" strokeWidth={2} aria-hidden />
+                            הורדה מיידית
+                          </span>
                         ) : null}
                       </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1.5">
-                        <div className="min-w-0 [&_.buyer-listing-price-main]:text-xl [&_.buyer-listing-price-main]:font-extrabold [&_.buyer-listing-price-main]:leading-none">
-                          <BuyerListingPrice ticket={firstTicket} compact />
-                        </div>
-                        <span className="inline-flex items-center rounded-full bg-green-800 px-2.5 py-0.5 text-xs font-semibold text-white">
-                          {bloomfield.rating.score} {bloomfield.rating.label}
-                        </span>
-                      </div>
                     </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      {bloomfield.lastTickets ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-800">
-                          Last tickets
-                        </span>
-                      ) : null}
-                    </div>
-
-                    {bloomfield.urgencyNote ? (
-                      <p className="text-xs font-semibold text-pink-600">{bloomfield.urgencyNote}</p>
-                    ) : null}
                   </button>
                 </div>
 
                 {isExpanded ? (
-                  <div className="mt-3 border-t border-gray-200 pt-3" dir="rtl">
+                  <div className="border-t border-slate-100 px-4 pb-4 pt-3" dir="rtl">
                     {sellerOwns ? (
                       <div
                         className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900"
