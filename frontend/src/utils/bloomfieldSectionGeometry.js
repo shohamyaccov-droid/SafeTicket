@@ -15,7 +15,8 @@ export const PITCH_H = Math.round(168 * 0.83);
 export const PITCH_RX = 5;
 export const PITCH_RY = 5;
 
-const GAP = 22;
+/** White moat between pitch edge and inner stand ring (viewBox px per side). */
+const GAP = 30;
 const STAND_DEPTH_LOWER = 48;
 const STAND_DEPTH_UPPER = 48;
 

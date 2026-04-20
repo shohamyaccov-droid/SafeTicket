@@ -85,59 +85,58 @@ export default function BloomfieldTicketListPanel({
                 data-ticket-group-id={groupId}
                 data-e2e-ticket-id={firstTicket?.id}
                 data-bloomfield-block={bloomfield.blockId}
-                className={`border-b border-gray-200 px-4 py-3.5 shadow-none transition-colors hover:bg-gray-50 ${
+                className={`border-b border-gray-200 shadow-none transition-colors hover:bg-gray-50 ${
                   isHi ? 'bg-gray-50' : 'bg-white'
                 } ${isLast ? 'border-b-0' : ''}`}
                 onMouseEnter={() => onHoverRow(stableId)}
                 onMouseLeave={() => onHoverRow(null)}
               >
+                {bloomfield.isTopChoice ? (
+                  <div className="flex items-center gap-2 border-b border-green-100 bg-green-50 px-4 py-2.5 font-sans text-sm font-semibold text-green-800">
+                    <Trophy className="h-4 w-4 shrink-0 text-green-700" strokeWidth={2} aria-hidden />
+                    Top choice
+                  </div>
+                ) : null}
                 <div dir="ltr" lang="en" className="text-left">
                   <button
                     type="button"
-                    className="flex w-full min-w-0 flex-col gap-3 border-0 bg-transparent p-0 text-left shadow-none outline-none ring-0 focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                    className="flex w-full min-w-0 flex-col gap-3 border-0 bg-transparent px-4 py-3.5 text-left font-sans shadow-none outline-none ring-0 focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                     onClick={() => onToggleRow(groupId)}
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0 flex-1 pr-2">
-                        <h3 className="text-lg font-bold leading-snug tracking-tight text-gray-900">
+                        <h3 className="text-base font-semibold leading-snug tracking-tight text-gray-900">
                           Section {bloomfield.sectionId}
                         </h3>
-                        <p className="mt-0.5 text-sm font-normal text-gray-600">
+                        <p className="mt-0.5 text-sm font-medium text-gray-600">
                           Row {bloomfield.row}
                         </p>
+                        {bloomfield.features.length > 0 ? (
+                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium text-slate-600">
+                            {bloomfield.features.map((f) => (
+                              <span key={f.key} className="inline-flex items-center gap-1.5">
+                                {f.key === 'together' ? (
+                                  <Users className="h-3.5 w-3.5 shrink-0 text-slate-500" strokeWidth={2} />
+                                ) : (
+                                  <Eye className="h-3.5 w-3.5 shrink-0 text-slate-500" strokeWidth={2} />
+                                )}
+                                {f.label}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
+                      <div className="flex shrink-0 flex-col items-end gap-1.5">
                         <div className="min-w-0 [&_.buyer-listing-price-main]:text-xl [&_.buyer-listing-price-main]:font-extrabold [&_.buyer-listing-price-main]:leading-none">
                           <BuyerListingPrice ticket={firstTicket} compact />
                         </div>
-                        <span className="inline-flex items-center rounded-full bg-emerald-500 px-2.5 py-0.5 text-xs font-bold text-white">
+                        <span className="inline-flex items-center rounded-full bg-green-800 px-2.5 py-0.5 text-xs font-semibold text-white">
                           {bloomfield.rating.score} {bloomfield.rating.label}
                         </span>
                       </div>
                     </div>
 
-                    {bloomfield.features.length > 0 ? (
-                      <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium text-slate-600">
-                        {bloomfield.features.map((f) => (
-                          <span key={f.key} className="inline-flex items-center gap-1.5">
-                            {f.key === 'together' ? (
-                              <Users className="h-4 w-4 shrink-0 text-emerald-600" strokeWidth={2} />
-                            ) : (
-                              <Eye className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2} />
-                            )}
-                            {f.label}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-
                     <div className="flex flex-wrap items-center gap-2">
-                      {bloomfield.isTopChoice ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-800">
-                          <Trophy className="h-3 w-3 shrink-0" strokeWidth={2} />
-                          Top choice
-                        </span>
-                      ) : null}
                       {bloomfield.lastTickets ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-800">
                           Last tickets

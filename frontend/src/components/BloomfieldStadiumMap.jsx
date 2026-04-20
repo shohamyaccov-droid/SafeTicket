@@ -18,21 +18,18 @@ import {
   PITCH_RY,
 } from '../utils/bloomfieldSectionGeometry';
 
-const FILL_DEFAULT = '#ebebeb';
+const FILL_DEFAULT = '#f3f4f6';
 const STROKE_SECTION = '#ffffff';
-const FILL_ACTIVE = '#9bca3e';
-const PITCH_GRASS = '#6d9048';
+const FILL_ACTIVE = '#a3e635';
+const PITCH_GRASS = '#82c91e';
 const LINE_WHITE = '#ffffff';
 const PIN_INVERTED = '#222222';
-const TEXT_INACTIVE = '#999999';
-const TEXT_ACTIVE = '#000000';
+/** Muted labels (Viagogo reference); active listings on green use dark text for contrast */
+const TEXT_SECTION_MUTED = '#9ca3af';
+const TEXT_ON_GREEN = '#14532d';
 const ROSE_600 = '#e11d48';
+const BEST_BADGE_FILL = '#14532d';
 
-const PIN_BODY_W = 96;
-const PIN_TRI_H = 6;
-const PIN_TRI_HALF = 6;
-const PIN_RX = 6;
-/** Slightly heavier so gaps + stroke read as separate “islands” (Viagogo-like). */
 const STROKE_INACTIVE_W = 2.05;
 const STROKE_HIGHLIGHT_W = 2.85;
 
@@ -52,7 +49,18 @@ function pickCheapestRow(list) {
   return best;
 }
 
+/** Lowest price across all visible rows (for “best price” pin badge). */
+function globalMinListingPrice(rows) {
+  let minP = Infinity;
+  for (const row of rows) {
+    const raw = parseFloat(getTicketPrice(row.firstTicket));
+    if (Number.isFinite(raw) && raw < minP) minP = raw;
+  }
+  return minP;
+}
+
 function layoutPins(rows) {
+  const floorPrice = globalMinListingPrice(rows);
   const byBlock = {};
   for (const row of rows) {
     const bid = row.bloomfield?.blockId;
@@ -73,13 +81,18 @@ function layoutPins(rows) {
     const cur = resolveTicketCurrency(t);
     const priceLabel = formatMoney(Number.isFinite(raw) ? raw : 0, cur);
     const n = rep.group.available_count ?? 0;
+    const isBestPrice =
+      Number.isFinite(raw) &&
+      Number.isFinite(floorPrice) &&
+      Math.abs(raw - floorPrice) < 0.005;
     pins.push({
       stableId: rep.stableId,
       blockId: bid,
       x: cx0,
       y: cy0 - 6,
-      priceLine: `מ- ${priceLabel}`,
+      priceLine: priceLabel,
       urgency: n > 0 && n < 5 ? `${n} left` : null,
+      isBestPrice,
     });
   }
   return pins;
@@ -141,7 +154,7 @@ export default function BloomfieldStadiumMap({
     (pinHoverId != null && String(stableId) === String(pinHoverId));
 
   return (
-    <div className="bloomfield-map-root relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-[#f4f5f7] shadow-sm">
+    <div className="bloomfield-map-root relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="absolute top-2 left-2 z-[5] flex flex-col overflow-hidden rounded-md shadow-md">
         <button
           type="button"
@@ -165,7 +178,7 @@ export default function BloomfieldStadiumMap({
         <button
           type="button"
           onClick={panZoom.resetView}
-          className="rounded-full bg-white/95 px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-md ring-1 ring-slate-200/80 hover:bg-white"
+          className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white shadow-md hover:bg-slate-800"
         >
           Search this area
         </button>
@@ -191,16 +204,17 @@ export default function BloomfieldStadiumMap({
             aria-label="Bloomfield stadium seating map"
           >
             <defs>
-              <filter id="bf-bubble-shadow" x="-50%" y="-50%" width="200%" height="200%">
-                <feDropShadow dx="0" dy="1.5" stdDeviation="3.2" floodOpacity="0.14" />
+              {/* ~Tailwind shadow-md for price pins */}
+              <filter id="bf-pin-shadow" x="-40%" y="-40%" width="180%" height="180%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000000" floodOpacity="0.12" />
               </filter>
             </defs>
 
-            <rect width={VIEW_W} height={VIEW_H} fill="#f4f5f7" />
+            <rect width={VIEW_W} height={VIEW_H} fill="#ffffff" />
 
-            <path d={BOWL_OUTER_D} fill="#e8eaed" stroke="#d1d5db" strokeWidth="1.5" />
+            <path d={BOWL_OUTER_D} fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
 
-            <path d={GAP_ROUNDRECT_D} fill="#e5e7eb" stroke="none" />
+            <path d={GAP_ROUNDRECT_D} fill="#ffffff" stroke="none" />
 
             {SECTION_WEDGES.map((sec) => {
               const has = blocksWithListings.has(sec.id);
@@ -234,10 +248,11 @@ export default function BloomfieldStadiumMap({
                   x={sec.cx}
                   y={sec.cy}
                   textAnchor="middle"
-                  dominantBaseline="middle"
-                  fill={has ? TEXT_ACTIVE : TEXT_INACTIVE}
+                  dominantBaseline="central"
+                  fill={has ? TEXT_ON_GREEN : TEXT_SECTION_MUTED}
                   fontSize="9"
-                  fontWeight={has ? '800' : '600'}
+                  fontWeight="600"
+                  fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
                   style={{
                     pointerEvents: 'none',
                     userSelect: 'none',
@@ -258,7 +273,7 @@ export default function BloomfieldStadiumMap({
               ry={PITCH_RY}
               fill={PITCH_GRASS}
               stroke={LINE_WHITE}
-              strokeWidth="2"
+              strokeWidth="1.25"
             />
 
             <line
@@ -267,7 +282,7 @@ export default function BloomfieldStadiumMap({
               x2={CX}
               y2={PITCH_Y + PITCH_H}
               stroke={LINE_WHITE}
-              strokeWidth="2"
+              strokeWidth="1.25"
             />
 
             <circle
@@ -276,7 +291,7 @@ export default function BloomfieldStadiumMap({
               r={centerCircleR}
               fill="none"
               stroke={LINE_WHITE}
-              strokeWidth="2"
+              strokeWidth="1.25"
             />
 
             <rect
@@ -286,7 +301,7 @@ export default function BloomfieldStadiumMap({
               height={penD}
               fill="none"
               stroke={LINE_WHITE}
-              strokeWidth="2"
+              strokeWidth="1.25"
             />
             <rect
               x={CX - penW / 2}
@@ -295,22 +310,23 @@ export default function BloomfieldStadiumMap({
               height={penD}
               fill="none"
               stroke={LINE_WHITE}
-              strokeWidth="2"
+              strokeWidth="1.25"
             />
 
             {pins.map((p) => {
               const hasUrgency = Boolean(p.urgency);
-              const bodyH = hasUrgency ? 32 : 26;
-              const bodyTop = -(bodyH + PIN_TRI_H);
+              const bodyH = hasUrgency ? 34 : 26;
+              const bodyW = p.isBestPrice ? 118 : 100;
+              const pillR = bodyH / 2;
+              const bodyTop = -bodyH - 4;
               const inverted = pinInverted(p.stableId);
               const bg = inverted ? PIN_INVERTED : '#ffffff';
-              const stroke = inverted ? '#404040' : '#e5e7eb';
-              const sw = 1;
+              const stroke = inverted ? '#404040' : '#f3f4f6';
               const lineFill = inverted ? '#ffffff' : '#000000';
               const urgentFill = inverted ? '#fda4af' : ROSE_600;
 
-              const priceY = hasUrgency ? bodyTop + 11 : bodyTop + bodyH / 2;
-              const urgentY = bodyTop + 23;
+              const priceY = hasUrgency ? bodyTop + 12 : bodyTop + bodyH / 2;
+              const urgentY = bodyTop + 24;
 
               return (
                 <g
@@ -330,32 +346,53 @@ export default function BloomfieldStadiumMap({
                     onSelectGroup?.(p.stableId);
                   }}
                 >
-                  <g filter="url(#bf-bubble-shadow)">
+                  <g filter="url(#bf-pin-shadow)">
                     <rect
-                      x={-PIN_BODY_W / 2}
+                      x={-bodyW / 2}
                       y={bodyTop}
-                      width={PIN_BODY_W}
+                      width={bodyW}
                       height={bodyH}
-                      rx={PIN_RX}
-                      ry={PIN_RX}
+                      rx={pillR}
+                      ry={pillR}
                       fill={bg}
                       stroke={stroke}
-                      strokeWidth={sw}
-                    />
-                    <polygon
-                      points={`0,0 ${-PIN_TRI_HALF},${-PIN_TRI_H} ${PIN_TRI_HALF},${-PIN_TRI_H}`}
-                      fill={bg}
-                      stroke="none"
+                      strokeWidth={1}
                     />
                   </g>
+                  {p.isBestPrice ? (
+                    <g pointerEvents="none">
+                      <rect
+                        x={-bodyW / 2 + 7}
+                        y={bodyTop + (bodyH - 18) / 2}
+                        width={18}
+                        height={18}
+                        rx={4}
+                        ry={4}
+                        fill={BEST_BADGE_FILL}
+                      />
+                      <text
+                        x={-bodyW / 2 + 16}
+                        y={bodyTop + bodyH / 2}
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        fill="#ffffff"
+                        fontSize="10"
+                        fontWeight="800"
+                        style={{ direction: 'ltr' }}
+                      >
+                        $
+                      </text>
+                    </g>
+                  ) : null}
                   <text
-                    x="0"
+                    x={p.isBestPrice ? 7 : 0}
                     y={priceY}
                     textAnchor="middle"
-                    dominantBaseline="middle"
+                    dominantBaseline="central"
                     fill={lineFill}
                     fontSize="11.5"
                     fontWeight="800"
+                    fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
                     style={{
                       pointerEvents: 'none',
                       direction: 'ltr',
@@ -366,13 +403,14 @@ export default function BloomfieldStadiumMap({
                   </text>
                   {hasUrgency ? (
                     <text
-                      x="0"
+                      x={p.isBestPrice ? 7 : 0}
                       y={urgentY}
                       textAnchor="middle"
-                      dominantBaseline="middle"
+                      dominantBaseline="central"
                       fill={urgentFill}
-                      fontSize="10"
+                      fontSize="9.5"
                       fontWeight="600"
+                      fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
                       style={{ pointerEvents: 'none', lineHeight: 1 }}
                     >
                       {p.urgency}
