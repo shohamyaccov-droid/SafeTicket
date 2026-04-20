@@ -19,7 +19,6 @@ import {
 } from '../utils/bloomfieldSectionGeometry';
 
 const FILL_DEFAULT = '#f3f4f6';
-const STROKE_SECTION = '#ffffff';
 const FILL_ACTIVE = '#9bca3e';
 const PITCH_GRASS = '#82c91e';
 const LINE_WHITE = '#ffffff';
@@ -32,9 +31,8 @@ const PIN_BODY_W = 96;
 const PIN_TRI_H = 6;
 const PIN_TRI_HALF = 6;
 const PIN_RX = 6;
-/** Crisp white separators; micro t-gap in geometry + stroke for Viagogo-style stands. */
-const STROKE_INACTIVE_W = 4;
-const STROKE_HIGHLIGHT_W = 4.75;
+/** Thick grid strokes; `paintOrder: stroke fill` + t-inset keeps gaps visible. */
+const SECTION_STROKE_WIDTH = 5;
 
 /** One listing per block for map affordances: lowest displayed price wins. */
 function pickCheapestRow(list) {
@@ -213,14 +211,16 @@ export default function BloomfieldStadiumMap({
                   d={sec.d}
                   fill={fill}
                   fillOpacity={1}
-                  stroke={isHi ? '#0ea5e9' : STROKE_SECTION}
-                  strokeWidth={isHi ? STROKE_HIGHLIGHT_W : STROKE_INACTIVE_W}
+                  stroke={isHi ? '#0ea5e9' : '#ffffff'}
+                  strokeWidth={SECTION_STROKE_WIDTH}
                   strokeLinejoin="round"
                   vectorEffect="non-scaling-stroke"
-                  paintOrder="fill stroke"
                   shapeRendering="geometricPrecision"
                   className="transition-[stroke] duration-150 ease-out"
-                  style={{ cursor: has ? 'pointer' : 'default' }}
+                  style={{
+                    cursor: has ? 'pointer' : 'default',
+                    paintOrder: 'stroke fill',
+                  }}
                   onMouseEnter={() => handleBlockEnter(sec.id)}
                   onMouseLeave={handleBlockLeave}
                   onClick={() => handleBlockClick(sec.id)}

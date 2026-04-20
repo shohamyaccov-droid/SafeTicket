@@ -27,8 +27,8 @@ const TIER_CHANNEL_DEPTH = 16;
 /** Extra semi-axis beyond nominal wo/2, ho/2 so bowl fill extends past seat ring (px). */
 const BOWL_OVAL_MARGIN = 14;
 
-/** Uniform perimeter inset per wedge side (~0.2° of full loop as t) so adjacent fills never share an edge. */
-const T_SEP_PER_SIDE = 0.2 / 360;
+/** Perimeter t shaved per wedge side so polygons don’t touch; leaves room for thick white strokes. */
+const T_INSET_PER_SIDE = 0.002;
 
 const wi = PITCH_W + 2 * GAP;
 const hi = PITCH_H + 2 * GAP;
@@ -134,7 +134,7 @@ function rayToEllipse(px, py, rx, ry) {
 
 function applyMicroSep(t0, t1) {
   const span = t1 - t0;
-  const pad = Math.min(T_SEP_PER_SIDE, span * 0.06);
+  const pad = Math.min(T_INSET_PER_SIDE, span * 0.22);
   const ta = t0 + pad;
   const tb = t1 - pad;
   if (tb <= ta + 1e-10) {
