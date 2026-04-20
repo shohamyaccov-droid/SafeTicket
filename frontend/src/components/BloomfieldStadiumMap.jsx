@@ -194,11 +194,11 @@ export default function BloomfieldStadiumMap({
               </filter>
             </defs>
 
-            <rect width={VIEW_W} height={VIEW_H} fill="#f3f4f6" />
+            <rect width={VIEW_W} height={VIEW_H} fill="#ffffff" />
 
-            <path d={BOWL_OUTER_D} fill="#e8eaed" stroke="#d1d5db" strokeWidth="1.5" />
+            <path d={BOWL_OUTER_D} fill="#ffffff" />
 
-            <path d={GAP_ROUNDRECT_D} fill="#e5e7eb" stroke="none" />
+            <path d={GAP_ROUNDRECT_D} fill="#ffffff" />
 
             {SECTION_WEDGES.map((sec) => {
               const has = blocksWithListings.has(sec.id);
@@ -211,10 +211,14 @@ export default function BloomfieldStadiumMap({
                   d={sec.d}
                   fill={fill}
                   fillOpacity={1}
-                  stroke={isHi ? '#0ea5e9' : 'none'}
-                  strokeWidth={isHi ? HIGHLIGHT_STROKE_W : 0}
-                  strokeLinejoin="round"
                   shapeRendering="geometricPrecision"
+                  {...(isHi
+                    ? {
+                        stroke: '#0ea5e9',
+                        strokeWidth: HIGHLIGHT_STROKE_W,
+                        strokeLinejoin: 'round',
+                      }
+                    : {})}
                   className="transition-[fill,stroke-width] duration-150 ease-out"
                   style={{ cursor: has ? 'pointer' : 'default' }}
                   onMouseEnter={() => handleBlockEnter(sec.id)}
