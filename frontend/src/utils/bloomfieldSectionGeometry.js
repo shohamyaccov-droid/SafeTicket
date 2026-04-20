@@ -1,6 +1,6 @@
 /**
  * Bloomfield schematic — inner bowl stays rounded-rect; outer stadium footprint is a smooth ellipse.
- * Outer-tier wedges use elliptical outer edges (no rounded-rect “kinks” at corners).
+ * Adjacent blocks share exact perimeter parameter boundaries → straight radial cuts; UI gaps = SVG stroke.
  */
 
 export const VIEW_W = 1000;
@@ -19,15 +19,10 @@ const STAND_DEPTH_LOWER = 48;
 /** Thicker upper tier (radial depth) vs inner — Viagogo-like proportion */
 const STAND_DEPTH_UPPER = 66;
 
-/** Pull inner tier outer edge inward (px in viewBox) — channel before outer tier. */
+/** Pull inner tier outer edge inward (px in viewBox) — opens the inter-tier channel. */
 const RADIAL_INNER_BACK_TRIM = 5;
-/** Outer tier inner edge sits this far beyond nominal lower-bowl depth (px). */
-const RADIAL_OUTER_FRONT_EXTRA = 11;
-
-/**
- * Normalized perimeter padding per wedge side (t ∈ [0,1)).
- */
-const ANGULAR_PAD_T = 0.00052;
+/** Constant radial depth (px) of the lower/upper tier gap: outer-front depth = inner-back depth + this. */
+const TIER_CHANNEL_DEPTH = 16;
 
 /** Extra semi-axis beyond nominal wo/2, ho/2 so bowl fill extends past seat ring (px). */
 const BOWL_OVAL_MARGIN = 14;
@@ -44,7 +39,7 @@ const wInnerBack = wi + 2 * innerBackDepth;
 const hInnerBack = hi + 2 * innerBackDepth;
 const rInnerBack = Math.min(ri + innerBackDepth, wInnerBack / 2 - 8, hInnerBack / 2 - 8);
 
-const outerFrontDepth = STAND_DEPTH_LOWER + RADIAL_OUTER_FRONT_EXTRA;
+const outerFrontDepth = innerBackDepth + TIER_CHANNEL_DEPTH;
 const wOuterFront = wi + 2 * outerFrontDepth;
 const hOuterFront = hi + 2 * outerFrontDepth;
 const rOuterFront = Math.min(ri + outerFrontDepth, wOuterFront / 2 - 8, hOuterFront / 2 - 8);
@@ -191,7 +186,8 @@ function ringSlice(t0, t1, innerW, innerH, innerR, outerW, outerH, outerR) {
 }
 
 /**
- * Outer tier: inner edge = rounded rect; outer edge = smooth ellipse (polyline along arc).
+ * Outer tier: inner edge = rounded rect; sides = straight radials C→perimeter(t);
+ * outer edge = single elliptical arc (crisp, shared endpoints with neighbors).
  */
 function ringSliceEllipseOuter(t0, t1, innerW, innerH, innerR) {
   const i1 = pointOnPerimeter(t0, innerW, innerH, innerR, CX, CY);
@@ -203,34 +199,22 @@ function ringSliceEllipseOuter(t0, t1, innerW, innerH, innerR) {
   const phiStart = ellipseParamAngle(o2.x, o2.y, OVAL_RX, OVAL_RY);
   const phiEnd = ellipseParamAngle(o1.x, o1.y, OVAL_RX, OVAL_RY);
   const dPhi = pickOuterArcDelta(phiStart, phiEnd, imx, imy);
-  const segs = Math.max(6, Math.ceil(Math.abs(dPhi) / (Math.PI / 20)));
-  const parts = [`M ${fmt(i1.x)} ${fmt(i1.y)}`, `L ${fmt(i2.x)} ${fmt(i2.y)}`, `L ${fmt(o2.x)} ${fmt(o2.y)}`];
-  for (let s = 1; s < segs; s += 1) {
-    const ang = phiStart + (dPhi * s) / segs;
-    const x = CX + OVAL_RX * Math.cos(ang);
-    const y = CY + OVAL_RY * Math.sin(ang);
-    parts.push(`L ${fmt(x)} ${fmt(y)}`);
-  }
-  parts.push(`L ${fmt(o1.x)} ${fmt(o1.y)}`, 'Z');
-  const d = parts.join(' ');
+  const largeArc = Math.abs(dPhi) > Math.PI ? 1 : 0;
+  const sweep = dPhi > 0 ? 1 : 0;
+  const arc = `A ${fmt(OVAL_RX)} ${fmt(OVAL_RY)} 0 ${largeArc} ${sweep} ${fmt(o1.x)} ${fmt(o1.y)}`;
+  const d = [
+    `M ${fmt(i1.x)} ${fmt(i1.y)}`,
+    `L ${fmt(i2.x)} ${fmt(i2.y)}`,
+    `L ${fmt(o2.x)} ${fmt(o2.y)}`,
+    arc,
+    'Z',
+  ].join(' ');
   const phiM = phiStart + dPhi / 2;
   const omx = CX + OVAL_RX * Math.cos(phiM);
   const omy = CY + OVAL_RY * Math.sin(phiM);
   const cx = (imx + omx) / 2;
   const cy = (imy + omy) / 2;
   return { d, cx, cy };
-}
-
-function applyAngularGap(t0, t1) {
-  const span = t1 - t0;
-  const pad = Math.min(ANGULAR_PAD_T, span * 0.12);
-  const ta = t0 + pad;
-  const tb = t1 - pad;
-  if (tb <= ta + 1e-8) {
-    const mid = (t0 + t1) / 2;
-    return { t0: mid - 1e-6, t1: mid + 1e-6 };
-  }
-  return { t0: ta, t1: tb };
 }
 
 const INNER_SPECS = [
@@ -261,8 +245,7 @@ function normalizeRanges(specs) {
 const INNER_RANGES = normalizeRanges(INNER_SPECS);
 
 const INNER_WEDGES = INNER_RANGES.map((r) => {
-  const { t0, t1 } = applyAngularGap(r.t0, r.t1);
-  const { d, cx, cy } = ringSlice(t0, t1, wi, hi, ri, wInnerBack, hInnerBack, rInnerBack);
+  const { d, cx, cy } = ringSlice(r.t0, r.t1, wi, hi, ri, wInnerBack, hInnerBack, rInnerBack);
   return { id: r.id, faceLabel: r.faceLabel, d, cx, cy, tier: 'lower' };
 });
 
@@ -279,9 +262,7 @@ const northInnerSpan = rangeForIds(['301', '302', '303', '304', '305', '306', '3
 
 function splitSpan(t0, t1, n, i) {
   const dt = (t1 - t0) / n;
-  const raw0 = t0 + dt * i;
-  const raw1 = t0 + dt * (i + 1);
-  return applyAngularGap(raw0, raw1);
+  return { t0: t0 + dt * i, t1: t0 + dt * (i + 1) };
 }
 
 const OUTER_WEDGES = [];

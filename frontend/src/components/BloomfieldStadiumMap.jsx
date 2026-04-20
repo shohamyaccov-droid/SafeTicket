@@ -32,9 +32,9 @@ const PIN_BODY_W = 96;
 const PIN_TRI_H = 6;
 const PIN_TRI_HALF = 6;
 const PIN_RX = 6;
-/** Slightly heavier so gaps + stroke read as separate “islands” (Viagogo-like). */
-const STROKE_INACTIVE_W = 2.05;
-const STROKE_HIGHLIGHT_W = 2.85;
+/** Crisp white separators — polygons meet; stroke paints the Viagogo-style gap. */
+const STROKE_INACTIVE_W = 3.5;
+const STROKE_HIGHLIGHT_W = 4.25;
 
 /** One listing per block for map affordances: lowest displayed price wins. */
 function pickCheapestRow(list) {
@@ -214,6 +214,7 @@ export default function BloomfieldStadiumMap({
                   fill={fill}
                   stroke={isHi ? '#0ea5e9' : STROKE_SECTION}
                   strokeWidth={isHi ? STROKE_HIGHLIGHT_W : STROKE_INACTIVE_W}
+                  strokeLinejoin="round"
                   className="transition-[stroke,fill-opacity] duration-150 ease-out"
                   style={{ cursor: has ? 'pointer' : 'default' }}
                   onMouseEnter={() => handleBlockEnter(sec.id)}
