@@ -1,7 +1,5 @@
 /**
- * Bloomfield schematic — Viagogo-style “rounded rectangle” football bowl:
- * rectangular pitch + gap + thick rounded-rect stand ring (straight N/S/E/W, curved corners).
- * Sections are quads between outer and inner rounded rectangles (no elliptical donut).
+ * Bloomfield schematic — rounded-rect bowl with lower + upper tier wedges.
  */
 
 export const VIEW_W = 1000;
@@ -10,25 +8,28 @@ export const VIEW_H = 640;
 export const CX = 500;
 export const CY = 320;
 
-/** Pitch — sharp rectangle (max rx 5) */
-export const PITCH_W = 300;
-export const PITCH_H = 168;
+/** Pitch ~17% smaller → more concourse between pitch and stands */
+export const PITCH_W = Math.round(300 * 0.83);
+export const PITCH_H = Math.round(168 * 0.83);
 export const PITCH_RX = 5;
 export const PITCH_RY = 5;
 
-/** Clear strip between pitch edge and stand inner edge */
 const GAP = 22;
-
-/** Stand depth (outer bowl − inner hole) */
-const STAND_DEPTH = 92;
+/** Lower bowl depth + upper tier depth (total ring thickness ≈ prior single ring) */
+const STAND_DEPTH_LOWER = 48;
+const STAND_DEPTH_UPPER = 48;
 
 const wi = PITCH_W + 2 * GAP;
 const hi = PITCH_H + 2 * GAP;
-const ri = 38;
+const ri = Math.min(36, Math.min(wi, hi) * 0.11 + 24);
 
-const wo = wi + 2 * STAND_DEPTH;
-const ho = hi + 2 * STAND_DEPTH;
-const ro = ri + STAND_DEPTH;
+const wm = wi + 2 * STAND_DEPTH_LOWER;
+const hm = hi + 2 * STAND_DEPTH_LOWER;
+const rm = Math.min(ri + STAND_DEPTH_LOWER, wm / 2 - 8, hm / 2 - 8);
+
+const wo = wm + 2 * STAND_DEPTH_UPPER;
+const ho = hm + 2 * STAND_DEPTH_UPPER;
+const ro = Math.min(rm + STAND_DEPTH_UPPER, wo / 2 - 6, ho / 2 - 6);
 
 const WEDGE_COUNT = 36;
 
@@ -37,70 +38,60 @@ function fmt(n) {
 }
 
 /**
- * Point on outer rounded-rect perimeter, clockwise from top-left of top straight edge.
- * @param {number} t - 0..1 along perimeter
+ * Point on rounded-rect perimeter (cw from top-left of top edge), t ∈ [0,1).
  */
-function pointOnOuterPerimeter(t) {
-  const hw = wo / 2;
-  const hh = ho / 2;
-  const xL = CX - hw;
-  const xR = CX + hw;
-  const yT = CY - hh;
-  const yB = CY + hh;
-  const r = Math.min(ro, hw, hh);
-  const tw = wo - 2 * r;
-  const th = ho - 2 * r;
-  const q = (Math.PI * r) / 2;
+function pointOnPerimeter(t, w, h, r, cx, cy) {
+  const hw = w / 2;
+  const hh = h / 2;
+  const xL = cx - hw;
+  const xR = cx + hw;
+  const yT = cy - hh;
+  const yB = cy + hh;
+  const rr = Math.min(r, hw, hh);
+  const tw = w - 2 * rr;
+  const th = h - 2 * rr;
+  const q = (Math.PI * rr) / 2;
   const L = 2 * tw + 2 * th + 4 * q;
   let u = (((t % 1) + 1) % 1) * L;
 
   if (u <= tw) {
-    return { x: xL + r + u, y: yT };
+    return { x: xL + rr + u, y: yT };
   }
   u -= tw;
   if (u <= q) {
-    const ang = u / r;
-    return { x: xR - r + r * Math.sin(ang), y: yT + r - r * Math.cos(ang) };
+    const ang = u / rr;
+    return { x: xR - rr + rr * Math.sin(ang), y: yT + rr - rr * Math.cos(ang) };
   }
   u -= q;
   if (u <= th) {
-    return { x: xR, y: yT + r + u };
+    return { x: xR, y: yT + rr + u };
   }
   u -= th;
   if (u <= q) {
-    const ang = u / r;
-    return { x: xR - r + r * Math.cos(ang), y: yB - r + r * Math.sin(ang) };
+    const ang = u / rr;
+    return { x: xR - rr + rr * Math.cos(ang), y: yB - rr + rr * Math.sin(ang) };
   }
   u -= q;
   if (u <= tw) {
-    return { x: xR - r - u, y: yB };
+    return { x: xR - rr - u, y: yB };
   }
   u -= tw;
   if (u <= q) {
-    const ang = u / r;
-    return { x: xL + r - r * Math.sin(ang), y: yB - r + r * Math.cos(ang) };
+    const ang = u / rr;
+    return { x: xL + rr - rr * Math.sin(ang), y: yB - rr + rr * Math.cos(ang) };
   }
   u -= q;
   if (u <= th) {
-    return { x: xL, y: yB - r - u };
+    return { x: xL, y: yB - rr - u };
   }
   u -= th;
-  const ang = u / r;
+  const ang = u / rr;
   return {
-    x: xL + r + r * Math.cos(Math.PI + ang),
-    y: yT + r + r * Math.sin(Math.PI + ang),
+    x: xL + rr + rr * Math.cos(Math.PI + ang),
+    y: yT + rr + rr * Math.sin(Math.PI + ang),
   };
 }
 
-/** Inner stand boundary point (same direction from center as outer point) */
-function innerFromOuter(ox, oy) {
-  return {
-    x: CX + (ox - CX) * (wi / wo),
-    y: CY + (oy - CY) * (hi / ho),
-  };
-}
-
-/** SVG d for a filled rounded rect (stroke optional) */
 export function roundedRectPathD(cx, cy, w, h, r) {
   const rr = Math.min(r, w / 2, h / 2);
   const hw = w / 2;
@@ -123,8 +114,8 @@ export function roundedRectPathD(cx, cy, w, h, r) {
   ].join(' ');
 }
 
-/** Ordered clockwise from north-centre: 301…310, 311…318, 319…328, 329…336 */
-export const WEDGE_IDS = (() => {
+/** Lower tier ids (inner bowl): 301…336 */
+export const LOWER_WEDGE_IDS = (() => {
   const ids = [];
   for (let i = 0; i < 10; i += 1) ids.push(String(301 + i));
   for (let i = 0; i < 8; i += 1) ids.push(String(311 + i));
@@ -133,48 +124,99 @@ export const WEDGE_IDS = (() => {
   return ids;
 })();
 
-export function blockIdFromSectionNumber(numStr) {
-  if (!numStr || numStr === '—') return WEDGE_IDS[0];
-  const n = parseInt(String(numStr), 10);
-  if (Number.isNaN(n)) return WEDGE_IDS[0];
-  const idx = ((n % 100) + 35) % WEDGE_COUNT;
-  return WEDGE_IDS[idx];
+/** Upper tier ids (outer ring): 401…436 */
+export const UPPER_WEDGE_IDS = (() => {
+  const ids = [];
+  for (let i = 0; i < 10; i += 1) ids.push(String(401 + i));
+  for (let i = 0; i < 8; i += 1) ids.push(String(411 + i));
+  for (let i = 0; i < 10; i += 1) ids.push(String(419 + i));
+  for (let i = 0; i < 8; i += 1) ids.push(String(429 + i));
+  return ids;
+})();
+
+/** @deprecated use LOWER_WEDGE_IDS */
+export const WEDGE_IDS = LOWER_WEDGE_IDS;
+
+function wedgeIndexFromSectionNumber(n) {
+  return ((n % 100) + 35) % WEDGE_COUNT;
 }
 
 /**
- * Face labels only (visual). Order matches wedges N→E→S→W; includes Viagogo-style numbers like 429, 338.
+ * Map ticket section number to a wedge id. Section numbers 400–499 → upper tier; else lower.
  */
-const BLOCK_FACE_LABELS = [
+export function blockIdFromSectionNumber(numStr) {
+  if (!numStr || numStr === '—') return LOWER_WEDGE_IDS[0];
+  const n = parseInt(String(numStr), 10);
+  if (Number.isNaN(n)) return LOWER_WEDGE_IDS[0];
+  const idx = wedgeIndexFromSectionNumber(n);
+  if (n >= 400 && n < 500) {
+    return UPPER_WEDGE_IDS[idx];
+  }
+  return LOWER_WEDGE_IDS[idx];
+}
+
+const LOWER_FACE_LABELS = [
   '118', '124', '129', '134', '138', '142', '148', '152', '156', '162',
   '215', '222', '229', '238', '245', '251', '258', '265',
   '301', '308', '315', '322', '329', '334', '338', '345', '352', '358',
   '401', '408', '415', '421', '426', '429', '433', '438',
 ];
 
+const UPPER_FACE_LABELS = [
+  '402', '406', '412', '418', '424', '428', '432', '436', '440', '444',
+  '448', '452', '456', '460', '464', '468', '472', '476',
+  '480', '484', '488', '492', '496', '500', '504', '508', '512', '516',
+  '520', '524', '528', '532', '536', '540', '544', '548',
+];
+
 function quadPath(o1, o2, i2, i1) {
   return `M ${fmt(o1.x)} ${fmt(o1.y)} L ${fmt(o2.x)} ${fmt(o2.y)} L ${fmt(i2.x)} ${fmt(i2.y)} L ${fmt(i1.x)} ${fmt(i1.y)} Z`;
 }
 
-export const SECTION_WEDGES = WEDGE_IDS.map((id, i) => {
-  const t1 = i / WEDGE_COUNT;
-  const t2 = (i + 1) / WEDGE_COUNT;
-  const o1 = pointOnOuterPerimeter(t1);
-  const o2 = pointOnOuterPerimeter(t2);
-  const i1 = innerFromOuter(o1.x, o1.y);
-  const i2 = innerFromOuter(o2.x, o2.y);
-  const d = quadPath(o1, o2, i2, i1);
-  const cx = (o1.x + o2.x + i1.x + i2.x) / 4;
-  const cy = (o1.y + o2.y + i1.y + i2.y) / 4;
-  const faceLabel = BLOCK_FACE_LABELS[i] ?? id;
-  return { id, faceLabel, d, cx, cy };
-});
+function buildTierWedge(ids, faceLabels, outerW, outerH, outerR, innerW, innerH, innerR) {
+  return ids.map((id, i) => {
+    const t1 = i / WEDGE_COUNT;
+    const t2 = (i + 1) / WEDGE_COUNT;
+    const o1 = pointOnPerimeter(t1, outerW, outerH, outerR, CX, CY);
+    const o2 = pointOnPerimeter(t2, outerW, outerH, outerR, CX, CY);
+    const i1 = pointOnPerimeter(t1, innerW, innerH, innerR, CX, CY);
+    const i2 = pointOnPerimeter(t2, innerW, innerH, innerR, CX, CY);
+    const d = quadPath(o1, o2, i2, i1);
+    const tcx = (o1.x + o2.x + i1.x + i2.x) / 4;
+    const tcy = (o1.y + o2.y + i1.y + i2.y) / 4;
+    const faceLabel = faceLabels[i] ?? id;
+    return { id, faceLabel, d, cx: tcx, cy: tcy, tier: outerW === wo ? 'upper' : 'lower' };
+  });
+}
 
-/** Concours / gap fill inside stand hole (under pitch in z-order) */
+const LOWER_WEDGES = buildTierWedge(
+  LOWER_WEDGE_IDS,
+  LOWER_FACE_LABELS,
+  wm,
+  hm,
+  rm,
+  wi,
+  hi,
+  ri
+);
+
+const UPPER_WEDGES = buildTierWedge(
+  UPPER_WEDGE_IDS,
+  UPPER_FACE_LABELS,
+  wo,
+  ho,
+  ro,
+  wm,
+  hm,
+  rm
+);
+
+/** All wedges: lower (inner bowl) first, then upper (outer ring) */
+export const SECTION_WEDGES = [...LOWER_WEDGES, ...UPPER_WEDGES];
+
 export const GAP_ROUNDRECT_D = roundedRectPathD(CX, CY, wi, hi, ri);
 
-/** Pitch placement */
 export const PITCH_X = CX - PITCH_W / 2;
 export const PITCH_Y = CY - PITCH_H / 2;
 
-/** Subtle outer bowl (rounded rect) behind stands */
 export const BOWL_OUTER_D = roundedRectPathD(CX, CY, wo + 24, ho + 24, ro + 14);

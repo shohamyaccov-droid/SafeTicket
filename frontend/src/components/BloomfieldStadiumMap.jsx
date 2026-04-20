@@ -34,6 +34,22 @@ const PIN_TRI_HALF = 6;
 const PIN_RX = 6;
 const STROKE_INACTIVE_W = 1.5;
 
+/** One listing per block for map affordances: lowest displayed price wins. */
+function pickCheapestRow(list) {
+  if (!list.length) return null;
+  let best = list[0];
+  let bestP = Infinity;
+  for (const row of list) {
+    const raw = parseFloat(getTicketPrice(row.firstTicket));
+    const p = Number.isFinite(raw) ? raw : Infinity;
+    if (p < bestP) {
+      bestP = p;
+      best = row;
+    }
+  }
+  return best;
+}
+
 function layoutPins(rows) {
   const byBlock = {};
   for (const row of rows) {
@@ -45,24 +61,24 @@ function layoutPins(rows) {
   const pins = [];
   for (const bid of Object.keys(byBlock)) {
     const list = byBlock[bid];
+    const rep = pickCheapestRow(list);
+    if (!rep) continue;
     const w = SECTION_WEDGES.find((x) => x.id === bid);
     const cx0 = w?.cx ?? CX;
     const cy0 = w?.cy ?? CY;
-    list.forEach((row, i) => {
-      const spread = list.length > 1 ? (i - (list.length - 1) / 2) * 12 : 0;
-      const t = row.firstTicket;
-      const raw = parseFloat(getTicketPrice(t));
-      const cur = resolveTicketCurrency(t);
-      const priceLabel = formatMoney(Number.isFinite(raw) ? raw : 0, cur);
-      const n = row.group.available_count ?? 0;
-      pins.push({
-        stableId: row.stableId,
-        blockId: bid,
-        x: cx0 + spread,
-        y: cy0 - 6,
-        priceLabel,
-        urgency: n > 0 && n < 5 ? `${n} left` : null,
-      });
+    const t = rep.firstTicket;
+    const raw = parseFloat(getTicketPrice(t));
+    const cur = resolveTicketCurrency(t);
+    const priceLabel = formatMoney(Number.isFinite(raw) ? raw : 0, cur);
+    const n = rep.group.available_count ?? 0;
+    pins.push({
+      stableId: rep.stableId,
+      blockId: bid,
+      x: cx0,
+      y: cy0 - 6,
+      priceLabel,
+      urgency: n > 0 && n < 5 ? `${n} left` : null,
+      showFrom: true,
     });
   }
   return pins;
@@ -93,10 +109,10 @@ export default function BloomfieldStadiumMap({
 
   const pins = useMemo(() => layoutPins(rows), [rows]);
 
-  const firstRowInBlock = useCallback(
-    (blockId) => rows.find((r) => r.bloomfield?.blockId === blockId),
-    [rows]
-  );
+  const firstRowInBlock = useCallback((blockId) => {
+    const list = rows.filter((r) => r.bloomfield?.blockId === blockId);
+    return pickCheapestRow(list) ?? undefined;
+  }, [rows]);
 
   const handleBlockEnter = (blockId) => {
     const has = blocksWithListings.has(blockId);
@@ -276,21 +292,38 @@ export default function BloomfieldStadiumMap({
 
             {pins.map((p) => {
               const hasUrgency = Boolean(p.urgency);
-              const bodyH = hasUrgency ? 30 : 24;
+              const hasFrom = Boolean(p.showFrom);
+              let bodyH = 24;
+              if (hasFrom && hasUrgency) bodyH = 38;
+              else if (hasFrom) bodyH = 30;
+              else if (hasUrgency) bodyH = 30;
               const bodyTop = -(bodyH + PIN_TRI_H);
               const inverted = pinInverted(p.stableId);
               const bg = inverted ? PIN_INVERTED : '#ffffff';
               const stroke = inverted ? '#404040' : '#e5e7eb';
               const sw = 1;
               const priceFill = inverted ? '#ffffff' : '#111827';
+              const fromFill = inverted ? '#d1d5db' : '#6b7280';
               const urgentFill = inverted ? '#fda4af' : ROSE_600;
 
-              const priceY = hasUrgency ? bodyTop + 10 : bodyTop + bodyH / 2;
-              const urgentY = bodyTop + 20;
+              let fromY = bodyTop + bodyH / 2;
+              let priceY = bodyTop + bodyH / 2;
+              let urgentY = bodyTop + bodyH / 2;
+              if (hasFrom && hasUrgency) {
+                fromY = bodyTop + 9;
+                priceY = bodyTop + 22;
+                urgentY = bodyTop + 33;
+              } else if (hasFrom) {
+                fromY = bodyTop + 9;
+                priceY = bodyTop + 21;
+              } else if (hasUrgency) {
+                priceY = bodyTop + 10;
+                urgentY = bodyTop + 20;
+              }
 
               return (
                 <g
-                  key={`${p.stableId}-${p.blockId}`}
+                  key={p.blockId}
                   transform={`translate(${p.x}, ${p.y})`}
                   style={{ cursor: 'pointer' }}
                   onMouseEnter={() => {
@@ -324,6 +357,20 @@ export default function BloomfieldStadiumMap({
                       stroke="none"
                     />
                   </g>
+                  {hasFrom ? (
+                    <text
+                      x="0"
+                      y={fromY}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fill={fromFill}
+                      fontSize="8.5"
+                      fontWeight="700"
+                      style={{ pointerEvents: 'none' }}
+                    >
+                      מ-
+                    </text>
+                  ) : null}
                   <text
                     x="0"
                     y={priceY}
