@@ -7,17 +7,25 @@ import {
   VIEW_H,
   CX,
   CY,
-  RX_PITCH,
-  RY_PITCH,
   SECTION_WEDGES,
-  BOWL_RX,
-  BOWL_RY,
+  GAP_ROUNDRECT_D,
+  BOWL_OUTER_D,
+  PITCH_X,
+  PITCH_Y,
+  PITCH_W,
+  PITCH_H,
+  PITCH_RX,
+  PITCH_RY,
 } from '../utils/bloomfieldSectionGeometry';
 
 const FILL_DEFAULT = '#f3f4f6';
 const STROKE_SECTION = '#ffffff';
 const FILL_ACTIVE = '#a3e635';
 const STROKE_ACTIVE_OUTLINE = '#84cc16';
+
+const PIN_BODY_W = 86;
+const PIN_TRI_H = 8;
+const PIN_TRI_HALF = 9;
 
 function layoutPins(rows) {
   const byBlock = {};
@@ -34,8 +42,7 @@ function layoutPins(rows) {
     const cx0 = w?.cx ?? CX;
     const cy0 = w?.cy ?? CY;
     list.forEach((row, i) => {
-      const spread = list.length > 1 ? (i - (list.length - 1) / 2) * 14 : 0;
-      const stack = ((i % 2) - 0.5) * 10;
+      const spread = list.length > 1 ? (i - (list.length - 1) / 2) * 12 : 0;
       const t = row.firstTicket;
       const raw = parseFloat(getTicketPrice(t));
       const cur = resolveTicketCurrency(t);
@@ -45,7 +52,7 @@ function layoutPins(rows) {
         stableId: row.stableId,
         blockId: bid,
         x: cx0 + spread,
-        y: cy0 + stack - 28,
+        y: cy0 - 6,
         priceLabel,
         urgency: n > 0 && n < 5 ? `${n} left` : null,
       });
@@ -100,8 +107,10 @@ export default function BloomfieldStadiumMap({
     if (first) onSelectGroup?.(first.stableId);
   };
 
+  const centerCircleR = Math.min(PITCH_W, PITCH_H) * 0.11;
+
   return (
-    <div className="relative w-full aspect-[1000/636] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-sm">
+    <div className="relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-[#f4f5f7] shadow-sm">
       <div className="absolute top-2 left-2 z-[5] flex flex-col overflow-hidden rounded-md shadow-md">
         <button
           type="button"
@@ -151,23 +160,17 @@ export default function BloomfieldStadiumMap({
             aria-label="Bloomfield stadium seating map"
           >
             <defs>
-              <filter id="bf-pin-shadow-md" x="-35%" y="-35%" width="170%" height="170%">
-                <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.14" />
+              <filter id="bf-bubble-shadow" x="-45%" y="-45%" width="190%" height="190%">
+                <feDropShadow dx="0" dy="2" stdDeviation="4" floodOpacity="0.18" />
               </filter>
             </defs>
 
-            {/* Bowl shell */}
-            <ellipse
-              cx={CX}
-              cy={CY}
-              rx={BOWL_RX}
-              ry={BOWL_RY}
-              fill="#e8eaed"
-              stroke="#d1d5db"
-              strokeWidth="2.5"
-            />
+            <rect width={VIEW_W} height={VIEW_H} fill="#f4f5f7" />
 
-            {/* Per-section wedges */}
+            <path d={BOWL_OUTER_D} fill="#e8eaed" stroke="#d1d5db" strokeWidth="1.5" />
+
+            <path d={GAP_ROUNDRECT_D} fill="#e5e7eb" stroke="none" />
+
             {SECTION_WEDGES.map((sec) => {
               const has = blocksWithListings.has(sec.id);
               const isHi = highlightBlockId === sec.id;
@@ -181,7 +184,7 @@ export default function BloomfieldStadiumMap({
                   fill={fill}
                   fillOpacity={isHi ? 1 : has ? 0.98 : 1}
                   stroke={isHi ? '#0ea5e9' : stroke}
-                  strokeWidth={isHi ? 2.75 : has ? 1.15 : 1.05}
+                  strokeWidth={isHi ? 2.75 : has ? 1.1 : 1}
                   className="transition-[stroke,fill-opacity] duration-150 ease-out"
                   style={{ cursor: has ? 'pointer' : 'default' }}
                   onMouseEnter={() => handleBlockEnter(sec.id)}
@@ -191,55 +194,57 @@ export default function BloomfieldStadiumMap({
               );
             })}
 
-            {/* Pitch (covers wedge inner hole visually) */}
-            <ellipse
-              cx={CX}
-              cy={CY}
-              rx={RX_PITCH}
-              ry={RY_PITCH}
+            <rect
+              x={PITCH_X}
+              y={PITCH_Y}
+              width={PITCH_W}
+              height={PITCH_H}
+              rx={PITCH_RX}
+              ry={PITCH_RY}
               fill="#4ade80"
               stroke="#15803d"
               strokeWidth="2.5"
             />
             <line
               x1={CX}
-              y1={CY - RY_PITCH}
+              y1={PITCH_Y}
               x2={CX}
-              y2={CY + RY_PITCH}
+              y2={PITCH_Y + PITCH_H}
               stroke="#bbf7d0"
               strokeWidth="2"
-              opacity="0.9"
+              opacity="0.95"
             />
-            <ellipse
+            <circle
               cx={CX}
               cy={CY}
-              rx="38"
-              ry="24"
+              r={centerCircleR}
               fill="none"
               stroke="#bbf7d0"
-              strokeWidth="1.75"
+              strokeWidth="2"
               opacity="0.95"
             />
 
             <text
               x={CX}
-              y={CY + 5}
+              y={CY + 4}
               textAnchor="middle"
               fill="#14532d"
-              fontSize="17"
+              fontSize="15"
               fontWeight="800"
               style={{ pointerEvents: 'none', userSelect: 'none' }}
             >
               Pitch
             </text>
 
-            {/* Price pins */}
             {pins.map((p) => {
+              const hasUrgency = Boolean(p.urgency);
+              const bodyH = hasUrgency ? 40 : 30;
+              const bodyTop = -(bodyH + PIN_TRI_H);
               const active =
                 highlightStableId != null &&
                 String(p.stableId) === String(highlightStableId);
-              const h = p.urgency ? 56 : 40;
-              const w = 96;
+              const stroke = active ? '#0284c7' : '#e5e7eb';
+              const sw = active ? 2 : 1;
               return (
                 <g
                   key={`${p.stableId}-${p.blockId}`}
@@ -252,50 +257,50 @@ export default function BloomfieldStadiumMap({
                     onSelectGroup?.(p.stableId);
                   }}
                 >
-                  <rect
-                    x={-w / 2}
-                    y={-h / 2}
-                    width={w}
-                    height={h}
-                    rx={h / 2}
-                    fill="white"
-                    stroke={active ? '#0284c7' : '#e5e7eb'}
-                    strokeWidth={active ? 2.25 : 1}
-                    filter="url(#bf-pin-shadow-md)"
-                  />
+                  <g filter="url(#bf-bubble-shadow)">
+                    <rect
+                      x={-PIN_BODY_W / 2}
+                      y={bodyTop}
+                      width={PIN_BODY_W}
+                      height={bodyH}
+                      rx={14}
+                      ry={14}
+                      fill="white"
+                      stroke={stroke}
+                      strokeWidth={sw}
+                    />
+                    <polygon
+                      points={`0,0 ${-PIN_TRI_HALF},${-PIN_TRI_H} ${PIN_TRI_HALF},${-PIN_TRI_H}`}
+                      fill="white"
+                      stroke={stroke}
+                      strokeWidth={sw}
+                      strokeLinejoin="miter"
+                    />
+                  </g>
                   <text
                     x="0"
-                    y={p.urgency ? -6 : 4}
+                    y={bodyTop + bodyH / 2 + (hasUrgency ? -5 : 3)}
                     textAnchor="middle"
                     fill="#0f172a"
-                    fontSize="15"
+                    fontSize="12.5"
                     fontWeight="800"
                     style={{ pointerEvents: 'none' }}
                   >
                     {p.priceLabel}
                   </text>
-                  {p.urgency ? (
+                  {hasUrgency ? (
                     <text
                       x="0"
-                      y="12"
+                      y={bodyTop + bodyH - 7}
                       textAnchor="middle"
                       fill="#e11d48"
-                      fontSize="11.5"
+                      fontSize="9"
                       fontWeight="700"
                       style={{ pointerEvents: 'none' }}
                     >
                       {p.urgency}
                     </text>
                   ) : null}
-                  <text
-                    x="34"
-                    y={p.urgency ? -14 : -8}
-                    textAnchor="middle"
-                    fontSize="13"
-                    style={{ pointerEvents: 'none' }}
-                  >
-                    🎟
-                  </text>
                 </g>
               );
             })}

@@ -61,7 +61,9 @@ export default function BloomfieldTicketListPanel({
         </div>
       </div>
 
-      <div className="max-h-[min(68vh,640px)] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
+      <div
+        className="max-h-[min(68vh,640px)] divide-y divide-slate-100 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-width:thin] [scrollbar-color:rgb(203_213_225)_transparent] [color-scheme:light] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/90"
+      >
         {rows.length === 0 ? (
           <div className="px-4 py-10 text-center text-sm text-slate-600">
             No listings match the number of tickets you selected. Try lowering the quantity or
@@ -85,7 +87,7 @@ export default function BloomfieldTicketListPanel({
                 className={`px-4 py-3.5 transition-colors ${
                   isHi
                     ? 'bg-sky-50 ring-1 ring-inset ring-sky-200'
-                    : 'bg-white hover:bg-slate-50/90'
+                    : 'bg-white hover:bg-gray-50'
                 }`}
                 onMouseEnter={() => onHoverRow(stableId)}
                 onMouseLeave={() => onHoverRow(null)}
@@ -132,7 +134,7 @@ export default function BloomfieldTicketListPanel({
 
                     <div className="flex flex-wrap items-center gap-2">
                       {bloomfield.isTopChoice ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-lime-100 px-2.5 py-1 text-xs font-semibold text-lime-900">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-800">
                           <Trophy className="h-3.5 w-3.5" strokeWidth={2} />
                           Top choice
                         </span>
