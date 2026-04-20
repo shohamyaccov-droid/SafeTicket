@@ -589,6 +589,10 @@
   border-radius: 0;
 }
 
+.tickets-split-container.tickets-split-container--bloomfield .venue-map-card-content {
+  background-color: #ffffff;
+}
+
 .venue-map-footer-label {
   margin: 0;
   padding: 0.65rem 1rem 0.85rem;

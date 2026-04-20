@@ -20,8 +20,10 @@ import {
 
 const FILL_DEFAULT = '#e5e7eb';
 const FILL_ACTIVE = '#9bca3e';
-/** Tracer: bright blue to verify live bundle (revert to grass green after deploy check). */
-const PITCH_GRASS = '#3b82f6';
+/** Viagogo-style pitch; grid is white void between grey wedges, not strokes. */
+const PITCH_GRASS = '#82c91e';
+/** Must match gaps between polygons — any grey here reads as “muddy grid”. */
+const STADIUM_BASE_FILL = '#ffffff';
 const LINE_WHITE = '#ffffff';
 const PIN_INVERTED = '#222222';
 const TEXT_INACTIVE = '#999999';
@@ -140,14 +142,7 @@ export default function BloomfieldStadiumMap({
     (pinHoverId != null && String(stableId) === String(pinHoverId));
 
   return (
-    <div className="relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div
-        className="pointer-events-none absolute top-2 right-2 z-50 rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
-        style={{ backgroundColor: '#ff0000' }}
-        aria-hidden
-      >
-        v2.0-TEST
-      </div>
+    <div className="bloomfield-map-root relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="absolute top-2 left-2 z-[5] flex flex-col overflow-hidden rounded-md shadow-md">
         <button
           type="button"
@@ -178,7 +173,7 @@ export default function BloomfieldStadiumMap({
       </div>
 
       <div
-        className="absolute inset-0 cursor-grab touch-none active:cursor-grabbing"
+        className="absolute inset-0 cursor-grab touch-none bg-white active:cursor-grabbing"
         onPointerDown={panZoom.onPointerDown}
         onPointerMove={panZoom.onPointerMove}
         onPointerUp={panZoom.onPointerUp}
@@ -187,7 +182,7 @@ export default function BloomfieldStadiumMap({
         aria-label="Bloomfield seating map — drag to pan, use plus and minus to zoom"
       >
         <div
-          className="flex h-full w-full items-center justify-center will-change-transform"
+          className="flex h-full w-full items-center justify-center bg-white will-change-transform"
           style={panZoom.transformStyle}
         >
           <svg
@@ -202,11 +197,11 @@ export default function BloomfieldStadiumMap({
               </filter>
             </defs>
 
-            <rect width={VIEW_W} height={VIEW_H} fill="#ffffff" />
+            <rect width={VIEW_W} height={VIEW_H} fill={STADIUM_BASE_FILL} />
 
-            <path d={BOWL_OUTER_D} fill="#ffffff" />
+            <path d={BOWL_OUTER_D} fill={STADIUM_BASE_FILL} />
 
-            <path d={GAP_ROUNDRECT_D} fill="#ffffff" />
+            <path d={GAP_ROUNDRECT_D} fill={STADIUM_BASE_FILL} />
 
             {SECTION_WEDGES.map((sec) => {
               const has = blocksWithListings.has(sec.id);
@@ -219,7 +214,7 @@ export default function BloomfieldStadiumMap({
                   d={sec.d}
                   fill={fill}
                   fillOpacity={1}
-                  shapeRendering="geometricPrecision"
+                  shapeRendering={isHi ? 'geometricPrecision' : 'crispEdges'}
                   {...(isHi
                     ? {
                         stroke: '#0ea5e9',
