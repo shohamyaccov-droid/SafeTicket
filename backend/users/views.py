@@ -8,9 +8,11 @@ from rest_framework.throttling import ScopedRateThrottle
 from .throttles import (
     AuthLoginScopedThrottle,
     AuthRegisterScopedThrottle,
+    CheckoutMutationScopedThrottle,
+    CheckoutReserveScopedThrottle,
     OffersMutationScopedThrottle,
 )
-from rest_framework.decorators import api_view, permission_classes, action
+from rest_framework.decorators import api_view, permission_classes, action, throttle_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.exceptions import APIException, PermissionDenied
@@ -1439,6 +1441,7 @@ def update_ticket_price(request, ticket_id):
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@throttle_classes([CheckoutMutationScopedThrottle])
 def create_order(request):
     """
     Create order for authenticated user after payment.
@@ -1788,7 +1791,15 @@ def create_order(request):
                             status=status.HTTP_400_BAD_REQUEST,
                         )
 
-            order = serializer.save(status='pending_payment', quantity=order_quantity)
+            if negotiated_offer:
+                server_total = expected_negotiated_total_from_offer_base(negotiated_offer.amount)
+            else:
+                server_total = expected_buy_now_total(ticket.asking_price, order_quantity)
+            order = serializer.save(
+                status='pending_payment',
+                quantity=order_quantity,
+                total_amount=server_total,
+            )
             order.ticket_ids = ticket_ids
             order.pending_offer = negotiated_offer
             if listing_group_id:
@@ -1820,6 +1831,7 @@ def create_order(request):
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([CheckoutMutationScopedThrottle])
 def confirm_order_payment(request, order_id):
     """
     Second step after create_order / guest_checkout: PSP / mock webhook confirms funds,
@@ -1999,6 +2011,7 @@ def confirm_order_payment(request, order_id):
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([CheckoutMutationScopedThrottle])
 def payment_simulation(request):
     """
     Simulate payment processing (for development).
@@ -2167,6 +2180,7 @@ def payment_simulation(request):
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([CheckoutMutationScopedThrottle])
 def guest_checkout(request):
     """
     Create order for guest (non-authenticated) user after payment
@@ -2469,7 +2483,10 @@ def guest_checkout(request):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-            total_amount = order_data.get('total_amount', ticket.asking_price)
+            if negotiated_offer:
+                server_total = expected_negotiated_total_from_offer_base(negotiated_offer.amount)
+            else:
+                server_total = expected_buy_now_total(ticket.asking_price, order_quantity)
             event_name = order_data.get('event_name', ticket.event_name)
 
             from users.currency import iso4217_for_ticket_listing
@@ -2483,7 +2500,7 @@ def guest_checkout(request):
                 guest_email=order_data['guest_email'],
                 guest_phone=order_data['guest_phone'],
                 ticket=ticket,
-                total_amount=total_amount,
+                total_amount=server_total,
                 currency=order_cur,
                 quantity=order_quantity,
                 event_name=event_name,
@@ -3063,7 +3080,11 @@ class TicketViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
     
-    @action(detail=True, methods=['post'])
+    @action(
+        detail=True,
+        methods=['post'],
+        throttle_classes=[CheckoutReserveScopedThrottle],
+    )
     def reserve(self, request, pk=None):
         """
         Reserve a ticket for 10 minutes when user clicks 'Buy'

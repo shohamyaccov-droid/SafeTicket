@@ -384,6 +384,8 @@ REST_FRAMEWORK = {
         'auth_register': '20/minute',
         'offers': '25/minute',
         'offers_mutations': '90/minute',
+        'checkout': '60/minute',
+        'checkout_reserve': '120/minute',
     },
 }
 

@@ -387,6 +387,7 @@ class OrderSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             'id', 'created_at', 'status', 'ticket_info', 'tickets', 'ticket_ids', 'currency',
+            'total_amount',
             'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'seller_service_fee',
             'total_paid_by_buyer', 'net_seller_revenue',
             'payout_status', 'payout_eligible_date',
