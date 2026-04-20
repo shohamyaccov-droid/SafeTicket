@@ -18,7 +18,7 @@ import {
   PITCH_RY,
 } from '../utils/bloomfieldSectionGeometry';
 
-const FILL_DEFAULT = '#f3f4f6';
+const FILL_DEFAULT = '#e5e7eb';
 const FILL_ACTIVE = '#9bca3e';
 const PITCH_GRASS = '#82c91e';
 const LINE_WHITE = '#ffffff';
@@ -31,8 +31,8 @@ const PIN_BODY_W = 96;
 const PIN_TRI_H = 6;
 const PIN_TRI_HALF = 6;
 const PIN_RX = 6;
-/** Thick grid strokes; `paintOrder: stroke fill` + t-inset keeps gaps visible. */
-const SECTION_STROKE_WIDTH = 5;
+/** Crisp edge on blocks; angular channels from geometry carry most separation. */
+const SECTION_STROKE_WIDTH = 3;
 
 /** One listing per block for map affordances: lowest displayed price wins. */
 function pickCheapestRow(list) {

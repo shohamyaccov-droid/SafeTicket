@@ -1,6 +1,6 @@
 /**
  * Bloomfield schematic — inner bowl stays rounded-rect; outer stadium footprint is a smooth ellipse.
- * Outer tier: sides are rays from (CX,CY) through inner rim points to the oval. Micro t-inset separates fills; stroke paints the gap.
+ * Outer tier: sides are rays from (CX,CY) through inner rim points to the oval. Large t-inset cuts real channels; stroke is a light edge.
  */
 
 export const VIEW_W = 1000;
@@ -21,14 +21,14 @@ const STAND_DEPTH_UPPER = 66;
 
 /** Pull inner tier outer edge inward (px in viewBox) — opens the inter-tier channel. */
 const RADIAL_INNER_BACK_TRIM = 5;
-/** Constant radial depth (px) of the lower/upper tier gap: outer-front depth = inner-back depth + this. */
-const TIER_CHANNEL_DEPTH = 16;
+/** Constant radial depth (px) of the lower/upper tier channel (lower bowl back → upper bowl front). */
+const TIER_CHANNEL_DEPTH = 30;
 
 /** Extra semi-axis beyond nominal wo/2, ho/2 so bowl fill extends past seat ring (px). */
 const BOWL_OVAL_MARGIN = 14;
 
-/** Perimeter t shaved per wedge side so polygons don’t touch; leaves room for thick white strokes. */
-const T_INSET_PER_SIDE = 0.002;
+/** Aggressive perimeter t inset per side — physical channels between blocks (capped vs. tiny spans). */
+const T_INSET_PER_SIDE = 0.012;
 
 const wi = PITCH_W + 2 * GAP;
 const hi = PITCH_H + 2 * GAP;
@@ -134,7 +134,7 @@ function rayToEllipse(px, py, rx, ry) {
 
 function applyMicroSep(t0, t1) {
   const span = t1 - t0;
-  const pad = Math.min(T_INSET_PER_SIDE, span * 0.22);
+  const pad = Math.min(T_INSET_PER_SIDE, span * 0.42);
   const ta = t0 + pad;
   const tb = t1 - pad;
   if (tb <= ta + 1e-10) {
