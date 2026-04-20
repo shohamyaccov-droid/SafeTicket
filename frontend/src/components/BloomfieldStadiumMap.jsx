@@ -30,8 +30,8 @@ const TEXT_ON_GREEN = '#14532d';
 const ROSE_600 = '#e11d48';
 const BEST_BADGE_FILL = '#14532d';
 
-const STROKE_INACTIVE_W = 2.05;
-const STROKE_HIGHLIGHT_W = 2.85;
+const STROKE_INACTIVE_W = 1.5;
+const STROKE_HIGHLIGHT_W = 2.75;
 
 /** One listing per block for map affordances: lowest displayed price wins. */
 function pickCheapestRow(list) {
@@ -59,6 +59,7 @@ function globalMinListingPrice(rows) {
   return minP;
 }
 
+/** One pin per map block: price is the minimum among listings in that section only. */
 function layoutPins(rows) {
   const floorPrice = globalMinListingPrice(rows);
   const byBlock = {};
@@ -250,7 +251,7 @@ export default function BloomfieldStadiumMap({
                   textAnchor="middle"
                   dominantBaseline="central"
                   fill={has ? TEXT_ON_GREEN : TEXT_SECTION_MUTED}
-                  fontSize="8.5"
+                  fontSize="8"
                   fontWeight={has ? '800' : '500'}
                   fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
                   style={{

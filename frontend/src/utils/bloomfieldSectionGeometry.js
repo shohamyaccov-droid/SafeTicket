@@ -1,7 +1,6 @@
 /**
- * Bloomfield — hardcoded Viagogo-style section map.
- * Inner ring: explicit CW order on inner bowl. Outer ring: West 420–431, North 404–406, South 221–229 only (East is single-tier).
- * Stadium shell: horizontal capsule (rounded rect with r = h/2) so touchline sides are longer than goal ends.
+ * Bloomfield — 4-stand “squircle” model: N/S/E/W rectangular bands + 4 corner arc wedges.
+ * Inner/outer tiers flush; east is inner-only. Clockwise from north-west: 301 (north-left) … 337 (west bottom).
  */
 
 export const VIEW_W = 1000;
@@ -15,265 +14,248 @@ export const PITCH_H = Math.round(168 * 0.83);
 export const PITCH_RX = 5;
 export const PITCH_RY = 5;
 
-/** Moat pitch ↔ inner rim */
 const GAP = 32;
-const STAND_DEPTH_LOWER = 50;
-const STAND_DEPTH_UPPER = 50;
-
-const RADIAL_INNER_BACK_TRIM = 6;
-const RADIAL_OUTER_FRONT_EXTRA = 12;
-
-/**
- * Normalized gap between adjacent blocks (t space). Slightly larger for a consistent white grid.
- */
-const ANGULAR_PAD_T = 0.00115;
+/** Inner tier radial depth (hole → inner-back). */
+const dInner = 52;
+/** Outer tier depth (inner-back → outer-back). */
+const dOuter = 48;
 
 const wi = PITCH_W + 2 * GAP;
 const hi = PITCH_H + 2 * GAP;
-/** Inner hole: moderate corners (pitch surround). */
-const ri = Math.min(28, Math.min(wi, hi) * 0.09 + 18);
+/** Hole / moat corner radius — moderate squircle (not a circle). */
+const ri = Math.min(40, Math.min(wi, hi) * 0.14 + 18);
 
-const wm = wi + 2 * STAND_DEPTH_LOWER;
-const hm = hi + 2 * STAND_DEPTH_LOWER;
+const xL = CX - wi / 2;
+const xR = CX + wi / 2;
+const yT = CY - hi / 2;
+const yB = CY + hi / 2;
 
-const innerBackDepth = STAND_DEPTH_LOWER - RADIAL_INNER_BACK_TRIM;
-const wInnerBack = wi + 2 * innerBackDepth;
-const hInnerBack = hi + 2 * innerBackDepth;
-const rInnerBack = Math.min(ri + innerBackDepth, wInnerBack / 2 - 8, hInnerBack / 2 - 8);
+const topFlatW = wi - 2 * ri;
+const bottomFlatW = topFlatW;
+const westFlatH = hi - 2 * ri;
 
-const outerFrontDepth = STAND_DEPTH_LOWER + RADIAL_OUTER_FRONT_EXTRA;
-const wOuterFront = wi + 2 * outerFrontDepth;
-const hOuterFront = hi + 2 * outerFrontDepth;
-const rOuterFront = Math.min(ri + outerFrontDepth, wOuterFront / 2 - 8, hOuterFront / 2 - 8);
-
-/** Outer bowl: wider than tall (sidelines > goal ends). */
-const wo = wm + 2 * STAND_DEPTH_UPPER;
-const ho = hm + 2 * STAND_DEPTH_UPPER;
-/** Capsule ends: semicircles on left/right (not a tall ellipse). */
-const ro = ho / 2;
+/** Inset between cells so white strokes read as aisles (half of ~1px gap in user space). */
+const CELL_IN = 0.45;
 
 function fmt(n) {
   return Number(n.toFixed(4));
-}
-
-/**
- * Point on rounded-rect perimeter, t ∈ [0,1), CW from west end of top edge.
- * With r = h/2 and w ≥ h this traces a horizontal stadium/capsule.
- */
-function pointOnPerimeter(t, w, h, r, cx, cy) {
-  const hw = w / 2;
-  const hh = h / 2;
-  const xL = cx - hw;
-  const xR = cx + hw;
-  const yT = cy - hh;
-  const yB = cy + hh;
-  const rr = Math.min(r, hw, hh);
-  const tw = w - 2 * rr;
-  const th = h - 2 * rr;
-  const q = (Math.PI * rr) / 2;
-  const L = 2 * tw + 2 * th + 4 * q;
-  let u = (((t % 1) + 1) % 1) * L;
-
-  if (u <= tw) {
-    return { x: xL + rr + u, y: yT };
-  }
-  u -= tw;
-  if (u <= q) {
-    const ang = u / rr;
-    return { x: xR - rr + rr * Math.sin(ang), y: yT + rr - rr * Math.cos(ang) };
-  }
-  u -= q;
-  if (u <= th) {
-    return { x: xR, y: yT + rr + u };
-  }
-  u -= th;
-  if (u <= q) {
-    const ang = u / rr;
-    return { x: xR - rr + rr * Math.cos(ang), y: yB - rr + rr * Math.sin(ang) };
-  }
-  u -= q;
-  if (u <= tw) {
-    return { x: xR - rr - u, y: yB };
-  }
-  u -= tw;
-  if (u <= q) {
-    const ang = u / rr;
-    return { x: xL + rr - rr * Math.sin(ang), y: yB - rr + rr * Math.cos(ang) };
-  }
-  u -= q;
-  if (u <= th) {
-    return { x: xL, y: yB - rr - u };
-  }
-  u -= th;
-  const ang = u / rr;
-  return {
-    x: xL + rr + rr * Math.cos(Math.PI + ang),
-    y: yT + rr + rr * Math.sin(Math.PI + ang),
-  };
 }
 
 export function roundedRectPathD(cx, cy, w, h, r) {
   const rr = Math.min(r, w / 2, h / 2);
   const hw = w / 2;
   const hh = h / 2;
-  const xL = cx - hw;
-  const xR = cx + hw;
-  const yT = cy - hh;
-  const yB = cy + hh;
+  const xl = cx - hw;
+  const xr = cx + hw;
+  const yt = cy - hh;
+  const yb = cy + hh;
   return [
-    `M ${fmt(xL + rr)} ${fmt(yT)}`,
-    `H ${fmt(xR - rr)}`,
-    `A ${fmt(rr)} ${fmt(rr)} 0 0 1 ${fmt(xR)} ${fmt(yT + rr)}`,
-    `V ${fmt(yB - rr)}`,
-    `A ${fmt(rr)} ${fmt(rr)} 0 0 1 ${fmt(xR - rr)} ${fmt(yB)}`,
-    `H ${fmt(xL + rr)}`,
-    `A ${fmt(rr)} ${fmt(rr)} 0 0 1 ${fmt(xL)} ${fmt(yB - rr)}`,
-    `V ${fmt(yT + rr)}`,
-    `A ${fmt(rr)} ${fmt(rr)} 0 0 1 ${fmt(xL + rr)} ${fmt(yT)}`,
+    `M ${fmt(xl + rr)} ${fmt(yt)}`,
+    `H ${fmt(xr - rr)}`,
+    `A ${fmt(rr)} ${fmt(rr)} 0 0 1 ${fmt(xr)} ${fmt(yt + rr)}`,
+    `V ${fmt(yb - rr)}`,
+    `A ${fmt(rr)} ${fmt(rr)} 0 0 1 ${fmt(xr - rr)} ${fmt(yb)}`,
+    `H ${fmt(xl + rr)}`,
+    `A ${fmt(rr)} ${fmt(rr)} 0 0 1 ${fmt(xl)} ${fmt(yb - rr)}`,
+    `V ${fmt(yt + rr)}`,
+    `A ${fmt(rr)} ${fmt(rr)} 0 0 1 ${fmt(xl + rr)} ${fmt(yt)}`,
     'Z',
   ].join(' ');
 }
 
-function quadPath(o1, o2, i2, i1) {
-  return `M ${fmt(o1.x)} ${fmt(o1.y)} L ${fmt(o2.x)} ${fmt(o2.y)} L ${fmt(i2.x)} ${fmt(i2.y)} L ${fmt(i1.x)} ${fmt(i1.y)} Z`;
+function rectCell(x0, y0, x1, y1) {
+  const xa = Math.min(x0, x1) + CELL_IN;
+  const xb = Math.max(x0, x1) - CELL_IN;
+  const ya = Math.min(y0, y1) + CELL_IN;
+  const yb = Math.max(y0, y1) - CELL_IN;
+  if (xb <= xa || yb <= ya) return null;
+  const d = `M ${fmt(xa)} ${fmt(ya)} L ${fmt(xb)} ${fmt(ya)} L ${fmt(xb)} ${fmt(yb)} L ${fmt(xa)} ${fmt(yb)} Z`;
+  return { d, cx: (xa + xb) / 2, cy: (ya + yb) / 2 };
 }
 
-/** Shoelace centroid of quad (o1→o2→i2→i1). */
-function quadCentroid(o1, o2, i2, i1) {
-  const pts = [o1, o2, i2, i1];
+function polygonCentroid(pts) {
   let a = 0;
-  let cxSum = 0;
-  let cySum = 0;
-  for (let i = 0; i < 4; i += 1) {
-    const j = (i + 1) % 4;
+  let cx = 0;
+  let cy = 0;
+  const n = pts.length;
+  for (let i = 0; i < n; i += 1) {
+    const j = (i + 1) % n;
     const cross = pts[i].x * pts[j].y - pts[j].x * pts[i].y;
     a += cross;
-    cxSum += (pts[i].x + pts[j].x) * cross;
-    cySum += (pts[i].y + pts[j].y) * cross;
+    cx += (pts[i].x + pts[j].x) * cross;
+    cy += (pts[i].y + pts[j].y) * cross;
   }
   a *= 0.5;
-  if (Math.abs(a) < 1e-8) {
-    return {
-      cx: (o1.x + o2.x + i1.x + i2.x) / 4,
-      cy: (o1.y + o2.y + i1.y + i2.y) / 4,
-    };
+  if (Math.abs(a) < 1e-10) {
+    const sx = pts.reduce((s, p) => s + p.x, 0);
+    const sy = pts.reduce((s, p) => s + p.y, 0);
+    return { cx: sx / n, cy: sy / n };
   }
-  return { cx: cxSum / (6 * a), cy: cySum / (6 * a) };
+  return { cx: cx / (6 * a), cy: cy / (6 * a) };
 }
 
-function ringSlice(t0, t1, innerW, innerH, innerR, outerW, outerH, outerR) {
-  const o1 = pointOnPerimeter(t0, outerW, outerH, outerR, CX, CY);
-  const o2 = pointOnPerimeter(t1, outerW, outerH, outerR, CX, CY);
-  const i1 = pointOnPerimeter(t0, innerW, innerH, innerR, CX, CY);
-  const i2 = pointOnPerimeter(t1, innerW, innerH, innerR, CX, CY);
-  const d = quadPath(o1, o2, i2, i1);
-  const { cx, cy } = quadCentroid(o1, o2, i2, i1);
+/** Annular sector: sweep angle a0 → a1 (radians), CCW in standard math with y right/x; works with SVG sin/cos. */
+function annularSector(cx0, cy0, rIn, rOut, a0, a1, steps = 16) {
+  const pts = [];
+  for (let i = 0; i <= steps; i += 1) {
+    const t = i / steps;
+    const a = a0 + t * (a1 - a0);
+    pts.push({ x: cx0 + rOut * Math.cos(a), y: cy0 + rOut * Math.sin(a) });
+  }
+  for (let i = steps; i >= 0; i -= 1) {
+    const t = i / steps;
+    const a = a0 + t * (a1 - a0);
+    pts.push({ x: cx0 + rIn * Math.cos(a), y: cy0 + rIn * Math.sin(a) });
+  }
+  let d = '';
+  for (let i = 0; i < pts.length; i += 1) {
+    const p = pts[i];
+    d += i === 0 ? `M ${fmt(p.x)} ${fmt(p.y)}` : ` L ${fmt(p.x)} ${fmt(p.y)}`;
+  }
+  d += ' Z';
+  const { cx, cy } = polygonCentroid(pts);
   return { d, cx, cy };
 }
 
-function applyAngularGap(t0, t1) {
-  const span = t1 - t0;
-  const pad = Math.min(ANGULAR_PAD_T, span * 0.14);
-  const ta = t0 + pad;
-  const tb = t1 - pad;
-  if (tb <= ta + 1e-9) {
-    const mid = (t0 + t1) / 2;
-    return { t0: mid - 1e-6, t1: mid + 1e-6 };
-  }
-  return { t0: ta, t1: tb };
+function pushWedge(list, id, faceLabel, tier, wedge) {
+  if (wedge && wedge.d) list.push({ id, faceLabel, d: wedge.d, cx: wedge.cx, cy: wedge.cy, tier });
 }
 
-/**
- * CW from t=0 on top edge (west→east): NW corner → North → NE → East → SE → South → SW → West.
- * West inner: 332…337 bottom→top on left; South inner along bottom east→west: 328…319.
- */
-const INNER_SPECS_ORDERED = [
-  { id: '338', faceLabel: '338', w: 0.92 },
-  ...[301, 302, 303, 304, 305, 306, 307, 308, 309].map((n) => ({ id: String(n), faceLabel: String(n), w: 1.05 })),
-  { id: '310', faceLabel: '310', w: 0.72 },
-  { id: '311', faceLabel: '311', w: 0.72 },
-  ...[312, 313, 314, 315, 316, 317].map((n) => ({ id: String(n), faceLabel: String(n), w: 1.18 })),
-  { id: '318', faceLabel: '318', w: 0.92 },
-  ...[328, 327, 326, 325, 324, 323, 322, 321, 320, 319].map((n) => ({ id: String(n), faceLabel: String(n), w: 1.05 })),
-  { id: '329', faceLabel: '329', w: 0.62 },
-  { id: '330', faceLabel: '330', w: 0.62 },
-  { id: '331', faceLabel: '331', w: 0.62 },
-  ...[337, 336, 335, 334, 333, 332].map((n) => ({ id: String(n), faceLabel: String(n), w: 1.22 })),
+const SECTION_WEDGES_BUILD = [];
+
+/* --- Inner tier: straight stands --- */
+
+const yInnerN0 = yT - dInner;
+const yInnerN1 = yT;
+for (let i = 0; i < 9; i += 1) {
+  const xa = xL + ri + (i / 9) * topFlatW;
+  const xb = xL + ri + ((i + 1) / 9) * topFlatW;
+  const w = rectCell(xa, yInnerN0, xb, yInnerN1);
+  pushWedge(SECTION_WEDGES_BUILD, String(301 + i), String(301 + i), 'lower', w);
+}
+
+const yInnerS0 = yB;
+const yInnerS1 = yB + dInner;
+for (let i = 0; i < 10; i += 1) {
+  const xa = xR - ri - (i / 10) * bottomFlatW;
+  const xb = xR - ri - ((i + 1) / 10) * bottomFlatW;
+  const w = rectCell(xb, yInnerS0, xa, yInnerS1);
+  pushWedge(SECTION_WEDGES_BUILD, String(328 - i), String(328 - i), 'lower', w);
+}
+
+const xInnerW0 = xL - dInner;
+const xInnerW1 = xL;
+for (let i = 0; i < 6; i += 1) {
+  const ya = yT + ri + (i / 6) * westFlatH;
+  const yb = yT + ri + ((i + 1) / 6) * westFlatH;
+  const w = rectCell(xInnerW0, ya, xInnerW1, yb);
+  pushWedge(SECTION_WEDGES_BUILD, String(332 + i), String(332 + i), 'lower', w);
+}
+
+const xInnerE0 = xR;
+const xInnerE1 = xR + dInner;
+for (let i = 0; i < 6; i += 1) {
+  const ya = yT + ri + (i / 6) * westFlatH;
+  const yb = yT + ri + ((i + 1) / 6) * westFlatH;
+  const w = rectCell(xInnerE0, ya, xInnerE1, yb);
+  pushWedge(SECTION_WEDGES_BUILD, String(312 + i), String(312 + i), 'lower', w);
+}
+
+/* --- Inner tier: corners (annular sectors around hole fillet centers) --- */
+
+const cnw = { x: xL + ri, y: yT + ri };
+const cne = { x: xR - ri, y: yT + ri };
+const cse = { x: xR - ri, y: yB - ri };
+const csw = { x: xL + ri, y: yB - ri };
+
+pushWedge(
+  SECTION_WEDGES_BUILD,
+  '338',
+  '338',
+  'lower',
+  annularSector(cnw.x, cnw.y, ri + CELL_IN, ri + dInner - CELL_IN, -Math.PI / 2, -Math.PI)
+);
+
+const ne310a = annularSector(cne.x, cne.y, ri + CELL_IN, ri + dInner - CELL_IN, -Math.PI / 2, -Math.PI / 4, 8);
+const ne311a = annularSector(cne.x, cne.y, ri + CELL_IN, ri + dInner - CELL_IN, -Math.PI / 4, 0, 8);
+pushWedge(SECTION_WEDGES_BUILD, '310', '310', 'lower', ne310a);
+pushWedge(SECTION_WEDGES_BUILD, '311', '311', 'lower', ne311a);
+
+pushWedge(
+  SECTION_WEDGES_BUILD,
+  '318',
+  '318',
+  'lower',
+  annularSector(cse.x, cse.y, ri + CELL_IN, ri + dInner - CELL_IN, 0, Math.PI / 2)
+);
+
+const swA = Math.PI / 2;
+const swB = Math.PI;
+const swThird = (swB - swA) / 3;
+const sw1 = annularSector(csw.x, csw.y, ri + CELL_IN, ri + dInner - CELL_IN, swA, swA + swThird, 6);
+const sw2 = annularSector(csw.x, csw.y, ri + CELL_IN, ri + dInner - CELL_IN, swA + swThird, swA + 2 * swThird, 6);
+const sw3 = annularSector(csw.x, csw.y, ri + CELL_IN, ri + dInner - CELL_IN, swA + 2 * swThird, swB, 6);
+pushWedge(SECTION_WEDGES_BUILD, '329', '329', 'lower', sw1);
+pushWedge(SECTION_WEDGES_BUILD, '330', '330', 'lower', sw2);
+pushWedge(SECTION_WEDGES_BUILD, '331', '331', 'lower', sw3);
+
+/* --- Outer tier: flush behind inner --- */
+
+const yOutN0 = yT - dInner - dOuter;
+const yOutN1 = yT - dInner;
+const northOuterFrac = 0.38;
+const nx0 = xL + ri + topFlatW * (0.5 - northOuterFrac / 2);
+const nx1 = xL + ri + topFlatW * (0.5 + northOuterFrac / 2);
+for (let i = 0; i < 3; i += 1) {
+  const xa = nx0 + (i / 3) * (nx1 - nx0);
+  const xb = nx0 + ((i + 1) / 3) * (nx1 - nx0);
+  const w = rectCell(xa, yOutN0, xb, yOutN1);
+  pushWedge(SECTION_WEDGES_BUILD, String(404 + i), String(404 + i), 'upper', w);
+}
+
+const yOutS0 = yB + dInner;
+const yOutS1 = yB + dInner + dOuter;
+for (let i = 0; i < 9; i += 1) {
+  const xa = xR - ri - (i / 9) * bottomFlatW;
+  const xb = xR - ri - ((i + 1) / 9) * bottomFlatW;
+  const w = rectCell(xb, yOutS0, xa, yOutS1);
+  pushWedge(SECTION_WEDGES_BUILD, String(221 + i), String(221 + i), 'upper', w);
+}
+
+const xOutW0 = xL - dInner - dOuter;
+const xOutW1 = xL - dInner;
+for (let i = 0; i < 12; i += 1) {
+  const ya = yT + ri + (i / 12) * westFlatH;
+  const yb = yT + ri + ((i + 1) / 12) * westFlatH;
+  const w = rectCell(xOutW0, ya, xOutW1, yb);
+  pushWedge(SECTION_WEDGES_BUILD, String(420 + i), String(420 + i), 'upper', w);
+}
+
+/** Stable draw + hit order: lower straights by edge, corners, upper — reorder for cleaner overlap. */
+const ORDER_IDS = [
+  ...[301, 302, 303, 304, 305, 306, 307, 308, 309].map(String),
+  ...[328, 327, 326, 325, 324, 323, 322, 321, 320, 319].map(String),
+  ...[332, 333, 334, 335, 336, 337].map(String),
+  ...[312, 313, 314, 315, 316, 317].map(String),
+  '338',
+  '310',
+  '311',
+  '318',
+  '329',
+  '330',
+  '331',
+  ...[404, 405, 406].map(String),
+  ...[221, 222, 223, 224, 225, 226, 227, 228, 229].map(String),
+  ...[420, 421, 422, 423, 424, 425, 426, 427, 428, 429, 430, 431].map(String),
 ];
 
-function normalizeRanges(specs) {
-  const sum = specs.reduce((a, s) => a + s.w, 0);
-  let acc = 0;
-  return specs.map((s) => {
-    const t0 = acc / sum;
-    acc += s.w;
-    const t1 = acc / sum;
-    return { ...s, t0, t1 };
-  });
-}
-
-const INNER_RANGES = normalizeRanges(INNER_SPECS_ORDERED);
-
-const INNER_WEDGES = INNER_RANGES.map((r) => {
-  const { t0, t1 } = applyAngularGap(r.t0, r.t1);
-  const { d, cx, cy } = ringSlice(t0, t1, wi, hi, ri, wInnerBack, hInnerBack, rInnerBack);
-  return { id: r.id, faceLabel: r.faceLabel, d, cx, cy, tier: 'lower' };
-});
-
-function rangeForIds(ids) {
-  const set = new Set(ids.map(String));
-  const hits = INNER_RANGES.filter((x) => set.has(x.id));
-  if (!hits.length) return { t0: 0, t1: 0 };
-  return { t0: hits[0].t0, t1: hits[hits.length - 1].t1 };
-}
-
-const westInnerSpan = rangeForIds(['332', '333', '334', '335', '336', '337']);
-const southInnerSpan = rangeForIds(['319', '320', '321', '322', '323', '324', '325', '326', '327', '328']);
-const northInnerSpan = rangeForIds(['301', '302', '303', '304', '305', '306', '307', '308', '309']);
-
-function splitSpan(t0, t1, n, i) {
-  const dt = (t1 - t0) / n;
-  const raw0 = t0 + dt * i;
-  const raw1 = t0 + dt * (i + 1);
-  return applyAngularGap(raw0, raw1);
-}
-
-const OUTER_WEDGES = [];
-
-for (let i = 0; i < 12; i += 1) {
-  const id = String(420 + i);
-  const { t0, t1 } = splitSpan(westInnerSpan.t0, westInnerSpan.t1, 12, i);
-  const { d, cx, cy } = ringSlice(t0, t1, wOuterFront, hOuterFront, rOuterFront, wo, ho, ro);
-  OUTER_WEDGES.push({ id, faceLabel: id, d, cx, cy, tier: 'upper' });
-}
-
-const northMid = (northInnerSpan.t0 + northInnerSpan.t1) / 2;
-const northOuterHalf = (northInnerSpan.t1 - northInnerSpan.t0) * 0.36;
-const northOuterT0 = northMid - northOuterHalf / 2;
-const northOuterT1 = northMid + northOuterHalf / 2;
-for (let i = 0; i < 3; i += 1) {
-  const id = String(404 + i);
-  const { t0, t1 } = splitSpan(northOuterT0, northOuterT1, 3, i);
-  const { d, cx, cy } = ringSlice(t0, t1, wOuterFront, hOuterFront, rOuterFront, wo, ho, ro);
-  OUTER_WEDGES.push({ id, faceLabel: id, d, cx, cy, tier: 'upper' });
-}
-
-for (let i = 0; i < 9; i += 1) {
-  const id = String(221 + i);
-  const { t0, t1 } = splitSpan(southInnerSpan.t0, southInnerSpan.t1, 9, i);
-  const { d, cx, cy } = ringSlice(t0, t1, wOuterFront, hOuterFront, rOuterFront, wo, ho, ro);
-  OUTER_WEDGES.push({ id, faceLabel: id, d, cx, cy, tier: 'upper' });
-}
-
-export const SECTION_WEDGES = [...INNER_WEDGES, ...OUTER_WEDGES];
+const byId = Object.fromEntries(SECTION_WEDGES_BUILD.map((s) => [s.id, s]));
+export const SECTION_WEDGES = ORDER_IDS.map((id) => byId[id]).filter(Boolean);
 
 const ALL_BLOCK_IDS = new Set(SECTION_WEDGES.map((s) => s.id));
 
-/** @deprecated */
-export const LOWER_WEDGE_IDS = INNER_WEDGES.map((w) => w.id);
-/** @deprecated */
-export const UPPER_WEDGE_IDS = OUTER_WEDGES.map((w) => w.id);
-/** @deprecated */
+export const LOWER_WEDGE_IDS = SECTION_WEDGES.filter((s) => s.tier === 'lower').map((s) => s.id);
+export const UPPER_WEDGE_IDS = SECTION_WEDGES.filter((s) => s.tier === 'upper').map((s) => s.id);
 export const WEDGE_IDS = LOWER_WEDGE_IDS;
 
 export function blockIdFromSectionNumber(numStr) {
@@ -290,6 +272,8 @@ export const GAP_ROUNDRECT_D = roundedRectPathD(CX, CY, wi, hi, ri);
 export const PITCH_X = CX - PITCH_W / 2;
 export const PITCH_Y = CY - PITCH_H / 2;
 
-/** Stadium shell: capsule (r = ho/2). Slight padding so stroke sits inside view. */
-const BOWL_PAD = 10;
-export const BOWL_OUTER_D = roundedRectPathD(CX, CY, wo + BOWL_PAD * 2, ho + BOWL_PAD * 2, ro + BOWL_PAD);
+const depthTotal = dInner + dOuter;
+const Wo = wi + 2 * depthTotal;
+const Ho = hi + 2 * depthTotal;
+const Ro = Math.min(ri + depthTotal, Wo / 2 - 2, Ho / 2 - 2);
+export const BOWL_OUTER_D = roundedRectPathD(CX, CY, Wo, Ho, Ro);
