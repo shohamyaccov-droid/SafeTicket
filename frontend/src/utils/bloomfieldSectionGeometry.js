@@ -141,6 +141,16 @@ export function blockIdFromSectionNumber(numStr) {
   return WEDGE_IDS[idx];
 }
 
+/**
+ * Face labels only (visual). Order matches wedges N→E→S→W; includes Viagogo-style numbers like 429, 338.
+ */
+const BLOCK_FACE_LABELS = [
+  '118', '124', '129', '134', '138', '142', '148', '152', '156', '162',
+  '215', '222', '229', '238', '245', '251', '258', '265',
+  '301', '308', '315', '322', '329', '334', '338', '345', '352', '358',
+  '401', '408', '415', '421', '426', '429', '433', '438',
+];
+
 function quadPath(o1, o2, i2, i1) {
   return `M ${fmt(o1.x)} ${fmt(o1.y)} L ${fmt(o2.x)} ${fmt(o2.y)} L ${fmt(i2.x)} ${fmt(i2.y)} L ${fmt(i1.x)} ${fmt(i1.y)} Z`;
 }
@@ -155,7 +165,8 @@ export const SECTION_WEDGES = WEDGE_IDS.map((id, i) => {
   const d = quadPath(o1, o2, i2, i1);
   const cx = (o1.x + o2.x + i1.x + i2.x) / 4;
   const cy = (o1.y + o2.y + i1.y + i2.y) / 4;
-  return { id, d, cx, cy };
+  const faceLabel = BLOCK_FACE_LABELS[i] ?? id;
+  return { id, faceLabel, d, cx, cy };
 });
 
 /** Concours / gap fill inside stand hole (under pitch in z-order) */

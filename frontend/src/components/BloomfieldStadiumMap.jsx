@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types -- project does not use PropTypes consistently */
-import { useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useVenueMapPanZoom } from '../hooks/useVenueMapPanZoom';
 import { getTicketPrice, formatMoney, resolveTicketCurrency } from '../utils/priceFormat';
 import {
@@ -18,14 +18,17 @@ import {
   PITCH_RY,
 } from '../utils/bloomfieldSectionGeometry';
 
-const FILL_DEFAULT = '#f3f4f6';
+const FILL_DEFAULT = '#f0f0f0';
 const STROKE_SECTION = '#ffffff';
 const FILL_ACTIVE = '#a3e635';
-const STROKE_ACTIVE_OUTLINE = '#84cc16';
+const PITCH_GRASS = '#7cb342';
+const LINE_WHITE = '#ffffff';
+const PIN_INVERTED = '#222222';
 
 const PIN_BODY_W = 86;
 const PIN_TRI_H = 8;
 const PIN_TRI_HALF = 9;
+const PIN_RX = 8;
 
 function layoutPins(rows) {
   const byBlock = {};
@@ -67,6 +70,7 @@ export default function BloomfieldStadiumMap({
   onSelectGroup,
   onHoverGroup,
 }) {
+  const [pinHoverId, setPinHoverId] = useState(null);
   const panZoom = useVenueMapPanZoom({ minScale: 0.65, maxScale: 2.8, zoomStep: 0.14 });
 
   const blocksWithListings = useMemo(() => {
@@ -107,7 +111,13 @@ export default function BloomfieldStadiumMap({
     if (first) onSelectGroup?.(first.stableId);
   };
 
-  const centerCircleR = Math.min(PITCH_W, PITCH_H) * 0.11;
+  const penW = PITCH_W * 0.42;
+  const penD = PITCH_H * 0.2;
+  const centerCircleR = Math.min(PITCH_W, PITCH_H) * 0.12;
+
+  const pinInverted = (stableId) =>
+    (highlightStableId != null && String(stableId) === String(highlightStableId)) ||
+    (pinHoverId != null && String(stableId) === String(pinHoverId));
 
   return (
     <div className="relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-[#f4f5f7] shadow-sm">
@@ -175,22 +185,38 @@ export default function BloomfieldStadiumMap({
               const has = blocksWithListings.has(sec.id);
               const isHi = highlightBlockId === sec.id;
               const fill = has ? FILL_ACTIVE : FILL_DEFAULT;
-              const stroke = has ? STROKE_ACTIVE_OUTLINE : STROKE_SECTION;
               return (
                 <path
                   key={sec.id}
                   data-section-id={sec.id}
                   d={sec.d}
                   fill={fill}
-                  fillOpacity={isHi ? 1 : has ? 0.98 : 1}
-                  stroke={isHi ? '#0ea5e9' : stroke}
-                  strokeWidth={isHi ? 2.75 : has ? 1.1 : 1}
+                  stroke={isHi ? '#0ea5e9' : STROKE_SECTION}
+                  strokeWidth={isHi ? 2.25 : 1.15}
                   className="transition-[stroke,fill-opacity] duration-150 ease-out"
                   style={{ cursor: has ? 'pointer' : 'default' }}
                   onMouseEnter={() => handleBlockEnter(sec.id)}
                   onMouseLeave={handleBlockLeave}
                   onClick={() => handleBlockClick(sec.id)}
                 />
+              );
+            })}
+
+            {SECTION_WEDGES.map((sec) => {
+              const has = blocksWithListings.has(sec.id);
+              return (
+                <text
+                  key={`lbl-${sec.id}`}
+                  x={sec.cx}
+                  y={sec.cy + 3}
+                  textAnchor="middle"
+                  fill={has ? '#111111' : '#b0b0b0'}
+                  fontSize="9"
+                  fontWeight="700"
+                  style={{ pointerEvents: 'none', userSelect: 'none' }}
+                >
+                  {sec.faceLabel}
+                </text>
               );
             })}
 
@@ -201,57 +227,72 @@ export default function BloomfieldStadiumMap({
               height={PITCH_H}
               rx={PITCH_RX}
               ry={PITCH_RY}
-              fill="#4ade80"
-              stroke="#15803d"
-              strokeWidth="2.5"
+              fill={PITCH_GRASS}
+              stroke={LINE_WHITE}
+              strokeWidth="2"
             />
+
             <line
               x1={CX}
               y1={PITCH_Y}
               x2={CX}
               y2={PITCH_Y + PITCH_H}
-              stroke="#bbf7d0"
+              stroke={LINE_WHITE}
               strokeWidth="2"
-              opacity="0.95"
             />
+
             <circle
               cx={CX}
               cy={CY}
               r={centerCircleR}
               fill="none"
-              stroke="#bbf7d0"
+              stroke={LINE_WHITE}
               strokeWidth="2"
-              opacity="0.95"
             />
 
-            <text
-              x={CX}
-              y={CY + 4}
-              textAnchor="middle"
-              fill="#14532d"
-              fontSize="15"
-              fontWeight="800"
-              style={{ pointerEvents: 'none', userSelect: 'none' }}
-            >
-              Pitch
-            </text>
+            <rect
+              x={CX - penW / 2}
+              y={PITCH_Y}
+              width={penW}
+              height={penD}
+              fill="none"
+              stroke={LINE_WHITE}
+              strokeWidth="2"
+            />
+            <rect
+              x={CX - penW / 2}
+              y={PITCH_Y + PITCH_H - penD}
+              width={penW}
+              height={penD}
+              fill="none"
+              stroke={LINE_WHITE}
+              strokeWidth="2"
+            />
 
             {pins.map((p) => {
               const hasUrgency = Boolean(p.urgency);
               const bodyH = hasUrgency ? 40 : 30;
               const bodyTop = -(bodyH + PIN_TRI_H);
-              const active =
-                highlightStableId != null &&
-                String(p.stableId) === String(highlightStableId);
-              const stroke = active ? '#0284c7' : '#e5e7eb';
-              const sw = active ? 2 : 1;
+              const inverted = pinInverted(p.stableId);
+              const bg = inverted ? PIN_INVERTED : '#ffffff';
+              const stroke = inverted ? '#333333' : '#e5e7eb';
+              const sw = inverted ? 1 : 1;
+              const priceFill = inverted ? '#ffffff' : '#0f172a';
+              const urgentFill = inverted ? '#fda4af' : '#e11d48';
+
               return (
                 <g
                   key={`${p.stableId}-${p.blockId}`}
                   transform={`translate(${p.x}, ${p.y})`}
                   style={{ cursor: 'pointer' }}
-                  onMouseEnter={() => onHoverGroup?.(p.stableId)}
-                  onMouseLeave={() => onHoverGroup?.(null)}
+                  onMouseEnter={() => {
+                    setPinHoverId(p.stableId);
+                    onHoverGroup?.(p.stableId);
+                  }}
+                  onMouseLeave={() => {
+                    setPinHoverId(null);
+                    onHoverGroup?.(null);
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     onSelectGroup?.(p.stableId);
@@ -263,15 +304,15 @@ export default function BloomfieldStadiumMap({
                       y={bodyTop}
                       width={PIN_BODY_W}
                       height={bodyH}
-                      rx={14}
-                      ry={14}
-                      fill="white"
+                      rx={PIN_RX}
+                      ry={PIN_RX}
+                      fill={bg}
                       stroke={stroke}
                       strokeWidth={sw}
                     />
                     <polygon
                       points={`0,0 ${-PIN_TRI_HALF},${-PIN_TRI_H} ${PIN_TRI_HALF},${-PIN_TRI_H}`}
-                      fill="white"
+                      fill={bg}
                       stroke={stroke}
                       strokeWidth={sw}
                       strokeLinejoin="miter"
@@ -281,8 +322,8 @@ export default function BloomfieldStadiumMap({
                     x="0"
                     y={bodyTop + bodyH / 2 + (hasUrgency ? -5 : 3)}
                     textAnchor="middle"
-                    fill="#0f172a"
-                    fontSize="12.5"
+                    fill={priceFill}
+                    fontSize="13"
                     fontWeight="800"
                     style={{ pointerEvents: 'none' }}
                   >
@@ -293,8 +334,8 @@ export default function BloomfieldStadiumMap({
                       x="0"
                       y={bodyTop + bodyH - 7}
                       textAnchor="middle"
-                      fill="#e11d48"
-                      fontSize="9"
+                      fill={urgentFill}
+                      fontSize="8.5"
                       fontWeight="700"
                       style={{ pointerEvents: 'none' }}
                     >

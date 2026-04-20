@@ -62,7 +62,7 @@ export default function BloomfieldTicketListPanel({
       </div>
 
       <div
-        className="max-h-[min(68vh,640px)] divide-y divide-slate-100 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-width:thin] [scrollbar-color:rgb(203_213_225)_transparent] [color-scheme:light] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/90"
+        className="max-h-[min(68vh,640px)] overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-width:thin] [scrollbar-color:rgb(203_213_225)_transparent] [color-scheme:light] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/90"
       >
         {rows.length === 0 ? (
           <div className="px-4 py-10 text-center text-sm text-slate-600">
@@ -70,13 +70,14 @@ export default function BloomfieldTicketListPanel({
             clearing filters.
           </div>
         ) : (
-          rows.map(({ stableId, group, bloomfield, firstTicket }) => {
+          rows.map(({ stableId, group, bloomfield, firstTicket }, idx) => {
             const groupId = group.listing_group_id ?? group.id;
             const isExpanded =
               activeTicketId != null && String(activeTicketId) === String(groupId);
             const isHi =
               highlightStableId != null && String(highlightStableId) === String(stableId);
             const sellerOwns = isSellerFn(user, firstTicket, group);
+            const isLast = idx === rows.length - 1;
 
             return (
               <article
@@ -84,36 +85,34 @@ export default function BloomfieldTicketListPanel({
                 data-ticket-group-id={groupId}
                 data-e2e-ticket-id={firstTicket?.id}
                 data-bloomfield-block={bloomfield.blockId}
-                className={`px-4 py-3.5 transition-colors ${
-                  isHi
-                    ? 'bg-sky-50 ring-1 ring-inset ring-sky-200'
-                    : 'bg-white hover:bg-gray-50'
-                }`}
+                className={`border-b border-gray-200 px-4 py-3.5 shadow-none transition-colors hover:bg-gray-50 ${
+                  isHi ? 'bg-gray-50' : 'bg-white'
+                } ${isLast ? 'border-b-0' : ''}`}
                 onMouseEnter={() => onHoverRow(stableId)}
                 onMouseLeave={() => onHoverRow(null)}
               >
                 <div dir="ltr" lang="en" className="text-left">
                   <button
                     type="button"
-                    className="flex w-full min-w-0 flex-col gap-3"
+                    className="flex w-full min-w-0 flex-col gap-3 border-0 bg-transparent p-0 text-left shadow-none outline-none ring-0 focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                     onClick={() => onToggleRow(groupId)}
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-[1.0625rem] font-bold leading-tight tracking-tight text-slate-900">
+                      <div className="min-w-0 flex-1 pr-2">
+                        <h3 className="text-lg font-bold leading-snug tracking-tight text-gray-900">
                           Section {bloomfield.sectionId}
                         </h3>
-                        <p className="mt-1 text-sm font-medium text-slate-600">
+                        <p className="mt-0.5 text-sm font-normal text-gray-600">
                           Row {bloomfield.row}
                         </p>
                       </div>
-                      <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
-                        <span className="inline-flex items-center rounded-full bg-emerald-500 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
-                          {bloomfield.rating.score} {bloomfield.rating.label}
-                        </span>
-                        <div className="min-w-0 [&_.buyer-listing-price-main]:text-xl [&_.buyer-listing-price-main]:font-extrabold">
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <div className="min-w-0 [&_.buyer-listing-price-main]:text-xl [&_.buyer-listing-price-main]:font-extrabold [&_.buyer-listing-price-main]:leading-none">
                           <BuyerListingPrice ticket={firstTicket} compact />
                         </div>
+                        <span className="inline-flex items-center rounded-full bg-emerald-500 px-2.5 py-0.5 text-xs font-bold text-white">
+                          {bloomfield.rating.score} {bloomfield.rating.label}
+                        </span>
                       </div>
                     </div>
 
@@ -134,8 +133,8 @@ export default function BloomfieldTicketListPanel({
 
                     <div className="flex flex-wrap items-center gap-2">
                       {bloomfield.isTopChoice ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-800">
-                          <Trophy className="h-3.5 w-3.5" strokeWidth={2} />
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-800">
+                          <Trophy className="h-3 w-3 shrink-0" strokeWidth={2} />
                           Top choice
                         </span>
                       ) : null}
@@ -147,13 +146,13 @@ export default function BloomfieldTicketListPanel({
                     </div>
 
                     {bloomfield.urgencyNote ? (
-                      <p className="text-xs font-semibold text-rose-600">{bloomfield.urgencyNote}</p>
+                      <p className="text-xs font-semibold text-pink-600">{bloomfield.urgencyNote}</p>
                     ) : null}
                   </button>
                 </div>
 
                 {isExpanded ? (
-                  <div className="mt-3 border-t border-slate-100 pt-3" dir="rtl">
+                  <div className="mt-3 border-t border-gray-200 pt-3" dir="rtl">
                     {sellerOwns ? (
                       <div
                         className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900"
