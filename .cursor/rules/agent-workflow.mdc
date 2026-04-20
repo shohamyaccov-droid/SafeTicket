@@ -1,0 +1,13 @@
+---
+description: After code changes, run QA/build and push to origin main unless told not to
+alwaysApply: true
+---
+
+# SafeTicket agent workflow
+
+After writing or modifying code in this repository:
+
+1. **QA / build** — Run a sanity check appropriate to the change (e.g. `npm run build` in `frontend/`, and fix any new ESLint errors introduced in touched files). Do not treat the task as done if the production build fails.
+2. **Git** — Unless the user explicitly says not to: `git add` the relevant changes, commit with a clear message, and `git push origin main`.
+
+If a change is backend-only or frontend-only, still verify the affected part builds or tests as usual before pushing.
