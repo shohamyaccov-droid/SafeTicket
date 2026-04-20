@@ -23,13 +23,13 @@ const STAND_DEPTH_UPPER = 66;
 /** Widen the radial channel: lower-bowl back stops short of nominal mid ring. */
 const RADIAL_INNER_BACK_TRIM = 10;
 /** Large lower↔upper tier gap (px depth from inner-back to outer-front). */
-const TIER_CHANNEL_DEPTH = 44;
+const TIER_CHANNEL_DEPTH = 30;
 
 /** Extra semi-axis beyond nominal wo/2, ho/2 so bowl fill extends past seat ring (px). */
 const BOWL_OVAL_MARGIN = 14;
 
 /** Perimeter t inset per side — negative space between blocks (capped vs. tiny spans). */
-const T_INSET_PER_SIDE = 0.015;
+const T_INSET_PER_SIDE = 0.02;
 
 const wi = PITCH_W + 2 * GAP;
 const hi = PITCH_H + 2 * GAP;

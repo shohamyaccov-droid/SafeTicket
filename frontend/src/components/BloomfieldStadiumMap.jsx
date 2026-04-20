@@ -219,10 +219,14 @@ export default function BloomfieldStadiumMap({
                   d={sec.d}
                   fill={fill}
                   fillOpacity={1}
-                  stroke={isHi ? '#0ea5e9' : 'none'}
-                  strokeWidth={isHi ? HIGHLIGHT_STROKE_W : 0}
-                  strokeLinejoin={isHi ? 'round' : 'miter'}
                   shapeRendering="geometricPrecision"
+                  {...(isHi
+                    ? {
+                        stroke: '#0ea5e9',
+                        strokeWidth: HIGHLIGHT_STROKE_W,
+                        strokeLinejoin: 'round',
+                      }
+                    : {})}
                   className="transition-[fill,stroke-width] duration-150 ease-out"
                   style={{ cursor: has ? 'pointer' : 'default' }}
                   onMouseEnter={() => handleBlockEnter(sec.id)}
