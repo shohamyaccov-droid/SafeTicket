@@ -1,16 +1,16 @@
 /**
- * Pais Arena Jerusalem — 2-tier symmetric bowl (lower + upper), uniform angular sectors.
- * Same idea as Menora: equal span/count around the ring; annular sectors + CELL_IN grid gaps.
+ * Pais Arena Jerusalem — elongated oval bowl, 2 tiers, uniform angular sectors.
+ * Clockwise from 9 o'clock (middle-left): θ = π, decreasing θ (equal Δθ per section).
  */
 
 // --- Editable section IDs (match ticket `section` / listing text) -----------------
-export const LOWER_SECTION_IDS = [
-  101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112,
-];
-export const UPPER_SECTION_IDS = [
-  201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212,
-];
-export const SECTIONS_PER_RING = 12;
+/** Level 100: 22 blocks, 101–122 */
+export const LOWER_SECTION_IDS = Array.from({ length: 22 }, (_, i) => 101 + i);
+/** Level 300: 30 blocks, 301–330 */
+export const UPPER_SECTION_IDS = Array.from({ length: 30 }, (_, i) => 301 + i);
+
+export const SECTIONS_LOWER = 22;
+export const SECTIONS_UPPER = 30;
 
 // ---------------------------------------------------------------------------------
 
@@ -22,31 +22,48 @@ export const CY = 300;
 
 const CELL_IN = 0.45;
 
-/** Lower ring inner / outer radii (px, viewBox space) */
-const R_LOWER_IN = 168;
-const R_LOWER_OUT = 232;
-/** Gap between lower outer and upper inner (aisle) */
-const RING_GAP = 6;
-/** Upper ring depth */
-const R_UPPER_DEPTH = 64;
+/** Ellipse semi-axes (px): wider than tall — horizontal major axis */
+const LOWER_RX_IN = 188;
+const LOWER_RY_IN = 118;
+const LOWER_RX_OUT = 258;
+const LOWER_RY_OUT = 162;
 
-const R_UPPER_IN = R_LOWER_OUT + RING_GAP;
-const R_UPPER_OUT = R_UPPER_IN + R_UPPER_DEPTH;
+/** Aisle between tiers (applied to both axes) */
+const RING_GAP = 8;
 
-/** First sector starts here (radians). π/2 sweep per step from Menora-style layout: sector 101 centered at top (−π/2). */
-const SECTOR_START_RAD = -Math.PI / 2 - Math.PI / SECTIONS_PER_RING;
-const ANGLE_STEP = (2 * Math.PI) / SECTIONS_PER_RING;
+const UPPER_RX_IN = LOWER_RX_OUT + RING_GAP;
+const UPPER_RY_IN = LOWER_RY_OUT + RING_GAP;
+/** Upper tier radial depth (added to both semi-axes) */
+const UPPER_DEPTH = 58;
+const UPPER_RX_OUT = UPPER_RX_IN + UPPER_DEPTH;
+const UPPER_RY_OUT = UPPER_RY_IN + UPPER_DEPTH;
 
-/** Central court (matches Menora proportions) */
-export const COURT_X = 280;
-export const COURT_Y = 220;
-export const COURT_W = 240;
-export const COURT_H = 160;
-export const COURT_RX = 8;
+/** Arena shell (floor behind seats) */
+export const ARENA_FLOOR_RX = 392;
+export const ARENA_FLOOR_RY = 268;
 
-/** Arena floor ellipse (behind seats) */
-export const ARENA_FLOOR_RX = 378;
-export const ARENA_FLOOR_RY = 278;
+/** Elongated court / floor (center hole) */
+export const COURT_X = 250;
+export const COURT_Y = 228;
+export const COURT_W = 300;
+export const COURT_H = 144;
+export const COURT_RX = 10;
+
+/**
+ * Math angle θ: 0 = east (3 o'clock), π = west (9 o'clock). SVG: y increases down.
+ * Clockwise from 9 o'clock: θ decreases — sector i: [π − φ − iΔθ, π − φ − (i+1)Δθ].
+ * Optional φ (phaseOffset): upper tier uses half-step so 301 starts just above middle-left vs 101.
+ */
+function anglesForRing(count, phaseOffset = 0) {
+  const d = (2 * Math.PI) / count;
+  const segments = [];
+  for (let i = 0; i < count; i += 1) {
+    const a0 = Math.PI - phaseOffset - i * d;
+    const a1 = Math.PI - phaseOffset - (i + 1) * d;
+    segments.push({ a0, a1 });
+  }
+  return segments;
+}
 
 function fmt(n) {
   const v = Number(n);
@@ -75,21 +92,23 @@ function polygonCentroid(pts) {
   return { cx: cx / (6 * a), cy: cy / (6 * a) };
 }
 
-/** Standalone annular sector; inner/outer radii inset by CELL_IN for crisp white grid. */
-function annularSector(cx0, cy0, rIn, rOut, a0, a1, steps = 18) {
-  const rin = rIn + CELL_IN;
-  const rout = rOut - CELL_IN;
-  if (!Number.isFinite(rin) || !Number.isFinite(rout) || rout <= rin + 1e-3) return null;
+/** Elliptical annular sector; CELL_IN insets along both axes (grid gaps). */
+function ellipticalAnnularSector(cx0, cy0, rxIn, ryIn, rxOut, ryOut, a0, a1, steps = 22) {
+  const rxi = rxIn + CELL_IN;
+  const ryi = ryIn + CELL_IN;
+  const rxo = rxOut - CELL_IN;
+  const ryo = ryOut - CELL_IN;
+  if (rxo <= rxi + 1e-3 || ryo <= ryi + 1e-3) return null;
   const pts = [];
   for (let i = 0; i <= steps; i += 1) {
     const t = i / steps;
     const a = a0 + t * (a1 - a0);
-    pts.push({ x: cx0 + rout * Math.cos(a), y: cy0 + rout * Math.sin(a) });
+    pts.push({ x: cx0 + rxo * Math.cos(a), y: cy0 + ryo * Math.sin(a) });
   }
   for (let i = steps; i >= 0; i -= 1) {
     const t = i / steps;
     const a = a0 + t * (a1 - a0);
-    pts.push({ x: cx0 + rin * Math.cos(a), y: cy0 + rin * Math.sin(a) });
+    pts.push({ x: cx0 + rxi * Math.cos(a), y: cy0 + ryi * Math.sin(a) });
   }
   let d = '';
   for (let i = 0; i < pts.length; i += 1) {
@@ -110,24 +129,33 @@ function push(list, id, faceLabel, tier, w) {
 const LOWER = [];
 const UPPER = [];
 
-for (let i = 0; i < SECTIONS_PER_RING; i += 1) {
-  const a0 = SECTOR_START_RAD + i * ANGLE_STEP;
-  const a1 = a0 + ANGLE_STEP;
+const lowerAngles = anglesForRing(SECTIONS_LOWER, 0);
+for (let i = 0; i < SECTIONS_LOWER; i += 1) {
+  const { a0, a1 } = lowerAngles[i];
   const id = String(LOWER_SECTION_IDS[i]);
-  push(LOWER, id, id, 'lower', annularSector(CX, CY, R_LOWER_IN, R_LOWER_OUT, a0, a1));
+  push(
+    LOWER,
+    id,
+    id,
+    'lower',
+    ellipticalAnnularSector(CX, CY, LOWER_RX_IN, LOWER_RY_IN, LOWER_RX_OUT, LOWER_RY_OUT, a0, a1)
+  );
 }
 
-for (let i = 0; i < SECTIONS_PER_RING; i += 1) {
-  const a0 = SECTOR_START_RAD + i * ANGLE_STEP;
-  const a1 = a0 + ANGLE_STEP;
+const upperAngles = anglesForRing(SECTIONS_UPPER, (2 * Math.PI) / SECTIONS_UPPER / 2);
+for (let i = 0; i < SECTIONS_UPPER; i += 1) {
+  const { a0, a1 } = upperAngles[i];
   const id = String(UPPER_SECTION_IDS[i]);
-  push(UPPER, id, id, 'upper', annularSector(CX, CY, R_UPPER_IN, R_UPPER_OUT, a0, a1));
+  push(
+    UPPER,
+    id,
+    id,
+    'upper',
+    ellipticalAnnularSector(CX, CY, UPPER_RX_IN, UPPER_RY_IN, UPPER_RX_OUT, UPPER_RY_OUT, a0, a1)
+  );
 }
 
-const DRAW_ORDER = [
-  ...LOWER_SECTION_IDS.map(String),
-  ...UPPER_SECTION_IDS.map(String),
-];
+const DRAW_ORDER = [...LOWER_SECTION_IDS.map(String), ...UPPER_SECTION_IDS.map(String)];
 
 const byId = Object.fromEntries([...LOWER, ...UPPER].map((s) => [s.id, s]));
 
@@ -157,6 +185,7 @@ export function blockIdFromSectionNumber(numStr) {
   if (Number.isNaN(n)) return '101';
   const s = String(n);
   if (ALL_BLOCK_IDS.has(s)) return s;
-  if (n >= 1 && n <= 12) return String(100 + n);
+  if (n >= 101 && n <= 122) return String(n);
+  if (n >= 301 && n <= 330) return String(n);
   return '101';
 }

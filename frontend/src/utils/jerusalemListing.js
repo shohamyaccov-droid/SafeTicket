@@ -1,5 +1,5 @@
 /**
- * Pais Arena Jerusalem — map block id from ticket section text (101–112 lower, 201–212 upper).
+ * Pais Arena Jerusalem — map block id from ticket section (101–122 lower, 301–330 upper).
  */
 
 import { blockIdFromSectionNumber } from './jerusalemArenaGeometry';
@@ -8,14 +8,18 @@ export function extractJerusalemBlockId(ticket) {
   if (!ticket) return null;
   const raw = ticket.section_detail?.name || ticket.section || '';
   const s = String(raw).trim();
-  const m = s.match(/\b(10[1-9]|11[0-2]|20[1-9]|21[0-2])\b/);
-  if (m) return m[1];
-  const numOnly = s.match(/\b([1-9]|1[0-2])\b/);
+  const m3 = s.match(/\b(\d{3})\b/);
+  if (m3) {
+    const n = parseInt(m3[1], 10);
+    if (n >= 101 && n <= 122) return String(n);
+    if (n >= 301 && n <= 330) return String(n);
+  }
+  const numOnly = s.match(/\b(\d{1,2})\b/);
   if (numOnly) {
     const n = parseInt(numOnly[1], 10);
-    const upper = /עליון|upper|עלי/i.test(s);
-    if (upper) return String(200 + n);
-    return String(100 + n);
+    const upper = /עליון|upper|עלי|300|level\s*3/i.test(s);
+    if (upper && n >= 1 && n <= 30) return String(300 + n);
+    if (!upper && n >= 1 && n <= 22) return String(100 + n);
   }
   return null;
 }
@@ -27,6 +31,6 @@ export function enrichJerusalemGroup(group) {
   return {
     blockId,
     sectionId: blockId,
-    isLower: Number.isFinite(n) && n < 200,
+    isLower: Number.isFinite(n) && n >= 101 && n <= 122,
   };
 }
