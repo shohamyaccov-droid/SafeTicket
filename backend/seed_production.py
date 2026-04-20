@@ -36,7 +36,7 @@ Production refresh (Render, after deploy)
        python seed_production.py
    The process uses the service `DATABASE_URL`. It prunes legacy placeholder events (incl. Coldplay /
    Taylor Swift / Hamilton / Real Madrid style names and old Hebrew demo rows), re-syncs the four launch
-   shows + QA inventory, and upserts the three high_demand waitlist events (no tickets).
+   shows + QA inventory, and upserts two high_demand waitlist events (no tickets).
 3. Optional: verify in Django admin → Events / Ticket alerts.
 
 This does **not** delete user accounts or paid orders; it **does** delete Events (and cascaded tickets)

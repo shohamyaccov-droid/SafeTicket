@@ -50,6 +50,12 @@ export function useVenueMapPanZoom(options = {}) {
     }
   }, []);
 
+  const resetView = useCallback(() => {
+    setScale(1);
+    setTx(0);
+    setTy(0);
+  }, []);
+
   const transformStyle = {
     transform: `translate(${tx}px, ${ty}px) scale(${scale})`,
   };
@@ -60,6 +66,7 @@ export function useVenueMapPanZoom(options = {}) {
     ty,
     zoomIn,
     zoomOut,
+    resetView,
     onPointerDown,
     onPointerMove,
     onPointerUp,

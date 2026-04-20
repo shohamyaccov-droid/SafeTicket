@@ -1,15 +1,20 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { eventAPI, ticketAPI, offerAPI, artistAPI } from '../services/api';
+import { eventAPI, offerAPI, artistAPI } from '../services/api';
 import CheckoutModal from '../components/CheckoutModal';
 import WaitlistSignupModal from '../components/WaitlistSignupModal';
 import Toast from '../components/Toast';
 import VenueMapPin from '../components/VenueMapPin';
 import InteractiveMenoraMap from '../components/InteractiveMenoraMap';
-import BloomfieldMap from '../components/BloomfieldMap';
+import BloomfieldStadiumMap from '../components/BloomfieldStadiumMap';
+import BloomfieldTicketListPanel from '../components/BloomfieldTicketListPanel';
 import JerusalemArenaMap from '../components/JerusalemArenaMap';
 import { VENUE_MAPS, getVenueConfig, normalizeSection } from '../utils/venueMaps';
+import {
+  enrichBloomfieldGroup,
+  groupMatchesTicketQuantity,
+} from '../utils/bloomfieldListing';
 import {
   getTicketPrice,
   iso4217FromCountry,
@@ -46,6 +51,14 @@ function isCurrentUserSellerOfTicket(user, ticket, group) {
   return false;
 }
 
+/** Stable id for matching listing groups after refetch (avoids 5 === "5" false negatives). */
+function stableListingGroupKey(group) {
+  if (!group) return '';
+  const lid = group.listing_group_id;
+  if (lid != null && lid !== '') return String(lid).trim();
+  return String(group.id ?? '');
+}
+
 const EventDetailsPage = () => {
   const { eventId } = useParams();
   const navigate = useNavigate();
@@ -75,6 +88,8 @@ const EventDetailsPage = () => {
   const [sortBy, setSortBy] = useState('price_asc');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeTicketId, setActiveTicketId] = useState(null);
+  const [listingQuantityFilter, setListingQuantityFilter] = useState(1);
+  const [bloomfieldHoverId, setBloomfieldHoverId] = useState(null);
   const [artists, setArtists] = useState([]);
   /** Prevents double-opens / race when Buy Now refetches listings before showing checkout. */
   const buyOpeningRef = useRef(false);
@@ -499,14 +514,6 @@ const EventDetailsPage = () => {
     }
   }, [ticketGroups]);
 
-  /** Stable id for matching listing groups after refetch (avoids 5 === "5" false negatives). */
-  const stableListingGroupKey = (group) => {
-    if (!group) return '';
-    const lid = group.listing_group_id;
-    if (lid != null && lid !== '') return String(lid).trim();
-    return String(group.id ?? '');
-  };
-
   const handleBuy = async (ticketGroup) => {
     if (!ticketGroup) {
       console.error('[EventDetails] handleBuy: missing ticketGroup');
@@ -698,6 +705,78 @@ const EventDetailsPage = () => {
     return iso4217FromCountry(event.country);
   }, [event]);
   const listSym = currencySymbol(listingCurrency);
+
+  const venueHaystackForMap = useMemo(() => {
+    if (!event) return '';
+    const venueMatch = getVenueConfig(event?.venue || '');
+    const finalVenueName = venueMatch ? venueMatch.matchedName : 'מנורה מבטחים';
+    return [event?.venue, event?.name, event?.venue_detail?.name, finalVenueName]
+      .filter(Boolean)
+      .join(' ');
+  }, [event]);
+
+  const isBloomfieldVenue = useMemo(
+    () => venueHaystackForMap.includes('בלומפילד'),
+    [venueHaystackForMap]
+  );
+
+  const venueMatchForMap = useMemo(
+    () => getVenueConfig(event?.venue || 'מנורה מבטחים'),
+    [event]
+  );
+  const finalVenueNameForMap = venueMatchForMap
+    ? venueMatchForMap.matchedName
+    : 'מנורה מבטחים';
+  const isMenoraVenue =
+    finalVenueNameForMap.includes('מנורה') || finalVenueNameForMap.includes('מבטחים');
+  const isJerusalemArenaVenue =
+    venueHaystackForMap.includes('ארנה') || venueHaystackForMap.includes('פיס ארנה');
+
+  const bloomfieldFilteredGroups = useMemo(() => {
+    if (!isBloomfieldVenue) return ticketGroups;
+    return ticketGroups.filter((g) => groupMatchesTicketQuantity(g, listingQuantityFilter));
+  }, [isBloomfieldVenue, ticketGroups, listingQuantityFilter]);
+
+  const bloomfieldRows = useMemo(() => {
+    return bloomfieldFilteredGroups.map((g) => {
+      const stableId = stableListingGroupKey(g);
+      return {
+        stableId,
+        group: g,
+        firstTicket: g.tickets[0],
+        bloomfield: enrichBloomfieldGroup(g, stableId),
+      };
+    });
+  }, [bloomfieldFilteredGroups]);
+
+  const bloomfieldMapHighlight = useMemo(() => {
+    if (bloomfieldHoverId) return String(bloomfieldHoverId);
+    if (activeTicketId == null) return null;
+    const g = bloomfieldFilteredGroups.find(
+      (x) => String(x.listing_group_id ?? x.id) === String(activeTicketId)
+    );
+    return g ? stableListingGroupKey(g) : String(activeTicketId);
+  }, [bloomfieldHoverId, activeTicketId, bloomfieldFilteredGroups]);
+
+  const handleBloomfieldMapSelect = useCallback(
+    (stableId) => {
+      const row = bloomfieldRows.find((r) => String(r.stableId) === String(stableId));
+      if (!row) return;
+      const gid = row.group.listing_group_id ?? row.group.id;
+      setActiveTicketId(gid);
+      setBloomfieldHoverId(null);
+      setTimeout(() => {
+        try {
+          document
+            .querySelector(`[data-ticket-group-id="${gid}"]`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch {
+          /* ignore */
+        }
+      }, 80);
+    },
+    [bloomfieldRows]
+  );
 
   if (loading) {
     return (
@@ -943,7 +1022,11 @@ const EventDetailsPage = () => {
             </button>
           </div>
         </div>
-        <div className="tickets-split-container">
+        <div
+          className={`tickets-split-container${
+            isBloomfieldVenue ? ' tickets-split-container--bloomfield' : ''
+          }`}
+        >
           {/* Sticky Map Container (Left side in RTL) */}
           <div className="venue-map-sticky-container">
             <div className="venue-map-card">
@@ -952,42 +1035,18 @@ const EventDetailsPage = () => {
               </div>
                 <div className="venue-map-card-content">
                   {(() => {
-                    // Get active ticket's section for map
-                    let activeSectionName = null; // Start with null
-                    
+                    let activeSectionName = null;
                     if (activeTicketId) {
-                      const activeGroup = ticketGroups.find(g => (g.listing_group_id || g.id) === activeTicketId);
-                      if (activeGroup && activeGroup.tickets && activeGroup.tickets.length > 0) {
-                        const activeTicket = activeGroup.tickets[0];
-                        const section = getSectionNameForMap(activeTicket);
-                        if (section) {
-                          activeSectionName = section;
-                        }
+                      const activeGroup = ticketGroups.find(
+                        (g) => String(g.listing_group_id ?? g.id) === String(activeTicketId)
+                      );
+                      if (activeGroup?.tickets?.length) {
+                        const section = getSectionNameForMap(activeGroup.tickets[0]);
+                        if (section) activeSectionName = section;
                       }
                     }
-                    
-                    const venueName = event?.venue || 'מנורה מבטחים'; // Default to Menora
-                    
-                    // Use flexible venue matching - ALWAYS returns a config (never null)
-                    const venueMatch = getVenueConfig(venueName);
-                    const finalVenueName = venueMatch ? venueMatch.matchedName : 'מנורה מבטחים';
 
-                    const venueHaystack = [
-                      event?.venue,
-                      event?.name,
-                      event?.venue_detail?.name,
-                      finalVenueName,
-                    ]
-                      .filter(Boolean)
-                      .join(' ');
-                    const isBloomfield = venueHaystack.includes('בלומפילד');
-                    const isJerusalemArena =
-                      venueHaystack.includes('ארנה') || venueHaystack.includes('פיס ארנה');
-                    
-                    // Use InteractiveMenoraMap for Menora venues, otherwise use VenueMapPin
-                    const isMenora = finalVenueName.includes('מנורה') || finalVenueName.includes('מבטחים');
-                    
-                    if (isMenora) {
+                    if (isMenoraVenue) {
                       try {
                         return (
                           <InteractiveMenoraMap
@@ -999,20 +1058,36 @@ const EventDetailsPage = () => {
                           />
                         );
                       } catch {
-                        return <VenueMapPin venueName={finalVenueName} sectionName={activeSectionName} />;
+                        return (
+                          <VenueMapPin
+                            venueName={finalVenueNameForMap}
+                            sectionName={activeSectionName}
+                          />
+                        );
                       }
                     }
 
-                    if (isBloomfield) {
-                      return <BloomfieldMap />;
+                    if (isBloomfieldVenue) {
+                      return (
+                        <BloomfieldStadiumMap
+                          rows={bloomfieldRows}
+                          highlightStableId={bloomfieldMapHighlight}
+                          onSelectGroup={handleBloomfieldMapSelect}
+                          onHoverGroup={setBloomfieldHoverId}
+                        />
+                      );
                     }
 
-                    if (isJerusalemArena) {
+                    if (isJerusalemArenaVenue) {
                       return <JerusalemArenaMap />;
                     }
-                    
-                    // ALWAYS render the map - never return null or conditional
-                    return <VenueMapPin venueName={finalVenueName} sectionName={activeSectionName} />;
+
+                    return (
+                      <VenueMapPin
+                        venueName={finalVenueNameForMap}
+                        sectionName={activeSectionName}
+                      />
+                    );
                   })()}
                   <p className="venue-map-footer-label" aria-hidden="true">מפת האולם</p>
                 </div>
@@ -1052,11 +1127,31 @@ const EventDetailsPage = () => {
                     אחריות 100%: אנחנו מוודאים שתקבלו כרטיסים תקפים בזמן לאירוע, או שתקבלו את כספכם בחזרה.
                   </span>
                 </div>
+                {isBloomfieldVenue ? (
+                  <BloomfieldTicketListPanel
+                    rows={bloomfieldRows}
+                    listingQuantity={listingQuantityFilter}
+                    onListingQuantityChange={setListingQuantityFilter}
+                    onOpenFilters={() => setFiltersOpen(true)}
+                    highlightStableId={bloomfieldMapHighlight}
+                    activeTicketId={activeTicketId}
+                    onHoverRow={(id) => setBloomfieldHoverId(id)}
+                    onToggleRow={(groupId) => {
+                      setActiveTicketId((prev) =>
+                        prev != null && String(prev) === String(groupId) ? null : groupId
+                      );
+                    }}
+                    onBuy={handleBuy}
+                    onOffer={handleMakeOffer}
+                    user={user}
+                    isSellerFn={isCurrentUserSellerOfTicket}
+                    totalListingsBeforeQuantityFilter={ticketGroups.length}
+                  />
+                ) : (
                 <div className="tickets-grid">
             {ticketGroups.map((group) => {
               const seatRange = getSeatRange(group);
               const hasPdf = group.tickets.some((t) => t.has_pdf_file || t.pdf_file_url);
-              const isUrgent = group.available_count < 5;
               const isVerified = group.seller_is_verified;
               const isCheapest = cheapestTicketPrice && parseFloat(group.price) === cheapestTicketPrice;
               const firstTicket = group.tickets[0];
@@ -1193,6 +1288,7 @@ const EventDetailsPage = () => {
               );
             })}
                 </div>
+                )}
               </>
             ) : (
               <div className="empty-state">

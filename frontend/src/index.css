@@ -1,4 +1,7 @@
 /* Classic Professional Theme - TradeTix */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 .visually-hidden {
   position: absolute;

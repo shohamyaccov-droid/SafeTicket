@@ -648,6 +648,16 @@
     flex-direction: column;
     gap: 0;
   }
+
+  .tickets-split-container.tickets-split-container--bloomfield .venue-map-sticky-container {
+    flex: 0 0 59% !important;
+    max-width: 59% !important;
+  }
+
+  .tickets-split-container.tickets-split-container--bloomfield .tickets-list-container {
+    flex: 0 0 39% !important;
+    max-width: 39% !important;
+  }
 }
 
 /* Premium trust banner — TradeTix buyer protection */
