@@ -20,8 +20,8 @@ const MOAT = 20;
 const D_T1 = 12;
 const G_T12 = 2;
 const D_T2 = 55;
-const G_T23 = 8;
-const D_T3 = 35;
+const G_T23 = 2;
+const D_T3 = 58;
 
 const CELL_IN = 0.45;
 
