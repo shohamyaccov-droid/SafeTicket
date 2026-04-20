@@ -1,6 +1,8 @@
 /**
  * Bloomfield — Viagogo 3-tier bowl on a squircle (rounded rect: straight N/S/E/W, curved corners only).
- * Tier 1 (~200s): thin inner ring. Tier 2 (~300s): main bowl full loop. Tier 3 (~400s): N+S only.
+ * Tier 1 (~200s): thin inner ring (straights only; corners = negative space).
+ * Tier 2 (~300s): full loop — uniform equal arc-length cells along inner/outer squircle track.
+ * Tier 3 (~400s): N+S only (equal splits on flats).
  */
 
 export const VIEW_W = 1000;
@@ -15,7 +17,6 @@ export const PITCH_RX = 5;
 export const PITCH_RY = 5;
 
 const MOAT = 20;
-/** Viagogo-ish radial weights (~112px stand + gaps): thin 200s, massive 300s, stout 400s N/S. */
 const D_T1 = 12;
 const G_T12 = 2;
 const D_T2 = 55;
@@ -23,12 +24,9 @@ const G_T23 = 8;
 const D_T3 = 35;
 
 const CELL_IN = 0.45;
-/** Tier 2 corner wedges: full annular depth to r2o (standalone sectors; grid gap from CELL_IN only). */
-const T2_CORNER_OUTER_FRAC = 1;
 
 const wi = PITCH_W + 2 * MOAT;
 const hi = PITCH_H + 2 * MOAT;
-/** Slightly tighter fillet than before — straights read longer, corners less “puffy”. */
 const ri = Math.min(34, Math.min(wi, hi) * 0.11 + 18);
 
 const xL = CX - wi / 2;
@@ -45,25 +43,15 @@ const xR1 = CX + w1 / 2;
 const yT1 = CY - h1 / 2;
 const yB1 = CY + h1 / 2;
 
-/** Tier 2 inner (after channel from T1) */
+/** Tier 2 inner / outer (concentric squircles for uniform ring cells) */
 const w2i = wi + 2 * (D_T1 + G_T12);
 const h2i = hi + 2 * (D_T1 + G_T12);
 const r2i = ri + D_T1 + G_T12;
-const xL2i = CX - w2i / 2;
-const xR2i = CX + w2i / 2;
-const yT2i = CY - h2i / 2;
-const yB2i = CY + h2i / 2;
-
-/** Tier 2 outer */
 const w2o = w2i + 2 * D_T2;
 const h2o = h2i + 2 * D_T2;
 const r2o = r2i + D_T2;
-const xL2o = CX - w2o / 2;
-const xR2o = CX + w2o / 2;
-const yT2o = CY - h2o / 2;
-const yB2o = CY + h2o / 2;
 
-/** Tier 3 inner edge (full ring — channel after T2) */
+/** Tier 3 inner edge */
 const w3i = w2o + 2 * G_T23;
 const h3i = h2o + 2 * G_T23;
 const r3i = r2o + G_T23;
@@ -72,22 +60,17 @@ const xR3i = CX + w3i / 2;
 const yT3i = CY - h3i / 2;
 const yB3i = CY + h3i / 2;
 
-/** Tier 3 outer (squircle shell) */
+/** Tier 3 outer */
 const w3o = w3i + 2 * D_T3;
 const h3o = h3i + 2 * D_T3;
 const r3o = r3i + D_T3;
 
-/** Tier 3 outer face (north/south 400s bands) */
 const yT3o = CY - h3o / 2;
 const yB3o = CY + h3o / 2;
 
 const topFlat1 = w1 - 2 * r1;
 const botFlat1 = topFlat1;
 const sideFlat1 = h1 - 2 * r1;
-
-const topFlat2i = w2i - 2 * r2i;
-const botFlat2i = topFlat2i;
-const sideFlat2i = h2i - 2 * r2i;
 
 const topFlat3i = w3i - 2 * r3i;
 const botFlat3i = topFlat3i;
@@ -120,15 +103,79 @@ export function roundedRectPathD(cx, cy, w, h, r) {
   ].join(' ');
 }
 
-/** Axis-aligned band slice; cx/cy = center of inset rect (matches 8px labels, any tier depth). */
-function rectCell(x0, y0, x1, y1) {
-  const xa = Math.min(x0, x1) + CELL_IN;
-  const xb = Math.max(x0, x1) - CELL_IN;
-  const ya = Math.min(y0, y1) + CELL_IN;
-  const yb = Math.max(y0, y1) - CELL_IN;
-  if (xb <= xa || yb <= ya) return null;
-  const d = `M ${fmt(xa)} ${fmt(ya)} L ${fmt(xb)} ${fmt(ya)} L ${fmt(xb)} ${fmt(yb)} L ${fmt(xa)} ${fmt(yb)} Z`;
-  return { d, cx: (xa + xb) / 2, cy: (ya + yb) / 2 };
+/**
+ * Point on rounded-rect perimeter at arc-length fraction frac ∈ [0,1).
+ * Start: west end of top edge (after NW corner), direction: clockwise.
+ */
+function pointOnRoundedRectPerimeter(cx, cy, w, h, r, frac) {
+  const rr = Math.min(r, w / 2, h / 2);
+  const hw = w / 2;
+  const hh = h / 2;
+  const xl = cx - hw;
+  const xr = cx + hw;
+  const yt = cy - hh;
+  const yb = cy + hh;
+  const Ltop = w - 2 * rr;
+  const Lright = h - 2 * rr;
+  const Lbot = w - 2 * rr;
+  const Lleft = h - 2 * rr;
+  const Lc = (Math.PI / 2) * rr;
+  const L = Ltop + Lright + Lbot + Lleft + 4 * Lc;
+  let s = (frac % 1 + 1) % 1 * L;
+  if (s >= L) s = 0;
+
+  let d = s;
+
+  if (d < Ltop) {
+    const t = d / Ltop;
+    return { x: xl + rr + t * (xr - xl - 2 * rr), y: yt };
+  }
+  d -= Ltop;
+
+  if (d < Lc) {
+    const t = d / Lc;
+    const a = -Math.PI / 2 + t * (Math.PI / 2);
+    return { x: xr - rr + rr * Math.cos(a), y: yt + rr + rr * Math.sin(a) };
+  }
+  d -= Lc;
+
+  if (d < Lright) {
+    const t = d / Lright;
+    return { x: xr, y: yt + rr + t * (yb - yt - 2 * rr) };
+  }
+  d -= Lright;
+
+  if (d < Lc) {
+    const t = d / Lc;
+    const a = 0 + t * (Math.PI / 2);
+    return { x: xr - rr + rr * Math.cos(a), y: yb - rr + rr * Math.sin(a) };
+  }
+  d -= Lc;
+
+  if (d < Lbot) {
+    const t = d / Lbot;
+    return { x: xr - rr - t * (xr - xl - 2 * rr), y: yb };
+  }
+  d -= Lbot;
+
+  if (d < Lc) {
+    const t = d / Lc;
+    const a = Math.PI / 2 + t * (Math.PI / 2);
+    return { x: xl + rr + rr * Math.cos(a), y: yb - rr + rr * Math.sin(a) };
+  }
+  d -= Lc;
+
+  if (d < Lleft) {
+    const t = d / Lleft;
+    return { x: xl, y: yb - rr - t * (yb - yt - 2 * rr) };
+  }
+  d -= Lleft;
+
+  {
+    const t = d / Lc;
+    const a = Math.PI + t * (Math.PI / 2);
+    return { x: xl + rr + rr * Math.cos(a), y: yt + rr + rr * Math.sin(a) };
+  }
 }
 
 function polygonCentroid(pts) {
@@ -152,27 +199,39 @@ function polygonCentroid(pts) {
   return { cx: cx / (6 * a), cy: cy / (6 * a) };
 }
 
-function annularSector(cx0, cy0, rIn, rOut, a0, a1, steps = 14) {
-  if (!Number.isFinite(rIn) || !Number.isFinite(rOut) || rOut <= rIn + 1e-3) return null;
-  const pts = [];
-  for (let i = 0; i <= steps; i += 1) {
-    const t = i / steps;
-    const a = a0 + t * (a1 - a0);
-    pts.push({ x: cx0 + rOut * Math.cos(a), y: cy0 + rOut * Math.sin(a) });
-  }
-  for (let i = steps; i >= 0; i -= 1) {
-    const t = i / steps;
-    const a = a0 + t * (a1 - a0);
-    pts.push({ x: cx0 + rIn * Math.cos(a), y: cy0 + rIn * Math.sin(a) });
-  }
-  let d = '';
-  for (let i = 0; i < pts.length; i += 1) {
-    const p = pts[i];
-    d += i === 0 ? `M ${fmt(p.x)} ${fmt(p.y)}` : ` L ${fmt(p.x)} ${fmt(p.y)}`;
-  }
-  d += ' Z';
-  const { cx, cy } = polygonCentroid(pts);
-  return { d, cx, cy };
+/** Inset quad vertices along inward radial from centroid (white grid gap). */
+function insetQuadTowardCentroid(p0, p1, p2, p3) {
+  const c = polygonCentroid([p0, p1, p2, p3]);
+  const shrink = (p) => {
+    const dx = p.x - c.cx;
+    const dy = p.y - c.cy;
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: p.x - (dx / len) * CELL_IN, y: p.y - (dy / len) * CELL_IN };
+  };
+  return [shrink(p0), shrink(p1), shrink(p2), shrink(p3)];
+}
+
+/** Ring slice between inner and outer squircle; same arc-length fraction on both tracks. */
+function ringQuadCell(cx, cy, wOut, hOut, rOut, wIn, hIn, rIn, f0, f1) {
+  const p0o = pointOnRoundedRectPerimeter(cx, cy, wOut, hOut, rOut, f0);
+  const p1o = pointOnRoundedRectPerimeter(cx, cy, wOut, hOut, rOut, f1);
+  const p1i = pointOnRoundedRectPerimeter(cx, cy, wIn, hIn, rIn, f1);
+  const p0i = pointOnRoundedRectPerimeter(cx, cy, wIn, hIn, rIn, f0);
+  const [q0, q1, q2, q3] = insetQuadTowardCentroid(p0o, p1o, p1i, p0i);
+  const d = `M ${fmt(q0.x)} ${fmt(q0.y)} L ${fmt(q1.x)} ${fmt(q1.y)} L ${fmt(q2.x)} ${fmt(q2.y)} L ${fmt(q3.x)} ${fmt(q3.y)} Z`;
+  const { cx: ccx, cy: ccy } = polygonCentroid([q0, q1, q2, q3]);
+  return { d, cx: ccx, cy: ccy };
+}
+
+/** Axis-aligned band slice */
+function rectCell(x0, y0, x1, y1) {
+  const xa = Math.min(x0, x1) + CELL_IN;
+  const xb = Math.max(x0, x1) - CELL_IN;
+  const ya = Math.min(y0, y1) + CELL_IN;
+  const yb = Math.max(y0, y1) - CELL_IN;
+  if (xb <= xa || yb <= ya) return null;
+  const d = `M ${fmt(xa)} ${fmt(ya)} L ${fmt(xb)} ${fmt(ya)} L ${fmt(xb)} ${fmt(yb)} L ${fmt(xa)} ${fmt(yb)} Z`;
+  return { d, cx: (xa + xb) / 2, cy: (ya + yb) / 2 };
 }
 
 function push(list, id, faceLabel, tier, w) {
@@ -185,7 +244,7 @@ const TIER_1 = [];
 const TIER_2 = [];
 const TIER_3 = [];
 
-/* --- TIER 1 straights only (no 200s in corners — white negative space) --- */
+/* --- TIER 1 straights only --- */
 
 for (let i = 0; i < 9; i += 1) {
   const xa = xL1 + r1 + (i / 9) * topFlat1;
@@ -193,10 +252,11 @@ for (let i = 0; i < 9; i += 1) {
   push(TIER_1, String(201 + i), String(201 + i), 't1', rectCell(xa, yT1, xb, yT));
 }
 
+/** South T1: screen L→R reads 229 … 221 (continues from east, right-to-left along stand). */
 for (let i = 0; i < 9; i += 1) {
-  const xa = xR1 - r1 - (i / 9) * botFlat1;
-  const xb = xR1 - r1 - ((i + 1) / 9) * botFlat1;
-  push(TIER_1, String(229 - i), String(229 - i), 't1', rectCell(xb, yB, xa, yB1));
+  const xa = xL1 + r1 + (i / 9) * botFlat1;
+  const xb = xL1 + r1 + ((i + 1) / 9) * botFlat1;
+  push(TIER_1, String(229 - i), String(229 - i), 't1', rectCell(xa, yB, xb, yB1));
 }
 
 for (let i = 0; i < 3; i += 1) {
@@ -211,86 +271,36 @@ for (let i = 0; i < 3; i += 1) {
   push(TIER_1, String(214 + i), String(214 + i), 't1', rectCell(xR, ya, xR1, yb));
 }
 
-/* --- TIER 2 full bowl --- */
+/* --- TIER 2: 38 equal arc-length cells around full squircle ring --- */
 
-for (let i = 0; i < 9; i += 1) {
-  const xa = xL2i + r2i + (i / 9) * topFlat2i;
-  const xb = xL2i + r2i + ((i + 1) / 9) * topFlat2i;
-  push(TIER_2, String(301 + i), String(301 + i), 't2', rectCell(xa, yT2o, xb, yT2i));
-}
-
-for (let i = 0; i < 10; i += 1) {
-  const xa = xR2i - r2i - (i / 10) * botFlat2i;
-  const xb = xR2i - r2i - ((i + 1) / 10) * botFlat2i;
-  push(TIER_2, String(328 - i), String(328 - i), 't2', rectCell(xb, yB2i, xa, yB2o));
-}
-
-for (let i = 0; i < 6; i += 1) {
-  const ya = yT2i + r2i + (i / 6) * sideFlat2i;
-  const yb = yT2i + r2i + ((i + 1) / 6) * sideFlat2i;
-  /** West reads top→bottom: 337 … 332 (i=0 is top). */
-  push(TIER_2, String(337 - i), String(337 - i), 't2', rectCell(xL2o, ya, xL2i, yb));
-}
-
-for (let i = 0; i < 6; i += 1) {
-  const ya = yT2i + r2i + (i / 6) * sideFlat2i;
-  const yb = yT2i + r2i + ((i + 1) / 6) * sideFlat2i;
-  push(TIER_2, String(312 + i), String(312 + i), 't2', rectCell(xR2i, ya, xR2o, yb));
-}
-
-const cn2 = {
-  nw: { x: xL2i + r2i, y: yT2i + r2i },
-  ne: { x: xR2i - r2i, y: yT2i + r2i },
-  se: { x: xR2i - r2i, y: yB2i - r2i },
-  sw: { x: xL2i + r2i, y: yB2i - r2i },
-};
-
-const rinC = r2i + CELL_IN;
-const routC = r2i + (r2o - r2i) * T2_CORNER_OUTER_FRAC - CELL_IN;
-
-push(TIER_2, '338', '338', 't2', annularSector(cn2.nw.x, cn2.nw.y, rinC, routC, -Math.PI / 2, -Math.PI));
-push(
-  TIER_2,
+const T2_COUNT = 38;
+const T2_IDS = [
+  ...[301, 302, 303, 304, 305, 306, 307, 308, 309].map(String),
   '310',
-  '310',
-  't2',
-  annularSector(cn2.ne.x, cn2.ne.y, rinC, routC, -Math.PI / 2, -Math.PI / 4, 8)
-);
-push(
-  TIER_2,
   '311',
-  '311',
-  't2',
-  annularSector(cn2.ne.x, cn2.ne.y, rinC, routC, -Math.PI / 4, 0, 8)
-);
-push(TIER_2, '318', '318', 't2', annularSector(cn2.se.x, cn2.se.y, rinC, routC, 0, Math.PI / 2));
-
-const swA = Math.PI / 2;
-const swB = Math.PI;
-const swThird = (swB - swA) / 3;
-push(
-  TIER_2,
+  ...[312, 313, 314, 315, 316, 317].map(String),
+  '318',
+  ...[328, 327, 326, 325, 324, 323, 322, 321, 320, 319].map(String),
   '329',
-  '329',
-  't2',
-  annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, swA, swA + swThird, 6)
-);
-push(
-  TIER_2,
   '330',
-  '330',
-  't2',
-  annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, swA + swThird, swA + 2 * swThird, 6)
-);
-push(
-  TIER_2,
   '331',
-  '331',
-  't2',
-  annularSector(cn2.sw.x, cn2.sw.y, rinC, routC, swA + 2 * swThird, swB, 6)
-);
+  ...[332, 333, 334, 335, 336, 337].map(String),
+  '338',
+];
 
-/* --- TIER 3 north + south only (uniform shell; cells on flats only) --- */
+for (let i = 0; i < T2_COUNT; i += 1) {
+  const f0 = i / T2_COUNT;
+  const f1 = (i + 1) / T2_COUNT;
+  push(
+    TIER_2,
+    T2_IDS[i],
+    T2_IDS[i],
+    't2',
+    ringQuadCell(CX, CY, w2o, h2o, r2o, w2i, h2i, r2i, f0, f1)
+  );
+}
+
+/* --- TIER 3 north + south (equal splits on flats) --- */
 
 for (let i = 0; i < 3; i += 1) {
   const xa = xL3i + r3i + (i / 3) * topFlat3i;
@@ -298,10 +308,11 @@ for (let i = 0; i < 3; i += 1) {
   push(TIER_3, String(404 + i), String(404 + i), 't3', rectCell(xa, yT3o, xb, yT3i));
 }
 
+/** South T3: screen L→R reads 431 … 419 */
 for (let i = 0; i < 13; i += 1) {
-  const xa = xR3i - r3i - (i / 13) * botFlat3i;
-  const xb = xR3i - r3i - ((i + 1) / 13) * botFlat3i;
-  push(TIER_3, String(431 - i), String(431 - i), 't3', rectCell(xb, yB3i, xa, yB3o));
+  const xa = xL3i + r3i + (i / 13) * botFlat3i;
+  const xb = xL3i + r3i + ((i + 1) / 13) * botFlat3i;
+  push(TIER_3, String(431 - i), String(431 - i), 't3', rectCell(xa, yB3i, xb, yB3o));
 }
 
 const DRAW_ORDER = [
