@@ -216,6 +216,22 @@ const EventDetailsPage = () => {
     // Try to construct section name from ticket data
     if (ticket.section) {
       const section = String(ticket.section).trim();
+
+      // Menora (היכל מנורה): real bowl labels 101–112 / 301–312 → SVG ids "1 Lower" … "12 Upper"
+      const venueHay = [event?.venue, event?.name].filter(Boolean).join(' ');
+      const isMenoraHall =
+        (venueHay.includes('מנורה') || venueHay.includes('מבטחים')) &&
+        !venueHay.includes('בלומפילד') &&
+        !/פיס\s*ארנה|ארנה\s*ירושלים/i.test(venueHay) &&
+        !(venueHay.includes('ירושלים') && venueHay.includes('ארנה'));
+      if (isMenoraHall) {
+        const m3 = section.match(/^(\d{3})$/);
+        if (m3) {
+          const n = parseInt(m3[1], 10);
+          if (n >= 101 && n <= 112) return `${n - 100} Lower`;
+          if (n >= 301 && n <= 312) return `${n - 300} Upper`;
+        }
+      }
       
       // Normalize the section name - this returns "11 Lower" or "11 Upper" format
       const normalized = normalizeSection(section);
