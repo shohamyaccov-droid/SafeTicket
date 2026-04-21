@@ -156,11 +156,10 @@ class Command(BaseCommand):
             home_team="מכבי תל אביב",
             away_team="מכבי חיפה",
         )
-        sections = (
-            [319, 328, 221, 229]
-            + list(range(419, 432))  # 419–431 inclusive
-        )
-        for i, sec in enumerate(sections):
+        # ~15 tickets across sections 319, 328, 221, 229, 419 (reference layout)
+        base_sections = [319, 328, 221, 229, 419]
+        for i in range(15):
+            sec = base_sections[i % len(base_sections)]
             p = _price_in_range(150, 350, i)
             self._mk_ticket(
                 seller,
@@ -185,8 +184,8 @@ class Command(BaseCommand):
             away_team='בית"ר ירושלים',
         )
         base_sections = [301, 309, 214, 216]
-        # 17 listings: cycle sections with distinct rows
-        for i in range(17):
+        # ~15 listings: cycle sections with distinct rows
+        for i in range(15):
             sec = base_sections[i % len(base_sections)]
             p = _price_in_range(150, 300, i)
             self._mk_ticket(
