@@ -630,13 +630,13 @@ class TicketSerializer(serializers.ModelSerializer):
     seller_is_verified = serializers.BooleanField(source='seller.is_verified_seller', read_only=True)
     pdf_file_url = serializers.SerializerMethodField()
     receipt_file_url = serializers.SerializerMethodField()
-    original_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
+    original_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     listing_price = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
         required=False,
         write_only=True,
-        help_text='Listing / buyer price; for IL must be <= original_price (face value)',
+        help_text='Listing / buyer price. If original_price is omitted, it is copied from this value.',
     )
     asking_price = serializers.DecimalField(
         max_digits=10,
@@ -766,12 +766,6 @@ class TicketSerializer(serializers.ModelSerializer):
         attrs.pop('asking_price', None)
         listing_price = attrs.pop('listing_price', None)
 
-        original_price = attrs.get('original_price')
-        if original_price is None:
-            raise serializers.ValidationError({
-                'original_price': 'Original price (face value) is required.'
-            })
-
         from decimal import Decimal
 
         # Geo-pricing / receipt rules: Event.venue country ONLY (not artist nationality).
@@ -782,6 +776,15 @@ class TicketSerializer(serializers.ModelSerializer):
         if not country:
             country = 'IL'
         cur = iso4217_for_country(country)
+
+        original_price = attrs.get('original_price')
+        if original_price is None:
+            if listing_price is None:
+                raise serializers.ValidationError({
+                    'listing_price': 'מחיר מכירה נדרש.'
+                })
+            original_price = listing_price
+            attrs['original_price'] = original_price
 
         if isinstance(original_price, (int, float, str, Decimal)):
             attrs['original_price'] = quantize_money_decimal(original_price, cur)
@@ -799,14 +802,9 @@ class TicketSerializer(serializers.ModelSerializer):
         legal_ok = legal_raw in (True, 'true', 'True', '1', 'on', 'yes')
 
         if country == 'IL':
-            receipt = attrs.get('receipt_file')
-            if not receipt:
-                raise serializers.ValidationError({
-                    'receipt_file': 'העלאת הוכחת קנייה / קבלה נדרשת לאירועים בישראל.'
-                })
             if not legal_ok:
                 raise serializers.ValidationError({
-                    'il_legal_declaration': 'יש לאשר את תנאי ההצהרה (כולל קבלה ומחיר חוקי).'
+                    'il_legal_declaration': 'יש לאשר את תנאי ההצהרה.'
                 })
             if listing_price > original_price:
                 raise serializers.ValidationError({

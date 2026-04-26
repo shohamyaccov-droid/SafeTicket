@@ -85,7 +85,7 @@ from django.utils import timezone
 
 from django.contrib.auth import get_user_model
 
-from users.models import Artist, Event, Ticket, Venue
+from users.models import Artist, Event, Ticket, Venue, VenueSection
 
 User = get_user_model()
 
@@ -196,6 +196,26 @@ SEED_LAUNCH_EVENTS: list[dict] = [
         'event_image': 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?auto=format&fit=crop&w=1400&q=85',
     },
 ]
+
+VENUE_SECTIONS: dict[tuple[str, str], list[str]] = {
+    ('היכל מנורה מבטחים', 'תל אביב'): [
+        *[str(n) for n in range(101, 113)],
+        *[str(n) for n in range(301, 313)],
+    ],
+    ('אצטדיון בלומפילד', 'תל אביב'): [
+        *[str(n) for n in range(201, 210)],
+        *[str(n) for n in range(214, 217)],
+        *[str(n) for n in range(221, 230)],
+        *[str(n) for n in range(234, 237)],
+        *[str(n) for n in range(301, 339)],
+        *[str(n) for n in range(404, 407)],
+        *[str(n) for n in range(419, 432)],
+    ],
+    ('פיס ארנה ירושלים', 'ירושלים'): [
+        *[str(n) for n in range(101, 123)],
+        *[str(n) for n in range(301, 331)],
+    ],
+}
 
 # High-demand “coming soon” rows — no tickets; drives homepage waitlist CTA.
 SEED_WAITLIST_EVENTS: list[dict] = [
@@ -426,6 +446,8 @@ def seed_launch_events_and_tickets() -> None:
     for row in SEED_LAUNCH_EVENTS:
         vname, vcity = row['venue_struct']
         venue_obj, _ = Venue.objects.get_or_create(name=vname, city=vcity)
+        for section_name in VENUE_SECTIONS.get((vname, vcity), []):
+            VenueSection.objects.get_or_create(venue=venue_obj, name=section_name)
         artist = artists_by_name.get(row['artist_name'])
         if not artist:
             _seed_log(f'[seed] launch event skipped (no artist): {row["name"]}')

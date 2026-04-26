@@ -21,7 +21,7 @@ from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from users.models import Artist, Event, Offer, Order, Ticket, TicketAlert, Venue
+from users.models import Artist, Event, Offer, Order, Ticket, TicketAlert, Venue, VenueSection
 
 User = get_user_model()
 
@@ -33,6 +33,26 @@ SELLER_USERNAME = "real_events_seed_seller"
 VENUE_BLOOMFIELD = "אצטדיון בלומפילד"
 VENUE_MENORA = "היכל מנורה מבטחים"
 VENUE_JERUSALEM_ARENA = "פיס ארנה ירושלים"
+
+VENUE_SECTIONS = {
+    (VENUE_MENORA, "תל אביב"): [
+        *[str(n) for n in range(101, 113)],
+        *[str(n) for n in range(301, 313)],
+    ],
+    (VENUE_BLOOMFIELD, "תל אביב"): [
+        *[str(n) for n in range(201, 210)],
+        *[str(n) for n in range(214, 217)],
+        *[str(n) for n in range(221, 230)],
+        *[str(n) for n in range(234, 237)],
+        *[str(n) for n in range(301, 339)],
+        *[str(n) for n in range(404, 407)],
+        *[str(n) for n in range(419, 432)],
+    ],
+    (VENUE_JERUSALEM_ARENA, "ירושלים"): [
+        *[str(n) for n in range(101, 123)],
+        *[str(n) for n in range(301, 331)],
+    ],
+}
 
 
 def _pdf(name: str = "ticket.pdf") -> ContentFile:
@@ -119,6 +139,8 @@ class Command(BaseCommand):
 
     def _get_venue(self, name: str, city: str) -> Venue:
         venue, _ = Venue.objects.get_or_create(name=name, city=city)
+        for section_name in VENUE_SECTIONS.get((name, city), []):
+            VenueSection.objects.get_or_create(venue=venue, name=section_name)
         return venue
 
     def _mk_ticket(

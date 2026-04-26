@@ -27,6 +27,60 @@ function isTicketAttachmentFile(file) {
   return /\.(jpe?g|png)$/i.test(file.name || '');
 }
 
+const rangeOptions = (start, end) =>
+  Array.from({ length: end - start + 1 }, (_, i) => {
+    const value = String(start + i);
+    return { value, label: `גוש ${value}`, structured: false };
+  });
+
+const BLOOMFIELD_SECTION_OPTIONS = [
+  ...rangeOptions(201, 209),
+  ...rangeOptions(214, 216),
+  ...rangeOptions(221, 229),
+  ...rangeOptions(234, 236),
+  ...rangeOptions(301, 338),
+  ...rangeOptions(404, 406),
+  ...rangeOptions(419, 431),
+];
+
+const ERROR_FIELD_LABELS = {
+  listing_price: 'מחיר מכירה',
+  original_price: 'מחיר',
+  venue_section: 'גוש',
+  custom_section_text: 'גוש',
+  pdf_file: 'קובץ כרטיס',
+  il_legal_declaration: 'אישור הצהרה',
+};
+
+function canonicalVenueName(eventLike) {
+  const values = [
+    eventLike?.venue_detail?.name,
+    eventLike?.venue,
+    eventLike?.selectedEvent?.venue_detail?.name,
+    eventLike?.selectedEvent?.venue,
+  ]
+    .filter(Boolean)
+    .map((v) => String(v).trim());
+  const haystack = values.join(' ');
+  if (haystack.includes('בלומפילד')) return 'אצטדיון בלומפילד';
+  if (haystack.includes('פיס ארנה') || haystack.includes('ארנה ירושלים')) return 'פיס ארנה ירושלים';
+  if (haystack.includes('מנורה') || haystack.includes('מבטחים')) return 'היכל מנורה מבטחים';
+  return values[0] || '';
+}
+
+function generatedSectionOptionsForVenue(venueName) {
+  if (venueName === 'היכל מנורה מבטחים') {
+    return [...rangeOptions(101, 112), ...rangeOptions(301, 312)];
+  }
+  if (venueName === 'אצטדיון בלומפילד') {
+    return BLOOMFIELD_SECTION_OPTIONS;
+  }
+  if (venueName === 'פיס ארנה ירושלים') {
+    return [...rangeOptions(101, 122), ...rangeOptions(301, 330)];
+  }
+  return [];
+}
+
 /** Visual confirmation before submit: image thumbnail or PDF badge. */
 function TicketAttachmentPreview({ file }) {
   const [url, setUrl] = useState(null);
@@ -78,14 +132,12 @@ const Sell = () => {
     seat_row: '', // Legacy field - kept for backward compatibility
     section: '', // Global: גוש (Section) - shared by all tickets
     row: '', // Global: שורה (Row) - shared by all tickets
-    original_price: '',
     available_quantity: 1, // Quantity selector (1-10)
     ticket_packages: [], // Array of {seat_number, pdf_file} - row comes from global formData.row
     singleMultiPagePdf: null, // Single file mode: 1 PDF with N pages for auto-split
     is_together: true, // Default to true (seats together)
     start_seat: '', // For auto-generating seat numbers
-    listing_price: '', // Buyer-facing price (IL: capped at face value / original_price)
-    receipt_file: null,
+    listing_price: '', // Buyer-facing price
     // Master Architecture fields
     ticket_type: 'pdf',
     split_type: 'כל כמות',
@@ -365,6 +417,23 @@ const Sell = () => {
   }, [formData.selectedEvent]);
   const sellSym = currencySymbol(sellCurrency);
 
+  const sectionOptions = useMemo(() => {
+    const structured = eventDetail?.venue_detail?.sections;
+    if (Array.isArray(structured) && structured.length > 0) {
+      return [...structured]
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'he', { numeric: true }))
+        .map((section) => ({
+          value: String(section.id),
+          label: `גוש ${section.name}`,
+          structured: true,
+        }));
+    }
+    const venueName = canonicalVenueName(eventDetail || formData);
+    return generatedSectionOptionsForVenue(venueName);
+  }, [eventDetail, formData.selectedEvent]);
+
+  const selectedVenueLabel = canonicalVenueName(eventDetail || formData.selectedEvent || {});
+
   // NOW ALL EARLY RETURNS CAN HAPPEN AFTER ALL HOOKS
   // Wait for auth to finish loading
   if (authLoading) {
@@ -466,7 +535,6 @@ const Sell = () => {
         selectedEvent: null,
         section: '',
         listing_price: '',
-        receipt_file: null,
       });
       setSellerListingTermsAccepted(false);
       return;
@@ -483,7 +551,6 @@ const Sell = () => {
         selectedEvent: selectedEvent,
         section: '',
         listing_price: '',
-        receipt_file: null,
       });
       setSellerListingTermsAccepted(false);
     }
@@ -557,20 +624,6 @@ const Sell = () => {
         });
         setError('');
       }
-    } else if (name === 'receipt_file') {
-      if (files && files.length > 0) {
-        const file = files[0];
-        const ok =
-          file.type === 'application/pdf' ||
-          file.type.startsWith('image/') ||
-          /\.(pdf|jpg|jpeg|png|webp)$/i.test(file.name);
-        if (!ok) {
-          setError('הוכחת קנייה: נא להעלות PDF או תמונה (JPG, PNG).');
-          return;
-        }
-        setFormData((prev) => ({ ...prev, receipt_file: file }));
-        setError('');
-      }
     } else if (name && name.startsWith('seat_number_pkg_')) {
       const index = parseInt(name.replace('seat_number_pkg_', ''), 10);
       if (!isNaN(index)) {
@@ -592,26 +645,8 @@ const Sell = () => {
         ...formData,
         [name]: Boolean(checked),
       });
-    } else if (name === 'listing_price' && isIsraelEvent(formData.selectedEvent)) {
-      const face = parseFloat(formData.original_price) || 0;
-      let next = value;
-      const num = parseFloat(String(next));
-      if (face > 0 && Number.isFinite(num) && num > face) {
-        next = String(Math.round(face));
-      }
-      setFormData({ ...formData, listing_price: next });
-    } else if (name === 'original_price' && isIsraelEvent(formData.selectedEvent)) {
-      const face = parseFloat(value) || 0;
-      const curAsk = parseFloat(formData.listing_price);
-      let nextListing = formData.listing_price;
-      if (face > 0 && !Number.isNaN(curAsk) && curAsk > face) {
-        nextListing = String(Math.round(face));
-      }
-      setFormData({
-        ...formData,
-        original_price: value,
-        listing_price: nextListing,
-      });
+    } else if (name === 'listing_price') {
+      setFormData({ ...formData, listing_price: value });
     } else {
       setFormData({
         ...formData,
@@ -641,28 +676,16 @@ const Sell = () => {
     }
 
     const ilEvent = isIsraelEvent(formData.selectedEvent);
-    if (ilEvent) {
-      if (formData.listing_price === '' || formData.listing_price == null) {
-        setError('נא להזין מחיר מבוקש (מכירה) — עד מחיר הפנים.');
-        setLoading(false);
-        return;
-      }
-      if (!formData.receipt_file) {
-        setError('לאירוע בישראל נדרשת הוכחת קנייה / קבלה (PDF או תמונה).');
-        setLoading(false);
-        return;
-      }
-      const faceVal = parseFloat(formData.original_price);
-      const askVal = parseFloat(
-        formData.listing_price !== '' && formData.listing_price != null
-          ? formData.listing_price
-          : formData.original_price
-      );
-      if (Number.isFinite(faceVal) && Number.isFinite(askVal) && askVal > faceVal) {
-        setError('מחיר המכירה אינו יכול לעלות על מחיר הפנים (אירוע בישראל).');
-        setLoading(false);
-        return;
-      }
+    if (formData.listing_price === '' || formData.listing_price == null) {
+      setError('נא להזין מחיר מכירה.');
+      setLoading(false);
+      return;
+    }
+    const askVal = parseFloat(String(formData.listing_price).replace(',', '.'));
+    if (!Number.isFinite(askVal) || askVal <= 0) {
+      setError('מחיר המכירה חייב להיות מספר חיובי.');
+      setLoading(false);
+      return;
     }
     
     // Validate ticket packages — seating + files (hybrid: structured section id or free-text גוש)
@@ -677,7 +700,7 @@ const Sell = () => {
 
     const secValStrict = (formData.section || '').trim();
     if (!secValStrict) {
-      setError('נא לבחור או להזין גוש (אזור).');
+      setError('נא לבחור גוש מהרשימה.');
       setLoading(false);
       return;
     }
@@ -766,11 +789,11 @@ const Sell = () => {
     // Create FormData for file upload — never append undefined/null as values (multipart-safe scalars).
     const fdText = (v) => (v === undefined || v === null ? '' : String(v));
     const qtyNum = Math.max(1, Math.min(10, parseInt(String(formData.available_quantity ?? 1), 10) || 1));
-    const originalPriceNum = Math.max(
+    const listingPriceNum = Math.max(
       0,
-      parseFloat(String(formData.original_price ?? '').replace(',', '.')) || 0
+      parseFloat(String(formData.listing_price ?? '').replace(',', '.')) || 0
     );
-    const originalPriceStr = fdText(originalPriceNum);
+    const listingPriceStr = fdText(listingPriceNum);
 
     const submitData = new FormData();
     submitData.append('event_id', fdText(formData.event_id));
@@ -779,25 +802,17 @@ const Sell = () => {
       submitData.append('event_name', evNameTrim);
     }
     submitData.append('seat_row', fdText(formData.seat_row)); // Legacy field
-    const vd = eventDetail?.venue_detail;
-    const structured = vd?.sections;
-    const hasStructured = Array.isArray(structured) && structured.length > 0;
     const secVal = (formData.section || '').trim();
-    if (hasStructured && secVal) {
+    const selectedSection = sectionOptions.find((option) => String(option.value) === String(secVal));
+    if (selectedSection?.structured && secVal) {
       submitData.append('venue_section', fdText(secVal));
     } else if (secVal) {
       submitData.append('custom_section_text', fdText(secVal));
     }
     submitData.append('row', fdText(formData.row));
-    submitData.append('original_price', originalPriceStr);
-    const askForApi =
-      ilEvent && formData.listing_price !== '' && formData.listing_price != null
-        ? String(Math.max(0, Math.round(parseFloat(String(formData.listing_price)) || 0)))
-        : String(Math.max(0, Math.round(originalPriceNum)));
+    submitData.append('original_price', listingPriceStr);
+    const askForApi = String(Math.max(0, Math.round(listingPriceNum)));
     submitData.append('listing_price', fdText(askForApi));
-    if (formData.receipt_file) {
-      submitData.append('receipt_file', formData.receipt_file);
-    }
     if (ilEvent) {
       submitData.append('il_legal_declaration', 'true');
     }
@@ -871,7 +886,8 @@ const Sell = () => {
             const errors = Object.entries(errorData)
               .map(([key, value]) => {
                 const fieldErrors = Array.isArray(value) ? value : [value];
-                return `${key}: ${fieldErrors.join(', ')}`;
+                const label = ERROR_FIELD_LABELS[key] || key;
+                return `${label}: ${fieldErrors.join(', ')}`;
               })
               .join('; ');
             errorMessage = errors || errorMessage;
@@ -901,7 +917,7 @@ const Sell = () => {
           <h3 className="success-subtitle-hebrew">הכרטיס הועלה בהצלחה!</h3>
           {successWasIsrael ? (
             <p className="success-text">
-              הכרטיס הועלה בהצלחה! הוא יפורסם באתר לאחר שצוות האתר יאמת את הקבלה (עד 24 שעות).
+              הכרטיס הועלה בהצלחה! הוא יפורסם באתר לאחר בדיקת צוות קצרה (עד 24 שעות).
             </p>
           ) : (
             <p className="success-text">הכרטיס פורסם באתר וזמין למכירה.</p>
@@ -913,13 +929,7 @@ const Sell = () => {
   }
 
   const ilSelected = isIsraelEvent(formData.selectedEvent);
-  const faceValueNum = parseFloat(String(formData.original_price || ''));
-  const faceMaxForInput =
-    Number.isFinite(faceValueNum) && faceValueNum >= 0 ? Math.round(faceValueNum) : undefined;
-  const feeBasis =
-    ilSelected && formData.listing_price !== '' && formData.listing_price != null
-      ? parseFloat(String(formData.listing_price)) || 0
-      : parseFloat(String(formData.original_price || 0)) || 0;
+  const feeBasis = parseFloat(String(formData.listing_price || 0)) || 0;
 
   return (
     <div className="sell-container">
@@ -1058,6 +1068,20 @@ const Sell = () => {
                 )}
               </div>
 
+              {formData.selectedEvent ? (
+                <div className="selected-event-summary" role="status" aria-live="polite">
+                  <div>
+                    <strong>{getEventDisplayName(formData.selectedEvent)}</strong>
+                    <span>
+                      {selectedVenueLabel || formData.selectedEvent.venue} ·{' '}
+                      {sectionOptions.length > 0
+                        ? `${sectionOptions.length} גושים זמינים לבחירה`
+                        : 'טוען גושים לאולם'}
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="missing-event-banner" role="region" aria-label="בקשה להוספת אירוע">
                 <div className="missing-event-banner-text">
                   <strong>לא מצאת את ההופעה או המשחק שלך?</strong>
@@ -1129,40 +1153,33 @@ const Sell = () => {
             <div className="form-row seating-row-compact">
               <div className="form-group">
                 <label htmlFor="section">גוש *</label>
-                {(() => {
-                  const structured = eventDetail?.venue_detail?.sections;
-                  const useDropdown = Array.isArray(structured) && structured.length > 0;
-                  if (useDropdown) {
-                    return (
-                      <select
-                        id="section"
-                        name="section"
-                        value={formData.section}
-                        onChange={handleChange}
-                        className="section-dropdown"
-                        required
-                      >
-                        <option value="">בחר גוש / אזור</option>
-                        {structured.map((s) => (
-                          <option key={s.id} value={String(s.id)}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
-                    );
-                  }
-                  return (
-                    <input
-                      type="text"
-                      id="section"
-                      name="section"
-                      value={formData.section}
-                      onChange={handleChange}
-                      placeholder="לדוגמה: שער 11"
-                      required
-                    />
-                  );
-                })()}
+                <select
+                  id="section"
+                  name="section"
+                  value={formData.section}
+                  onChange={handleChange}
+                  className="section-dropdown premium-select"
+                  required
+                  disabled={!formData.event_id || sectionOptions.length === 0}
+                >
+                  <option value="">
+                    {!formData.event_id
+                      ? 'בחרו אירוע תחילה'
+                      : sectionOptions.length === 0
+                        ? 'לא נמצאו גושים לאולם זה'
+                        : 'בחר גוש / אזור'}
+                  </option>
+                  {sectionOptions.map((section) => (
+                    <option key={`${section.structured ? 'vs' : 'custom'}-${section.value}`} value={section.value}>
+                      {section.label}
+                    </option>
+                  ))}
+                </select>
+                {formData.event_id && sectionOptions.length > 0 ? (
+                  <small className="field-hint">
+                    מוצגים רק הגושים התקינים לאולם שנבחר.
+                  </small>
+                ) : null}
               </div>
               <div className="form-group">
                 <label htmlFor="row">שורה *</label>
@@ -1433,61 +1450,21 @@ const Sell = () => {
           )}
 
           <div className="form-group sell-pricing-block">
-            {ilSelected ? (
-              <>
-                <div className="form-row">
-                  <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                    <label htmlFor="original_price">מחיר פנים (המחיר המקורי) *</label>
-                    <input
-                      type="number"
-                      id="original_price"
-                      name="original_price"
-                      value={formData.original_price}
-                      onChange={handleChange}
-                      required
-                      min="0"
-                      step="1"
-                      placeholder={sellSym}
-                    />
-                  </div>
-                  <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                    <label htmlFor="listing_price">
-                      מחיר מבוקש (מכירה) *
-                    </label>
-                    <input
-                      type="number"
-                      id="listing_price"
-                      name="listing_price"
-                      value={formData.listing_price}
-                      onChange={handleChange}
-                      required
-                      min="0"
-                      max={faceMaxForInput}
-                      step="1"
-                      placeholder="עד מחיר הפנים"
-                    />
-                  </div>
-                </div>
-                <small className="sell-il-pricing-hint">
-                  באירועים בישראל מחיר המכירה אינו יכול לעלות על מחיר הפנים (ציות לאיסור ספסרות).
-                </small>
-              </>
-            ) : (
-              <>
-                <label htmlFor="original_price">מחיר הכרטיס *</label>
-                <input
-                  type="number"
-                  id="original_price"
-                  name="original_price"
-                  value={formData.original_price}
-                  onChange={handleChange}
-                  required
-                  min="0"
-                  step="0.01"
-                  placeholder={sellSym}
-                />
-              </>
-            )}
+            <label htmlFor="listing_price">מחיר מכירה *</label>
+            <input
+              type="number"
+              id="listing_price"
+              name="listing_price"
+              value={formData.listing_price}
+              onChange={handleChange}
+              required
+              min="1"
+              step={sellCurrency === 'ILS' ? '1' : '0.01'}
+              placeholder={sellSym}
+            />
+            <small className="sell-il-pricing-hint">
+              זה המחיר שיוצג לקונים לפני עמלת השירות. אין צורך להזין מחיר מקורי או להעלות קבלה.
+            </small>
 
             {feeBasis > 0 ? (
               <div className="price-breakdown-container">
@@ -1503,35 +1480,6 @@ const Sell = () => {
             ) : null}
           </div>
 
-          {ilSelected ? (
-            <div className="form-group sell-receipt-zone sell-receipt-zone--required">
-              <label htmlFor="receipt_file">
-                הוכחת קנייה / קבלה
-                <span className="req-asterisk" aria-hidden="true">
-                  {' '}
-                  *
-                </span>
-              </label>
-              <div className="file-dropzone-box sell-receipt-dropzone">
-                <input
-                  type="file"
-                  id="receipt_file"
-                  name="receipt_file"
-                  onChange={handleChange}
-                  accept=".pdf,application/pdf,image/jpeg,image/png,image/webp"
-                />
-                {formData.receipt_file ? (
-                  <span className="uploaded-file-name">✓ {formData.receipt_file.name}</span>
-                ) : (
-                  <span className="dropzone-placeholder">גררו קובץ או לחצו לבחירה (PDF או תמונה)</span>
-                )}
-              </div>
-              <small className="sell-receipt-hint">
-                חובה לאירועים בישראל. קבלה, אישור הזמנה או צילום מסך מהמפיץ.
-              </small>
-            </div>
-          ) : null}
-
           <div className="terms-checkbox-container sell-single-compliance">
             <input
               type="checkbox"
@@ -1544,7 +1492,7 @@ const Sell = () => {
             />
             <label htmlFor="sellerListingTerms" className="terms-checkbox-label">
               {ilSelected
-                ? 'אני מסכים/ה לתנאי השימוש של TradeTix ומצהיר/ה שהמחיר חוקי (לא עולה על המחיר המקורי) ושהעליתי קבלה תקינה. ידוע לי שהכרטיס יפורסם לאחר אישור הנהלה, ושהתשלום יועבר אליי כ-24 שעות לאחר קיום האירוע.'
+                ? 'אני מסכים/ה לתנאי השימוש של TradeTix ומצהיר/ה שהמחיר שהזנתי חוקי. ידוע לי שהכרטיס יפורסם לאחר אישור הנהלה, ושהתשלום יועבר אליי כ-24 שעות לאחר קיום האירוע.'
                 : 'אני מסכים/ה לתנאי השימוש של TradeTix ומאשר/ת שהתשלום בגין המכירה יועבר אליי כ-24 שעות לאחר קיום האירוע, על מנת להבטיח קנייה בטוחה ואת אמינות הכרטיסים.'}
             </label>
           </div>

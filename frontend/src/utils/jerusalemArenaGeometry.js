@@ -1,25 +1,23 @@
 /**
  * Pais Arena Jerusalem — elongated oval bowl, 2 tiers, uniform angular sectors.
  *
- * Stage gap is on the LEFT (west, θ = π). Sections are numbered clockwise on
- * screen (= increasing θ in SVG y-down coords) starting from the upper edge
- * of the stage gap, matching the physical seating chart orientation:
+ * Sections are numbered clockwise on screen (= increasing θ in SVG y-down
+ * coords) around a full continuous oval. Stage-side sections are still drawn
+ * but naturally remain gray/disabled unless inventory exists there.
  *
- *   Lower (Level 100): 18 active sections 103–120
- *     gap = 4/22 × 2π = 4π/11 ≈ 65.5° (sections 101-102 & 121-122 blocked)
+ *   Lower (Level 100): 22 sections 101–122
  *
- *   Upper (Level 300): 24 active sections 304–327
- *     gap = 6/30 × 2π = 2π/5 ≈ 72°   (sections 301-303 & 328-330 blocked)
+ *   Upper (Level 300): 30 sections 301–330
  */
 
-// --- Active section IDs -------------------------------------------------------
-/** Level 100: 18 active blocks, 103–120 */
-export const LOWER_SECTION_IDS = Array.from({ length: 18 }, (_, i) => 103 + i);
-/** Level 300: 24 active blocks, 304–327 */
-export const UPPER_SECTION_IDS = Array.from({ length: 24 }, (_, i) => 304 + i);
+// --- Section IDs --------------------------------------------------------------
+/** Level 100: 22 blocks, 101–122 */
+export const LOWER_SECTION_IDS = Array.from({ length: 22 }, (_, i) => 101 + i);
+/** Level 300: 30 blocks, 301–330 */
+export const UPPER_SECTION_IDS = Array.from({ length: 30 }, (_, i) => 301 + i);
 
-export const SECTIONS_LOWER = 18;
-export const SECTIONS_UPPER = 24;
+export const SECTIONS_LOWER = 22;
+export const SECTIONS_UPPER = 30;
 
 // ---------------------------------------------------------------------------------
 
@@ -60,36 +58,19 @@ export const COURT_RX = 10;
 
 // ─── Arc generation ──────────────────────────────────────────────────────────
 //
-// Stage gap: centered at θ = π (west/left).
-//
-// Lower ring: 4 slots blocked out of 22 → gap = 4/22 × 2π = 4π/11 rad
-// Upper ring: 6 slots blocked out of 30 → gap = 6/30 × 2π = 2π/5  rad
-//
-// For each ring, `count` uniform sections fill (2π − gapAngle) of arc.
-// Section i=0 (e.g. section 103) starts at (π + gapAngle/2), which is the
-// upper-left edge of the stage gap in screen coordinates.
-// Sections proceed clockwise on screen (= increasing θ in SVG y-down).
+// Sections start at west/left (θ = π) and proceed clockwise on screen
+// (= increasing θ in SVG y-down coordinates). Each tier divides the full
+// 2π track equally, so every block in a tier has the exact same size.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Total stage-gap angle for the lower ring (4 blocked out of 22 total slots) */
-const LOWER_GAP = (4 / 22) * (2 * Math.PI); // 4π/11 ≈ 1.143 rad ≈ 65.5°
-
-/** Total stage-gap angle for the upper ring (6 blocked out of 30 total slots) */
-const UPPER_GAP = (6 / 30) * (2 * Math.PI); // 2π/5  ≈ 1.257 rad ≈ 72°
-
 /**
- * Generate `count` equal-span arc segments for one tier.
- * Sections start at the upper edge of the stage gap (π + gapAngle/2) and
- * increase clockwise (increasing θ) until the lower edge of the gap.
- *
- * @param {number} count     - number of active sections in this tier
- * @param {number} gapAngle  - total angular width of the stage gap (rad)
+ * Generate `count` equal-span full-ring segments for one tier.
+ * @param {number} count - number of sections in this tier
  * @returns {{ a0: number, a1: number }[]}
  */
-function anglesForArc(count, gapAngle) {
-  const arcSpan = 2 * Math.PI - gapAngle;
-  const d = arcSpan / count;
-  const startAngle = Math.PI + gapAngle / 2; // upper edge of stage gap
+function anglesForRing(count) {
+  const d = (2 * Math.PI) / count;
+  const startAngle = Math.PI;
   const segments = [];
   for (let i = 0; i < count; i += 1) {
     const a0 = startAngle + i * d;
@@ -172,7 +153,7 @@ function push(list, id, faceLabel, tier, w) {
 const LOWER = [];
 const UPPER = [];
 
-const lowerAngles = anglesForArc(SECTIONS_LOWER, LOWER_GAP);
+const lowerAngles = anglesForRing(SECTIONS_LOWER);
 for (let i = 0; i < SECTIONS_LOWER; i += 1) {
   const { a0, a1 } = lowerAngles[i];
   const id = String(LOWER_SECTION_IDS[i]);
@@ -185,7 +166,7 @@ for (let i = 0; i < SECTIONS_LOWER; i += 1) {
   );
 }
 
-const upperAngles = anglesForArc(SECTIONS_UPPER, UPPER_GAP);
+const upperAngles = anglesForRing(SECTIONS_UPPER);
 for (let i = 0; i < SECTIONS_UPPER; i += 1) {
   const { a0, a1 } = upperAngles[i];
   const id = String(UPPER_SECTION_IDS[i]);
@@ -225,27 +206,13 @@ export const UPPER_WEDGE_IDS = UPPER.map((s) => s.id);
 export const WEDGE_IDS = SECTION_WEDGES.map((s) => s.id);
 
 /**
- * Map a raw section string/number from ticket data to the nearest renderable
- * block id. Stage-adjacent blocked sections (101-102, 121-122, 301-303, 328-330)
- * are clamped to the nearest active section.
+ * Map a raw section string/number from ticket data to a renderable block id.
  */
 export function blockIdFromSectionNumber(numStr) {
-  if (!numStr || numStr === '—') return '103';
+  if (!numStr || numStr === '—') return '101';
   const n = parseInt(String(numStr), 10);
-  if (Number.isNaN(n)) return '103';
+  if (Number.isNaN(n)) return '101';
   const s = String(n);
   if (ALL_BLOCK_IDS.has(s)) return s;
-  // Lower tier range (101–122) — clamp to active 103–120
-  if (n >= 101 && n <= 122) {
-    if (n < 103) return '103';
-    if (n > 120) return '120';
-    return s;
-  }
-  // Upper tier range (301–330) — clamp to active 304–327
-  if (n >= 301 && n <= 330) {
-    if (n < 304) return '304';
-    if (n > 327) return '327';
-    return s;
-  }
-  return '103';
+  return '101';
 }
