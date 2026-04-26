@@ -1,7 +1,14 @@
 /* eslint-disable react/prop-types -- project does not use PropTypes consistently */
 import { useMemo } from 'react';
-import { Filter, Trophy, Ticket, Gem, CheckSquare } from 'lucide-react';
+import { Filter, Ticket, Gem, CheckSquare } from 'lucide-react';
 import BuyerListingPrice from './BuyerListingPrice';
+
+const ZONE_HE = {
+  north: 'טריבונה צפון',
+  south: 'טריבונה דרום',
+  east: 'טריבונה מזרח',
+  west: 'טריבונה מערב',
+};
 
 export default function BloomfieldTicketListPanel({
   rows = [],
@@ -33,16 +40,16 @@ export default function BloomfieldTicketListPanel({
     <div className="flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm" dir="rtl">
       {totalListingsBeforeQuantityFilter > 0 && totalListingsBeforeQuantityFilter <= 8 ? (
         <div className="border-b border-rose-100 bg-rose-50 px-3 py-2 text-center text-xs font-semibold text-rose-700">
-          Only a few tickets left for this event — don&apos;t wait until the last minute
+          נותרו מעט כרטיסים לאירוע זה — אל תחכו לרגע האחרון
         </div>
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5">
         <p className="text-sm font-semibold text-slate-800">
-          {rows.length} listings
+          {rows.length} מודעות
           {listingQuantity > 1 ? (
             <span className="mr-1 font-normal text-slate-500">
-              · at least {listingQuantity} tickets
+              · לפחות {listingQuantity} כרטיסים
             </span>
           ) : null}
         </p>
@@ -62,11 +69,11 @@ export default function BloomfieldTicketListPanel({
             id="bloomfield-qty-select"
             value={listingQuantity}
             onChange={(e) => onListingQuantityChange(Number(e.target.value))}
-            className="rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-2 text-sm font-medium text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            className="rounded-lg border border-slate-200 bg-white py-1.5 px-3 text-sm font-medium text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
           >
             {[1, 2, 3, 4, 5, 6, 8].map((n) => (
               <option key={n} value={n}>
-                {n} {n === 1 ? 'ticket' : 'tickets'}
+                {n} {n === 1 ? 'כרטיס' : 'כרטיסים'}
               </option>
             ))}
           </select>
@@ -77,9 +84,8 @@ export default function BloomfieldTicketListPanel({
         className="max-h-[min(68vh,640px)] space-y-3 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-3 [scrollbar-width:thin] [scrollbar-color:rgb(203_213_225)_transparent] [color-scheme:light] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/90"
       >
         {rows.length === 0 ? (
-          <div className="px-4 py-10 text-center text-sm text-slate-600">
-            No listings match the number of tickets you selected. Try lowering the quantity or
-            clearing filters.
+          <div className="px-4 py-10 text-center text-sm text-slate-600" dir="rtl">
+            אין מודעות שתואמות לכמות הנבחרת. נסו להפחית את הכמות או לנקות את הסינון.
           </div>
         ) : (
           rows.map(({ stableId, group, bloomfield, firstTicket }) => {
@@ -99,9 +105,11 @@ export default function BloomfieldTicketListPanel({
             const detailTitle =
               rawSection.length > 0
                 ? bloomfield.row && bloomfield.row !== '—'
-                  ? `${rawSection} — row ${bloomfield.row}`
+                  ? `${rawSection} — שורה ${bloomfield.row}`
                   : rawSection
-                : `${bloomfield.zone}-tier-${bloomfield.sectionId}`;
+                : bloomfield.sectionId && bloomfield.sectionId !== '—'
+                  ? `מקטע ${bloomfield.sectionId}`
+                  : ZONE_HE[bloomfield.zone] || 'אזור כללי';
 
             return (
               <article
@@ -115,26 +123,20 @@ export default function BloomfieldTicketListPanel({
                 onMouseEnter={() => onHoverRow(stableId)}
                 onMouseLeave={() => onHoverRow(null)}
               >
-                {bloomfield.isTopChoice ? (
-                  <div className="flex items-center gap-2 border-b border-green-100 bg-green-50 px-4 py-2.5 font-sans text-sm font-semibold text-green-800">
-                    <Trophy className="h-4 w-4 shrink-0 text-green-700" strokeWidth={2} aria-hidden />
-                    Top choice
-                  </div>
-                ) : null}
                 <div dir="ltr" lang="en" className="text-left">
-                  <button
+                    <button
                     type="button"
-                    className="flex w-full min-w-0 flex-row items-center justify-between gap-4 border-0 bg-transparent px-4 py-4 text-left font-sans shadow-none outline-none ring-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/40"
+                    className="flex w-full min-w-0 flex-row items-center justify-between gap-3 border-0 bg-transparent px-4 py-3 text-left font-sans shadow-none outline-none ring-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/40"
                     onClick={() => onToggleRow(groupId)}
                   >
                     <div
-                      className="min-w-0 shrink-0 [&_.buyer-listing-price]:items-start [&_.buyer-listing-price]:text-left [&_.buyer-listing-price-main]:text-3xl [&_.buyer-listing-price-main]:font-bold [&_.buyer-listing-price-main]:leading-none [&_.buyer-listing-price-main]:tracking-tight [&_.buyer-listing-price-fee]:mt-1 [&_.buyer-listing-price-fee]:text-xs [&_.buyer-listing-price-fee]:text-slate-500"
+                      className="min-w-0 shrink-0 [&_.buyer-listing-price]:items-start [&_.buyer-listing-price]:text-left [&_.buyer-listing-price-main]:text-2xl [&_.buyer-listing-price-main]:font-bold [&_.buyer-listing-price-main]:leading-none [&_.buyer-listing-price-main]:tracking-tight [&_.buyer-listing-price-fee]:mt-1 [&_.buyer-listing-price-fee]:text-xs [&_.buyer-listing-price-fee]:text-slate-500"
                     >
                       <BuyerListingPrice ticket={firstTicket} />
                     </div>
-                    <div className="flex min-w-0 flex-1 flex-col items-end text-right">
-                      <h3 className="text-sm font-semibold leading-snug text-slate-800">{detailTitle}</h3>
-                      <div className="mt-2 flex flex-wrap justify-end gap-2">
+                    <div className="flex min-w-0 flex-1 flex-col items-end text-right gap-1.5">
+                      <h3 className="text-sm font-semibold leading-snug text-slate-800 truncate max-w-[180px]">{detailTitle}</h3>
+                      <div className="flex flex-wrap justify-end gap-1.5">
                         {group.available_count > 0 ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
                             <Ticket className="h-3.5 w-3.5 shrink-0 text-pink-500" strokeWidth={2} aria-hidden />
@@ -171,7 +173,7 @@ export default function BloomfieldTicketListPanel({
                       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                         <button
                           type="button"
-                          className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700"
+                          className="min-h-[44px] rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
                           disabled={group.available_count <= 0}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -183,7 +185,7 @@ export default function BloomfieldTicketListPanel({
                         {user ? (
                           <button
                             type="button"
-                            className="rounded-lg border-2 border-emerald-600 bg-white px-4 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50"
+                            className="min-h-[44px] rounded-lg border-2 border-emerald-600 bg-white px-4 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60 disabled:cursor-not-allowed"
                             disabled={group.available_count <= 0}
                             onClick={(e) => {
                               e.stopPropagation();
