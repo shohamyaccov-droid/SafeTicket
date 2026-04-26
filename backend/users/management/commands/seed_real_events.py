@@ -21,7 +21,7 @@ from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from users.models import Artist, Event, Offer, Order, Ticket, TicketAlert
+from users.models import Artist, Event, Offer, Order, Ticket, TicketAlert, Venue
 
 User = get_user_model()
 
@@ -29,6 +29,10 @@ TZ_IL = ZoneInfo("Asia/Jerusalem")
 
 SELLER_EMAIL = "seed_real_events@safeticket.demo"
 SELLER_USERNAME = "real_events_seed_seller"
+
+VENUE_BLOOMFIELD = "אצטדיון בלומפילד"
+VENUE_MENORA = "היכל מנורה מבטחים"
+VENUE_JERUSALEM_ARENA = "פיס ארנה ירושלים"
 
 
 def _pdf(name: str = "ticket.pdf") -> ContentFile:
@@ -113,6 +117,10 @@ class Command(BaseCommand):
         u.save()
         return u
 
+    def _get_venue(self, name: str, city: str) -> Venue:
+        venue, _ = Venue.objects.get_or_create(name=name, city=city)
+        return venue
+
     def _mk_ticket(
         self,
         seller: User,
@@ -148,7 +156,8 @@ class Command(BaseCommand):
         ev = Event.objects.create(
             name=title,
             date=when,
-            venue="אצטדיון בלומפילד",
+            venue=VENUE_BLOOMFIELD,
+            venue_place=self._get_venue(VENUE_BLOOMFIELD, "תל אביב"),
             city="תל אביב",
             category="sport",
             status="פעיל",
@@ -175,7 +184,8 @@ class Command(BaseCommand):
         ev = Event.objects.create(
             name=title,
             date=when,
-            venue="אצטדיון בלומפילד",
+            venue=VENUE_BLOOMFIELD,
+            venue_place=self._get_venue(VENUE_BLOOMFIELD, "תל אביב"),
             city="תל אביב",
             category="sport",
             status="פעיל",
@@ -208,7 +218,8 @@ class Command(BaseCommand):
             artist=artist,
             name="אייל גולן - בלומפילד",
             date=when,
-            venue="אצטדיון בלומפילד",
+            venue=VENUE_BLOOMFIELD,
+            venue_place=self._get_venue(VENUE_BLOOMFIELD, "תל אביב"),
             city="תל אביב",
             category="concert",
             status="פעיל",
@@ -264,7 +275,8 @@ class Command(BaseCommand):
             artist=artist,
             name="עדן חסון - היכל מנורה",
             date=when,
-            venue="היכל מנורה מבטחים",
+            venue=VENUE_MENORA,
+            venue_place=self._get_venue(VENUE_MENORA, "תל אביב"),
             city="תל אביב",
             category="concert",
             status="פעיל",
@@ -294,7 +306,8 @@ class Command(BaseCommand):
             artist=artist,
             name="בן צור - הופעת ענק",
             date=when,
-            venue="פיס ארנה ירושלים",
+            venue=VENUE_JERUSALEM_ARENA,
+            venue_place=self._get_venue(VENUE_JERUSALEM_ARENA, "ירושלים"),
             city="ירושלים",
             category="concert",
             status="פעיל",

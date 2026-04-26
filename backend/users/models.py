@@ -118,8 +118,9 @@ class Event(models.Model):
     Centralized Event model for grouping tickets
     """
     VENUE_CHOICES = [
-        ('מנורה מבטחים', 'מנורה מבטחים'),
-        ('בלומפילד', 'בלומפילד'),
+        ('היכל מנורה מבטחים', 'היכל מנורה מבטחים'),
+        ('אצטדיון בלומפילד', 'אצטדיון בלומפילד'),
+        ('פיס ארנה ירושלים', 'פיס ארנה ירושלים'),
         ('סמי עופר', 'סמי עופר'),
         ('בארבי תל אביב', 'בארבי תל אביב'),
         ('אחר', 'אחר'),
@@ -138,7 +139,7 @@ class Event(models.Model):
     venue = models.CharField(
         max_length=255,
         choices=VENUE_CHOICES,
-        default='מנורה מבטחים',
+        default='היכל מנורה מבטחים',
         help_text="Venue name"
     )
     venue_place = models.ForeignKey(

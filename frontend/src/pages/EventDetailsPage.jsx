@@ -724,39 +724,35 @@ const EventDetailsPage = () => {
   }, [event]);
   const listSym = currencySymbol(listingCurrency);
 
-  const venueHaystackForMap = useMemo(() => {
+  const canonicalVenueForMap = useMemo(() => {
     if (!event) return '';
-    const venueMatch = getVenueConfig(event?.venue || '');
-    const finalVenueName = venueMatch ? venueMatch.matchedName : 'מנורה מבטחים';
-    return [event?.venue, event?.name, event?.venue_detail?.name, finalVenueName]
+    const candidates = [event?.venue, event?.venue_detail?.name]
       .filter(Boolean)
-      .join(' ');
+      .map((v) => String(v).trim());
+
+    if (candidates.includes('אצטדיון בלומפילד')) return 'אצטדיון בלומפילד';
+    if (candidates.includes('היכל מנורה מבטחים')) return 'היכל מנורה מבטחים';
+    if (candidates.includes('פיס ארנה ירושלים')) return 'פיס ארנה ירושלים';
+
+    const haystack = candidates.join(' ');
+    if (haystack.includes('בלומפילד')) return 'אצטדיון בלומפילד';
+    if (
+      haystack.includes('פיס ארנה') ||
+      haystack.includes('ארנה ירושלים') ||
+      /Pais\s*Arena|Arena\s+Jerusalem/i.test(haystack)
+    ) {
+      return 'פיס ארנה ירושלים';
+    }
+    if (haystack.includes('מנורה') || haystack.includes('מבטחים')) return 'היכל מנורה מבטחים';
+
+    const venueMatch = getVenueConfig(candidates[0] || '');
+    return venueMatch?.matchedName || candidates[0] || '';
   }, [event]);
 
-  const isBloomfieldVenue = useMemo(
-    () => venueHaystackForMap.includes('בלומפילד'),
-    [venueHaystackForMap]
-  );
-
-  const venueMatchForMap = useMemo(
-    () => getVenueConfig(event?.venue || 'מנורה מבטחים'),
-    [event]
-  );
-  const finalVenueNameForMap = venueMatchForMap
-    ? venueMatchForMap.matchedName
-    : 'מנורה מבטחים';
-  const isMenoraVenue =
-    finalVenueNameForMap.includes('מנורה') || finalVenueNameForMap.includes('מבטחים');
-  const isJerusalemArenaVenue = useMemo(
-    () =>
-      venueHaystackForMap.includes('פיס ארנה') ||
-      venueHaystackForMap.includes('ארנה ירושלים') ||
-      /Pais\s*Arena/i.test(venueHaystackForMap) ||
-      /Arena\s+Jerusalem/i.test(venueHaystackForMap) ||
-      (venueHaystackForMap.includes('ירושלים') &&
-        (venueHaystackForMap.includes('ארנה') || venueHaystackForMap.includes('פיס'))),
-    [venueHaystackForMap]
-  );
+  const finalVenueNameForMap = canonicalVenueForMap || event?.venue || '';
+  const isBloomfieldVenue = canonicalVenueForMap === 'אצטדיון בלומפילד';
+  const isMenoraVenue = canonicalVenueForMap === 'היכל מנורה מבטחים';
+  const isJerusalemArenaVenue = canonicalVenueForMap === 'פיס ארנה ירושלים';
 
   const bloomfieldFilteredGroups = useMemo(() => {
     if (!isBloomfieldVenue) return ticketGroups;

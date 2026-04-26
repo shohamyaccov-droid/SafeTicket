@@ -154,8 +154,8 @@ SEED_LAUNCH_EVENTS: list[dict] = [
     {
         'name': 'בן צור - ארנה ירושלים',
         'date': _il_dt(2026, 5, 28, 21, 0),
-        'venue': 'אחר',
-        'venue_struct': ('היכל הפיס ארנה', 'ירושלים'),
+        'venue': 'פיס ארנה ירושלים',
+        'venue_struct': ('פיס ארנה ירושלים', 'ירושלים'),
         'city': 'ירושלים',
         'category': 'concert',
         'artist_name': 'בן צור',
@@ -165,7 +165,7 @@ SEED_LAUNCH_EVENTS: list[dict] = [
     {
         'name': 'אייל גולן - בלומפילד',
         'date': _il_dt(2026, 6, 18, 20, 0),
-        'venue': 'בלומפילד',
+        'venue': 'אצטדיון בלומפילד',
         'venue_struct': ('אצטדיון בלומפילד', 'תל אביב'),
         'city': 'תל אביב',
         'category': 'concert',
@@ -187,7 +187,7 @@ SEED_LAUNCH_EVENTS: list[dict] = [
     {
         'name': 'עדן חסון - היכל מנורה',
         'date': _il_dt(2026, 6, 25, 20, 45),
-        'venue': 'מנורה מבטחים',
+        'venue': 'היכל מנורה מבטחים',
         'venue_struct': ('היכל מנורה מבטחים', 'תל אביב'),
         'city': 'תל אביב',
         'category': 'concert',
