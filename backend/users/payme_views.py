@@ -36,12 +36,9 @@ def payme_webhook(request):
     """
     Payme → TradeTix status updates. Configure Payme dashboard to POST here.
     """
-    if not verify_payme_webhook_request(request):
-        log_payme('webhook_rejected_signature', payload={'reason': 'bad_signature'})
-        return Response({'error': 'invalid signature'}, status=status.HTTP_403_FORBIDDEN)
-
+    raw_body = request.body or b''
     try:
-        payload = request.data if isinstance(request.data, dict) else json.loads(request.body or b'{}')
+        payload = json.loads(raw_body or b'{}')
     except Exception as e:
         log_payme('webhook_bad_json', exc=e)
         return Response({'error': 'invalid json'}, status=status.HTTP_400_BAD_REQUEST)
@@ -63,7 +60,26 @@ def payme_webhook(request):
     tid, norm = normalize_payme_webhook_status(payload)
     order = Order.objects.filter(pk=order_id).first()
     if not order:
+        log_payme('webhook_order_not_found', order_id=order_id, payload={'merchant_order_id': oid_raw})
         return Response({'error': 'order not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    verified, verify_reason = verify_payme_webhook_request(
+        request,
+        payload=payload,
+        order=order,
+        raw_body=raw_body,
+    )
+    if not verified:
+        log_payme(
+            'webhook_rejected_validation',
+            order_id=order_id,
+            payload={
+                'reason': verify_reason,
+                'stored_transaction_id': order.payme_transaction_id,
+                'order_currency': order.currency,
+            },
+        )
+        return Response({'error': 'invalid webhook'}, status=status.HTTP_403_FORBIDDEN)
 
     if order.status == 'paid':
         return Response({'received': True, 'finalized': True, 'order_status': 'paid'})
@@ -153,21 +169,21 @@ def payme_init_checkout(request):
 
     redirect_url = extract_redirect_url(payme_response)
     p_tid = extract_transaction_id(payme_response)
-    if p_tid:
-        order.payme_transaction_id = p_tid
-        order.payme_status = 'initialized'
-        order.save(update_fields=['payme_transaction_id', 'payme_status', 'updated_at'])
 
-    if http_status >= 400 or not redirect_url:
+    if http_status >= 400 or not redirect_url or not p_tid:
         log_payme('init_unexpected_response', order_id=oid, response={'http': http_status, 'body': payme_response})
         return Response(
             {
-                'error': 'Payme did not return a redirect URL',
+                'error': 'Payme did not return a redirect URL and transaction ID',
                 'payme_http_status': http_status,
                 'payme_response': payme_response,
             },
             status=status.HTTP_502_BAD_GATEWAY,
         )
+
+    order.payme_transaction_id = p_tid
+    order.payme_status = 'initialized'
+    order.save(update_fields=['payme_transaction_id', 'payme_status', 'updated_at'])
 
     return Response(
         {

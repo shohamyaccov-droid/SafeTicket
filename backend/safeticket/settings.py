@@ -536,6 +536,19 @@ PAYME_GENERATE_SALE_URL = (
 ).strip()
 PAYME_WEBHOOK_SECRET = (os.environ.get('PAYME_WEBHOOK_SECRET') or '').strip()
 PAYME_SUB_SELLER_PAYEE_ID = (os.environ.get('PAYME_SUB_SELLER_PAYEE_ID') or '').strip()
+_VITE_USE_PAYME = (os.environ.get('VITE_USE_PAYME') or '').strip().lower() in ('1', 'true', 'yes')
+_PAYME_CONFIGURED = bool(PAYME_API_KEY or PAYME_MERCHANT_ID)
+# Production payment authority: when PayMe is enabled/configured, only a verified PayMe webhook may
+# finalize inventory. Local/dev can still use the mock confirm endpoint unless explicitly disabled.
+PAYME_REQUIRE_WEBHOOK_CONFIRMATION = (
+    os.environ.get(
+        'PAYME_REQUIRE_WEBHOOK_CONFIRMATION',
+        'true' if (not DEBUG and (_VITE_USE_PAYME or _PAYME_CONFIGURED)) else 'false',
+    )
+    .strip()
+    .lower()
+    in ('1', 'true', 'yes')
+)
 try:
     PAYME_EXTRA_BODY_JSON = json.loads(os.environ.get('PAYME_EXTRA_BODY_JSON', '{}') or '{}')
 except json.JSONDecodeError:

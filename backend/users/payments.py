@@ -167,6 +167,89 @@ def extract_transaction_id(payme_response: Any) -> str | None:
     return None
 
 
+def _nested_dicts(payload: dict[str, Any]):
+    """PayMe payloads vary by account/API version; inspect common top-level wrappers only."""
+    yield payload
+    for key in ('data', 'result', 'payment', 'transaction', 'sale', 'metadata'):
+        nested = payload.get(key)
+        if isinstance(nested, dict):
+            yield nested
+
+
+def _first_payload_value(payload: dict[str, Any], *keys: str) -> Any:
+    wanted = {k.lower() for k in keys}
+    for source in _nested_dicts(payload):
+        for k, v in source.items():
+            if str(k).lower() in wanted:
+                return v
+    return None
+
+
+def _extract_merchant_order_id(payload: dict[str, Any]) -> int | None:
+    raw = _first_payload_value(
+        payload,
+        'merchant_order_id',
+        'merchantOrderId',
+        'order_id',
+        'orderId',
+    )
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_currency(payload: dict[str, Any]) -> str:
+    raw = _first_payload_value(payload, 'currency', 'currency_code', 'currencyCode')
+    return str(raw or '').strip().upper()
+
+
+def _payload_amount_candidates_agorot(payload: dict[str, Any]) -> set[int]:
+    """
+    Return possible webhook amount interpretations in agorot/cents.
+
+    PayMe docs/responses can use `sale_price` in minor units, while some gateway
+    payloads use decimal major units. We accept only values that exactly match the
+    order total after converting either plausible representation.
+    """
+    candidates: set[int] = set()
+    minor_keys = {
+        'sale_price',
+        'saleprice',
+        'amount_agorot',
+        'amount_cents',
+        'amount_minor',
+    }
+    all_keys = minor_keys | {
+        'amount',
+        'total',
+        'total_amount',
+        'totalamount',
+        'transaction_amount',
+        'transactionamount',
+        'price',
+    }
+    for source in _nested_dicts(payload):
+        for key, value in source.items():
+            key_norm = str(key).lower()
+            if key_norm not in all_keys:
+                continue
+            try:
+                dec = Decimal(str(value)).quantize(QUANT, rounding=ROUND_HALF_UP)
+            except Exception:
+                continue
+            if key_norm in minor_keys:
+                candidates.add(int(dec))
+            # Also allow decimal major-unit fields; exact comparison below still protects the order.
+            candidates.add(int((dec * 100).quantize(Decimal('1'), rounding=ROUND_HALF_UP)))
+    return candidates
+
+
+def _expected_order_total_agorot(order) -> int:
+    total = order.total_paid_by_buyer if order.total_paid_by_buyer is not None else order.total_amount
+    return _money_to_agorot(total)
+
+
 def normalize_payme_webhook_status(payload: dict[str, Any]) -> tuple[str | None, str | None]:
     """Return (transaction_id, normalized_status) where normalized is success|authorized|failed|pending."""
     tid = None
@@ -198,21 +281,60 @@ def normalize_payme_webhook_status(payload: dict[str, Any]) -> tuple[str | None,
     return tid, 'pending' if s else None
 
 
-def verify_payme_webhook_request(request) -> bool:
+def verify_payme_webhook_request(
+    request,
+    *,
+    payload: dict[str, Any],
+    order,
+    raw_body: bytes | None = None,
+) -> tuple[bool, str]:
+    """
+    Validate that a PayMe webhook is both authentic and for this exact order.
+
+    Finalization is irreversible from a marketplace perspective (inventory is sold
+    and PDFs are released), so every success webhook must prove:
+    signature, merchant order id, PayMe transaction id, amount, and currency.
+    """
     secret = (get_payme_config()['webhook_secret'] or '').strip()
     if not secret:
-        return True
+        return False, 'missing_webhook_secret'
     got = (request.headers.get('X-Payme-Signature') or request.headers.get('X-Webhook-Signature') or '').strip()
     if not got:
-        return False
+        return False, 'missing_signature_header'
     import hmac
     import hashlib
 
-    body = request.body or b''
+    body = raw_body if raw_body is not None else (request.body or b'')
     expected = hmac.new(secret.encode('utf-8'), body, hashlib.sha256).hexdigest()
     from secrets import compare_digest
 
-    return compare_digest(got, expected) or compare_digest(got, f'sha256={expected}')
+    if not (compare_digest(got, expected) or compare_digest(got, f'sha256={expected}')):
+        return False, 'bad_signature'
+
+    merchant_order_id = _extract_merchant_order_id(payload)
+    if merchant_order_id != int(order.pk):
+        return False, 'merchant_order_id_mismatch'
+
+    transaction_id, _norm = normalize_payme_webhook_status(payload)
+    if not transaction_id:
+        return False, 'missing_transaction_id'
+    stored_tid = (order.payme_transaction_id or '').strip()
+    if not stored_tid:
+        return False, 'missing_stored_transaction_id'
+    if transaction_id != stored_tid:
+        return False, 'transaction_id_mismatch'
+
+    currency = _extract_currency(payload)
+    expected_currency = (order.currency or 'ILS').strip().upper()
+    if not currency or currency != expected_currency:
+        return False, 'currency_mismatch'
+
+    expected_amount = _expected_order_total_agorot(order)
+    amount_candidates = _payload_amount_candidates_agorot(payload)
+    if expected_amount not in amount_candidates:
+        return False, 'amount_mismatch'
+
+    return True, 'ok'
 
 
 def finalize_pending_order_to_paid(order_id: int, source: str = 'payme') -> tuple[bool, str | None]:

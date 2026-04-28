@@ -1844,6 +1844,22 @@ def confirm_order_payment(request, order_id):
             status=status.HTTP_404_NOT_FOUND,
         )
 
+    if getattr(settings, 'PAYME_REQUIRE_WEBHOOK_CONFIRMATION', False):
+        logger.warning(
+            'confirm_order_payment rejected: PayMe webhook confirmation required order_id=%s user_id=%s',
+            order_id,
+            getattr(request.user, 'id', None),
+        )
+        return Response(
+            {
+                'error': (
+                    'Payment confirmation is handled by PayMe. '
+                    'Please wait for the payment status to update.'
+                )
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     webhook_secret = (os.environ.get('MOCK_PAYMENT_WEBHOOK_SECRET') or '').strip()
     mock_ack = request.data.get('mock_payment_ack') is True or str(
         request.data.get('mock_payment_ack', '')
