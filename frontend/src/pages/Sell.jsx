@@ -15,6 +15,8 @@ const SELL_PAGE_BUILD_TAG = import.meta.env.VITE_BUILD_ID || 'local-dev';
 /** PDF or image (JPEG/PNG) — matches backend ticket upload */
 const TICKET_FILE_INPUT_ACCEPT =
   '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
+const MAX_TICKET_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const TICKET_FILE_CONSTRAINTS_HE = 'פורמטים נתמכים: PDF, JPG, PNG · גודל מקסימלי: 5MB לקובץ';
 
 function isPdfFile(file) {
   if (!file) return false;
@@ -26,6 +28,35 @@ function isTicketAttachmentFile(file) {
   if (isPdfFile(file)) return true;
   if (file.type === 'image/jpeg' || file.type === 'image/jpg' || file.type === 'image/png') return true;
   return /\.(jpe?g|png)$/i.test(file.name || '');
+}
+
+function formatFileSize(bytes) {
+  const n = Number(bytes || 0);
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)}MB`;
+  if (n >= 1024) return `${Math.ceil(n / 1024)}KB`;
+  return `${n}B`;
+}
+
+function ticketFileValidationError(file, { requirePdf = false } = {}) {
+  if (!file) return 'לא נבחר קובץ.';
+  if (!isTicketAttachmentFile(file)) {
+    return `הקובץ "${file.name || 'ללא שם'}" אינו נתמך. ניתן להעלות PDF, JPG או PNG בלבד.`;
+  }
+  if (requirePdf && !isPdfFile(file)) {
+    return 'למספר כרטיסים במצב קובץ יחיד יש להעלות PDF מרובה עמודים בלבד.';
+  }
+  if (file.size > MAX_TICKET_FILE_SIZE_BYTES) {
+    return `הקובץ "${file.name || 'ללא שם'}" גדול מדי (${formatFileSize(file.size)}). הגודל המקסימלי הוא 5MB.`;
+  }
+  return '';
+}
+
+function validateTicketFiles(files, options = {}) {
+  for (const file of files || []) {
+    const msg = ticketFileValidationError(file, options);
+    if (msg) return msg;
+  }
+  return '';
 }
 
 const rangeOptions = (start, end) =>
@@ -105,6 +136,7 @@ function TicketAttachmentPreview({ file }) {
       <div className="sell-file-preview sell-file-preview--image">
         <img src={url} alt="" loading="lazy" decoding="async" />
         <span className="sell-file-preview-label">מוכן להעלאה</span>
+        <span className="sell-file-preview-meta">{formatFileSize(file.size)}</span>
       </div>
     );
   }
@@ -114,6 +146,7 @@ function TicketAttachmentPreview({ file }) {
         PDF
       </span>
       <span className="sell-file-preview-label">מוכן להעלאה</span>
+      <span className="sell-file-preview-meta">{formatFileSize(file.size)}</span>
     </div>
   );
 }
@@ -160,6 +193,8 @@ const Sell = () => {
   const [success, setSuccess] = useState(false);
   const [successWasIsrael, setSuccessWasIsrael] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadPhase, setUploadPhase] = useState('');
   /** Single mandatory compliance checkbox — label depends on event.country (venue), not artist. */
   const [sellerListingTermsAccepted, setSellerListingTermsAccepted] = useState(false);
   const [eventRequestOpen, setEventRequestOpen] = useState(false);
@@ -564,11 +599,10 @@ const Sell = () => {
       // Handle multiple ticket file uploads - one per ticket
       if (files && files.length > 0) {
         const fileArray = Array.from(files);
-        
-        const invalidFiles = fileArray.filter((file) => !isTicketAttachmentFile(file));
-        
-        if (invalidFiles.length > 0) {
-          setError('נא לבחור קבצי PDF או תמונה (JPG, PNG) בלבד.');
+
+        const fileError = validateTicketFiles(fileArray);
+        if (fileError) {
+          setError(fileError);
           return;
         }
         
@@ -590,14 +624,9 @@ const Sell = () => {
       if (files && files.length > 0) {
         const file = files[0];
         const qty = formData.available_quantity || 1;
-        if (!isTicketAttachmentFile(file)) {
-          setError('נא לבחור קובץ PDF או תמונה (JPG, PNG).');
-          return;
-        }
-        if (qty > 1 && !isPdfFile(file)) {
-          setError(
-            'למספר כרטיסים יש להעלות קובץ PDF עם עמוד לכל כרטיס, או לבחור "קובץ נפרד לכל כרטיס" והעלאת PDF/תמונה לכל אחד.'
-          );
+        const fileError = ticketFileValidationError(file, { requirePdf: qty > 1 });
+        if (fileError) {
+          setError(fileError);
           return;
         }
         setFormData(prev => ({
@@ -612,8 +641,9 @@ const Sell = () => {
       const index = parseInt(name.replace('pdf_file_package_', ''), 10);
       if (!isNaN(index) && files && files.length > 0) {
         const file = files[0];
-        if (!isTicketAttachmentFile(file)) {
-          setError('נא לבחור קובץ PDF או תמונה (JPG, PNG).');
+        const fileError = ticketFileValidationError(file);
+        if (fileError) {
+          setError(fileError);
           return;
         }
         // Always use functional updates so ticket_packages is never copied from a stale closure.
@@ -661,7 +691,10 @@ const Sell = () => {
     e.preventDefault();
     setError('');
     setSuccess(false);
+    setUploadProgress(5);
+    setUploadPhase('בודק את פרטי הכרטיס והקבצים...');
     setLoading(true);
+    let progressTimer = null;
 
     if (!sellerListingTermsAccepted) {
       setError('יש לאשר את תנאי ההצהרה כדי להמשיך');
@@ -724,10 +757,9 @@ const Sell = () => {
 
     if (requiredCount > 1) {
       if (useSingleFile) {
-        if (requiredCount > 1 && formData.singleMultiPagePdf && !isPdfFile(formData.singleMultiPagePdf)) {
-          setError(
-            'למספר כרטיסים ניתן להשתמש רק בקובץ PDF מרובה עמודים במצב קובץ יחיד, או לעבור לקובץ נפרד לכל כרטיס (PDF/תמונה).'
-          );
+        const singleFileError = ticketFileValidationError(formData.singleMultiPagePdf, { requirePdf: true });
+        if (singleFileError) {
+          setError(singleFileError);
           setLoading(false);
           return;
         }
@@ -746,8 +778,9 @@ const Sell = () => {
           return;
         }
         const invalidFiles = pdfFiles.filter((f) => !isTicketAttachmentFile(f));
-        if (invalidFiles.length > 0) {
-          setError('נא להעלות לכל כרטיס קובץ PDF או תמונה (JPG, PNG).');
+        const fileError = validateTicketFiles(pdfFiles);
+        if (invalidFiles.length > 0 || fileError) {
+          setError(fileError || 'נא להעלות לכל כרטיס קובץ PDF או תמונה (JPG, PNG).');
           setLoading(false);
           return;
         }
@@ -769,8 +802,9 @@ const Sell = () => {
           return;
         }
         const pdfFile = formData.ticket_packages[0].pdf_file;
-        if (!isTicketAttachmentFile(pdfFile)) {
-          setError('נא להעלות קובץ PDF או תמונה (JPG, PNG).');
+        const fileError = ticketFileValidationError(pdfFile);
+        if (fileError) {
+          setError(fileError);
           setLoading(false);
           return;
         }
@@ -780,12 +814,21 @@ const Sell = () => {
           setLoading(false);
           return;
         }
+        const fileError = ticketFileValidationError(formData.singleMultiPagePdf);
+        if (fileError) {
+          setError(fileError);
+          setLoading(false);
+          return;
+        }
       } else {
         setError('אנא העלה קובץ כרטיס (PDF או תמונה).');
         setLoading(false);
         return;
       }
     }
+
+    setUploadProgress(30);
+    setUploadPhase('מכין את הקבצים להעלאה...');
 
     // Create FormData for file upload — never append undefined/null as values (multipart-safe scalars).
     const fdText = (v) => (v === undefined || v === null ? '' : String(v));
@@ -859,7 +902,14 @@ const Sell = () => {
     }
 
     try {
+      setUploadProgress(55);
+      setUploadPhase('מעלה את הכרטיסים לאימות מאובטח...');
+      progressTimer = window.setInterval(() => {
+        setUploadProgress((prev) => Math.min(90, prev + 4));
+      }, 700);
       await ticketAPI.createTicket(submitData);
+      setUploadProgress(100);
+      setUploadPhase('הכרטיסים נשמרו בהצלחה.');
       setSuccessWasIsrael(ilEvent);
       setSuccess(true);
       // Show success message for 3 seconds before redirect
@@ -867,11 +917,17 @@ const Sell = () => {
         navigate('/');
       }, 3000);
     } catch (err) {
-      const errorMessage = apiErrorMessageHe(err, 'יצירת רשימת הכרטיס נכשלה. אנא נסה שוב.');
+      const raw = `${err?.message || ''} ${JSON.stringify(err?.response?.data || {})}`;
+      const errorMessage = /cloudinary|storage|upload|media/i.test(raw)
+        ? 'העלאת הקובץ נכשלה מול שירות האחסון. בדקו שהקובץ תקין ועד 5MB ונסו שוב בעוד רגע.'
+        : apiErrorMessageHe(err, 'יצירת רשימת הכרטיס נכשלה. אנא נסה שוב.');
       setError(errorMessage);
       toastError(errorMessage);
     } finally {
+      if (progressTimer != null) window.clearInterval(progressTimer);
       setLoading(false);
+      setUploadProgress(0);
+      setUploadPhase('');
     }
   };
 
@@ -906,8 +962,18 @@ const Sell = () => {
             <div className="sell-upload-spinner" aria-hidden />
             <p className="sell-upload-overlay-title">מעלה את הכרטיס...</p>
             <p className="sell-upload-overlay-hint">נא להמתין — אל תסגרו את הדף</p>
-            <div className="sell-upload-progress-track" aria-hidden>
-              <div className="sell-upload-progress-bar" />
+            <p className="sell-upload-overlay-phase">{uploadPhase || 'מכין העלאה מאובטחת...'}</p>
+            <div
+              className="sell-upload-progress-track"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow={Math.max(0, Math.min(100, uploadProgress))}
+            >
+              <div
+                className="sell-upload-progress-bar sell-upload-progress-bar--determinate"
+                style={{ width: `${Math.max(8, Math.min(100, uploadProgress || 8))}%` }}
+              />
             </div>
           </div>
         </div>
@@ -1254,12 +1320,20 @@ const Sell = () => {
                 </div>
               </label>
             </div>
+            <div className="upload-constraints-card" role="note">
+              <strong>הנחיות לקובץ הכרטיס</strong>
+              <span>{TICKET_FILE_CONSTRAINTS_HE}</span>
+              <span>
+                לכמה כרטיסים בקובץ יחיד: העלו PDF מרובה עמודים, עמוד אחד לכל כרטיס. תמונות מתאימות רק במצב קובץ נפרד לכל כרטיס.
+              </span>
+            </div>
           </div>
 
           {/* Single file dropzone (Option A) */}
           {uploadMethod === 'single_file' && (
             <div className="form-group single-pdf-dropzone">
               <label htmlFor="single_multi_page_pdf">קובץ כרטיס (PDF או תמונה) *</label>
+              <small className="upload-field-hint">{TICKET_FILE_CONSTRAINTS_HE}</small>
               <div className="file-dropzone-box">
                 <input
                   type="file"
@@ -1318,6 +1392,7 @@ const Sell = () => {
                     {uploadMethod === 'separate_files' && (
                       <div className="form-group">
                         <label htmlFor={`pdf_file_package_${index}`}>קובץ כרטיס (PDF או תמונה) *</label>
+                        <small className="upload-field-hint">{TICKET_FILE_CONSTRAINTS_HE}</small>
                         <input
                           type="file"
                           id={`pdf_file_package_${index}`}

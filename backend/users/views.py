@@ -89,14 +89,14 @@ def _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity)
 
 def _log_cloudinary_or_storage_error(exc: BaseException, context: str) -> str:
     """Log full exception for ops; return a short message for API (no secrets)."""
-    msg = str(exc).strip() or repr(exc)
-    logger.exception('Ticket/media upload failed [%s]: %s', context, msg)
-    # Common Cloudinary HTTP body is in exc.args or attached message
-    for attr in ('http_body', 'message', 'args'):
-        raw = getattr(exc, attr, None)
-        if raw and isinstance(raw, str) and len(raw) < 2000:
-            logger.error('Cloudinary detail [%s] %s=%r', context, attr, raw)
-    return msg
+    logger.exception('Ticket/media upload failed [%s]: %s', context, exc.__class__.__name__)
+    if settings.DEBUG:
+        # Provider bodies can contain URLs, public ids, or request metadata. Keep them out of prod logs.
+        for attr in ('http_body', 'message', 'args'):
+            raw = getattr(exc, attr, None)
+            if raw and isinstance(raw, str) and len(raw) < 2000:
+                logger.debug('Cloudinary debug detail [%s] %s=%r', context, attr, raw)
+    return 'upload_storage_failed'
 
 
 def _rollback_tickets(created):
@@ -272,6 +272,37 @@ HE_RESERVATION_RELEASE_FORBIDDEN = 'אין הרשאה לשחרר את השמיר
 HE_OFFER_NOT_PENDING = 'ההצעה כבר אינה זמינה. ייתכן שהיא טופלה על ידי משתמש אחר.'
 HE_OFFER_EXPIRED = 'פג תוקף ההצעה.'
 HE_OFFER_NOT_ENOUGH_TICKETS = 'אין מספיק כרטיסים זמינים עבור ההצעה הזו.'
+
+
+def _find_existing_pending_checkout(*, ticket_ids, quantity, user=None, guest_email: str = ''):
+    """Idempotency guard for checkout double-clicks before payment confirmation."""
+    cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
+    qs = Order.objects.select_for_update().filter(
+        status='pending_payment',
+        created_at__gte=cutoff,
+        quantity=quantity,
+    )
+    if user is not None and getattr(user, 'is_authenticated', False):
+        qs = qs.filter(user=user)
+    else:
+        ge = (guest_email or '').strip()
+        if not ge:
+            return None
+        qs = qs.filter(guest_email__iexact=ge)
+
+    normalized_ids = []
+    for tid in ticket_ids or []:
+        try:
+            normalized_ids.append(int(tid))
+        except (TypeError, ValueError):
+            continue
+    if not normalized_ids:
+        return None
+
+    for order in qs.order_by('-created_at'):
+        if all(order.covers_ticket(tid) for tid in normalized_ids):
+            return order
+    return None
 
 
 def _reject_pending_offers_for_ticket_ids(ticket_ids):
@@ -1793,6 +1824,13 @@ def create_order(request):
                 server_total = expected_negotiated_total_from_offer_base(negotiated_offer.amount)
             else:
                 server_total = expected_buy_now_total(ticket.asking_price, order_quantity)
+            existing_order = _find_existing_pending_checkout(
+                ticket_ids=ticket_ids,
+                quantity=order_quantity,
+                user=request.user,
+            )
+            if existing_order:
+                return _order_pending_checkout_response(existing_order, request)
             order = serializer.save(
                 status='pending_payment',
                 quantity=order_quantity,
@@ -2510,6 +2548,13 @@ def guest_checkout(request):
                 if negotiated_offer and getattr(negotiated_offer, 'currency', None)
                 else iso4217_for_ticket_listing(ticket)
             )
+            existing_order = _find_existing_pending_checkout(
+                ticket_ids=ticket_ids,
+                quantity=order_quantity,
+                guest_email=order_data.get('guest_email', ''),
+            )
+            if existing_order:
+                return _order_pending_checkout_response(existing_order, request)
             order = Order.objects.create(
                 guest_email=order_data['guest_email'],
                 guest_phone=order_data['guest_phone'],

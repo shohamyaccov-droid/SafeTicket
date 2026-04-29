@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import hashlib
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
@@ -24,6 +25,44 @@ logger = logging.getLogger(__name__)
 QUANT = Decimal('0.01')
 
 
+def _short_hash(value: Any) -> str:
+    raw = str(value or '').encode('utf-8', errors='ignore')
+    return hashlib.sha256(raw).hexdigest()[:12]
+
+
+def _sanitize_payme_log_value(key: str, value: Any) -> Any:
+    key_l = str(key).lower()
+    if any(part in key_l for part in ('secret', 'token', 'key', 'authorization', 'signature')):
+        return '***'
+    if any(part in key_l for part in ('email', 'phone', 'buyer', 'payee')):
+        return '***'
+    if 'url' in key_l:
+        return '<url>'
+    if any(part in key_l for part in ('transaction', 'sale_id', 'tid')) or key_l == 'id':
+        return f'hash:{_short_hash(value)}' if value else ''
+    if any(part in key_l for part in ('amount', 'price', 'commission', 'total')):
+        return '<amount>'
+    if isinstance(value, dict):
+        return _sanitize_payme_log_payload(value)
+    if isinstance(value, list):
+        return f'<list:{len(value)}>'
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        if key_l in ('status', 'normalized', 'currency', 'reason', 'http', 'merchant_order_id'):
+            return value
+        return '<present>' if value not in (None, '', False) else value
+    return f'<{value.__class__.__name__}>'
+
+
+def _sanitize_payme_log_payload(payload: Any) -> Any:
+    if isinstance(payload, dict):
+        return {str(k): _sanitize_payme_log_value(str(k), v) for k, v in payload.items()}
+    if isinstance(payload, list):
+        return f'<list:{len(payload)}>'
+    if payload is None:
+        return None
+    return f'<{payload.__class__.__name__}>'
+
+
 def _money_to_agorot(amount: Decimal | str | float | int) -> int:
     d = Decimal(str(amount)).quantize(QUANT, rounding=ROUND_HALF_UP)
     return int(d * 100)
@@ -33,12 +72,16 @@ def log_payme(stage: str, *, order_id: int | None = None, payload: Any = None, r
     """Structured Payme logging (never log raw API secrets)."""
     extra = {'payme_stage': stage, 'order_id': order_id}
     if exc is not None:
-        logger.exception('Payme [%s] order_id=%s failed: %s', stage, order_id, exc, extra=extra)
+        logger.exception('Payme [%s] order_id=%s failed: %s', stage, order_id, exc.__class__.__name__, extra=extra)
         return
-    safe_payload = payload
-    if isinstance(payload, dict):
-        safe_payload = {k: ('***' if 'key' in k.lower() or 'secret' in k.lower() or 'token' in k.lower() else v) for k, v in payload.items()}
-    logger.info('Payme [%s] order_id=%s payload=%s response=%s', stage, order_id, safe_payload, response, extra=extra)
+    logger.info(
+        'Payme [%s] order_id=%s payload=%s response=%s',
+        stage,
+        order_id,
+        _sanitize_payme_log_payload(payload),
+        _sanitize_payme_log_payload(response),
+        extra=extra,
+    )
 
 
 def get_payme_config() -> dict[str, Any]:
