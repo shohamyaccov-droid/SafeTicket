@@ -96,6 +96,7 @@ const EventDetailsPage = () => {
   const [artists, setArtists] = useState([]);
   /** Prevents double-opens / race when Buy Now refetches listings before showing checkout. */
   const buyOpeningRef = useRef(false);
+  const [buyOpeningKey, setBuyOpeningKey] = useState(null);
 
   // Helper function to group tickets by listing
   const groupTicketsByListing = (ticketsArray) => {
@@ -540,6 +541,7 @@ const EventDetailsPage = () => {
     }
     if (buyOpeningRef.current) return;
     buyOpeningRef.current = true;
+    setBuyOpeningKey(stableListingGroupKey(ticketGroup));
     try {
       let freshTickets;
       try {
@@ -594,6 +596,7 @@ const EventDetailsPage = () => {
       });
     } finally {
       buyOpeningRef.current = false;
+      setBuyOpeningKey(null);
     }
   };
 
@@ -1201,6 +1204,7 @@ const EventDetailsPage = () => {
                     }}
                     onBuy={handleBuy}
                     onOffer={handleMakeOffer}
+                    buyingStableId={buyOpeningKey}
                     user={user}
                     isSellerFn={isCurrentUserSellerOfTicket}
                     totalListingsBeforeQuantityFilter={ticketGroups.length}
@@ -1220,6 +1224,7 @@ const EventDetailsPage = () => {
               group.split_type = splitTypeRaw;
               const groupId = group.listing_group_id || group.id;
               const isExpanded = activeTicketId === groupId;
+              const isBuyOpening = buyOpeningKey === stableListingGroupKey(group);
               
               
               // Handle click to toggle expansion and update map
@@ -1316,9 +1321,15 @@ const EventDetailsPage = () => {
                                   handleBuy(group);
                                 }}
                                 className="viagogo-buy-button"
-                                disabled={group.available_count <= 0}
+                                disabled={group.available_count <= 0 || isBuyOpening}
                               >
-                                קנה עכשיו
+                                {isBuyOpening ? (
+                                  <>
+                                    פותח תשלום… <span className="button-spinner" aria-hidden />
+                                  </>
+                                ) : (
+                                  'קנה עכשיו'
+                                )}
                               </button>
                               <span className="micro-trust-text">🔒 תשלום מאובטח ומוגן</span>
                             </div>
@@ -1618,7 +1629,13 @@ const EventDetailsPage = () => {
                       ביטול
                     </button>
                     <button type="submit" className="primary-button offer-modal-btn modal-action-primary" disabled={offerSubmitting}>
-                      {offerSubmitting ? 'שולח…' : 'שלח הצעה'}
+                      {offerSubmitting ? (
+                        <>
+                          שולח… <span className="button-spinner" aria-hidden />
+                        </>
+                      ) : (
+                        'שלח הצעה'
+                      )}
                     </button>
                   </div>
                 </form>

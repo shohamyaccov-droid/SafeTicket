@@ -27,6 +27,28 @@
   max-width: 100%;
 }
 
+.button-spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-inline-start: 0.4rem;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 999px;
+  vertical-align: -0.15em;
+  animation: button-spin 0.7s linear infinite;
+}
+
+button:disabled .button-spinner {
+  opacity: 0.85;
+}
+
+@keyframes button-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Mobile edge padding */
 @media (max-width: 768px) {
   .App > main {

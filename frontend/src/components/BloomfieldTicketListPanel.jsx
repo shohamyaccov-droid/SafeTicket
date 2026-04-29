@@ -67,6 +67,7 @@ export default function BloomfieldTicketListPanel({
   onToggleRow,
   onBuy,
   onOffer,
+  buyingStableId = null,
   user,
   isSellerFn,
   totalListingsBeforeQuantityFilter = 0,
@@ -145,6 +146,8 @@ export default function BloomfieldTicketListPanel({
               activeTicketId != null && String(activeTicketId) === String(groupId);
             const isHi =
               highlightStableId != null && String(highlightStableId) === String(stableId);
+            const isBuying =
+              buyingStableId != null && String(buyingStableId) === String(stableId);
             const sellerOwns = isSellerFn(user, firstTicket, group);
             const hasPdf = (group.tickets || []).some((t) => t.has_pdf_file || t.pdf_file_url);
             const groupPrice = parseFloat(group.price);
@@ -287,13 +290,19 @@ export default function BloomfieldTicketListPanel({
                         <button
                           type="button"
                           className="min-h-[44px] rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={group.available_count <= 0}
+                          disabled={group.available_count <= 0 || isBuying}
                           onClick={(e) => {
                             e.stopPropagation();
                             onBuy(group);
                           }}
                         >
-                          קנה עכשיו
+                          {isBuying ? (
+                            <>
+                              פותח תשלום… <span className="button-spinner" aria-hidden />
+                            </>
+                          ) : (
+                            'קנה עכשיו'
+                          )}
                         </button>
                         {user ? (
                           <button

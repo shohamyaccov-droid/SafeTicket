@@ -1384,7 +1384,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 </div>
 
                 <p className="payment-note">
-                  <small>🔒 זהו סימולציה של תשלום. לא יתבצע תשלום אמיתי.</small>
+                  <small>מצב פיתוח פנימי בלבד. בסביבת production התשלום מתבצע דרך PayMe המאובטח.</small>
                 </p>
               </>
             ) : (
@@ -1402,57 +1402,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     lineHeight: 1.5,
                   }}
                 >
-                  התשלום ימשיך בדף מאובטח של Payme (סביבת בדיקות). לאחר האישור יוחזרו לכאן לסטטוס ההזמנה.
-                </div>
-                <div
-                  className="payme-test-methods"
-                  style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '0.5rem',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginBottom: '1rem',
-                  }}
-                  aria-label="אמצעי תשלום זמינים במצב בדיקה"
-                >
-                  <span
-                    style={{
-                      fontSize: '0.75rem',
-                      color: '#64748b',
-                      width: '100%',
-                      textAlign: 'center',
-                    }}
-                  >
-                    במצב בדיקה בדף Payme זמינים גם:
-                  </span>
-                  <span
-                    style={{
-                      padding: '0.35rem 0.75rem',
-                      borderRadius: '999px',
-                      background: '#0f172a',
-                      color: '#fff',
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
-                    }}
-                  >
-                    Apple Pay
-                  </span>
-                  <span
-                    style={{
-                      padding: '0.35rem 0.75rem',
-                      borderRadius: '999px',
-                      background: '#0068f5',
-                      color: '#fff',
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
-                    }}
-                  >
-                    ביט (Bit)
-                  </span>
+                  התשלום יתבצע בדף מאובטח של PayMe. פרטי התשלום אינם נשמרים ב-TradeTix, ולאחר אישור התשלום תוחזרו לעדכון סטטוס ההזמנה.
                 </div>
                 <p className="payment-note">
-                  <small>🔒 Payme Test — חיוב בפיקדון (Authorize) לפי הגדרות הסוחר.</small>
+                  <small>מוגן SSL ומעובד דרך ספק תשלומים מאושר.</small>
                 </p>
               </>
             )}
@@ -1479,12 +1432,28 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               >
                 {loading
                   ? paymentPhase === 'creating_order'
-                    ? 'יוצר הזמנה...'
+                    ? (
+                      <>
+                        יוצר הזמנה… <span className="button-spinner" aria-hidden />
+                      </>
+                    )
                     : paymentPhase === 'redirecting'
-                      ? 'מעביר ל-Payme...'
+                      ? (
+                        <>
+                          מעביר ל-PayMe… <span className="button-spinner" aria-hidden />
+                        </>
+                      )
                       : paymentPhase === 'confirming_payment'
-                        ? 'מעבד תשלום...'
-                        : 'מעבד...'
+                        ? (
+                          <>
+                            מעבד תשלום… <span className="button-spinner" aria-hidden />
+                          </>
+                        )
+                        : (
+                          <>
+                            מעבד… <span className="button-spinner" aria-hidden />
+                          </>
+                        )
                   : timeRemaining === 0
                     ? 'זמן פג'
                     : usePayme
@@ -1673,7 +1642,13 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               disabled={loading || infoStepBusy}
               className="checkout-button"
             >
-              {infoStepBusy ? 'ממשיך…' : 'המשך לתשלום'}
+              {infoStepBusy ? (
+                <>
+                  ממשיך… <span className="button-spinner" aria-hidden />
+                </>
+              ) : (
+                'המשך לתשלום'
+              )}
             </button>
           </div>
         ) : (
@@ -1714,7 +1689,13 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 disabled={loading || infoStepBusy}
                 className="checkout-button"
               >
-                {infoStepBusy ? 'ממשיך…' : 'המשך לתשלום'}
+                {infoStepBusy ? (
+                  <>
+                    ממשיך… <span className="button-spinner" aria-hidden />
+                  </>
+                ) : (
+                  'המשך לתשלום'
+                )}
               </button>
             </form>
           </div>

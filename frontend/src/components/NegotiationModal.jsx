@@ -127,6 +127,8 @@ const NegotiationModal = ({
     pendingId != null && rejectingOfferId != null && Number(rejectingOfferId) === pendingId;
   const counterInFlightForThisOffer =
     pendingId != null && counteringOfferId != null && Number(counteringOfferId) === pendingId;
+  const offerActionBusy =
+    acceptInFlightForThisOffer || rejectInFlightForThisOffer || counterInFlightForThisOffer;
 
   return (
     <div className="negotiation-modal-overlay" onClick={onClose}>
@@ -246,21 +248,31 @@ const NegotiationModal = ({
                   className="accept-button negotiation-action-btn"
                   data-e2e="negotiation-accept-offer"
                   onClick={() => onAccept(Number(latestPending.id))}
-                  disabled={acceptInFlightForThisOffer || rejectInFlightForThisOffer}
+                  disabled={offerActionBusy}
                 >
-                  {acceptInFlightForThisOffer ? 'Confirming…' : 'אישור'}
+                  {acceptInFlightForThisOffer ? (
+                    <>
+                      מאשר… <span className="button-spinner" aria-hidden />
+                    </>
+                  ) : (
+                    'אישור'
+                  )}
                 </button>
                 <button
                   type="button"
                   className="reject-button negotiation-action-btn"
                   onClick={() => onReject(latestPending.id)}
                   disabled={
-                    acceptInFlightForThisOffer ||
-                    rejectInFlightForThisOffer ||
-                    counterInFlightForThisOffer
+                    offerActionBusy
                   }
                 >
-                  דחייה
+                  {rejectInFlightForThisOffer ? (
+                    <>
+                      דוחה… <span className="button-spinner" aria-hidden />
+                    </>
+                  ) : (
+                    'דחייה'
+                  )}
                 </button>
               </div>
               {(canCounter || (roundCount >= 2 && responsesLeft === 0)) && (
@@ -299,12 +311,16 @@ const NegotiationModal = ({
                         disabled={
                           !counterAmount ||
                           responsesLeft <= 0 ||
-                          counterInFlightForThisOffer ||
-                          acceptInFlightForThisOffer ||
-                          rejectInFlightForThisOffer
+                          offerActionBusy
                         }
                       >
-                        {counterInFlightForThisOffer ? 'שולח…' : 'שלח הצעת נגד'}
+                        {counterInFlightForThisOffer ? (
+                          <>
+                            שולח… <span className="button-spinner" aria-hidden />
+                          </>
+                        ) : (
+                          'שלח הצעת נגד'
+                        )}
                       </button>
                     </>
                   )}

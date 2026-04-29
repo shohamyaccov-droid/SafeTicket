@@ -21,6 +21,8 @@ import FAQ from './pages/FAQ';
 import Contact from './pages/Contact';
 import TermsPage from './pages/TermsPage';
 import RefundsPage from './pages/RefundsPage';
+import PrivacyPage from './pages/PrivacyPage';
+import NotFoundPage from './pages/NotFoundPage';
 import PaymeCheckoutSuccess from './pages/PaymeCheckoutSuccess';
 import PaymeCheckoutFailure from './pages/PaymeCheckoutFailure';
 import FloatingWhatsApp from './components/FloatingWhatsApp';
@@ -117,9 +119,11 @@ function App() {
               <Route path="/faq" element={<FAQ />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/terms" element={<TermsPage />} />
+              <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/refunds" element={<RefundsPage />} />
               <Route path="/checkout/payme/success" element={<PaymeCheckoutSuccess />} />
               <Route path="/checkout/payme/failure" element={<PaymeCheckoutFailure />} />
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </main>
           <Footer />

@@ -20,3 +20,27 @@
 .terms-card li { margin-bottom: 0.5rem; color: #4b5563; }
 .terms-card strong { color: #111827; }
 
+.not-found-card {
+  text-align: center;
+}
+
+.not-found-actions {
+  margin-top: 2rem;
+}
+
+.not-found-home-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.75rem 1.25rem;
+  border-radius: 10px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.not-found-home-link:hover {
+  background: #1d4ed8;
+}

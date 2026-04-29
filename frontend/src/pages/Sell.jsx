@@ -1465,7 +1465,13 @@ const Sell = () => {
           </div>
 
           <button type="submit" disabled={loading} className="submit-button">
-            {loading ? 'מציע כרטיס...' : 'הצע כרטיס למכירה'}
+            {loading ? (
+              <>
+                מפרסם כרטיס… <span className="button-spinner" aria-hidden />
+              </>
+            ) : (
+              'הצע כרטיס למכירה'
+            )}
           </button>
         </form>
 
