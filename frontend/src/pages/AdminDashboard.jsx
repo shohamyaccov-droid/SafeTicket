@@ -249,7 +249,6 @@ export default function AdminDashboard() {
                     <th>אירוע</th>
                     <th>מחיר פנים</th>
                     <th>מחיר מבוקש</th>
-                    <th>קבלה</th>
                     <th>פעולות</th>
                   </tr>
                 </thead>
@@ -282,22 +281,28 @@ export default function AdminDashboard() {
                           );
                         })()}
                       </td>
-                      <td data-label="קבלה">
-                        {t.receipt_file_url ? (
-                          <button
-                            type="button"
-                            className="admin-receipt-link-btn"
-                            disabled={receiptLoadingId === t.id}
-                            onClick={() => downloadReceiptForTicket(t.id)}
-                          >
-                            {receiptLoadingId === t.id ? '…' : 'צפה בקבלה'}
-                          </button>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
                       <td data-label="פעולות">
                         <div className="admin-pending-actions">
+                          {t.ticket_file_url ? (
+                            <a
+                              className="admin-btn-view-file"
+                              href={t.ticket_file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              צפה ב-PDF
+                            </a>
+                          ) : null}
+                          {t.receipt_file_url ? (
+                            <a
+                              className="admin-btn-view-file admin-btn-view-file--receipt"
+                              href={t.receipt_file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              צפה בקבלה
+                            </a>
+                          ) : null}
                           <button
                             type="button"
                             className="admin-btn-approve-ticket"

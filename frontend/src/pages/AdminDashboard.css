@@ -130,6 +130,36 @@
   font-family: inherit;
 }
 
+.admin-btn-view-file {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  font-weight: 700;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.admin-btn-view-file:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.admin-btn-view-file--receipt {
+  background: #f0fdf4;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.admin-btn-view-file--receipt:hover {
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
 .admin-btn-approve-ticket:disabled {
   opacity: 0.6;
   cursor: not-allowed;

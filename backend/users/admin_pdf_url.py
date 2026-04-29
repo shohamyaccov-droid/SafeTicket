@@ -42,35 +42,44 @@ def _raw_extension(public_id: str) -> str:
     return ext or 'pdf'
 
 
-def get_ticket_pdf_admin_url(ticket) -> Optional[str]:
+def get_ticket_file_admin_url(ticket, field_name: str = 'pdf_file') -> Optional[str]:
     """
-    URL for admin PDF link / new-tab preview. Local: FieldFile.url.
-    Cloudinary: signed URL that returns 200 for the stored raw asset.
+    URL for staff-only admin file preview. Local: FieldFile.url.
+    Cloudinary: signed URL that returns 200 for raw/image assets.
     Never raises: failures return None.
     """
     try:
-        return _get_ticket_pdf_admin_url_uncaught(ticket)
+        return _get_ticket_file_admin_url_uncaught(ticket, field_name)
     except Exception as exc:
         _log.warning(
-            'get_ticket_pdf_admin_url failed (ticket pk=%s): %s',
+            'get_ticket_file_admin_url failed (ticket pk=%s field=%s): %s',
             getattr(ticket, 'pk', None),
+            field_name,
             exc,
             exc_info=True,
         )
         return None
 
 
-def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
+def get_ticket_pdf_admin_url(ticket) -> Optional[str]:
+    return get_ticket_file_admin_url(ticket, 'pdf_file')
+
+
+def get_ticket_receipt_admin_url(ticket) -> Optional[str]:
+    return get_ticket_file_admin_url(ticket, 'receipt_file')
+
+
+def _get_ticket_file_admin_url_uncaught(ticket, field_name: str) -> Optional[str]:
     if not ticket:
         return None
     try:
-        pdf = getattr(ticket, 'pdf_file', None)
+        file_field = getattr(ticket, field_name, None)
     except Exception:
         return None
-    if not pdf:
+    if not file_field:
         return None
     try:
-        name = (getattr(pdf, 'name', None) or '').strip()
+        name = (getattr(file_field, 'name', None) or '').strip()
     except Exception:
         return None
     if not name:
@@ -78,7 +87,7 @@ def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
 
     if not getattr(settings, 'USE_CLOUDINARY', False):
         try:
-            return pdf.url
+            return file_field.url
         except Exception:
             return None
 
@@ -88,43 +97,49 @@ def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
         from cloudinary.utils import cloudinary_url, private_download_url
     except ImportError:
         try:
-            return pdf.url
+            return file_field.url
         except Exception:
             return None
 
     # 1) Signed API download URL (api.cloudinary.com/.../raw/download?...) — works when CDN returns 401
     for pid in _public_id_variants(name):
         ext = _raw_extension(pid)
-        for fmt in (ext, 'pdf'):
+        for fmt in (ext, 'pdf', 'jpg', 'png'):
             if not fmt:
                 continue
             for dl_type in ('upload', 'authenticated'):
-                try:
-                    dl = private_download_url(
-                        pid,
-                        fmt,
-                        resource_type='raw',
-                        type=dl_type,
-                    )
-                    if dl and str(dl).startswith('https://'):
-                        return str(dl)
-                except Exception as exc:
-                    _log.debug(
-                        'private_download_url failed pid=%r fmt=%r type=%r: %s',
-                        pid,
-                        fmt,
-                        dl_type,
-                        exc,
-                    )
+                for resource_type in ('raw', 'image'):
+                    try:
+                        dl = private_download_url(
+                            pid,
+                            fmt,
+                            resource_type=resource_type,
+                            type=dl_type,
+                        )
+                        if dl and str(dl).startswith('https://'):
+                            return str(dl)
+                    except Exception as exc:
+                        _log.debug(
+                            'private_download_url failed pid=%r fmt=%r type=%r resource=%r: %s',
+                            pid,
+                            fmt,
+                            dl_type,
+                            resource_type,
+                            exc,
+                        )
 
     # 2) Version-aware signed CDN URL (real version from Admin API)
     for pid in _public_id_variants(name):
         info = None
-        try:
-            info = cloudinary.api.resource(pid, resource_type='raw')
-        except Exception:
-            continue
-        if not info:
+        resource_type = None
+        for candidate_type in ('raw', 'image'):
+            try:
+                info = cloudinary.api.resource(pid, resource_type=candidate_type)
+                resource_type = candidate_type
+                break
+            except Exception:
+                continue
+        if not info or not resource_type:
             continue
         cid = (info.get('public_id') or pid).replace('\\', '/')
         ver = info.get('version')
@@ -132,7 +147,7 @@ def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
         for typ in ('upload', 'authenticated'):
             for opts in (
                 {
-                    'resource_type': 'raw',
+                    'resource_type': resource_type,
                     'type': typ,
                     'sign_url': True,
                     'secure': True,
@@ -140,7 +155,7 @@ def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
                     'long_url_signature': True,
                 },
                 {
-                    'resource_type': 'raw',
+                    'resource_type': resource_type,
                     'type': typ,
                     'sign_url': True,
                     'secure': True,
@@ -157,7 +172,7 @@ def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
 
     # 3) Storage delivery URL (unsigned or as configured)
     try:
-        u = pdf.url
+        u = file_field.url
         if u and str(u).startswith('http'):
             return str(u)
     except Exception:
@@ -166,18 +181,19 @@ def _get_ticket_pdf_admin_url_uncaught(ticket) -> Optional[str]:
     # 4) Last resort: signed CDN URL without forcing version (may 401 on strict accounts)
     for pid in _public_id_variants(name):
         for typ in ('upload', 'authenticated'):
-            try:
-                url, _ = cloudinary_url(
-                    pid,
-                    resource_type='raw',
-                    type=typ,
-                    sign_url=True,
-                    secure=True,
-                    force_version=False,
-                )
-                if url and str(url).startswith('https://'):
-                    return str(url)
-            except Exception:
-                continue
+            for resource_type in ('raw', 'image'):
+                try:
+                    url, _ = cloudinary_url(
+                        pid,
+                        resource_type=resource_type,
+                        type=typ,
+                        sign_url=True,
+                        secure=True,
+                        force_version=False,
+                    )
+                    if url and str(url).startswith('https://'):
+                        return str(url)
+                except Exception:
+                    continue
 
     return None

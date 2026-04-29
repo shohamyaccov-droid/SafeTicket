@@ -4001,12 +4001,24 @@ def admin_pending_tickets(request):
             status=status.HTTP_403_FORBIDDEN
         )
     
-    pending_tickets = Ticket.objects.filter(status='pending_approval').order_by('-created_at')
+    pending_tickets = (
+        Ticket.objects.filter(status='pending_approval')
+        .select_related('seller', 'event', 'event__artist')
+        .order_by('-created_at')
+    )
     serializer = TicketSerializer(pending_tickets, many=True, context={'request': request})
-    
+    tickets = list(serializer.data)
+
+    if request.user.is_staff:
+        from .admin_pdf_url import get_ticket_pdf_admin_url, get_ticket_receipt_admin_url
+
+        for ticket_data, ticket in zip(tickets, pending_tickets):
+            ticket_data['ticket_file_url'] = get_ticket_pdf_admin_url(ticket)
+            ticket_data['receipt_file_url'] = get_ticket_receipt_admin_url(ticket)
+
     return Response({
         'count': pending_tickets.count(),
-        'tickets': serializer.data
+        'tickets': tickets
     }, status=status.HTTP_200_OK)
 
 
