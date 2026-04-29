@@ -266,6 +266,12 @@ def _order_pending_checkout_response(order, request):
 
 # Cart abandonment timeout (minutes)
 RESERVATION_TIMEOUT_MINUTES = 10
+HE_TICKET_HELD_BY_OTHER = 'הכרטיס כבר נתפס על ידי משתמש אחר. ניתן לנסות שוב בעוד כמה דקות.'
+HE_TICKET_NOT_AVAILABLE = 'הכרטיס אינו זמין יותר. אנא בחרו כרטיס אחר.'
+HE_RESERVATION_RELEASE_FORBIDDEN = 'אין הרשאה לשחרר את השמירה על הכרטיס.'
+HE_OFFER_NOT_PENDING = 'ההצעה כבר אינה זמינה. ייתכן שהיא טופלה על ידי משתמש אחר.'
+HE_OFFER_EXPIRED = 'פג תוקף ההצעה.'
+HE_OFFER_NOT_ENOUGH_TICKETS = 'אין מספיק כרטיסים זמינים עבור ההצעה הזו.'
 
 
 def _reject_pending_offers_for_ticket_ids(ticket_ids):
@@ -3103,178 +3109,146 @@ class TicketViewSet(viewsets.ModelViewSet):
     )
     def reserve(self, request, pk=None):
         """
-        Reserve a ticket for 10 minutes when user clicks 'Buy'
+        Reserve a ticket for 10 minutes when user clicks 'Buy'.
+
+        The row lock makes the check-and-reserve operation atomic: if two buyers click at
+        the same time, one transaction commits first and the loser sees a clean Hebrew
+        "already held" response instead of both receiving success.
         """
-        import logging
-        from django.utils import timezone
-        from datetime import timedelta
-        
-        logger = logging.getLogger(__name__)
-        ticket = get_object_or_404(Ticket, pk=pk)
-        
-        # Check if ticket is available
-        if ticket.status not in ['active']:
-            if ticket.status == 'reserved':
-                # Calculate time remaining
-                if ticket.reserved_at:
-                    time_remaining = (ticket.reserved_at + timedelta(minutes=10)) - timezone.now()
-                    if time_remaining.total_seconds() > 0:
-                        # Same buyer already holds this reservation (e.g. seller accepted offer — stock
-                        # locked for buyer). Do not 400: client must be able to open checkout / idempotent reserve.
-                        if request.user.is_authenticated and ticket.reserved_by_id == request.user.id:
+        guest_email = (request.data.get('email') or '').strip().lower()
+
+        try:
+            with transaction.atomic():
+                ticket = Ticket.objects.select_for_update().get(pk=pk)
+                _sync_expired_cart_reservation(ticket)
+
+                if ticket.status == 'reserved':
+                    if ticket.reserved_at:
+                        expires_at = ticket.reserved_at + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
+                        if timezone.now() < expires_at:
+                            if request.user.is_authenticated and ticket.reserved_by_id == request.user.id:
+                                return Response(
+                                    {
+                                        'success': True,
+                                        'message': 'Ticket reserved successfully',
+                                        'reserved_at': ticket.reserved_at.isoformat(),
+                                        'expires_at': expires_at.isoformat(),
+                                    },
+                                    status=status.HTTP_200_OK,
+                                )
+                            res_email = (ticket.reservation_email or '').strip().lower()
+                            if guest_email and res_email and guest_email == res_email:
+                                return Response(
+                                    {
+                                        'success': True,
+                                        'message': 'Ticket reserved successfully',
+                                        'reserved_at': ticket.reserved_at.isoformat(),
+                                        'expires_at': expires_at.isoformat(),
+                                    },
+                                    status=status.HTTP_200_OK,
+                                )
+                            minutes_remaining = max(0, int((expires_at - timezone.now()).total_seconds() / 60))
                             return Response(
                                 {
-                                    'success': True,
-                                    'message': 'Ticket reserved successfully',
-                                    'reserved_at': ticket.reserved_at.isoformat(),
-                                    'expires_at': (
-                                        ticket.reserved_at + timedelta(minutes=10)
-                                    ).isoformat(),
+                                    'error': HE_TICKET_HELD_BY_OTHER,
+                                    'status': 'reserved',
+                                    'minutes_remaining': minutes_remaining,
                                 },
-                                status=status.HTTP_200_OK,
+                                status=status.HTTP_400_BAD_REQUEST,
                             )
-                        guest_email = (request.data.get('email') or '').strip().lower()
-                        res_email = (ticket.reservation_email or '').strip().lower()
-                        if guest_email and res_email and guest_email == res_email:
-                            return Response(
-                                {
-                                    'success': True,
-                                    'message': 'Ticket reserved successfully',
-                                    'reserved_at': ticket.reserved_at.isoformat(),
-                                    'expires_at': (
-                                        ticket.reserved_at + timedelta(minutes=10)
-                                    ).isoformat(),
-                                },
-                                status=status.HTTP_200_OK,
-                            )
-                        minutes_remaining = int(time_remaining.total_seconds() / 60)
-                        return Response(
-                            {
-                                'error': 'This ticket is currently in someone else\'s cart. It may become available again in a few minutes.',
-                                'status': 'reserved',
-                                'minutes_remaining': minutes_remaining
-                            },
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-                else:
                     return Response(
-                        {
-                            'error': 'This ticket is currently in someone else\'s cart. It may become available again in a few minutes.',
-                            'status': 'reserved'
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
+                        {'error': HE_TICKET_HELD_BY_OTHER, 'status': 'reserved'},
+                        status=status.HTTP_400_BAD_REQUEST,
                     )
-            else:
-                return Response(
-                    {'error': 'Ticket is not available for reservation', 'status': ticket.status},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
-        # Check if ticket is already reserved by someone else
-        if ticket.status == 'reserved' and ticket.reserved_at:
-            # Check if reservation has expired (10 minutes)
-            if timezone.now() > ticket.reserved_at + timedelta(minutes=10):
-                # Reservation expired, release it
-                logger.info(f'Releasing expired reservation for ticket {ticket.id} (reserved at {ticket.reserved_at})')
-                ticket.status = 'active'
-                ticket.reserved_at = None
-                ticket.reserved_by = None
-                ticket.reservation_email = None
-                ticket.save()
-            else:
-                # Check if it's reserved by the same user/email
+
+                if ticket.status != 'active':
+                    return Response(
+                        {'error': HE_TICKET_NOT_AVAILABLE, 'status': ticket.status},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                now = timezone.now()
+                ticket.status = 'reserved'
+                ticket.reserved_at = now
                 if request.user.is_authenticated:
-                    if ticket.reserved_by != request.user:
-                        time_remaining = (ticket.reserved_at + timedelta(minutes=10)) - timezone.now()
-                        minutes_remaining = int(time_remaining.total_seconds() / 60)
-                        return Response(
-                            {
-                                'error': 'This ticket is currently in someone else\'s cart. It may become available again in a few minutes.',
-                                'status': 'reserved',
-                                'minutes_remaining': minutes_remaining
-                            },
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
+                    ticket.reserved_by = request.user
+                    ticket.reservation_email = None
+                    logger.info(
+                        'Ticket %s reserved by user %s at %s',
+                        ticket.id,
+                        request.user.id,
+                        ticket.reserved_at,
+                    )
                 else:
-                    # Guest reservation - check email if provided
-                    guest_email = request.data.get('email')
-                    if guest_email and ticket.reservation_email != guest_email:
-                        time_remaining = (ticket.reserved_at + timedelta(minutes=10)) - timezone.now()
-                        minutes_remaining = int(time_remaining.total_seconds() / 60)
-                        return Response(
-                            {
-                                'error': 'This ticket is currently in someone else\'s cart. It may become available again in a few minutes.',
-                                'status': 'reserved',
-                                'minutes_remaining': minutes_remaining
-                            },
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-        
-        # Reserve the ticket
-        ticket.status = 'reserved'
-        ticket.reserved_at = timezone.now()
-        if request.user.is_authenticated:
-            ticket.reserved_by = request.user
-            ticket.reservation_email = None
-            logger.info(f'Ticket {ticket.id} reserved by user {request.user.id} ({request.user.username}) at {ticket.reserved_at}')
-        else:
-            ticket.reserved_by = None
-            ticket.reservation_email = request.data.get('email', '')
-            logger.info(f'Ticket {ticket.id} reserved by guest email {ticket.reservation_email} at {ticket.reserved_at}')
-        ticket.save()
-        
-        return Response({
-            'success': True,
-            'message': 'Ticket reserved successfully',
-            'reserved_at': ticket.reserved_at.isoformat(),
-            'expires_at': (ticket.reserved_at + timedelta(minutes=10)).isoformat()
-        }, status=status.HTTP_200_OK)
+                    ticket.reserved_by = None
+                    ticket.reservation_email = guest_email or None
+                    logger.info(
+                        'Ticket %s reserved by guest email %s at %s',
+                        ticket.id,
+                        guest_email or '(empty)',
+                        ticket.reserved_at,
+                    )
+                ticket.save(update_fields=['status', 'reserved_at', 'reserved_by', 'reservation_email', 'updated_at'])
+
+                return Response(
+                    {
+                        'success': True,
+                        'message': 'Ticket reserved successfully',
+                        'reserved_at': ticket.reserved_at.isoformat(),
+                        'expires_at': (ticket.reserved_at + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)).isoformat(),
+                    },
+                    status=status.HTTP_200_OK,
+                )
+        except Ticket.DoesNotExist:
+            return Response({'error': HE_TICKET_NOT_AVAILABLE}, status=status.HTTP_404_NOT_FOUND)
     
     @action(detail=True, methods=['post'])
     def release_reservation(self, request, pk=None):
         """
         Release a ticket reservation (when timer expires or modal closes)
         """
-        import logging
-        logger = logging.getLogger(__name__)
-        ticket = get_object_or_404(Ticket, pk=pk)
-        
-        # Only allow releasing if ticket is reserved
-        if ticket.status != 'reserved':
-            return Response(
-                {'error': 'Ticket is not reserved'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Check if user has permission to release (must be the one who reserved it)
-        if request.user.is_authenticated:
-            if ticket.reserved_by != request.user:
+        guest_email = (request.data.get('email') or '').strip().lower()
+
+        try:
+            with transaction.atomic():
+                ticket = Ticket.objects.select_for_update().get(pk=pk)
+                if ticket.status != 'reserved':
+                    return Response(
+                        {'error': 'הכרטיס אינו שמור כרגע.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                if request.user.is_authenticated:
+                    if ticket.reserved_by_id != request.user.id:
+                        return Response(
+                            {'error': HE_RESERVATION_RELEASE_FORBIDDEN},
+                            status=status.HTTP_403_FORBIDDEN,
+                        )
+                    logger.info('Ticket %s reservation released by user %s', ticket.id, request.user.id)
+                else:
+                    res_email = (ticket.reservation_email or '').strip().lower()
+                    if not guest_email or guest_email != res_email:
+                        return Response(
+                            {'error': HE_RESERVATION_RELEASE_FORBIDDEN},
+                            status=status.HTTP_403_FORBIDDEN,
+                        )
+                    logger.info('Ticket %s reservation released by guest email %s', ticket.id, guest_email)
+
+                ticket.status = 'active'
+                ticket.reserved_at = None
+                ticket.reserved_by = None
+                ticket.reservation_email = None
+                ticket.save(update_fields=['status', 'reserved_at', 'reserved_by', 'reservation_email', 'updated_at'])
+
                 return Response(
-                    {'error': 'You do not have permission to release this reservation'},
-                    status=status.HTTP_403_FORBIDDEN
+                    {
+                        'success': True,
+                        'message': 'Reservation released successfully',
+                    },
+                    status=status.HTTP_200_OK,
                 )
-            logger.info(f'Ticket {ticket.id} reservation released by user {request.user.id} ({request.user.username})')
-        else:
-            # Guest reservation - check email
-            guest_email = request.data.get('email')
-            if guest_email and ticket.reservation_email != guest_email:
-                return Response(
-                    {'error': 'You do not have permission to release this reservation'},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-            logger.info(f'Ticket {ticket.id} reservation released by guest email {guest_email or ticket.reservation_email}')
-        
-        # Release the reservation
-        ticket.status = 'active'
-        ticket.reserved_at = None
-        ticket.reserved_by = None
-        ticket.reservation_email = None
-        ticket.save()
-        
-        return Response({
-            'success': True,
-            'message': 'Reservation released successfully'
-        }, status=status.HTTP_200_OK)
+        except Ticket.DoesNotExist:
+            return Response({'error': HE_TICKET_NOT_AVAILABLE}, status=status.HTTP_404_NOT_FOUND)
     
     def destroy(self, request, *args, **kwargs):
         """
@@ -4264,30 +4238,67 @@ class OfferViewSet(viewsets.ModelViewSet):
         """Accept an offer - only the RECIPIENT (not creator) can accept."""
         from datetime import timedelta
 
-        with transaction.atomic():
-            # BOLA: Only participants may target this offer ID (404 for outsiders — no existence leak).
-            try:
-                pk_int = int(pk)
-            except (TypeError, ValueError):
-                return Response({'error': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            pk_int = int(pk)
+        except (TypeError, ValueError):
+            return Response({'error': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-            # Lock Offer row only — no select_related (get_queryset adds nullable joins like parent_offer).
-            offer = (
+        # Read only enough to discover the listing. The transaction below locks inventory first,
+        # then locks all offers for that listing by id, preventing deadlocks between two accepts.
+        target = (
+            Offer.objects.select_related('ticket')
+            .filter(pk=pk_int)
+            .filter(Q(buyer=request.user) | Q(ticket__seller=request.user))
+            .first()
+        )
+        if not target:
+            return Response({'error': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        with transaction.atomic():
+            ticket_seed = target.ticket
+            if ticket_seed.listing_group_id:
+                locked_tickets = list(
+                    Ticket.objects.select_for_update()
+                    .filter(
+                        listing_group_id=ticket_seed.listing_group_id,
+                        seller_id=ticket_seed.seller_id,
+                    )
+                    .order_by('id')
+                )
+            else:
+                locked_tickets = list(
+                    Ticket.objects.select_for_update()
+                    .filter(pk=ticket_seed.pk)
+                    .order_by('id')
+                )
+            if not locked_tickets:
+                return Response({'error': HE_TICKET_NOT_AVAILABLE}, status=status.HTTP_404_NOT_FOUND)
+
+            group_ticket_ids = [t.id for t in locked_tickets]
+            locked_offers = list(
                 Offer.objects.select_for_update()
-                .filter(pk=pk_int)
-                .filter(Q(buyer=request.user) | Q(ticket__seller=request.user))
-                .first()
+                .filter(ticket_id__in=group_ticket_ids)
+                .order_by('id')
             )
+            offer = next((o for o in locked_offers if o.id == pk_int), None)
             if not offer:
                 return Response({'error': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-            recipient = self._get_offer_recipient(offer)
-            if recipient is None or request.user.pk != recipient.pk:
+            ticket = next((t for t in locked_tickets if t.id == offer.ticket_id), None)
+            if ticket is None:
+                return Response({'error': HE_TICKET_NOT_AVAILABLE}, status=status.HTTP_404_NOT_FOUND)
+
+            if offer.buyer_id != request.user.id and ticket.seller_id != request.user.id:
+                return Response({'error': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+            round_count = getattr(offer, 'offer_round_count', 0)
+            recipient_id = ticket.seller_id if round_count in (0, 2) else offer.buyer_id
+            if request.user.pk != recipient_id:
                 raise PermissionDenied("Only the recipient of this offer can accept it.")
 
             if offer.status != 'pending':
                 return Response(
-                    {'error': 'This offer is no longer pending.'},
+                    {'error': HE_OFFER_NOT_PENDING},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -4295,36 +4306,27 @@ class OfferViewSet(viewsets.ModelViewSet):
                 offer.status = 'expired'
                 offer.save(update_fields=['status'])
                 return Response(
-                    {'error': 'This offer has expired.'},
+                    {'error': HE_OFFER_EXPIRED},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            ticket = Ticket.objects.select_for_update().get(pk=offer.ticket_id)
-            if ticket.listing_group_id:
-                group_rows = Ticket.objects.select_for_update().filter(
-                    listing_group_id=ticket.listing_group_id,
-                    seller_id=ticket.seller_id,
-                )
-                for t in group_rows:
-                    _sync_expired_cart_reservation(t)
-            else:
-                _sync_expired_cart_reservation(ticket)
-            ticket.refresh_from_db()
+            for t in locked_tickets:
+                _sync_expired_cart_reservation(t)
 
             if ticket.status in ('sold', 'rejected', 'pending_payout', 'paid_out'):
                 return Response(
-                    {'error': 'This listing is no longer available for acceptance.'},
+                    {'error': HE_TICKET_NOT_AVAILABLE},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             if ticket.status == 'pending_approval':
                 return Response(
-                    {'error': 'This listing is not yet verified.'},
+                    {'error': 'המודעה עדיין ממתינה לאישור.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             if _group_reservation_blocks_seller_accept_offer(ticket, offer):
                 return Response(
                     {
-                        'error': 'This listing is currently in another buyer\'s checkout. Try again shortly.',
+                        'error': HE_TICKET_HELD_BY_OTHER,
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
@@ -4334,12 +4336,12 @@ class OfferViewSet(viewsets.ModelViewSet):
                 avail = _group_available_units_for_offer_accept(ticket, offer)
                 if avail < needed_qty:
                     return Response(
-                        {'error': 'Not enough tickets available to accept this offer.'},
+                        {'error': HE_OFFER_NOT_ENOUGH_TICKETS},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
             elif ticket.available_quantity < needed_qty:
                 return Response(
-                    {'error': 'Not enough tickets available to accept this offer.'},
+                    {'error': HE_OFFER_NOT_ENOUGH_TICKETS},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -4348,18 +4350,11 @@ class OfferViewSet(viewsets.ModelViewSet):
             offer.checkout_expires_at = timezone.now() + timedelta(hours=24)
             offer.save()
 
-            group_ticket_ids = [ticket.id]
-            if ticket.listing_group_id:
-                group_ticket_ids = list(
-                    Ticket.objects.filter(
-                        listing_group_id=ticket.listing_group_id,
-                        seller_id=ticket.seller_id,
-                    ).values_list('id', flat=True)
-                )
-            Offer.objects.filter(
-                ticket_id__in=group_ticket_ids,
-                status='pending',
-            ).exclude(id=offer.id).update(status='rejected')
+            competing_offer_ids = [
+                o.id for o in locked_offers if o.id != offer.id and o.status == 'pending'
+            ]
+            if competing_offer_ids:
+                Offer.objects.filter(id__in=competing_offer_ids).update(status='rejected')
 
             # Non-bundled listing: hold stock for the accepted buyer during checkout window
             if not ticket.listing_group_id:
@@ -4425,17 +4420,14 @@ class OfferViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def counter(self, request, pk=None):
         """Create a counter-offer - enforces round limits and role validation (Ping-Pong rule)."""
-        from django.utils import timezone
         from datetime import timedelta
-        from django.db import transaction
         from decimal import Decimal
 
-        offer = self.get_object()
         counter_amount = request.data.get('amount')
 
         if counter_amount is None or counter_amount == '':
             return Response(
-                {'error': 'Counter offer amount is required.'},
+                {'error': 'יש להזין סכום להצעת הנגד.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -4445,51 +4437,69 @@ class OfferViewSet(viewsets.ModelViewSet):
                 raise ValueError("Amount must be positive")
         except (ValueError, TypeError):
             return Response(
-                {'error': 'Invalid counter offer amount.'},
+                {'error': 'סכום הצעת הנגד אינו תקין.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         from users.currency import iso4217_for_ticket_listing, quantize_money_decimal
+        try:
+            pk_int = int(pk)
+        except (TypeError, ValueError):
+            return Response({'error': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        offer_cur = getattr(offer, 'currency', None) or iso4217_for_ticket_listing(offer.ticket)
-        counter_amount = quantize_money_decimal(counter_amount, offer_cur)
+        target = (
+            Offer.objects.select_related('ticket')
+            .filter(pk=pk_int)
+            .filter(Q(buyer=request.user) | Q(ticket__seller=request.user))
+            .first()
+        )
+        if not target:
+            return Response({'error': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Expiration check
-        if offer.expires_at and timezone.now() > offer.expires_at:
-            offer.status = 'expired'
-            offer.save(update_fields=['status'])
-            return Response(
-                {'error': 'This offer has expired.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Status must be pending
-        if offer.status != 'pending':
-            return Response(
-                {'error': 'This offer is no longer pending.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Role & Round Validation (Ping-Pong Rule)
-        round_count = getattr(offer, 'offer_round_count', 0)
-
-        if round_count >= 2:
-            return Response(
-                {'error': 'Maximum negotiation rounds reached.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if round_count == 0:
-            # Only SELLER can counter the initial buyer offer
-            if request.user != offer.ticket.seller:
-                raise PermissionDenied("Only the seller can counter this offer.")
-        elif round_count == 1:
-            # Only BUYER can counter the seller's counter
-            if request.user != offer.buyer:
-                raise PermissionDenied("Only the buyer can counter this offer.")
-
-        # Atomic state mutation
         with transaction.atomic():
+            # Lock inventory/listing first, then the offer row. This matches accept() and avoids
+            # cross-action deadlocks (accept vs counter) on the same listing.
+            ticket = Ticket.objects.select_for_update().get(pk=target.ticket_id)
+            offer = (
+                Offer.objects.select_for_update()
+                .filter(pk=pk_int)
+                .filter(Q(buyer=request.user) | Q(ticket__seller=request.user))
+                .first()
+            )
+            if not offer:
+                return Response({'error': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+            offer_cur = getattr(offer, 'currency', None) or iso4217_for_ticket_listing(ticket)
+            counter_amount = quantize_money_decimal(counter_amount, offer_cur)
+
+            if offer.expires_at and timezone.now() > offer.expires_at:
+                offer.status = 'expired'
+                offer.save(update_fields=['status'])
+                return Response(
+                    {'error': HE_OFFER_EXPIRED},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if offer.status != 'pending':
+                return Response(
+                    {'error': HE_OFFER_NOT_PENDING},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            round_count = getattr(offer, 'offer_round_count', 0)
+            if round_count >= 2:
+                return Response(
+                    {'error': 'הגעתם למספר המקסימלי של סבבי משא ומתן.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if round_count == 0:
+                if request.user.id != ticket.seller_id:
+                    raise PermissionDenied("Only the seller can counter this offer.")
+            elif round_count == 1:
+                if request.user.id != offer.buyer_id:
+                    raise PermissionDenied("Only the buyer can counter this offer.")
+
             # Mark original as countered
             offer.status = 'countered'
             offer.save(update_fields=['status'])
@@ -4500,7 +4510,7 @@ class OfferViewSet(viewsets.ModelViewSet):
 
             new_offer = Offer.objects.create(
                 buyer=offer.buyer,
-                ticket=offer.ticket,
+                ticket=ticket,
                 amount=counter_amount,
                 currency=offer_cur,
                 quantity=offer.quantity,
