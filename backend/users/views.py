@@ -690,7 +690,7 @@ def release_abandoned_carts():
     Self-healing: Release expired ticket reservations and cancel stale pending orders.
     Call lazily at the top of Event/Ticket list endpoints so inventory cleans itself.
     """
-    from django.db.models import Q
+    from users.order_cleanup import cancel_abandoned_pending_payment_orders
     cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
     released = 0
     # 1. Expired ticket reservations -> back to active
@@ -728,18 +728,10 @@ def release_abandoned_carts():
     stale_count = stale_orders.update(status='cancelled')
     released += stale_count
 
-    # 3. payment pending orders: release inventory like abandoned carts
-    stale_pending = list(
-        Order.objects.filter(status='pending_payment', created_at__lt=cutoff)
-        .only('id', 'held_ticket_id', 'held_quantity', 'ticket_ids')
-    )
-    for po in stale_pending:
-        _restore_order_held_inventory(po)
-        _release_pending_payment_group_reservations(po.ticket_ids or [])
-    if stale_pending:
-        released += Order.objects.filter(
-            pk__in=[x.pk for x in stale_pending]
-        ).update(status='cancelled')
+    # 3. payment pending orders: give PayMe/webhooks a 15-minute grace window before
+    # cancelling and releasing inventory. Successful/authorized PayMe statuses are skipped.
+    cleanup_result = cancel_abandoned_pending_payment_orders(older_than_minutes=15)
+    released += cleanup_result.cancelled
     return released
 
 
