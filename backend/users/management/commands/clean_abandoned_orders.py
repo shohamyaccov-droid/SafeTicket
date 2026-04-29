@@ -10,8 +10,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--minutes',
             type=int,
-            default=15,
-            help='Cancel pending_payment orders older than this many minutes. Default: 15.',
+            default=10,
+            help='Cancel pending_payment orders older than this many minutes. Default: 10.',
         )
         parser.add_argument(
             '--dry-run',

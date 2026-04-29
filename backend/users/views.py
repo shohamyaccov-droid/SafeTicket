@@ -728,9 +728,9 @@ def release_abandoned_carts():
     stale_count = stale_orders.update(status='cancelled')
     released += stale_count
 
-    # 3. payment pending orders: give PayMe/webhooks a 15-minute grace window before
+    # 3. payment pending orders: give PayMe/webhooks the same 10-minute checkout window
     # cancelling and releasing inventory. Successful/authorized PayMe statuses are skipped.
-    cleanup_result = cancel_abandoned_pending_payment_orders(older_than_minutes=15)
+    cleanup_result = cancel_abandoned_pending_payment_orders(older_than_minutes=RESERVATION_TIMEOUT_MINUTES)
     released += cleanup_result.cancelled
     return released
 

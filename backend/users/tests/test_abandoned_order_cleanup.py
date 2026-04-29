@@ -51,7 +51,7 @@ class AbandonedOrderCleanupTests(TestCase):
         base.update(overrides)
         return Ticket.objects.create(**base)
 
-    def _pending_order(self, **overrides):
+    def _pending_order(self, *, age_minutes=20, **overrides):
         base = {
             'user': self.buyer,
             'total_amount': Decimal('110.00'),
@@ -62,15 +62,15 @@ class AbandonedOrderCleanupTests(TestCase):
         }
         base.update(overrides)
         order = Order.objects.create(**base)
-        Order.objects.filter(pk=order.pk).update(created_at=timezone.now() - timedelta(minutes=20))
+        Order.objects.filter(pk=order.pk).update(created_at=timezone.now() - timedelta(minutes=age_minutes))
         order.refresh_from_db()
         return order
 
-    def test_cancels_abandoned_group_order_and_releases_reserved_tickets(self):
+    def test_cancels_ten_minute_abandoned_group_order_and_releases_reserved_tickets(self):
         ticket = self._ticket()
         order = self._pending_order(ticket=ticket, ticket_ids=[ticket.id], payme_status='initialized')
 
-        result = cancel_abandoned_pending_payment_orders(older_than_minutes=15)
+        result = cancel_abandoned_pending_payment_orders()
 
         self.assertEqual(result.cancelled, 1)
         self.assertEqual(result.released_tickets, 1)
@@ -93,7 +93,7 @@ class AbandonedOrderCleanupTests(TestCase):
             payme_status='pending',
         )
 
-        result = cancel_abandoned_pending_payment_orders(older_than_minutes=15)
+        result = cancel_abandoned_pending_payment_orders()
 
         self.assertEqual(result.cancelled, 1)
         self.assertEqual(result.restored_quantity, 2)
@@ -109,10 +109,27 @@ class AbandonedOrderCleanupTests(TestCase):
         ticket = self._ticket()
         order = self._pending_order(ticket=ticket, ticket_ids=[ticket.id], payme_status='authorized')
 
-        result = cancel_abandoned_pending_payment_orders(older_than_minutes=15)
+        result = cancel_abandoned_pending_payment_orders()
 
         self.assertEqual(result.cancelled, 0)
         self.assertEqual(result.skipped_payme_completed, 1)
+        order.refresh_from_db()
+        ticket.refresh_from_db()
+        self.assertEqual(order.status, 'pending_payment')
+        self.assertEqual(ticket.status, 'reserved')
+
+    def test_keeps_pending_payment_order_inside_ten_minute_window(self):
+        ticket = self._ticket()
+        order = self._pending_order(
+            age_minutes=9,
+            ticket=ticket,
+            ticket_ids=[ticket.id],
+            payme_status='initialized',
+        )
+
+        result = cancel_abandoned_pending_payment_orders()
+
+        self.assertEqual(result.cancelled, 0)
         order.refresh_from_db()
         ticket.refresh_from_db()
         self.assertEqual(order.status, 'pending_payment')

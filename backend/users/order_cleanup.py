@@ -91,7 +91,7 @@ def _release_reserved_ticket_ids(ticket_ids) -> int:
 
 def cancel_abandoned_pending_payment_orders(
     *,
-    older_than_minutes: int = 15,
+    older_than_minutes: int = 10,
     dry_run: bool = False,
 ) -> AbandonedOrderCleanupResult:
     """
