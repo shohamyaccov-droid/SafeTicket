@@ -6,6 +6,7 @@ import { createListFetchAbort } from '../utils/listFetch';
 import SellFormSkeleton from '../components/skeletons/SellFormSkeleton';
 import BecomeSellerModal from '../components/BecomeSellerModal';
 import { toastError } from '../utils/toast';
+import { apiErrorMessageHe } from '../utils/apiErrors';
 import { iso4217FromCountry, currencySymbol, formatAmountForCurrency } from '../utils/priceFormat';
 import './Sell.css';
 
@@ -866,41 +867,7 @@ const Sell = () => {
         navigate('/');
       }, 3000);
     } catch (err) {
-      let errorMessage = 'יצירת רשימת הכרטיס נכשלה. אנא נסה שוב.';
-      
-      if (err.response?.data) {
-        const errorData = err.response.data;
-        // Handle validation errors
-        if (typeof errorData === 'object') {
-          if (errorData.asking_price) {
-            // Handle field-specific errors
-            errorMessage = Array.isArray(errorData.asking_price) 
-              ? errorData.asking_price[0] 
-              : errorData.asking_price;
-          } else if (errorData.non_field_errors) {
-            errorMessage = Array.isArray(errorData.non_field_errors)
-              ? errorData.non_field_errors[0]
-              : errorData.non_field_errors;
-          } else {
-            // Handle multiple field errors
-            const errors = Object.entries(errorData)
-              .map(([key, value]) => {
-                const fieldErrors = Array.isArray(value) ? value : [value];
-                const label = ERROR_FIELD_LABELS[key] || key;
-                return `${label}: ${fieldErrors.join(', ')}`;
-              })
-              .join('; ');
-            errorMessage = errors || errorMessage;
-          }
-        } else if (typeof errorData === 'string') {
-          errorMessage = errorData;
-        } else if (errorData.message) {
-          errorMessage = errorData.message;
-        }
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      
+      const errorMessage = apiErrorMessageHe(err, 'יצירת רשימת הכרטיס נכשלה. אנא נסה שוב.');
       setError(errorMessage);
       toastError(errorMessage);
     } finally {

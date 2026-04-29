@@ -20,6 +20,7 @@ import NegotiationModal from '../components/NegotiationModal';
 import Toast from '../components/Toast';
 import DashboardSkeleton from '../components/skeletons/DashboardSkeleton';
 import { toastError, toastSuccess } from '../utils/toast';
+import { apiErrorMessageHe } from '../utils/apiErrors';
 import { downloadTicketFromAxiosBlob } from '../utils/ticketDownload';
 import './Dashboard.css';
 
@@ -57,31 +58,6 @@ function mergeOffersListWithPrevious(incoming, previous) {
     const old = prevById.get(id);
     return old ? mergeOfferPatch(old, o) : o;
   });
-}
-
-/** DRF often returns PermissionDenied/validation as `detail` (string or list). */
-function apiErrorMessage(err, fallback) {
-  const d = err?.response?.data;
-  if (d == null) return fallback;
-  if (typeof d === 'string') return d;
-  if (typeof d.error === 'string') return d.error;
-  if (typeof d.detail === 'string') return d.detail;
-  if (Array.isArray(d.detail) && d.detail.length) return String(d.detail[0]);
-  if (Array.isArray(d.non_field_errors) && d.non_field_errors.length) {
-    return String(d.non_field_errors[0]);
-  }
-  if (typeof d === 'object' && d !== null) {
-    for (const key of Object.keys(d)) {
-      const v = d[key];
-      if (Array.isArray(v) && v.length) {
-        const first = v[0];
-        if (typeof first === 'string') return first;
-        if (first != null && typeof first === 'object') return String(first);
-      }
-      if (typeof v === 'string') return v;
-    }
-  }
-  return fallback;
 }
 
 function offerTicketGroupKey(offer) {
@@ -466,7 +442,7 @@ const Dashboard = () => {
     } catch (err) {
       setAcceptingOfferId(null);
       setToast({
-        message: apiErrorMessage(err, 'שגיאה באישור ההצעה'),
+        message: apiErrorMessageHe(err, 'שגיאה באישור ההצעה'),
         type: 'error',
       });
     } finally {
@@ -492,7 +468,7 @@ const Dashboard = () => {
       setToast({ message: 'ההצעה נדחתה', type: 'info' });
       await fetchOffers({ silent: true });
     } catch (err) {
-      setToast({ message: apiErrorMessage(err, 'שגיאה בדחיית ההצעה'), type: 'error' });
+      setToast({ message: apiErrorMessageHe(err, 'שגיאה בדחיית ההצעה'), type: 'error' });
     } finally {
       setRejectingOfferId(null);
     }
@@ -512,10 +488,7 @@ const Dashboard = () => {
       setCounterAmount('');
       await fetchOffers({ silent: true });
     } catch (err) {
-      const errorMsg =
-        apiErrorMessage(err, null) ||
-        err.response?.data?.amount?.[0] ||
-        'שגיאה בשליחת הצעת הנגד';
+      const errorMsg = apiErrorMessageHe(err, 'שגיאה בשליחת הצעת הנגד');
       setToast({ message: errorMsg, type: 'error' });
     } finally {
       setCounteringOfferId(null);

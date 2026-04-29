@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import api, {
   authAPI,
+  SESSION_EXPIRED_EVENT,
   resetCsrfTokenCache,
   setBearerFallback,
   clearBearerFallback,
@@ -53,6 +54,15 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
         setLoading(false);
       });
+  }, []);
+
+  useEffect(() => {
+    const onSessionExpired = () => {
+      clearBearerFallback();
+      setUser(null);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
   }, []);
 
   // Multi-tab: login/logout in another tab updates HttpOnly cookies — refresh profile from server.

@@ -26,6 +26,7 @@ import {
 import BuyerListingPrice from '../components/BuyerListingPrice';
 import { getFullImageUrl } from '../utils/formatters';
 import { toastError } from '../utils/toast';
+import { apiErrorMessageHe } from '../utils/apiErrors';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import { Helmet } from 'react-helmet-async';
 import { BUYER_SERVICE_FEE_PERCENT } from '../constants/pricing';
@@ -679,21 +680,7 @@ const EventDetailsPage = () => {
       setOfferSubmitted(true);
     } catch (error) {
       console.error('[EventDetails] Submit offer failed', error);
-      const d = error.response?.data;
-      const detailRaw = d?.detail;
-      const detailStr =
-        typeof detailRaw === 'string'
-          ? detailRaw
-          : detailRaw != null
-            ? JSON.stringify(detailRaw)
-            : null;
-      const errorMsg =
-        (Array.isArray(d?.non_field_errors) && d.non_field_errors[0]) ||
-        d?.error ||
-        detailStr ||
-        (typeof d === 'string' ? d : null) ||
-        error.message ||
-        'שגיאה בשליחת ההצעה';
+      const errorMsg = apiErrorMessageHe(error, 'שגיאה בשליחת ההצעה');
       setToast({ message: errorMsg, type: 'error' });
     } finally {
       setOfferSubmitting(false);

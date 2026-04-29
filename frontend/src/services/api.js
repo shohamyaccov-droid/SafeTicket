@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+export const SESSION_EXPIRED_EVENT = 'tradetix:session-expired';
+
 axios.defaults.withCredentials = true;
 axios.defaults.xsrfCookieName = 'csrftoken';
 axios.defaults.xsrfHeaderName = 'X-CSRFToken';
@@ -88,6 +90,27 @@ function getRefreshForBearerFallback() {
   if (bearerRefreshToken) return bearerRefreshToken;
   hydrateRefreshFromStorage();
   return bearerRefreshToken;
+}
+
+function currentReturnTo() {
+  if (typeof window === 'undefined') return '/';
+  const path = `${window.location.pathname || '/'}${window.location.search || ''}${window.location.hash || ''}`;
+  return path && path !== '/login' ? path : '/';
+}
+
+function notifySessionExpired() {
+  if (typeof window === 'undefined') return;
+  const returnTo = currentReturnTo();
+  try {
+    sessionStorage.setItem('tradetix_return_to', returnTo);
+  } catch {
+    /* ignore private mode */
+  }
+  window.dispatchEvent(
+    new CustomEvent(SESSION_EXPIRED_EVENT, {
+      detail: { returnTo },
+    }),
+  );
 }
 
 /** Production API when VITE_API_URL is missing at build time (never fall back to localhost in prod). */
@@ -315,7 +338,8 @@ api.interceptors.response.use(
           return Promise.reject(error);
         }
         clearBearerFallback();
-        window.location.href = '/login';
+        notifySessionExpired();
+        return Promise.reject(error);
       }
     }
 

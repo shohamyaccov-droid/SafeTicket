@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { contactAPI } from '../services/api';
+import { apiErrorMessageHe } from '../utils/apiErrors';
 import './Contact.css';
 
 const Contact = () => {
@@ -41,7 +42,7 @@ const Contact = () => {
         setShowSuccess(false);
       }, 5000);
     } catch (err) {
-      setError(err.response?.data?.message || 'אירעה שגיאה. אנא נסה שוב מאוחר יותר.');
+      setError(apiErrorMessageHe(err, 'אירעה שגיאה. אנא נסה שוב מאוחר יותר.'));
     } finally {
       setIsSubmitting(false);
     }

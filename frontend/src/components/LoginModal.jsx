@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toastError, toastSuccess } from '../utils/toast';
+import { apiErrorMessageHe } from '../utils/apiErrors';
 import '../pages/Auth.css';
 
 function responseDetail(data) {
@@ -24,6 +25,23 @@ export function LoginForm() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  const resolveReturnTo = () => {
+    const fromQuery = searchParams.get('returnTo');
+    const fromState = location.state?.returnTo;
+    let fromStorage = null;
+    try {
+      fromStorage = sessionStorage.getItem('tradetix_return_to');
+    } catch {
+      /* ignore */
+    }
+    const raw = fromQuery || fromState || fromStorage || '/';
+    return typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/login')
+      ? raw
+      : '/';
+  };
 
   const handleChange = (e) => {
     if (error) {
@@ -46,43 +64,29 @@ export function LoginForm() {
 
       if (result.success) {
         toastSuccess('התחברת בהצלחה');
-        navigate('/', { replace: true });
+        const returnTo = resolveReturnTo();
+        try {
+          sessionStorage.removeItem('tradetix_return_to');
+        } catch {
+          /* ignore */
+        }
+        navigate(returnTo, { replace: true });
         return;
       }
 
-      let exact =
-        typeof result.error === 'string'
-          ? result.error
-          : responseDetail(result.error) ||
-            result.error?.message ||
-            (typeof result.error?.error === 'string' ? result.error.error : null);
-      if (exact == null && result.error != null) {
-        exact =
-          typeof result.error === 'object'
-            ? JSON.stringify(result.error)
-            : String(result.error);
-      }
-      if (!exact) exact = 'Login Failed';
-
       const friendly =
         result.errorHebrew ||
-        (typeof result.error === 'string' && result.error.length < 200
-          ? result.error
-          : null) ||
+        apiErrorMessageHe(result.error, null) ||
         'שם משתמש או סיסמה אינם נכונים';
       setError(friendly);
-      toastError(exact);
+      toastError(friendly);
     } catch (err) {
-      const exact =
-        responseDetail(err?.response?.data) ||
-        err?.message ||
-        'Login Failed';
       const friendly =
         !err?.response || err?.message === 'Network Error'
           ? 'שגיאת תקשורת עם השרת'
-          : exact;
+          : apiErrorMessageHe(err, responseDetail(err?.response?.data) || 'שם משתמש או סיסמה אינם נכונים');
       setError(friendly);
-      toastError(exact);
+      toastError(friendly);
     } finally {
       setLoading(false);
     }

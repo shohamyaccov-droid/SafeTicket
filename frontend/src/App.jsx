@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import api, { authAPI } from './services/api';
+import api, { authAPI, SESSION_EXPIRED_EVENT } from './services/api';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
@@ -26,7 +26,46 @@ import PaymeCheckoutFailure from './pages/PaymeCheckoutFailure';
 import FloatingWhatsApp from './components/FloatingWhatsApp';
 import Footer from './components/Footer';
 import ScrollToTop from './components/ScrollToTop';
+import { toastError } from './utils/toast';
 import './App.css';
+
+function safeReturnTo(value) {
+  const raw = typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') ? value : '/';
+  return raw.startsWith('/login') ? '/' : raw;
+}
+
+function SessionExpiredRedirector() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    let lastToastAt = 0;
+    const onExpired = (event) => {
+      const current = `${location.pathname}${location.search}${location.hash}`;
+      const returnTo = safeReturnTo(event.detail?.returnTo || current || '/');
+      try {
+        sessionStorage.setItem('tradetix_return_to', returnTo);
+      } catch {
+        /* ignore private mode */
+      }
+      const now = Date.now();
+      if (now - lastToastAt > 1500) {
+        toastError('החיבור שלך פג תוקף. אנא התחבר מחדש.');
+        lastToastAt = now;
+      }
+      if (!location.pathname.startsWith('/login')) {
+        navigate(`/login?returnTo=${encodeURIComponent(returnTo)}`, {
+          replace: true,
+          state: { returnTo, sessionExpired: true },
+        });
+      }
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, [location.pathname, location.search, location.hash, navigate]);
+
+  return null;
+}
 
 function App() {
   useEffect(() => {
@@ -51,6 +90,7 @@ function App() {
     <AuthProvider>
       <Router>
         <ScrollToTop />
+        <SessionExpiredRedirector />
         <div className="App">
           <Navbar />
           <main>
