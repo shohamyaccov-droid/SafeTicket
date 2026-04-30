@@ -1,0 +1,32 @@
+{% extends "emails/base.html" %}
+{% block title %}הקבלה והכרטיסים שלך — {{ site_name }}{% endblock %}
+{% block preheader %}הרכישה עבור {{ event_name }} הושלמה בהצלחה{% endblock %}
+{% block hero_title %}הרכישה הושלמה בהצלחה{% endblock %}
+{% block hero_subtitle %}הכרטיסים והקבלה שלכם מוכנים. שמרו את המייל עד האירוע.{% endblock %}
+{% block content %}
+  <p style="margin:0 0 16px;font-size:16px;">שלום,</p>
+  <p style="margin:0 0 18px;font-size:16px;">
+    תודה שרכשתם דרך TradeTix. התשלום עבור <strong>{{ event_name }}</strong> אושר, והכרטיסים שלכם מצורפים למייל זה.
+  </p>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:20px 0;background:#f8fafc;border-radius:14px;overflow:hidden;">
+    <tr><td style="padding:12px 14px;color:#64748b;">מספר הזמנה</td><td style="padding:12px 14px;font-weight:800;">#{{ order_id }}</td></tr>
+    <tr><td style="padding:12px 14px;color:#64748b;">אירוע</td><td style="padding:12px 14px;font-weight:700;">{{ event_name }}</td></tr>
+    <tr><td style="padding:12px 14px;color:#64748b;">כמות</td><td style="padding:12px 14px;">{{ quantity }}</td></tr>
+    <tr><td style="padding:12px 14px;color:#64748b;">סכום כולל</td><td style="padding:12px 14px;font-weight:800;">{{ total_display }} <span style="color:#64748b;font-size:13px;">{{ currency_code }}</span></td></tr>
+  </table>
+  {% if download_links %}
+    <p style="margin:0 0 10px;color:#334155;">בנוסף לצרופות, אפשר להוריד את הכרטיסים דרך הקישורים החתומים הבאים:</p>
+    <ul style="margin:0 0 18px;padding-right:20px;">
+      {% for link in download_links %}
+        <li style="margin:8px 0;"><a href="{{ link.url }}" style="color:#2563eb;text-decoration:none;font-weight:700;">{{ link.label }}</a></li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  {% if recipient_is_guest %}
+    <p style="margin:0;padding:14px 16px;background:#fffbeb;border:1px solid #fde68a;border-radius:14px;color:#92400e;">
+      רכשתם כאורחים? שמרו את המייל הזה. הקישורים חתומים ומוגבלים בזמן, ותוכלו גם להירשם עם אותה כתובת אימייל כדי לצפות בהזמנה באזור האישי.
+    </p>
+  {% else %}
+    <p style="margin:0;color:#475569;">ניתן לצפות בהזמנה ובהורדות גם באזור האישי שלכם.</p>
+  {% endif %}
+{% endblock %}

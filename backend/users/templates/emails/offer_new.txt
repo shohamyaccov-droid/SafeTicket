@@ -1,11 +1,15 @@
-{{ site_name }} — New offer on your listing
+{{ site_name }} — התקבלה הצעה חדשה
 
-{{ counterparty_name }} submitted an offer for {{ event_name }}.
+שלום,
 
-Offer amount: {{ amount_display }} ({{ currency_code }})
+{{ counterparty_name }} שלח/ה הצעה עבור {{ event_name }}.
 
-{% if dashboard_url %}Open your dashboard to respond:
+סכום ההצעה: {{ amount_display }} ({{ currency_code }})
+
+תגובה מהירה מגדילה את הסיכוי לסגור עסקה מוצלחת.
+
+{% if dashboard_url %}לצפייה בהצעה באזור האישי:
 {{ dashboard_url }}
 {% endif %}
 
-— {{ site_name }}
+— צוות {{ site_name }}

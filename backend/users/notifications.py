@@ -80,8 +80,11 @@ def _send_notification(
     ctx = {
         'site_name': 'TradeTix',
         'dashboard_url': dashboard_url(),
+        'support_email': getattr(settings, 'SUPPORT_EMAIL', '') or getattr(settings, 'DEFAULT_FROM_EMAIL', ''),
         **context,
     }
+    if ctx.get('dashboard_url') and not ctx.get('cta_url'):
+        ctx['cta_url'] = ctx['dashboard_url']
     try:
         text_body = render_to_string(f'emails/{template_basename}.txt', ctx)
         html_body = render_to_string(f'emails/{template_basename}.html', ctx)
@@ -124,8 +127,9 @@ def notify_new_offer(offer) -> None:
         'currency_code': cur,
         'counterparty_name': buyer.username if buyer else 'A buyer',
         'offer_id': offer.id,
+        'cta_label': 'צפה בהצעה',
     }
-    subject = f'TradeTix — New offer on {ctx["event_name"]}'
+    subject = f'TradeTix — התקבלה הצעה חדשה עבור {ctx["event_name"]}'
     _send_notification(subject, 'offer_new', seller.email, ctx)
 
 
@@ -152,8 +156,9 @@ def notify_counter_offer(new_offer, previous_offer) -> None:
         'role_hint': role_hint,
         'offer_id': new_offer.id,
         'quantity': new_offer.quantity or 1,
+        'cta_label': 'צפה בהצעת הנגד',
     }
-    subject = f'TradeTix — Counter-offer for {ctx["event_name"]}'
+    subject = f'TradeTix — הצעת נגד עבור {ctx["event_name"]}'
     _send_notification(subject, 'offer_counter', recipient.email, ctx)
 
 
@@ -174,8 +179,9 @@ def notify_offer_accepted(offer) -> None:
         'currency_code': cur,
         'offer_id': offer.id,
         'checkout_expires_at': checkout_str,
+        'cta_label': 'השלם תשלום',
     }
-    subject = f'TradeTix — Offer accepted — complete payment for {ctx["event_name"]}'
+    subject = f'TradeTix — ההצעה התקבלה, השלימו תשלום עבור {ctx["event_name"]}'
     _send_notification(subject, 'offer_accepted', buyer.email, ctx)
 
 
@@ -204,6 +210,7 @@ def notify_seller_ticket_sold_escrow(order) -> None:
         'buyer_paid_display': format_money_for_email(paid, cur),
         'currency_code': cur,
         'quantity': order.quantity or 1,
+        'cta_label': 'צפה במכירות שלי',
     }
-    subject = f'TradeTix — Your tickets sold (order #{order.id})'
+    subject = f'TradeTix — הכרטיסים נמכרו (הזמנה #{order.id})'
     _send_notification(subject, 'order_seller_escrow', seller.email, ctx)

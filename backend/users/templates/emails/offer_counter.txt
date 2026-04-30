@@ -1,12 +1,14 @@
-{{ site_name }} — Counter-offer received
+{{ site_name }} — התקבלה הצעת נגד
 
-You have a new counter-offer for {{ event_name }} ({{ role_hint }}).
+שלום,
 
-Amount: {{ amount_display }} ({{ currency_code }})
-Quantity: {{ quantity }}
+יש הצעת נגד חדשה עבור {{ event_name }}.
 
-{% if dashboard_url %}Open your dashboard:
+סכום: {{ amount_display }} ({{ currency_code }})
+כמות: {{ quantity }}
+
+{% if dashboard_url %}לניהול המשא ומתן באזור האישי:
 {{ dashboard_url }}
 {% endif %}
 
-— {{ site_name }}
+— צוות {{ site_name }}

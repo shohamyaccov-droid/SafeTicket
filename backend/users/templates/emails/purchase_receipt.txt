@@ -1,0 +1,22 @@
+{{ site_name }} — הקבלה והכרטיסים שלך
+
+שלום,
+
+הרכישה עבור {{ event_name }} הושלמה בהצלחה.
+
+מספר הזמנה: #{{ order_id }}
+כמות: {{ quantity }}
+סכום כולל: {{ total_display }} ({{ currency_code }})
+
+הכרטיסים מצורפים למייל זה, אם קיימים.
+
+{% if download_links %}קישורי הורדה חתומים:
+{% for link in download_links %}- {{ link.label }}: {{ link.url }}
+{% endfor %}{% endif %}
+
+{% if recipient_is_guest %}רכשתם כאורחים? שמרו את המייל הזה. הקישורים חתומים ומוגבלים בזמן.
+{% elif dashboard_url %}ניתן לצפות בהזמנה באזור האישי:
+{{ dashboard_url }}
+{% endif %}
+
+— צוות {{ site_name }}

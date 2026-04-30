@@ -1,0 +1,13 @@
+{% extends "emails/base.html" %}
+{% block title %}קוד אימות — {{ site_name }}{% endblock %}
+{% block preheader %}קוד האימות שלכם ל-TradeTix הוא {{ otp }}{% endblock %}
+{% block hero_title %}קוד האימות שלכם{% endblock %}
+{% block hero_subtitle %}עוד רגע ואתם בפנים — הזינו את הקוד כדי לאמת את כתובת המייל.{% endblock %}
+{% block content %}
+  <p style="margin:0 0 16px;font-size:16px;">שלום {{ user_name }},</p>
+  <p style="margin:0 0 18px;font-size:16px;">השתמשו בקוד הבא כדי להשלים את אימות החשבון שלכם ב-TradeTix:</p>
+  <div style="margin:24px 0;padding:20px;border-radius:18px;background:#0f172a;color:#ffffff;text-align:center;letter-spacing:8px;font-size:32px;font-weight:900;direction:ltr;">
+    {{ otp }}
+  </div>
+  <p style="margin:0;color:#475569;">הקוד תקף ל-{{ expires_minutes }} דקות. אם לא ביקשתם את הקוד, אפשר להתעלם מהמייל.</p>
+{% endblock %}

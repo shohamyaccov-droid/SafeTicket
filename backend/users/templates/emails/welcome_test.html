@@ -1,0 +1,16 @@
+{% extends "emails/base.html" %}
+{% block title %}ברוכים הבאים — {{ site_name }}{% endblock %}
+{% block preheader %}זוהי הודעת בדיקה ממותגת מ-TradeTix{% endblock %}
+{% block hero_title %}ברוכים הבאים ל-TradeTix{% endblock %}
+{% block hero_subtitle %}כך ייראו הודעות המייל החדשות: נקיות, ברורות ומותאמות למובייל.{% endblock %}
+{% block content %}
+  <p style="margin:0 0 16px;font-size:16px;">שלום {{ user_name }},</p>
+  <p style="margin:0 0 18px;font-size:16px;">
+    זהו מייל בדיקה ממותג של TradeTix. אם אתם רואים אותו בתיבת המייל, תצורת ה-SMTP וה-HTML עובדות כמצופה.
+  </p>
+  <div style="margin:22px 0;padding:18px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0;">
+    <p style="margin:0;color:#334155;">
+      מעכשיו הודעות רכישה, הצעות ועדכונים חשובים יישלחו בעיצוב מקצועי, עם גרסת טקסט חלופית ללקוחות מייל ישנים.
+    </p>
+  </div>
+{% endblock %}

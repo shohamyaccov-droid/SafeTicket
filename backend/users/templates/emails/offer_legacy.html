@@ -1,8 +1,8 @@
 {% extends "emails/base.html" %}
 {% block title %}הצעה חדשה — {{ site_name }}{% endblock %}
 {% block preheader %}קיבלתם הצעה חדשה עבור {{ event_name }}{% endblock %}
-{% block hero_title %}יש הצעה חדשה על הכרטיס שלכם{% endblock %}
-{% block hero_subtitle %}קונים רציניים מחכים לתגובה שלכם — אפשר לאשר, לדחות או לשלוח הצעת נגד.{% endblock %}
+{% block hero_title %}קיבלתם הצעה חדשה{% endblock %}
+{% block hero_subtitle %}בדקו את ההצעה והגיבו מהממשק האישי שלכם.{% endblock %}
 {% block content %}
   <p style="margin:0 0 16px;font-size:16px;">שלום,</p>
   <p style="margin:0 0 18px;font-size:16px;">
@@ -10,8 +10,6 @@
   </p>
   <div style="margin:22px 0;padding:18px;border-radius:16px;background:#eff6ff;border:1px solid #bfdbfe;">
     <div style="color:#64748b;font-size:13px;font-weight:700;">סכום ההצעה</div>
-    <div style="margin-top:4px;font-size:26px;font-weight:800;color:#1d4ed8;">{{ amount_display }}</div>
-    <div style="color:#64748b;font-size:13px;">{{ currency_code }}</div>
+    <div style="margin-top:4px;font-size:24px;font-weight:800;color:#1d4ed8;">{{ amount_display }}</div>
   </div>
-  <p style="margin:0;color:#475569;">תגובה מהירה מגדילה את הסיכוי לסגור עסקה מוצלחת ולשחרר את הכרטיס לקונה בזמן.</p>
 {% endblock %}

@@ -1,0 +1,12 @@
+{{ site_name }} — הצעה חדשה
+
+שלום,
+
+{{ counterparty_name }} שלח/ה הצעה עבור {{ event_name }}.
+סכום ההצעה: {{ amount_display }}
+
+{% if cta_url %}לצפייה בהצעה:
+{{ cta_url }}
+{% endif %}
+
+— צוות {{ site_name }}

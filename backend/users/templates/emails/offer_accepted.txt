@@ -1,14 +1,16 @@
-{{ site_name }} — Your offer was accepted
+{{ site_name }} — ההצעה שלכם התקבלה
 
-Your offer for {{ event_name }} was accepted.
+שלום,
 
-Agreed negotiated amount (listing currency): {{ amount_display }} ({{ currency_code }})
+ההצעה שלכם עבור {{ event_name }} התקבלה.
 
-{% if checkout_expires_at %}Complete payment before: {{ checkout_expires_at }}
+מחיר שסוכם לפני עמלת שירות: {{ amount_display }} ({{ currency_code }})
+
+{% if checkout_expires_at %}יש להשלים את התשלום עד: {{ checkout_expires_at }}
 {% endif %}
 
-{% if dashboard_url %}Open your dashboard to pay:
+{% if dashboard_url %}להשלמת התשלום באזור האישי:
 {{ dashboard_url }}
 {% endif %}
 
-— {{ site_name }}
+— צוות {{ site_name }}

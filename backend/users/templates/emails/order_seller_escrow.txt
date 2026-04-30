@@ -1,14 +1,16 @@
-{{ site_name }} — Your tickets sold (order #{{ order_id }})
+{{ site_name }} — הכרטיסים שלכם נמכרו (הזמנה #{{ order_id }})
 
-A buyer completed payment for {{ event_name }}.
+שלום,
 
-Quantity: {{ quantity }}
-Total paid by buyer (incl. fees): {{ buyer_paid_display }} ({{ currency_code }})
+קונה השלים תשלום עבור {{ event_name }}.
 
-Funds are held in escrow per platform rules until payout eligibility.
+כמות: {{ quantity }}
+סכום ששולם: {{ buyer_paid_display }} ({{ currency_code }})
 
-{% if dashboard_url %}Dashboard:
+התשלום נשמר בנאמנות וישוחרר לפי כללי הפלטפורמה לאחר השלמת תנאי העסקה.
+
+{% if dashboard_url %}לצפייה במכירות באזור האישי:
 {{ dashboard_url }}
 {% endif %}
 
-— {{ site_name }}
+— צוות {{ site_name }}

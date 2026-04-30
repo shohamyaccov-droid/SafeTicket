@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}TradeTix{% endblock %}</title>
+</head>
+<body dir="rtl" style="margin:0;padding:0;background:#f1f5f9;color:#0f172a;font-family:Assistant,Arial,sans-serif;text-align:right;line-height:1.6;">
+  <div style="display:none;max-height:0;overflow:hidden;color:transparent;opacity:0;">
+    {% block preheader %}עדכון חשוב מ-TradeTix{% endblock %}
+  </div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f1f5f9;margin:0;padding:0;" dir="rtl">
+    <tr>
+      <td align="center" style="padding:28px 14px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border:1px solid #e2e8f0;border-radius:22px;overflow:hidden;box-shadow:0 18px 48px rgba(15,23,42,0.08);" dir="rtl">
+          <tr>
+            <td style="background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 48%,#0d9488 100%);padding:26px 28px;color:#ffffff;text-align:right;">
+              <div style="display:inline-block;border:1px solid rgba(255,255,255,0.38);border-radius:14px;padding:9px 14px;font-weight:800;letter-spacing:0.02em;">
+                TradeTix
+              </div>
+              <div style="margin-top:8px;color:#dbeafe;font-size:13px;">לוגו TradeTix יופיע כאן</div>
+              <h1 style="margin:20px 0 0;font-size:26px;line-height:1.25;font-weight:800;color:#ffffff;">
+                {% block hero_title %}עדכון מ-TradeTix{% endblock %}
+              </h1>
+              <p style="margin:10px 0 0;font-size:15px;color:#e0f2fe;">
+                {% block hero_subtitle %}קנייה ומכירה בטוחה של כרטיסים, עם ליווי עד הכניסה לאירוע.{% endblock %}
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:30px 28px;text-align:right;">
+              {% block content %}{% endblock %}
+              {% if cta_url and cta_label %}
+                <div style="margin:28px 0 8px;text-align:right;">
+                  <a href="{{ cta_url }}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:13px 24px;border-radius:999px;font-weight:800;font-size:15px;box-shadow:0 10px 22px rgba(37,99,235,0.22);">
+                    {{ cta_label }}
+                  </a>
+                </div>
+                <p style="margin:12px 0 0;color:#64748b;font-size:12px;direction:ltr;text-align:left;word-break:break-all;">{{ cta_url }}</p>
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:22px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:right;color:#64748b;font-size:13px;">
+              <p style="margin:0 0 8px;color:#334155;font-weight:700;">TradeTix — הכרטיסים שלכם בידיים טובות.</p>
+              <p style="margin:0;">נשלח אליכם כי ביצעתם פעולה באתר TradeTix או שיש עדכון חשוב לגבי חשבונכם.</p>
+              {% if support_email %}
+                <p style="margin:8px 0 0;">לתמיכה: <a href="mailto:{{ support_email }}" style="color:#2563eb;text-decoration:none;">{{ support_email }}</a></p>
+              {% endif %}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
