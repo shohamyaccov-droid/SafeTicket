@@ -102,7 +102,13 @@ function canonicalVenueName(eventLike) {
 
 function generatedSectionOptionsForVenue(venueName) {
   if (venueName === 'היכל מנורה מבטחים') {
-    return [...rangeOptions(101, 112), ...rangeOptions(301, 312)];
+    return Array.from({ length: 12 }, (_, i) => {
+      const number = i + 1;
+      return [
+        { value: `${number} תחתון`, label: `גוש ${number} תחתון`, structured: false },
+        { value: `${number} עליון`, label: `גוש ${number} עליון`, structured: false },
+      ];
+    }).flat();
   }
   if (venueName === 'אצטדיון בלומפילד') {
     return BLOOMFIELD_SECTION_OPTIONS;

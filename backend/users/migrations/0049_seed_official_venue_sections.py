@@ -3,8 +3,8 @@ from django.db import migrations
 
 VENUE_SECTIONS = {
     ('היכל מנורה מבטחים', 'תל אביב'): [
-        *[str(n) for n in range(101, 113)],
-        *[str(n) for n in range(301, 313)],
+        *[f'{n} תחתון' for n in range(1, 13)],
+        *[f'{n} עליון' for n in range(1, 13)],
     ],
     ('אצטדיון בלומפילד', 'תל אביב'): [
         *[str(n) for n in range(201, 210)],

@@ -36,8 +36,8 @@ VENUE_JERUSALEM_ARENA = "פיס ארנה ירושלים"
 
 VENUE_SECTIONS = {
     (VENUE_MENORA, "תל אביב"): [
-        *[str(n) for n in range(101, 113)],
-        *[str(n) for n in range(301, 313)],
+        *[f"{n} תחתון" for n in range(1, 13)],
+        *[f"{n} עליון" for n in range(1, 13)],
     ],
     (VENUE_BLOOMFIELD, "תל אביב"): [
         *[str(n) for n in range(201, 210)],
@@ -304,7 +304,7 @@ class Command(BaseCommand):
             status="פעיל",
             country="IL",
         )
-        base = [101, 105, 301, 312]
+        base = ["1 תחתון", "5 תחתון", "1 עליון", "12 עליון"]
         for i in range(15):
             sec = base[i % len(base)]
             p = _price_in_range(200, 450, i)

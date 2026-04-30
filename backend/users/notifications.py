@@ -6,7 +6,6 @@ and correct transaction boundaries (OfferViewSet, confirm_order_payment).
 from __future__ import annotations
 
 import logging
-import threading
 from decimal import Decimal
 
 from django.conf import settings
@@ -52,7 +51,7 @@ def _event_name_from_ticket(ticket) -> str:
 def _send_smtp_in_background(msg: EmailMultiAlternatives, template_basename: str, to_email: str) -> None:
     """Run SMTP in a worker thread; never raise to the HTTP layer."""
     try:
-        msg.send(fail_silently=True)
+        msg.send(fail_silently=False)
         logger.info('notifications: sent %s to %s', template_basename, to_email)
     except Exception as exc:
         logger.error(
@@ -105,12 +104,7 @@ def _send_notification(
         )
         return
 
-    thread = threading.Thread(
-        target=_send_smtp_in_background,
-        args=(msg, template_basename, to_email.strip()),
-        daemon=True,
-    )
-    thread.start()
+    _send_smtp_in_background(msg, template_basename, to_email.strip())
 
 
 def notify_new_offer(offer) -> None:

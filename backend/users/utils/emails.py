@@ -70,7 +70,20 @@ def send_branded_email(
     msg.attach_alternative(html_body, 'text/html')
     for filename, content, mimetype in attachments or []:
         msg.attach(filename, content, mimetype)
-    return msg.send(fail_silently=fail_silently)
+    try:
+        return msg.send(fail_silently=False)
+    except Exception as exc:
+        logger.error(
+            'send_branded_email: SMTP failed template=%s recipient=%s subject=%s error=%s',
+            template_basename,
+            recipient,
+            subject,
+            (str(exc) or repr(exc))[:500],
+            exc_info=True,
+        )
+        if fail_silently:
+            return 0
+        raise
 
 
 def _collect_pdf_files_from_order(order):
