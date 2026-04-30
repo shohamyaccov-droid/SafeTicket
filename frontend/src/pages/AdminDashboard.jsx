@@ -64,6 +64,19 @@ function StatCard({ label, value, sub, currency = false }) {
   );
 }
 
+function AdminSeatDetails({ ticket }) {
+  const zone = ticket.section || ticket.custom_section_text || ticket.venue_section_name || '—';
+  const row = ticket.row || ticket.row_number || '—';
+  const seat = ticket.seat_number || ticket.seat_numbers || '—';
+  return (
+    <div className="admin-seat-details" dir="rtl">
+      <span><strong>גוש:</strong> {zone}</span>
+      <span><strong>שורה:</strong> {row}</span>
+      <span><strong>כיסא:</strong> {seat}</span>
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const { user } = useAuth();
   const [mainTab, setMainTab] = useState('overview');
@@ -247,6 +260,7 @@ export default function AdminDashboard() {
                   <tr>
                     <th>ID</th>
                     <th>אירוע</th>
+                    <th>פרטי מושב</th>
                     <th>מחיר פנים</th>
                     <th>מחיר מבוקש</th>
                     <th>פעולות</th>
@@ -258,6 +272,9 @@ export default function AdminDashboard() {
                       <td data-label="ID">{t.id}</td>
                       <td data-label="אירוע" className="admin-td-clip">
                         {t.event?.name || t.event_name || '—'}
+                      </td>
+                      <td data-label="פרטי מושב">
+                        <AdminSeatDetails ticket={t} />
                       </td>
                       <td data-label="פנים">
                         {(() => {

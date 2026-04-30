@@ -214,3 +214,23 @@ def notify_seller_ticket_sold_escrow(order) -> None:
     }
     subject = f'TradeTix — הכרטיסים נמכרו (הזמנה #{order.id})'
     _send_notification(subject, 'order_seller_escrow', seller.email, ctx)
+
+
+def notify_ticket_approved(ticket) -> None:
+    """Admin approved a pending listing — tell the seller it is live."""
+    seller = getattr(ticket, 'seller', None)
+    if not seller or not (seller.email or '').strip():
+        return
+    cur = iso4217_for_ticket_listing(ticket)
+    ctx = {
+        'event_name': _event_name_from_ticket(ticket),
+        'ticket_id': ticket.id,
+        'section': ticket.get_section_display() or '',
+        'row': getattr(ticket, 'row', '') or getattr(ticket, 'row_number', '') or '',
+        'seat_numbers': getattr(ticket, 'seat_numbers', '') or getattr(ticket, 'seat_number', '') or '',
+        'asking_price_display': format_money_for_email(ticket.asking_price, cur),
+        'currency_code': cur,
+        'cta_label': 'צפה בכרטיס',
+    }
+    subject = f'TradeTix — הכרטיס שלך אושר ועלה לאתר ({ctx["event_name"]})'
+    _send_notification(subject, 'ticket_approved', seller.email, ctx)

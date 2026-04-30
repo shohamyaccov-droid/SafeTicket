@@ -39,6 +39,8 @@ class HybridSeatingListingEmailResilienceTests(TestCase):
         self.venue = Venue.objects.create(name='QA Arena', city='Tel Aviv')
         self.sec_a = VenueSection.objects.create(venue=self.venue, name='Gate A')
         VenueSection.objects.create(venue=self.venue, name='Gate B')
+        self.other_venue = Venue.objects.create(name='Other QA Arena', city='Jerusalem')
+        self.other_sec = VenueSection.objects.create(venue=self.other_venue, name='Wrong Gate')
         self.event_structured = Event.objects.create(
             name='Structured Venue Event',
             artist=self.artist,
@@ -71,6 +73,8 @@ class HybridSeatingListingEmailResilienceTests(TestCase):
         self.assertEqual(r.data['venue_detail']['name'], self.venue.name)
         names = {s['name'] for s in r.data['venue_detail']['sections']}
         self.assertEqual(names, {'Gate A', 'Gate B'})
+        venue_ids = {s['venue_id'] for s in r.data['venue_detail']['sections']}
+        self.assertEqual(venue_ids, {self.venue.id})
 
     def test_plain_event_has_null_venue_detail(self):
         r = self.client.get(f'/api/users/events/{self.event_plain.id}/')
@@ -99,6 +103,26 @@ class HybridSeatingListingEmailResilienceTests(TestCase):
         self.assertEqual(t.venue_section_id, self.sec_a.id)
         self.assertFalse((t.custom_section_text or '').strip())
         self.assertEqual(t.get_section_display(), 'Gate A')
+
+    def test_structured_section_from_other_venue_is_rejected(self):
+        b = _pdf_bytes()
+        pdf = SimpleUploadedFile('t.pdf', b, content_type='application/pdf')
+        self.client.force_authenticate(self.seller)
+        r = self.client.post(
+            '/api/users/tickets/',
+            {
+                'event_id': self.event_structured.id,
+                'original_price': '80',
+                'listing_price': '100',
+                'available_quantity': '1',
+                'pdf_files_count': '1',
+                'pdf_file_0': pdf,
+                'venue_section': str(self.other_sec.id),
+            },
+            format='multipart',
+        )
+        self.assertEqual(r.status_code, 400, getattr(r, 'data', r.content))
+        self.assertIn('venue_section', r.data)
 
     def test_list_ticket_free_text_section(self):
         b = _pdf_bytes()

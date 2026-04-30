@@ -4003,7 +4003,7 @@ def admin_pending_tickets(request):
     
     pending_tickets = (
         Ticket.objects.filter(status='pending_approval')
-        .select_related('seller', 'event', 'event__artist')
+        .select_related('seller', 'event', 'event__artist', 'event__venue_place', 'venue_section')
         .order_by('-created_at')
     )
     serializer = TicketSerializer(pending_tickets, many=True, context={'request': request})
@@ -4037,7 +4037,7 @@ def admin_approve_ticket(request, ticket_id):
         )
     
     try:
-        ticket = Ticket.objects.get(id=ticket_id)
+        ticket = Ticket.objects.select_related('seller', 'event', 'event__venue_place', 'venue_section').get(id=ticket_id)
         
         if ticket.status != 'pending_approval':
             return Response(
@@ -4049,6 +4049,13 @@ def admin_approve_ticket(request, ticket_id):
         ticket.status = 'active'
         ticket.verification_status = 'מאומת'
         ticket.save(update_fields=['status', 'verification_status', 'updated_at'])
+
+        try:
+            from .notifications import notify_ticket_approved
+
+            transaction.on_commit(lambda: notify_ticket_approved(ticket))
+        except Exception:
+            logger.exception('admin_approve_ticket: approval email dispatch failed ticket_id=%s', ticket_id)
         
         serializer = TicketSerializer(ticket, context={'request': request})
         return Response({

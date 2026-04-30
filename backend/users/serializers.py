@@ -515,7 +515,7 @@ class ArtistCardSerializer(serializers.ModelSerializer):
 class VenueSectionBriefSerializer(serializers.ModelSerializer):
     class Meta:
         model = VenueSection
-        fields = ('id', 'name')
+        fields = ('id', 'name', 'venue_id')
         read_only_fields = fields
 
 
@@ -805,6 +805,10 @@ class TicketSerializer(serializers.ModelSerializer):
             if not legal_ok:
                 raise serializers.ValidationError({
                     'il_legal_declaration': 'יש לאשר את תנאי ההצהרה.'
+                })
+            if not attrs.get('receipt_file') and not getattr(self.instance, 'receipt_file', None):
+                raise serializers.ValidationError({
+                    'receipt_file': 'לאירועים בישראל חובה לצרף קבלה או הוכחת רכישה.'
                 })
             if listing_price > original_price:
                 raise serializers.ValidationError({

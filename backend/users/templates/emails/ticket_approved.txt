@@ -1,0 +1,17 @@
+{{ site_name }} — הכרטיס שלכם אושר
+
+שלום,
+
+הכרטיס שלכם עבור {{ event_name }} אושר ועלה לאתר.
+
+מספר כרטיס: #{{ ticket_id }}
+גוש: {{ section|default:"—" }}
+שורה: {{ row|default:"—" }}
+כיסא: {{ seat_numbers|default:"—" }}
+מחיר מבוקש: {{ asking_price_display }} ({{ currency_code }})
+
+{% if dashboard_url %}לצפייה באזור האישי:
+{{ dashboard_url }}
+{% endif %}
+
+— צוות {{ site_name }}

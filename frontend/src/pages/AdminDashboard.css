@@ -119,6 +119,23 @@
   justify-content: flex-end;
 }
 
+.admin-seat-details {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 130px;
+  color: #334155;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.admin-seat-details span {
+  white-space: nowrap;
+}
+
+.admin-seat-details strong {
+  color: #0f172a;
+}
+
 .admin-btn-approve-ticket {
   background: linear-gradient(135deg, #059669 0%, #047857 100%);
   color: #fff;

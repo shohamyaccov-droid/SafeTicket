@@ -454,21 +454,35 @@ const Sell = () => {
   const sellSym = currencySymbol(sellCurrency);
 
   const sectionOptions = useMemo(() => {
-    const structured = eventDetail?.venue_detail?.sections;
+    const selectedEventId = formData.event_id ? String(formData.event_id) : '';
+    const detailMatchesSelection = eventDetail && String(eventDetail.id) === selectedEventId;
+    const eventForSections = detailMatchesSelection ? eventDetail : formData.selectedEvent;
+    const venueDetail = eventForSections?.venue_detail;
+    const structured = venueDetail?.sections;
     if (Array.isArray(structured) && structured.length > 0) {
+      const selectedVenueId = venueDetail?.id ? String(venueDetail.id) : '';
       return [...structured]
+        .filter((section) => !selectedVenueId || String(section.venue_id || selectedVenueId) === selectedVenueId)
         .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'he', { numeric: true }))
         .map((section) => ({
           value: String(section.id),
           label: `גוש ${section.name}`,
           structured: true,
+          venueId: venueDetail?.id ? String(venueDetail.id) : '',
         }));
     }
-    const venueName = canonicalVenueName(eventDetail || formData);
+    if (venueDetail?.id) {
+      return [];
+    }
+    const venueName = canonicalVenueName(eventForSections || {});
     return generatedSectionOptionsForVenue(venueName);
-  }, [eventDetail, formData.selectedEvent]);
+  }, [eventDetail, formData.event_id, formData.selectedEvent]);
 
-  const selectedVenueLabel = canonicalVenueName(eventDetail || formData.selectedEvent || {});
+  const selectedVenueLabel = canonicalVenueName(
+    eventDetail && String(eventDetail.id) === String(formData.event_id)
+      ? eventDetail
+      : formData.selectedEvent || {}
+  );
 
   // NOW ALL EARLY RETURNS CAN HAPPEN AFTER ALL HOOKS
   // Wait for auth to finish loading
@@ -537,6 +551,7 @@ const Sell = () => {
     const newCategory = e.target.value;
     setSelectedCategory(newCategory);
     setSelectedArtistId(''); // Reset artist when category changes
+    setEventDetail(null);
     setFormData({
       ...formData,
       event_id: '', // Reset event when category changes
@@ -551,6 +566,7 @@ const Sell = () => {
     const artistId = e.target.value;
     setSelectedArtistId(artistId);
     setArtistEvents([]);
+    setEventDetail(null);
     setFormData({
       ...formData,
       event_id: '', // Reset event when artist changes
@@ -563,6 +579,7 @@ const Sell = () => {
 
   const handleEventChange = (e) => {
     const eventId = e.target.value;
+    setEventDetail(null);
     if (!eventId) {
       setFormData({
         ...formData,
