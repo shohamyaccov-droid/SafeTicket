@@ -291,17 +291,21 @@
 .form-group input:focus {
   outline: none;
   border-color: var(--primary-blue);
+  box-shadow: 0 0 0 3px rgba(0, 69, 175, 0.1);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
-/* Price Breakdown Container - 5% Seller Fee Calculator */
+/* Price Breakdown Container — receipt-style card */
 .price-breakdown-container {
   margin-top: 0.75rem;
   padding: 0.875rem 1rem;
-  background: #f8f9fa;
-  border-radius: var(--radius-sm);
-  border: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border-radius: 12px;
+  border: 1px solid #bbf7d0;
+  border-top: 3px solid #16a34a;
   direction: rtl;
   font-size: 0.875rem;
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.08);
 }
 
 .price-breakdown-row {
@@ -757,22 +761,37 @@
   cursor: not-allowed;
 }
 
+.submit-button:active:not(:disabled) {
+  transform: scale(0.99);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
 .error-message {
-  background-color: var(--error-red);
-  color: white;
-  padding: 0.75rem;
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-right: 4px solid #dc2626;
+  padding: 0.75rem 1rem;
   border-radius: var(--radius-md);
   margin-bottom: 1rem;
-  text-align: center;
+  text-align: right;
+  font-weight: 500;
+  direction: rtl;
+  line-height: 1.45;
 }
 
 .warning-message {
-  background-color: #ffc107;
-  color: #856404;
-  padding: 0.75rem;
+  background-color: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-right: 4px solid #f59e0b;
+  padding: 0.75rem 1rem;
   border-radius: var(--radius-md);
   margin-bottom: 1rem;
-  text-align: center;
+  text-align: right;
+  font-weight: 500;
+  direction: rtl;
+  line-height: 1.45;
 }
 
 .success-message {
@@ -1173,6 +1192,32 @@
     flex-direction: column;
     align-items: stretch;
     gap: 0.5rem;
+  }
+
+  /* Fix checkbox label overflow — allow text to wrap on narrow screens */
+  .checkbox-label {
+    white-space: normal !important;
+    word-break: break-word;
+    line-height: 1.45 !important;
+  }
+
+  /* 16px minimum prevents iOS Safari auto-zoom on input focus */
+  .form-group input[type="text"],
+  .form-group input[type="number"],
+  .form-group input[type="date"],
+  .form-group input[type="time"],
+  .form-group select,
+  .premium-select,
+  .artist-search-wrapper input,
+  .event-search-wrapper input {
+    font-size: 16px;
+    min-height: 48px;
+  }
+
+  /* Price receipt card: slightly tighter on phones */
+  .price-breakdown-container {
+    padding: 0.75rem;
+    font-size: 0.9rem;
   }
 }
 

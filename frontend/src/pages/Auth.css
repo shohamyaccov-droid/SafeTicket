@@ -62,6 +62,8 @@
 .form-group select:focus {
   outline: none;
   border-color: var(--primary-blue);
+  box-shadow: 0 0 0 3px rgba(0, 69, 175, 0.12);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .form-group select {
@@ -93,6 +95,11 @@
   background-color: var(--primary-blue-hover);
 }
 
+.auth-button:active:not(:disabled) {
+  transform: scale(0.98);
+  box-shadow: 0 1px 4px rgba(0, 69, 175, 0.25);
+}
+
 .auth-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -100,17 +107,20 @@
 
 .error-message,
 .error-box {
-  background-color: var(--error-red);
-  color: white;
-  padding: 0.75rem;
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-right: 4px solid #dc2626;
+  padding: 0.75rem 1rem;
   border-radius: var(--radius-sm);
   margin-bottom: var(--spacing-md);
-  text-align: center;
+  text-align: right;
   min-height: 1.5rem;
   display: flex;
   align-items: center;
-  justify-content: center;
   direction: rtl;
+  font-weight: 500;
+  line-height: 1.45;
 }
 
 .auth-footer {
@@ -127,4 +137,42 @@
 
 .auth-footer a:hover {
   text-decoration: underline;
+}
+
+/* ── Mobile-first refinements (< 480px) ── */
+@media (max-width: 480px) {
+  .auth-container {
+    padding: 1.5rem var(--spacing-sm);
+    align-items: flex-start;
+    padding-top: 2rem;
+  }
+
+  .auth-card {
+    padding: 1.5rem 1.25rem;
+    border-radius: 16px;
+  }
+
+  .auth-card h2 {
+    font-size: 1.55rem;
+    margin-bottom: 1rem;
+  }
+
+  /* 16px minimum prevents iOS Safari from auto-zooming on focus */
+  .form-group input,
+  .form-group select {
+    font-size: 16px;
+    min-height: 48px;
+    padding: 0.875rem 0.75rem;
+  }
+
+  .auth-button {
+    min-height: 52px;
+    font-size: 1.05rem;
+    border-radius: 12px;
+    margin-top: 1rem;
+  }
+
+  .auth-footer {
+    font-size: 0.95rem;
+  }
 }
