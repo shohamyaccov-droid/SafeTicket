@@ -13,7 +13,7 @@ import resend
 
 logger = logging.getLogger(__name__)
 
-RESEND_FROM_EMAIL = 'onboarding@resend.dev'
+RESEND_FROM_EMAIL = 'TradeTix <onboarding@resend.dev>'
 
 
 def _frontend_origin() -> str:

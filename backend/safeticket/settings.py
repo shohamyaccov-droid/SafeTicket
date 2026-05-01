@@ -479,9 +479,9 @@ JWT_ACCESS_COOKIE_NAME = 'access_token'
 JWT_REFRESH_COOKIE_NAME = 'refresh_token'
 
 # Email — customer-facing mail is sent through Resend's HTTPS API, not SMTP.
-# While the Resend domain is unverified, users.utils.emails hardcodes the sender to onboarding@resend.dev.
+# While the Resend domain is unverified, users.utils.emails hardcodes the sender to TradeTix <onboarding@resend.dev>.
 RESEND_API_KEY = (os.environ.get('RESEND_API_KEY') or '').strip()
-DEFAULT_FROM_EMAIL = 'onboarding@resend.dev'
+DEFAULT_FROM_EMAIL = 'TradeTix <onboarding@resend.dev>'
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 

@@ -75,7 +75,7 @@ class MenoraAndEmailFlowTests(TestCase):
         self.assertEqual(response.status_code, 200, getattr(response, 'data', response.content))
         mock_resend_send.assert_called_once()
         payload = mock_resend_send.call_args.args[0]
-        self.assertEqual(payload['from'], 'onboarding@resend.dev')
+        self.assertEqual(payload['from'], 'TradeTix <onboarding@resend.dev>')
         self.assertEqual(payload['to'], [self.seller.email])
         self.assertIn('הכרטיס שלך אושר', payload['subject'])
         self.assertIn('html', payload)

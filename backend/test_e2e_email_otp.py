@@ -201,7 +201,7 @@ class E2EEmailOTPTest(TransactionTestCase):
         self.assertGreater(len(receipt_payloads), 0, 'At least one receipt email to buyer')
 
         last_receipt = receipt_payloads[-1]
-        self.assertEqual(last_receipt['from'], 'onboarding@resend.dev')
+        self.assertEqual(last_receipt['from'], 'TradeTix <onboarding@resend.dev>')
         self.assertIn(buyer.email, last_receipt['to'])
         self.assertIn('html', last_receipt)
         self.assertIn('קבלה', last_receipt['subject'])
