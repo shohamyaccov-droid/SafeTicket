@@ -9,11 +9,11 @@ import logging
 from decimal import Decimal
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils import timezone as django_timezone
 
 from .currency import currency_symbol, iso4217_for_ticket_listing, money_amount_for_api
+from .utils.emails import send_resend_email
 
 logger = logging.getLogger(__name__)
 
@@ -48,21 +48,6 @@ def _event_name_from_ticket(ticket) -> str:
     return (ticket.event_name or '').strip() or 'Unknown event'
 
 
-def _send_smtp_in_background(msg: EmailMultiAlternatives, template_basename: str, to_email: str) -> None:
-    """Run SMTP in a worker thread; never raise to the HTTP layer."""
-    try:
-        msg.send(fail_silently=False)
-        logger.info('notifications: sent %s to %s', template_basename, to_email)
-    except Exception as exc:
-        logger.error(
-            'notifications: SMTP failed for %s to %s: %s',
-            template_basename,
-            to_email,
-            _safe_err(exc),
-            exc_info=True,
-        )
-
-
 def _safe_err(exc: BaseException) -> str:
     return (str(exc) or repr(exc))[:500]
 
@@ -87,24 +72,23 @@ def _send_notification(
     try:
         text_body = render_to_string(f'emails/{template_basename}.txt', ctx)
         html_body = render_to_string(f'emails/{template_basename}.html', ctx)
-        msg = EmailMultiAlternatives(
+        send_resend_email(
             subject=subject,
-            body=text_body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[to_email.strip()],
+            to_email=to_email.strip(),
+            html_body=html_body,
+            text_body=text_body.strip(),
+            template_basename=template_basename,
+            fail_silently=True,
         )
-        msg.attach_alternative(html_body, 'text/html')
     except Exception as exc:
         logger.error(
-            'notifications: build failed for %s to %s: %s',
+            'notifications: build/send failed for %s to %s: %s',
             template_basename,
             to_email,
             _safe_err(exc),
             exc_info=True,
         )
         return
-
-    _send_smtp_in_background(msg, template_basename, to_email.strip())
 
 
 def notify_new_offer(offer) -> None:

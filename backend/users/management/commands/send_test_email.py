@@ -4,7 +4,7 @@ from users.utils.emails import send_test_welcome_email
 
 
 class Command(BaseCommand):
-    help = 'Send a branded TradeTix HTML test email to verify SMTP configuration.'
+    help = 'Send a branded TradeTix HTML test email through Resend.'
 
     def add_arguments(self, parser):
         parser.add_argument('email_address', help='Recipient email address for the test message.')
@@ -19,7 +19,7 @@ class Command(BaseCommand):
             sent = send_test_welcome_email(email_address)
         except Exception as exc:
             self.stderr.write(self.style.ERROR(f'Failed to send test email: {exc.__class__.__name__}: {exc}'))
-            raise CommandError('SMTP test failed. Check EMAIL_* settings and provider logs.') from exc
+            raise CommandError('Resend test failed. Check RESEND_API_KEY and Resend logs.') from exc
 
         if sent:
             self.stdout.write(self.style.SUCCESS(f'Successfully sent TradeTix test email to {email_address}.'))

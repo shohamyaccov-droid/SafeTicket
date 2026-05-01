@@ -9,12 +9,14 @@ Run:
   python manage.py test test_e2e_email_otp -v 2
 """
 from decimal import Decimal
+import base64
+import time
+from unittest import mock
 
 from django.contrib.auth import get_user_model
-from django.core import mail
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import TransactionTestCase
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.test import APIClient
@@ -26,12 +28,10 @@ from users.pricing import expected_buy_now_total
 User = get_user_model()
 
 
-@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
-class E2EEmailOTPTest(TestCase):
+class E2EEmailOTPTest(TransactionTestCase):
     """Auth + receipt path tests aligned with production registration (instant JWT)."""
 
     def setUp(self):
-        mail.outbox.clear()
         cache.clear()
         self.client = APIClient()
         self.client.enforce_csrf_checks = False
@@ -97,7 +97,9 @@ class E2EEmailOTPTest(TestCase):
         user = User.objects.get(email='verify_me@test.com')
         self.assertTrue(user.is_email_verified)
 
-    def test_3_pdf_receipt_delivery(self):
+    @mock.patch.dict('os.environ', {'RESEND_API_KEY': 're_test_key'})
+    @mock.patch('users.utils.emails.resend.Emails.send', return_value={'id': 'email_test'})
+    def test_3_pdf_receipt_delivery(self, mock_resend_send):
         """
         Buy-now flow: payment simulate + order; receipt mail with attachment.
 
@@ -144,8 +146,6 @@ class E2EEmailOTPTest(TestCase):
         )
         ticket.refresh_from_db()
 
-        outbox_before = len(mail.outbox)
-
         token = str(RefreshToken.for_user(buyer).access_token)
         expected_total_dec = expected_buy_now_total(ticket.asking_price, 1)
         pay_r = self.client.post(
@@ -186,27 +186,36 @@ class E2EEmailOTPTest(TestCase):
         )
         self.assertEqual(conf.status_code, 200, conf.content.decode())
 
-        self.assertGreater(len(mail.outbox), outbox_before, 'Receipt email should be sent')
-        # Receipt subject is Hebrew (קבלה), not the word "Receipt"
-        receipt_emails = [
-            m
-            for m in mail.outbox
-            if buyer.email in (m.to or []) and ('קבלה' in (m.subject or '') or 'Receipt' in (m.subject or ''))
-        ]
-        self.assertGreater(len(receipt_emails), 0, 'At least one receipt email to buyer')
+        receipt_payloads = []
+        for _ in range(20):
+            receipt_payloads = [
+                call.args[0]
+                for call in mock_resend_send.call_args_list
+                if buyer.email in (call.args[0].get('to') or [])
+                and ('קבלה' in (call.args[0].get('subject') or '') or 'Receipt' in (call.args[0].get('subject') or ''))
+            ]
+            if receipt_payloads:
+                break
+            time.sleep(0.1)
 
-        last_receipt = receipt_emails[-1]
-        self.assertIn(buyer.email, last_receipt.to, f'Recipient should be {buyer.email}, got {last_receipt.to}')
+        self.assertGreater(len(receipt_payloads), 0, 'At least one receipt email to buyer')
 
-        self.assertGreater(len(last_receipt.attachments), 0, 'Receipt email must have PDF attachment')
+        last_receipt = receipt_payloads[-1]
+        self.assertEqual(last_receipt['from'], 'onboarding@resend.dev')
+        self.assertIn(buyer.email, last_receipt['to'])
+        self.assertIn('html', last_receipt)
+        self.assertIn('קבלה', last_receipt['subject'])
+
+        attachments = last_receipt.get('attachments') or []
+        self.assertGreater(len(attachments), 0, 'Receipt email must have PDF attachment')
         has_pdf = False
-        for att in last_receipt.attachments:
-            fn = att[0] if len(att) >= 1 else None
-            content = att[1] if len(att) >= 2 else b''
+        for att in attachments:
+            fn = att.get('filename')
+            content = base64.b64decode(att.get('content') or '')
             if fn and str(fn).lower().endswith('.pdf'):
                 has_pdf = True
                 break
-            if isinstance(content, bytes) and content[:4] == b'%PDF':
+            if content[:4] == b'%PDF':
                 has_pdf = True
                 break
-        self.assertTrue(has_pdf, f'No PDF attachment found. Attachments: {last_receipt.attachments}')
+        self.assertTrue(has_pdf, f'No PDF attachment found. Attachments: {attachments}')

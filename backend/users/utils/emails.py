@@ -2,14 +2,18 @@
 Email utilities for OTP, offer notifications, receipts, and branded test emails.
 All customer-facing messages are sent as HTML with a plain-text fallback.
 """
+import base64
 import logging
+import os
 from urllib.parse import quote
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
+import resend
 
 logger = logging.getLogger(__name__)
+
+RESEND_FROM_EMAIL = 'onboarding@resend.dev'
 
 
 def _frontend_origin() -> str:
@@ -46,6 +50,71 @@ def build_branded_email(template_basename: str, context: dict) -> tuple[str, str
     return text_body, html_body
 
 
+def _resend_attachment_payloads(attachments: list[tuple[str, bytes, str]] | None) -> list[dict]:
+    payloads = []
+    for filename, content, _mimetype in attachments or []:
+        raw = content.encode('utf-8') if isinstance(content, str) else bytes(content or b'')
+        payloads.append({
+            'filename': filename,
+            'content': base64.b64encode(raw).decode('ascii'),
+        })
+    return payloads
+
+
+def send_resend_email(
+    *,
+    subject: str,
+    to_email: str,
+    html_body: str,
+    text_body: str = '',
+    attachments: list[tuple[str, bytes, str]] | None = None,
+    template_basename: str = '',
+    fail_silently: bool = False,
+) -> int:
+    recipient = (to_email or '').strip()
+    if not recipient:
+        logger.warning('send_resend_email: empty recipient for template=%s', template_basename)
+        return 0
+
+    api_key = (os.environ.get('RESEND_API_KEY') or '').strip()
+    if not api_key:
+        msg = 'RESEND_API_KEY is not configured'
+        logger.error('send_resend_email: %s template=%s recipient=%s', msg, template_basename, recipient)
+        if fail_silently:
+            return 0
+        raise RuntimeError(msg)
+
+    resend.api_key = api_key
+    payload = {
+        'from': RESEND_FROM_EMAIL,
+        'to': [recipient],
+        'subject': subject,
+        'html': html_body,
+    }
+    if text_body:
+        payload['text'] = text_body
+    attachment_payloads = _resend_attachment_payloads(attachments)
+    if attachment_payloads:
+        payload['attachments'] = attachment_payloads
+
+    try:
+        resend.Emails.send(payload)
+        logger.info('send_resend_email: sent template=%s recipient=%s', template_basename, recipient)
+        return 1
+    except Exception as exc:
+        logger.error(
+            'send_resend_email: Resend API failed template=%s recipient=%s subject=%s error=%s',
+            template_basename,
+            recipient,
+            subject,
+            (str(exc) or repr(exc))[:500],
+            exc_info=True,
+        )
+        if fail_silently:
+            return 0
+        raise
+
+
 def send_branded_email(
     *,
     subject: str,
@@ -61,29 +130,15 @@ def send_branded_email(
         return 0
 
     text_body, html_body = build_branded_email(template_basename, context or {})
-    msg = EmailMultiAlternatives(
+    return send_resend_email(
         subject=subject,
-        body=text_body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[recipient],
+        to_email=recipient,
+        html_body=html_body,
+        text_body=text_body,
+        attachments=attachments,
+        template_basename=template_basename,
+        fail_silently=fail_silently,
     )
-    msg.attach_alternative(html_body, 'text/html')
-    for filename, content, mimetype in attachments or []:
-        msg.attach(filename, content, mimetype)
-    try:
-        return msg.send(fail_silently=False)
-    except Exception as exc:
-        logger.error(
-            'send_branded_email: SMTP failed template=%s recipient=%s subject=%s error=%s',
-            template_basename,
-            recipient,
-            subject,
-            (str(exc) or repr(exc))[:500],
-            exc_info=True,
-        )
-        if fail_silently:
-            return 0
-        raise
 
 
 def _collect_pdf_files_from_order(order):
@@ -256,7 +311,7 @@ def send_receipt_with_pdf(recipient_email, order, pdf_files=None):
 
 
 def send_test_welcome_email(email_address: str) -> int:
-    """Used by the send_test_email management command to verify SMTP + HTML rendering."""
+    """Used by the send_test_email management command to verify Resend + HTML rendering."""
     return send_branded_email(
         subject='TradeTix — ברוכים הבאים לחוויית כרטיסים בטוחה',
         to_email=email_address,

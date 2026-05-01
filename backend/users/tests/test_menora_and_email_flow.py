@@ -1,9 +1,9 @@
 from decimal import Decimal
 from datetime import timedelta
+from unittest import mock
 
 from django.contrib.auth import get_user_model
-from django.core import mail
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -13,10 +13,6 @@ from users.models import Artist, Event, Ticket, Venue
 User = get_user_model()
 
 
-@override_settings(
-    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
-    DEFAULT_FROM_EMAIL='noreply@tradetix.test',
-)
 class MenoraAndEmailFlowTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -55,7 +51,9 @@ class MenoraAndEmailFlowTests(TestCase):
         self.assertIn('1 עליון', names)
         self.assertNotIn('101', names)
 
-    def test_ticket_approval_sends_one_email(self):
+    @mock.patch.dict('os.environ', {'RESEND_API_KEY': 're_test_key'})
+    @mock.patch('users.utils.emails.resend.Emails.send', return_value={'id': 'email_test'})
+    def test_ticket_approval_sends_one_resend_email(self, mock_resend_send):
         ticket = Ticket.objects.create(
             seller=self.seller,
             event=self.event,
@@ -75,6 +73,10 @@ class MenoraAndEmailFlowTests(TestCase):
             response = self.client.post(f'/api/users/admin/tickets/{ticket.id}/approve/', {}, format='json')
 
         self.assertEqual(response.status_code, 200, getattr(response, 'data', response.content))
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertIn('הכרטיס שלך אושר', mail.outbox[0].subject)
-        self.assertEqual(mail.outbox[0].to, [self.seller.email])
+        mock_resend_send.assert_called_once()
+        payload = mock_resend_send.call_args.args[0]
+        self.assertEqual(payload['from'], 'onboarding@resend.dev')
+        self.assertEqual(payload['to'], [self.seller.email])
+        self.assertIn('הכרטיס שלך אושר', payload['subject'])
+        self.assertIn('html', payload)
+        self.assertIn('הכרטיס שלכם אושר', payload['html'])

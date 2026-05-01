@@ -147,7 +147,8 @@ class HybridSeatingListingEmailResilienceTests(TestCase):
         self.assertIsNone(t.venue_section_id)
         self.assertEqual(t.get_section_display(), 'Terrace 9')
 
-    @mock.patch('django.core.mail.EmailMultiAlternatives.send', side_effect=OSError('SMTP failure'))
+    @mock.patch.dict('os.environ', {'RESEND_API_KEY': 're_test_key'})
+    @mock.patch('users.utils.emails.resend.Emails.send', side_effect=OSError('Resend failure'))
     def test_ticket_creation_succeeds_when_mailer_raises(self, _mock_send):
         b = _pdf_bytes()
         pdf = SimpleUploadedFile('t.pdf', b, content_type='application/pdf')
@@ -170,12 +171,12 @@ class HybridSeatingListingEmailResilienceTests(TestCase):
         t = Ticket.objects.get(pk=r.data['id'])
         self.assertIn('Legacy', t.get_section_display())
 
-    def test_send_notification_does_not_propagate_smtp_errors(self):
+    def test_send_notification_does_not_propagate_resend_errors(self):
         from users.notifications import _send_notification
 
-        with mock.patch(
-            'django.core.mail.EmailMultiAlternatives.send',
-            side_effect=OSError('SMTP failure'),
+        with mock.patch.dict('os.environ', {'RESEND_API_KEY': 're_test_key'}), mock.patch(
+            'users.utils.emails.resend.Emails.send',
+            side_effect=OSError('Resend failure'),
         ):
             _send_notification(
                 'TradeTix test',
