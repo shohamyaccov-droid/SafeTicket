@@ -75,15 +75,6 @@ const BLOOMFIELD_SECTION_OPTIONS = [
   ...rangeOptions(419, 431),
 ];
 
-const ERROR_FIELD_LABELS = {
-  listing_price: 'מחיר מכירה',
-  original_price: 'מחיר',
-  venue_section: 'גוש',
-  custom_section_text: 'גוש',
-  pdf_file: 'קובץ כרטיס',
-  il_legal_declaration: 'אישור הצהרה',
-};
-
 function canonicalVenueName(eventLike) {
   const values = [
     eventLike?.venue_detail?.name,
@@ -120,6 +111,7 @@ function generatedSectionOptionsForVenue(venueName) {
 }
 
 /** Visual confirmation before submit: image thumbnail or PDF badge. */
+/* eslint-disable react/prop-types */
 function TicketAttachmentPreview({ file }) {
   const [url, setUrl] = useState(null);
   useEffect(() => {
@@ -156,6 +148,7 @@ function TicketAttachmentPreview({ file }) {
     </div>
   );
 }
+/* eslint-enable react/prop-types */
 
 const Sell = () => {
   // ALL HOOKS MUST BE CALLED FIRST - BEFORE ANY EARLY RETURNS
@@ -443,12 +436,15 @@ const Sell = () => {
   // Initialize ticket_packages array when quantity changes (seat_number only - row is global)
   useEffect(() => {
     const quantity = formData.available_quantity || 1;
-    if (!formData.ticket_packages || formData.ticket_packages.length !== quantity) {
-      setFormData(prev => ({
+    setFormData(prev => {
+      if (prev.ticket_packages && prev.ticket_packages.length === quantity) {
+        return prev;
+      }
+      return {
         ...prev,
         ticket_packages: Array(quantity).fill(null).map(() => ({ seat_number: '', pdf_file: null })),
-      }));
-    }
+      };
+    });
   }, [formData.available_quantity]);
 
   const sellCurrency = useMemo(() => {

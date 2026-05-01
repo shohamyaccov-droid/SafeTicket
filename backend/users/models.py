@@ -416,7 +416,7 @@ class Ticket(models.Model):
         upload_to='tickets/receipts/',
         blank=True,
         null=True,
-        help_text='Proof of purchase / receipt (mandatory for Israeli events)',
+        help_text='Optional proof of purchase / receipt file',
     )
     
     # Seating information

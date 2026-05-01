@@ -131,7 +131,7 @@ class TicketAdmin(admin.ModelAdmin):
         }),
         ('Pricing', {
             'fields': ('original_price', 'asking_price'),
-            'description': 'For IL events, asking_price must not exceed face value (original_price). Proof of purchase is stored in receipt_file.'
+            'description': 'For IL events, asking_price must not exceed face value (original_price). Receipt files are optional.'
         }),
         ('Quantity & Split Options', {
             'fields': ('available_quantity', 'split_type')

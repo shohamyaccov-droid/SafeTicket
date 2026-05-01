@@ -768,7 +768,7 @@ class TicketSerializer(serializers.ModelSerializer):
 
         from decimal import Decimal
 
-        # Geo-pricing / receipt rules: Event.venue country ONLY (not artist nationality).
+        # Geo-pricing rules use Event.venue country ONLY (not artist nationality).
         event = attrs.get('event')
         country = 'IL'
         if event is not None:
@@ -805,10 +805,6 @@ class TicketSerializer(serializers.ModelSerializer):
             if not legal_ok:
                 raise serializers.ValidationError({
                     'il_legal_declaration': 'יש לאשר את תנאי ההצהרה.'
-                })
-            if not attrs.get('receipt_file') and not getattr(self.instance, 'receipt_file', None):
-                raise serializers.ValidationError({
-                    'receipt_file': 'לאירועים בישראל חובה לצרף קבלה או הוכחת רכישה.'
                 })
             if listing_price > original_price:
                 raise serializers.ValidationError({

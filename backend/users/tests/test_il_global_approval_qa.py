@@ -1,5 +1,5 @@
 """
-Option A QA: IL → pending_approval + receipt + price cap; global → active + open pricing.
+Option A QA: IL → pending_approval + price cap; global → active + open pricing.
 
 Run:
   cd backend
@@ -94,7 +94,7 @@ class IlGlobalApprovalQATest(TestCase):
         )
         self.assertEqual(r.status_code, 400, getattr(r, 'data', r.content))
 
-    def test_case_a_il_missing_receipt_rejected(self):
+    def test_case_a_il_valid_without_receipt_then_pending_approval(self):
         b = _pdf_bytes()
         pdf = SimpleUploadedFile('ticket.pdf', b, content_type='application/pdf')
         self.client.force_authenticate(self.seller)
@@ -111,12 +111,14 @@ class IlGlobalApprovalQATest(TestCase):
             },
             format='multipart',
         )
-        self.assertEqual(r.status_code, 400, getattr(r, 'data', r.content))
+        self.assertEqual(r.status_code, 201, getattr(r, 'data', r.content))
+        ticket = Ticket.objects.get(pk=r.data['id'])
+        self.assertEqual(ticket.status, 'pending_approval')
+        self.assertFalse(ticket.receipt_file)
 
     def test_case_a_il_valid_then_approve_and_offer(self):
         b = _pdf_bytes()
         pdf = SimpleUploadedFile('ticket.pdf', b, content_type='application/pdf')
-        receipt = SimpleUploadedFile('rcpt.pdf', b, content_type='application/pdf')
         self.client.force_authenticate(self.seller)
         r = self.client.post(
             '/api/users/tickets/',
@@ -128,7 +130,6 @@ class IlGlobalApprovalQATest(TestCase):
                 'available_quantity': '1',
                 'pdf_files_count': '1',
                 'pdf_file_0': pdf,
-                'receipt_file': receipt,
             },
             format='multipart',
         )

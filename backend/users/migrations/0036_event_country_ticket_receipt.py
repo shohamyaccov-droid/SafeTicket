@@ -18,6 +18,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='ticket',
             name='receipt_file',
-            field=models.FileField(blank=True, help_text='Proof of purchase / receipt (mandatory for Israeli events)', null=True, upload_to='tickets/receipts/'),
+            field=models.FileField(blank=True, help_text='Optional proof of purchase / receipt file', null=True, upload_to='tickets/receipts/'),
         ),
     ]
