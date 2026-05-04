@@ -154,6 +154,14 @@
   color: var(--text-tertiary);
 }
 
+.event-subsection-h2 {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-tertiary, #64748b);
+  margin: 0.45rem 0 0.1rem;
+  line-height: 1.25;
+}
+
 .event-hero-meta {
   display: flex;
   flex-direction: column;
@@ -564,7 +572,7 @@
   border-bottom: 1px solid #e5e7eb;
 }
 
-.venue-map-card-header h3 {
+.venue-map-card-header h2 {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;

@@ -33,6 +33,10 @@ import { Helmet } from 'react-helmet-async';
 import { BUYER_SERVICE_FEE_PERCENT } from '../constants/pricing';
 import './EventDetailsPage.css';
 
+/** Absolute URL for OG/Twitter when the SPA has no event image yet. */
+const defaultOgImageUrl = () =>
+  typeof window !== 'undefined' ? `${window.location.origin}/og-share.svg` : '';
+
 /** Seller id from API may be a numeric PK or nested object — compare robustly to current user. */
 function isCurrentUserSellerOfTicket(user, ticket, group) {
   if (!user || !ticket) return false;
@@ -837,6 +841,9 @@ const EventDetailsPage = () => {
   if (loading) {
     return (
       <div className="event-details-container">
+        <Helmet>
+          <title>טוען אירוע | TradeTix</title>
+        </Helmet>
         <div className="loading-state">
           <p>טוען פרטי אירוע...</p>
         </div>
@@ -847,6 +854,10 @@ const EventDetailsPage = () => {
   if (!event) {
     return (
       <div className="event-details-container">
+        <Helmet>
+          <title>אירוע לא נמצא | TradeTix</title>
+          <meta name="robots" content="noindex, nofollow" />
+        </Helmet>
         <div className="empty-state">
           <p>אירוע לא נמצא</p>
           <button onClick={() => navigate('/')} className="back-button">
@@ -880,30 +891,33 @@ const EventDetailsPage = () => {
     ? getFullImageUrl(heroImageRaw)
     : `https://via.placeholder.com/640x400/0f172a/e2e8f0?text=${encodeURIComponent((event.name || '').slice(0, 28))}`;
 
+  const eventTitle = (event.name || 'אירוע').trim();
+  const locationLine =
+    [event.venue, event.city].filter((s) => s && String(s).trim()).join(', ') || 'ישראל';
+  const metaDescription = `קנו או מכרו כרטיסים ל${eventTitle} ב-${locationLine} בביטחון מלא. קנייה מאובטחת, השהיית תשלום בנאמנות ו-0% עמלה למוכרים.`;
+  const documentTitle = `כרטיסים ל${eventTitle} | TradeTix`;
+
   const pageCanonical =
-    typeof window !== 'undefined' && eventId
-      ? `${window.location.origin}/events/${eventId}`
-      : '';
-  const ogDescription = [event.name, event.city, 'כרטיסים מאובטחים ב-TradeTix']
-    .filter(Boolean)
-    .join(' · ');
+    typeof window !== 'undefined' && eventId ? `${window.location.origin}/event/${eventId}` : '';
+  const ogImageAbsolute = heroImageRaw ? heroImageSrc : defaultOgImageUrl();
 
   return (
     <div className="event-details-container">
       <Helmet>
-        <title>{`TradeTix - ${event.name} | כרטיסים`}</title>
-        <meta name="description" content={ogDescription} />
+        <title>{documentTitle}</title>
+        <meta name="description" content={metaDescription} />
         <link rel="canonical" href={pageCanonical || undefined} />
         <meta property="og:site_name" content="TradeTix" />
         <meta property="og:type" content="website" />
-        <meta property="og:title" content={`TradeTix - ${event.name}`} />
-        <meta property="og:description" content={ogDescription} />
-        <meta property="og:image" content={heroImageSrc} />
+        <meta property="og:locale" content="he_IL" />
+        <meta property="og:title" content={documentTitle} />
+        <meta property="og:description" content={metaDescription} />
+        <meta property="og:image" content={ogImageAbsolute} />
         {pageCanonical ? <meta property="og:url" content={pageCanonical} /> : null}
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={`TradeTix - ${event.name}`} />
-        <meta name="twitter:description" content={ogDescription} />
-        <meta name="twitter:image" content={heroImageSrc} />
+        <meta name="twitter:title" content={documentTitle} />
+        <meta name="twitter:description" content={metaDescription} />
+        <meta name="twitter:image" content={ogImageAbsolute} />
       </Helmet>
       <div className="event-header">
         <button type="button" onClick={() => navigate(-1)} className="back-button">
@@ -936,6 +950,7 @@ const EventDetailsPage = () => {
                 {event.tournament ? <span className="event-hero-tournament"> · {event.tournament}</span> : null}
               </p>
             ) : null}
+            <h2 className="event-subsection-h2">פרטי האירוע</h2>
             <div className="event-hero-meta">
               <p className="event-hero-date">📅 {formatEventDateTimeWithLocality(event.date, event)}</p>
               <p className="event-hero-location">
@@ -984,7 +999,7 @@ const EventDetailsPage = () => {
           </button>
 
           <div className={`filters-section ${filtersOpen ? 'mobile-open' : ''}`}>
-            <h3 className="filters-title">סינון:</h3>
+            <h2 className="filters-title">סינון:</h2>
 
             {/* Price Range */}
             <div className="filter-group">
@@ -1087,7 +1102,7 @@ const EventDetailsPage = () => {
           <div className="venue-map-sticky-container">
             <div className="venue-map-card">
               <div className="venue-map-card-header">
-                <h3>מפת אולם</h3>
+                <h2>מפת אולם</h2>
               </div>
                 <div className="venue-map-card-content">
                   {(() => {
