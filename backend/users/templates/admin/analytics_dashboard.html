@@ -28,6 +28,19 @@
 
 <a class="back-link" href="..">← Back to event log</a>
 
+{% if show_reset_test_data_button %}
+<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px 20px;margin-bottom:24px;max-width:900px;">
+  <strong style="color:#991b1b;">Danger zone — reset test data</strong>
+  <p style="margin:8px 0 12px;color:#64748b;font-size:0.95rem;line-height:1.45;">
+    Superuser only: wipe all orders &amp; offers and reset sold / reserved / payout tickets to <em>active</em>
+    (same as <code>manage.py reset_test_data --execute</code>). Use on staging or before launch — not for production with real customers.
+  </p>
+  <a href="{% url 'admin:analyticsevent_reset_test_data' %}" class="button" style="background:#dc2626;color:#fff;border-color:#b91c1c;font-weight:600;">
+    Open reset confirmation…
+  </a>
+</div>
+{% endif %}
+
 {# ── KPI cards ── #}
 <div class="analytics-grid">
   <div class="analytics-card">

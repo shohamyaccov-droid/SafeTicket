@@ -1,0 +1,33 @@
+{% extends "admin/base_site.html" %}
+{% block title %}Confirm reset test data{% endblock %}
+
+{% block content %}
+<h1>Reset test data</h1>
+<p style="max-width:720px;line-height:1.5;color:#334155;">
+  This runs the same logic as <code>python manage.py reset_test_data --execute</code>:
+  all <strong>Offer</strong> and <strong>Order</strong> rows are deleted (there is no separate Transaction model),
+  tickets in <code>sold</code>, <code>reserved</code>, <code>pending_payout</code>, or <code>paid_out</code> are set back to
+  <strong>active</strong>, and active listings stuck at <code>available_quantity=0</code> are restored to <code>1</code>.
+</p>
+
+<div style="background:#fefce8;border:1px solid #eab308;border-radius:8px;padding:16px 20px;margin:20px 0;max-width:720px;">
+  <strong>Current counts (before reset)</strong>
+  <ul style="margin:8px 0 0 1.2rem;">
+    <li>Orders: {{ preview.order_count }}</li>
+    <li>Offers: {{ preview.offer_count }}</li>
+    <li>Tickets to reset to active: {{ preview.dirty_ticket_count }}</li>
+    <li>Active tickets with quantity 0: {{ preview.held_ticket_count }}</li>
+  </ul>
+</div>
+
+<form method="post" action="">
+  {% csrf_token %}
+  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:24px;">
+    <button type="submit" class="default" style="background:#b91c1c;color:#fff;border-color:#991b1b;font-weight:600;padding:10px 18px;">
+      Yes — delete orders &amp; offers and reset tickets
+    </button>
+    <a href="{% url 'admin:analyticsevent_dashboard' %}" class="button cancel-link">Cancel — back to analytics</a>
+    <a href="{% url 'admin:users_analyticsevent_changelist' %}" class="button cancel-link">Event log</a>
+  </div>
+</form>
+{% endblock %}

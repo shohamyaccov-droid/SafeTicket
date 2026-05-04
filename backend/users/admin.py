@@ -2,9 +2,11 @@ import logging
 from decimal import Decimal
 from datetime import timedelta
 
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.core.exceptions import ObjectDoesNotExist
+from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
@@ -630,6 +632,11 @@ class AnalyticsEventAdmin(admin.ModelAdmin):
         urls = super().get_urls()
         custom = [
             dj_path(
+                'reset-test-data/',
+                self.admin_site.admin_view(self.reset_test_data_view),
+                name='analyticsevent_reset_test_data',
+            ),
+            dj_path(
                 'dashboard/',
                 self.admin_site.admin_view(self.analytics_dashboard_view),
                 name='analyticsevent_dashboard',
@@ -681,5 +688,49 @@ class AnalyticsEventAdmin(admin.ModelAdmin):
             'drop_off': drop_off,
             'total_events': total_events,
             'today_label': today_start.strftime('%Y-%m-%d'),
+            'show_reset_test_data_button': request.user.is_superuser,
         }
         return render(request, 'admin/analytics_dashboard.html', context)
+
+    def reset_test_data_view(self, request):
+        """
+        Superuser-only: same behaviour as ``manage.py reset_test_data --execute``.
+        GET shows a confirmation page; POST runs the wipe and redirects to the dashboard.
+        """
+        from users.reset_test_data_core import get_reset_test_data_preview, run_reset_test_data
+
+        if not request.user.is_superuser:
+            self.message_user(
+                request,
+                'Only Django superusers can reset test data.',
+                level=messages.ERROR,
+            )
+            return redirect('admin:index')
+
+        if request.method == 'POST':
+            result = run_reset_test_data()
+            messages.success(
+                request,
+                (
+                    'Test data reset completed. Deleted %(offers)d offer(s) and %(orders)d order(s); '
+                    'reset %(tickets)d ticket row(s) to active; restored quantity on %(qty)d active listing(s). '
+                    'Platform sales stats should now read zero.'
+                )
+                % {
+                    'offers': result['offers_deleted'],
+                    'orders': result['orders_deleted'],
+                    'tickets': result['tickets_reset'],
+                    'qty': result['qty_restored'],
+                },
+            )
+            return redirect(reverse('admin:analyticsevent_dashboard'))
+
+        preview = get_reset_test_data_preview()
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Confirm reset test data',
+            'preview': preview,
+            'opts': self.model._meta,
+            'has_permission': True,
+        }
+        return render(request, 'admin/reset_test_data_confirm.html', context)

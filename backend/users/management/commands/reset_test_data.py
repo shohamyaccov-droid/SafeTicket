@@ -8,7 +8,8 @@ Usage:
 from __future__ import annotations
 
 from django.core.management.base import BaseCommand
-from django.db import transaction
+
+from users.reset_test_data_core import get_reset_test_data_preview, run_reset_test_data
 
 
 class Command(BaseCommand):
@@ -24,26 +25,14 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         execute = options["execute"]
 
-        # Import inside handle so Django app registry is fully loaded
-        from users.models import Offer, Order, Ticket
-
-        # ── counts before ─────────────────────────────────────────────────────
-        order_count = Order.objects.count()
-        offer_count = Offer.objects.count()
-
-        dirty_statuses = ["sold", "pending_payout", "paid_out", "reserved"]
-        dirty_tickets = Ticket.objects.filter(status__in=dirty_statuses)
-        dirty_ticket_count = dirty_tickets.count()
-
-        held_tickets = Ticket.objects.filter(available_quantity__lt=1, status="active")
-        held_ticket_count = held_tickets.count()
+        preview = get_reset_test_data_preview()
 
         self.stdout.write("")
         self.stdout.write("=== reset_test_data preview ===")
-        self.stdout.write(f"  Orders to delete          : {order_count}")
-        self.stdout.write(f"  Offers to delete          : {offer_count}")
-        self.stdout.write(f"  Tickets to reset to active: {dirty_ticket_count}")
-        self.stdout.write(f"  Active tickets with qty=0 : {held_ticket_count}")
+        self.stdout.write(f"  Orders to delete          : {preview['order_count']}")
+        self.stdout.write(f"  Offers to delete          : {preview['offer_count']}")
+        self.stdout.write(f"  Tickets to reset to active: {preview['dirty_ticket_count']}")
+        self.stdout.write(f"  Active tickets with qty=0 : {preview['held_ticket_count']}")
         self.stdout.write("")
 
         if not execute:
@@ -54,35 +43,13 @@ class Command(BaseCommand):
             )
             return
 
-        # ── execute ───────────────────────────────────────────────────────────
-        with transaction.atomic():
-            # 1. Delete all offers first (FK referenced by Order.related_offer)
-            offer_del, _ = Offer.objects.all().delete()
-
-            # 2. Delete all orders
-            order_del, _ = Order.objects.all().delete()
-
-            # 3. Reset sold/reserved/payout tickets → active
-            ticket_reset = dirty_tickets.update(
-                status="active",
-                reserved_by=None,
-                reserved_at=None,
-                reservation_email=None,
-            )
-
-            # 4. Restore available_quantity for tickets that were held
-            #    (held_ticket.available_quantity was decremented; set back to 1 minimum)
-            qty_fixed = 0
-            for t in Ticket.objects.filter(available_quantity=0, status="active"):
-                t.available_quantity = 1
-                t.save(update_fields=["available_quantity", "updated_at"])
-                qty_fixed += 1
+        result = run_reset_test_data()
 
         self.stdout.write(self.style.SUCCESS("=== reset_test_data complete ==="))
-        self.stdout.write(self.style.SUCCESS(f"  Offers deleted            : {offer_del}"))
-        self.stdout.write(self.style.SUCCESS(f"  Orders deleted            : {order_del}"))
-        self.stdout.write(self.style.SUCCESS(f"  Tickets reset to active   : {ticket_reset}"))
-        self.stdout.write(self.style.SUCCESS(f"  Ticket qty restored to 1  : {qty_fixed}"))
+        self.stdout.write(self.style.SUCCESS(f"  Offers deleted            : {result['offers_deleted']}"))
+        self.stdout.write(self.style.SUCCESS(f"  Orders deleted            : {result['orders_deleted']}"))
+        self.stdout.write(self.style.SUCCESS(f"  Tickets reset to active   : {result['tickets_reset']}"))
+        self.stdout.write(self.style.SUCCESS(f"  Ticket qty restored to 1  : {result['qty_restored']}"))
         self.stdout.write("")
         self.stdout.write(
             self.style.SUCCESS(
