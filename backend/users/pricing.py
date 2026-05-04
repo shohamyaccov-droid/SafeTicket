@@ -1,5 +1,7 @@
 """
-Order pricing: buyer service fee + seller withholding (rates from Django settings, default 10% + 5%).
+Order pricing: buyer service fee + seller withholding (rates from Django settings).
+
+Current model: 15% buyer fee (added at checkout) + 0% seller fee (sellers keep 100% of asking price).
 
 Buyer pays: base + buyer fee (quantized). Seller receives: base minus seller-side fee.
 
@@ -23,14 +25,14 @@ QUANT = Decimal('0.01')
 def _buyer_fee_rate() -> Decimal:
     r = getattr(settings, 'PLATFORM_BUYER_SERVICE_FEE_RATE', None)
     if r is None:
-        return Decimal('0.10')
+        return Decimal('0.15')
     return Decimal(str(r)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
 
 
 def _seller_fee_rate() -> Decimal:
     r = getattr(settings, 'PLATFORM_SELLER_SERVICE_FEE_RATE', None)
     if r is None:
-        return Decimal('0.05')
+        return Decimal('0.00')
     return Decimal(str(r)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
 
 

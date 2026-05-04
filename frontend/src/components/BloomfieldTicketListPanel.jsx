@@ -229,7 +229,7 @@ export default function BloomfieldTicketListPanel({
                           direction: 'rtl',
                         }}
                       >
-                        + {sym}{feeStr} עמלת שירות (10%)
+                        + {sym}{feeStr} עמלת שירות (15%)
                       </span>
                     )}
                   </div>

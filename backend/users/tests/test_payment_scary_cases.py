@@ -129,9 +129,10 @@ class PaymentScaryCaseTests(TestCase):
 
     def test_checkout_double_click_reuses_existing_pending_order(self):
         ticket = self._ticket()
+        # 100 base + 15% buyer service fee = 115.00
         payload = {
             'ticket': ticket.id,
-            'total_amount': '110.00',
+            'total_amount': '115.00',
             'quantity': 1,
         }
 

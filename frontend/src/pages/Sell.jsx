@@ -1530,12 +1530,12 @@ const Sell = () => {
             {feeBasis > 0 ? (
               <div className="price-breakdown-container">
                 <div className="price-breakdown-row fee-row">
-                  <span>עמלת מכירה (5%):</span>
-                  <span dir="ltr">- {sellSym}{formatAmountForCurrency(feeBasis * 0.05, sellCurrency)}</span>
+                  <span>עמלת מכירה (0% — ללא עמלה!):</span>
+                  <span dir="ltr" style={{ color: '#16a34a', fontWeight: 700 }}>חינם ✓</span>
                 </div>
                 <div className="price-breakdown-row net-row">
-                  <strong>הסכום שתקבלו (בערך):</strong>
-                  <strong dir="ltr">{sellSym}{formatAmountForCurrency(feeBasis * 0.95, sellCurrency)}</strong>
+                  <strong>הסכום שתקבלו (100% מהמחיר):</strong>
+                  <strong dir="ltr">{sellSym}{formatAmountForCurrency(feeBasis, sellCurrency)}</strong>
                 </div>
               </div>
             ) : null}

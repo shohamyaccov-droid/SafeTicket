@@ -229,6 +229,7 @@ const Dashboard = () => {
   const [expandedPurchaseId, setExpandedPurchaseId] = useState(null);
   const [expandedListingId, setExpandedListingId] = useState(null);
   const [expandedSoldListingId, setExpandedSoldListingId] = useState(null);
+  const [copiedListingId, setCopiedListingId] = useState(null);
   const [offersReceived, setOffersReceived] = useState([]);
   const [offersSent, setOffersSent] = useState([]);
   const [offersLoading, setOffersLoading] = useState(false);
@@ -602,7 +603,7 @@ const Dashboard = () => {
   <p><strong>${lblTotalPaid}:</strong> ${escapeHtml(fmt(d.total_paid_by_buyer ?? d.total_amount))}</p>
   <p><strong>מחיר מוסכם (בסיס):</strong> ${escapeHtml(d.final_negotiated_price != null ? fmt(d.final_negotiated_price) : '—')}</p>
   <p><strong>עמלת שירות (לקוח):</strong> ${escapeHtml(d.buyer_service_fee != null ? fmt(d.buyer_service_fee) : '—')}</p>
-  <p><strong>עמלת פלטפורמה (מוכר, 5%):</strong> ${escapeHtml(d.seller_service_fee != null ? fmt(d.seller_service_fee) : '—')}</p>
+  <p><strong>עמלת פלטפורמה (מוכר, 0%):</strong> ${escapeHtml(d.seller_service_fee != null ? fmt(d.seller_service_fee) : '—')}</p>
   <p><strong>נטו למוכר:</strong> ${escapeHtml(d.net_seller_revenue != null ? fmt(d.net_seller_revenue) : '—')}</p>
   <p><strong>כמות:</strong> ${escapeHtml(d.quantity)}</p>
   <p><strong>אירוע:</strong> ${escapeHtml(d.event_name)}</p>
@@ -622,6 +623,23 @@ const Dashboard = () => {
     } catch (err) {
       console.error('handleViewReceipt', err);
       toastError('טעינת הקבלה נכשלה. אנא נסה שוב מאוחר יותר.');
+    }
+  };
+
+  const handleCopyListingLink = async (listing) => {
+    const eventId = listing.event_id;
+    if (!eventId) {
+      toastError('לא ניתן להעתיק קישור — מזהה אירוע חסר');
+      return;
+    }
+    const url = `${window.location.origin}/events/${eventId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedListingId(listing.id);
+      toastSuccess('הקישור הועתק! ניתן להדביק בפייסבוק או בווטסאפ.');
+      setTimeout(() => setCopiedListingId((prev) => (prev === listing.id ? null : prev)), 2500);
+    } catch {
+      toastError('העתקה נכשלה — אנא העתק ידנית: ' + url);
     }
   };
 
@@ -1501,6 +1519,25 @@ const Dashboard = () => {
                                   ? 'שולם'
                                   : listing.status}
                               </span>
+                              {/* Copy ticket link — only for live/pending listings */}
+                              {!['sold', 'pending_payout', 'paid_out'].includes(listing.status) && (
+                                <button
+                                  className="row-action-button row-copy-link-btn"
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCopyListingLink(listing);
+                                  }}
+                                  title={copiedListingId === listing.id ? 'הועתק!' : 'העתק קישור לשיתוף'}
+                                  aria-label="Copy ticket link"
+                                  style={{
+                                    color: copiedListingId === listing.id ? '#16a34a' : undefined,
+                                    position: 'relative',
+                                  }}
+                                >
+                                  {copiedListingId === listing.id ? '✓' : '🔗'}
+                                </button>
+                              )}
                               <button
                                 className="row-action-button"
                                 type="button"

@@ -594,13 +594,13 @@ class Order(models.Model):
         max_digits=10,
         decimal_places=2,
         default=0,
-        help_text='10% buyer-side service fee (on top of final_negotiated_price)',
+        help_text='15% buyer-side service fee (added on top of final_negotiated_price)',
     )
     seller_service_fee = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=0,
-        help_text='5% seller-side platform fee (withheld from final_negotiated_price)',
+        help_text='0% seller-side platform fee — sellers keep 100% of their asking price',
     )
     total_paid_by_buyer = models.DecimalField(
         max_digits=10,
@@ -614,7 +614,7 @@ class Order(models.Model):
         decimal_places=2,
         null=True,
         blank=True,
-        help_text='Amount seller receives after 5% seller_service_fee on final_negotiated_price',
+        help_text='Amount seller receives after seller_service_fee (currently 0%) on final_negotiated_price',
     )
 
     # Escrow / seller payout (funds held until after event + 24h)

@@ -1117,10 +1117,12 @@ class ProfileListingSerializer(serializers.ModelSerializer):
     escrow_payout_eligible_date = serializers.SerializerMethodField()
     currency = serializers.SerializerMethodField()
     
+    event_id = serializers.SerializerMethodField()
+
     class Meta:
         model = Ticket
         fields = (
-            'id', 'event_name', 'event_date', 'venue', 'seat_row', 
+            'id', 'event_id', 'event_name', 'event_date', 'venue', 'seat_row',
             'section', 'row', 'seat_numbers',
             'original_price', 'asking_price', 'is_together', 'available_quantity', 'status', 'created_at',
             'event_image_url', 'event_name_display', 'event_date_display', 'venue_display',
@@ -1129,6 +1131,9 @@ class ProfileListingSerializer(serializers.ModelSerializer):
             'escrow_payout_status', 'escrow_payout_eligible_date', 'currency',
         )
         read_only_fields = fields
+
+    def get_event_id(self, obj):
+        return obj.event_id
 
     def _primary_order_for_sold_ticket(self, obj):
         if obj.status not in ['sold', 'pending_payout', 'paid_out']:

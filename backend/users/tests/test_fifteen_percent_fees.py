@@ -1,4 +1,4 @@
-"""15% platform fee model: 10% buyer + 5% seller; admin dashboard aggregates both."""
+"""15% platform fee model: 15% buyer + 0% seller; admin dashboard aggregates buyer fee only."""
 from __future__ import annotations
 
 from decimal import Decimal
@@ -43,12 +43,13 @@ class FifteenPercentFeeTests(TestCase):
         )
         t.pdf_file.save('f.pdf', ContentFile(_pdf()), save=True)
 
-        bd = compute_order_price_breakdown(Decimal('110'), None, t, 1)
+        # Buyer pays base (100) + 15% fee = 115; seller keeps 100% of base (0% seller fee)
+        bd = compute_order_price_breakdown(Decimal('115'), None, t, 1)
         self.assertEqual(bd['final_negotiated_price'], Decimal('100'))
-        self.assertEqual(bd['buyer_service_fee'], Decimal('10'))
-        self.assertEqual(bd['seller_service_fee'], Decimal('5'))
-        self.assertEqual(bd['net_seller_revenue'], Decimal('95'))
-        self.assertEqual(bd['total_paid_by_buyer'], Decimal('110'))
+        self.assertEqual(bd['buyer_service_fee'], Decimal('15'))
+        self.assertEqual(bd['seller_service_fee'], Decimal('0'))
+        self.assertEqual(bd['net_seller_revenue'], Decimal('100'))
+        self.assertEqual(bd['total_paid_by_buyer'], Decimal('115'))
 
     def test_admin_dashboard_stats_includes_seller_fee_in_platform_fees_and_ils(self):
         staff = User.objects.create_user(
@@ -80,19 +81,20 @@ class FifteenPercentFeeTests(TestCase):
         )
         t.pdf_file.save('g.pdf', ContentFile(_pdf()), save=True)
 
+        # New model: 15% buyer fee on 480 GBP base = 72; 0% seller fee; platform keeps only buyer fee.
         Order.objects.create(
             user=User.objects.create_user(username='b2', email='b2@t.com', password='x', role='buyer'),
             ticket=t,
-            total_amount=Decimal('528.00'),
-            total_paid_by_buyer=Decimal('528.00'),
+            total_amount=Decimal('552.00'),
+            total_paid_by_buyer=Decimal('552.00'),
             status='paid',
             currency='GBP',
             quantity=1,
             event_name='E2',
-            buyer_service_fee=Decimal('48.00'),
-            seller_service_fee=Decimal('24.00'),
+            buyer_service_fee=Decimal('72.00'),
+            seller_service_fee=Decimal('0.00'),
             final_negotiated_price=Decimal('480.00'),
-            net_seller_revenue=Decimal('456.00'),
+            net_seller_revenue=Decimal('480.00'),
         )
 
         c = APIClient()
@@ -101,6 +103,7 @@ class FifteenPercentFeeTests(TestCase):
         self.assertEqual(r.status_code, 200, r.content)
         payload = r.json()
         gbp = payload['all_time']['by_currency'].get('GBP', {})
+        # platform_fees = buyer_service_fee + seller_service_fee = 72 + 0 = 72
         self.assertEqual(Decimal(str(gbp.get('platform_fees'))), Decimal('72'))
         ils_fees = Decimal(str(payload['all_time']['totals_ils']['platform_fees_ils']))
         self.assertGreater(ils_fees, Decimal('300'))

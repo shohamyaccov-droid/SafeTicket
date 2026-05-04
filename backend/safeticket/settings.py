@@ -59,12 +59,13 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dummy-key-for-dev')
 # Set DEBUG=true in .env only for local dev. On Render, leave unset or false so errors are not leaked.
 DEBUG = os.environ.get('DEBUG', 'False').lower() in ('1', 'true', 'yes')
 
-# Platform commission rates (Decimal). Buyer fee is added at checkout; seller fee is withheld from payout.
+# Platform commission rates (Decimal).
+# New model: sellers pay 0% (cold-start subsidy); buyers pay 15% service fee added at checkout.
 PLATFORM_BUYER_SERVICE_FEE_RATE = Decimal(
-    str(os.environ.get('PLATFORM_BUYER_SERVICE_FEE_RATE', '0.10'))
+    str(os.environ.get('PLATFORM_BUYER_SERVICE_FEE_RATE', '0.15'))
 )
 PLATFORM_SELLER_SERVICE_FEE_RATE = Decimal(
-    str(os.environ.get('PLATFORM_SELLER_SERVICE_FEE_RATE', '0.05'))
+    str(os.environ.get('PLATFORM_SELLER_SERVICE_FEE_RATE', '0.00'))
 )
 
 # When True: looser PDF MIME checks (%PDF magic bytes), non-strict PyPDF, optional fallbacks for testing.
