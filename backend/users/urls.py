@@ -31,6 +31,7 @@ from .views import (
     admin_dashboard_stats,
     admin_transactions,
     admin_cancel_order,
+    track_analytics_event,
 )
 
 app_name = 'users'
@@ -68,6 +69,7 @@ urlpatterns = [
     path('admin/orders/<int:order_id>/cancel/', admin_cancel_order, name='admin_cancel_order'),
     path('admin/tickets/<int:ticket_id>/approve/', admin_approve_ticket, name='admin_approve_ticket'),
     path('admin/tickets/<int:ticket_id>/reject/', admin_reject_ticket, name='admin_reject_ticket'),
+    path('analytics/track/', track_analytics_event, name='track_analytics_event'),
     path('', include(router.urls)),
 ]
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { orderAPI } from '../services/api';
+import { Analytics } from '../utils/analytics';
 
 const POLL_MS = 2000;
 const MAX_POLLS = 45;
@@ -52,6 +53,7 @@ export default function PaymeCheckoutSuccess() {
       setLastCheckedAt(new Date());
       if (s === 'paid' || s === 'completed') {
         setPhase('paid');
+        Analytics.checkoutComplete(orderId);
         try {
           sessionStorage.removeItem('payme_checkout_guest_email');
         } catch {

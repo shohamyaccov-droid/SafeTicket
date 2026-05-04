@@ -13,6 +13,7 @@ import {
   getTicketBaseNumeric,
 } from '../utils/priceFormat';
 import { toastError } from '../utils/toast';
+import { Analytics } from '../utils/analytics';
 import { downloadTicketFromAxiosBlob, ticketFileMimeFromAxiosHeaders } from '../utils/ticketDownload';
 import { BUYER_SERVICE_FEE_PERCENT } from '../constants/pricing';
 import './CheckoutModal.css';
@@ -622,6 +623,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             paymeRes.data?.error || 'Payme לא החזיר כתובת תשלום — בדקו הגדרות PAYME_* בשרת',
           );
         }
+        Analytics.checkoutStart(ticket?.id);
         window.location.assign(redirectUrl);
         return;
       }

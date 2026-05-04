@@ -8,7 +8,19 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
-from .models import User, Order, Ticket, Event, Artist, Offer, ContactMessage, EventRequest, Venue, VenueSection
+from .models import (
+    AnalyticsEvent,
+    Artist,
+    ContactMessage,
+    Event,
+    EventRequest,
+    Offer,
+    Order,
+    Ticket,
+    User,
+    Venue,
+    VenueSection,
+)
 from .admin_pdf_url import get_ticket_pdf_admin_url
 
 _admin_log = logging.getLogger(__name__)
@@ -594,3 +606,79 @@ class ContactMessageAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+
+# ── Analytics Admin ────────────────────────────────────────────────────────────
+
+@admin.register(AnalyticsEvent)
+class AnalyticsEventAdmin(admin.ModelAdmin):
+    """
+    Admin for AnalyticsEvent.
+    The main list gives a raw event log; the custom /dashboard/ sub-page shows
+    today's traffic summary (unique visitors, top pages, funnel drop-off).
+    """
+    list_display = ['timestamp', 'event_type', 'path', 'session_id', 'user']
+    list_filter = ['event_type', 'timestamp']
+    search_fields = ['path', 'session_id']
+    readonly_fields = [
+        'timestamp', 'session_id', 'path', 'event_type', 'event_data', 'ip_hash', 'user',
+    ]
+    ordering = ['-timestamp']
+
+    def get_urls(self):
+        from django.urls import path as dj_path
+        urls = super().get_urls()
+        custom = [
+            dj_path(
+                'dashboard/',
+                self.admin_site.admin_view(self.analytics_dashboard_view),
+                name='analyticsevent_dashboard',
+            ),
+        ]
+        return custom + urls
+
+    # Link shown at the top of the change list to jump to the dashboard
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['dashboard_url'] = '../dashboard/'
+        return super().changelist_view(request, extra_context=extra_context)
+
+    def analytics_dashboard_view(self, request):
+        from django.db.models import Count
+        from django.shortcuts import render
+
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_qs = AnalyticsEvent.objects.filter(timestamp__gte=today_start)
+
+        # 1. Unique visitors today (distinct session IDs)
+        unique_visitors = today_qs.values('session_id').distinct().count()
+
+        # 2. Top event pages (/events/<id>) by page_view count
+        top_pages = list(
+            today_qs
+            .filter(event_type='page_view', path__startswith='/events/')
+            .values('path')
+            .annotate(views=Count('id'))
+            .order_by('-views')[:10]
+        )
+
+        # 3. Checkout funnel
+        checkout_starts = today_qs.filter(event_type='checkout_start').count()
+        checkout_completes = today_qs.filter(event_type='checkout_complete').count()
+        drop_off = checkout_starts - checkout_completes
+
+        # 4. All-time totals (quick sanity figures)
+        total_events = AnalyticsEvent.objects.count()
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Analytics Dashboard — Today',
+            'unique_visitors': unique_visitors,
+            'top_pages': top_pages,
+            'checkout_starts': checkout_starts,
+            'checkout_completes': checkout_completes,
+            'drop_off': drop_off,
+            'total_events': total_events,
+            'today_label': today_start.strftime('%Y-%m-%d'),
+        }
+        return render(request, 'admin/analytics_dashboard.html', context)

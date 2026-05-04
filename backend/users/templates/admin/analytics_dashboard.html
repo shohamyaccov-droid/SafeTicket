@@ -1,0 +1,104 @@
+{% extends "admin/base_site.html" %}
+{% block title %}Analytics Dashboard{% endblock %}
+
+{% block content %}
+<style>
+  .analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .analytics-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px 24px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
+  .analytics-card .metric { font-size: 2.4rem; font-weight: 700; color: #1d4ed8; line-height: 1; }
+  .analytics-card .label { font-size: .85rem; color: #64748b; margin-top: 6px; }
+  .analytics-section { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px 24px; margin-bottom: 24px; }
+  .analytics-section h2 { margin: 0 0 16px; font-size: 1.1rem; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; }
+  .analytics-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  .analytics-table th { text-align: left; padding: 8px 12px; background: #f8fafc; color: #475569; font-weight: 600; }
+  .analytics-table td { padding: 8px 12px; border-top: 1px solid #f1f5f9; color: #1e293b; }
+  .funnel-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .funnel-bar-bg { flex: 1; background: #f1f5f9; border-radius: 99px; height: 18px; overflow: hidden; }
+  .funnel-bar { height: 100%; border-radius: 99px; transition: width .3s; }
+  .funnel-label { min-width: 140px; font-size: .9rem; color: #475569; }
+  .funnel-count { min-width: 40px; font-weight: 600; text-align: right; }
+  .drop-off-badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: .8rem; font-weight: 600; }
+  .drop-off-badge.bad { background: #fee2e2; color: #dc2626; }
+  .drop-off-badge.ok { background: #dcfce7; color: #16a34a; }
+  .back-link { display: inline-block; margin-bottom: 20px; color: #1d4ed8; font-size: .9rem; }
+</style>
+
+<h1 style="margin-bottom:4px;">📊 Analytics Dashboard</h1>
+<p style="color:#64748b; margin-bottom:20px;">Traffic summary for <strong>{{ today_label }}</strong> &mdash; {{ total_events }} total events in database</p>
+
+<a class="back-link" href="..">← Back to event log</a>
+
+{# ── KPI cards ── #}
+<div class="analytics-grid">
+  <div class="analytics-card">
+    <div class="metric">{{ unique_visitors }}</div>
+    <div class="label">Unique Visitors Today</div>
+  </div>
+  <div class="analytics-card">
+    <div class="metric">{{ checkout_starts }}</div>
+    <div class="label">Checkout Started</div>
+  </div>
+  <div class="analytics-card">
+    <div class="metric">{{ checkout_completes }}</div>
+    <div class="label">Purchases Completed</div>
+  </div>
+  <div class="analytics-card">
+    <div class="metric" style="color:{% if drop_off > 0 %}#dc2626{% else %}#16a34a{% endif %};">{{ drop_off }}</div>
+    <div class="label">Checkout Drop-offs</div>
+  </div>
+</div>
+
+{# ── Funnel visualisation ── #}
+<div class="analytics-section">
+  <h2>Checkout Funnel</h2>
+  {% if checkout_starts > 0 %}
+    {% with starts=checkout_starts completes=checkout_completes %}
+    <div class="funnel-row">
+      <span class="funnel-label">Checkout Started</span>
+      <div class="funnel-bar-bg"><div class="funnel-bar" style="width:100%;background:#3b82f6;"></div></div>
+      <span class="funnel-count">{{ starts }}</span>
+    </div>
+    <div class="funnel-row">
+      <span class="funnel-label">Purchase Completed</span>
+      {% widthratio completes starts 100 as pct %}
+      <div class="funnel-bar-bg"><div class="funnel-bar" style="width:{{ pct }}%;background:#16a34a;"></div></div>
+      <span class="funnel-count">{{ completes }}</span>
+    </div>
+    {% endwith %}
+    <p style="margin-top:12px; font-size:.9rem; color:#64748b;">
+      Conversion rate:
+      {% widthratio checkout_completes checkout_starts 100 as conv_pct %}
+      <strong>{{ conv_pct }}%</strong>
+      &nbsp;
+      <span class="drop-off-badge {% if drop_off > 0 %}bad{% else %}ok{% endif %}">
+        {% if drop_off > 0 %}{{ drop_off }} dropped off{% else %}No drop-offs 🎉{% endif %}
+      </span>
+    </p>
+  {% else %}
+    <p style="color:#94a3b8; font-style:italic;">No checkout events recorded today.</p>
+  {% endif %}
+</div>
+
+{# ── Top event pages ── #}
+<div class="analytics-section">
+  <h2>Top Event Pages Today</h2>
+  {% if top_pages %}
+  <table class="analytics-table">
+    <thead>
+      <tr><th>#</th><th>Path</th><th>Views</th></tr>
+    </thead>
+    <tbody>
+      {% for page in top_pages %}
+      <tr>
+        <td style="color:#94a3b8;">{{ forloop.counter }}</td>
+        <td><code>{{ page.path }}</code></td>
+        <td><strong>{{ page.views }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p style="color:#94a3b8; font-style:italic;">No event page views recorded today.</p>
+  {% endif %}
+</div>
+{% endblock %}

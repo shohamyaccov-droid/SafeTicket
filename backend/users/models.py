@@ -888,3 +888,57 @@ class ContactMessage(models.Model):
     
     def __str__(self):
         return f"Contact from {self.name} ({self.email}) - {self.created_at.strftime('%Y-%m-%d')}"
+
+
+class AnalyticsEvent(models.Model):
+    """
+    Lightweight funnel / traffic event store. No external dependencies.
+    One row per user action; designed to stay small — purge rows older than 90 days periodically.
+    """
+    EVENT_TYPE_CHOICES = [
+        ('page_view', 'Page View'),
+        ('checkout_start', 'Checkout Start'),
+        ('checkout_complete', 'Purchase Complete'),
+        ('offer_submitted', 'Offer Submitted'),
+        ('ticket_viewed', 'Ticket Viewed'),
+    ]
+
+    session_id = models.CharField(
+        max_length=64,
+        db_index=True,
+        help_text='Anonymous browser session UUID (localStorage); no PII.',
+    )
+    path = models.CharField(max_length=500, help_text='URL path, e.g. /events/12')
+    event_type = models.CharField(
+        max_length=30,
+        choices=EVENT_TYPE_CHOICES,
+        db_index=True,
+    )
+    event_data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Optional extra context (event_id, ticket_id, etc.).',
+    )
+    ip_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text='First 32 chars of SHA-256(client IP) — allows unique-visitor counts without storing raw PII.',
+    )
+    user = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='analytics_events',
+    )
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['timestamp', 'event_type']),
+            models.Index(fields=['session_id', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f'{self.event_type} {self.path} @ {self.timestamp:%Y-%m-%d %H:%M}'

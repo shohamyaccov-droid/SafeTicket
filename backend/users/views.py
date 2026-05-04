@@ -190,7 +190,18 @@ from .serializers import (
     user_can_access_ticket_pdf,
 )
 from .ticket_download_tokens import verify_ticket_download_token
-from .models import Order, Ticket, Event, Artist, TicketAlert, Offer, ContactMessage, EventRequest, VenueSection
+from .models import (
+    AnalyticsEvent,
+    Artist,
+    ContactMessage,
+    Event,
+    EventRequest,
+    Offer,
+    Order,
+    Ticket,
+    TicketAlert,
+    VenueSection,
+)
 from .schema_compat import event_queryset_defer_rollout_columns, ticket_queryset_defer_event_rollout_columns
 from .pricing import (
     buyer_charge_from_base_amount,
@@ -4619,3 +4630,52 @@ class ContactMessageViewSet(viewsets.GenericViewSet, viewsets.mixins.CreateModel
     queryset = ContactMessage.objects.all()
     serializer_class = ContactMessageSerializer
     permission_classes = [AllowAny]  # No authentication required
+
+
+# ── Analytics ─────────────────────────────────────────────────────────────────
+
+_VALID_ANALYTICS_TYPES = frozenset(
+    ['page_view', 'checkout_start', 'checkout_complete', 'offer_submitted', 'ticket_viewed']
+)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def track_analytics_event(request):
+    """
+    Log a single analytics event from the frontend.
+    Intentionally lenient: unknown/missing fields are silently coerced so a bad
+    payload from the client never causes an unhandled error.
+    Returns 204 No Content on success.
+    """
+    import hashlib
+
+    session_id = str(request.data.get('session_id', '') or '')[:64].strip()
+    path = str(request.data.get('path', '') or '')[:500].strip()
+    event_type = str(request.data.get('event_type', 'page_view') or 'page_view')
+    if event_type not in _VALID_ANALYTICS_TYPES:
+        event_type = 'page_view'
+
+    event_data = request.data.get('event_data') or {}
+    if not isinstance(event_data, dict):
+        event_data = {}
+
+    if not session_id or not path:
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # Hash the client IP so we can count unique visitors without storing raw PII.
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    raw_ip = forwarded.split(',')[0].strip() if forwarded else request.META.get('REMOTE_ADDR', '')
+    ip_hash = hashlib.sha256(raw_ip.encode()).hexdigest()[:32] if raw_ip else ''
+
+    user = request.user if request.user.is_authenticated else None
+
+    AnalyticsEvent.objects.create(
+        session_id=session_id,
+        path=path,
+        event_type=event_type,
+        event_data=event_data,
+        ip_hash=ip_hash,
+        user=user,
+    )
+    return Response(status=status.HTTP_204_NO_CONTENT)

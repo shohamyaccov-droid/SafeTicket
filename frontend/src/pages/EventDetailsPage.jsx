@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { eventAPI, offerAPI, artistAPI } from '../services/api';
+import { Analytics } from '../utils/analytics';
 import CheckoutModal from '../components/CheckoutModal';
 import WaitlistSignupModal from '../components/WaitlistSignupModal';
 import Toast from '../components/Toast';
@@ -266,6 +267,7 @@ const EventDetailsPage = () => {
         // Fetch event details
         const eventResponse = await eventAPI.getEvent(eventId);
         setEvent(eventResponse.data);
+        Analytics.ticketViewed(eventId);
 
         // Fetch tickets for this event with filters
         await fetchTickets();

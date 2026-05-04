@@ -29,11 +29,21 @@ import FloatingWhatsApp from './components/FloatingWhatsApp';
 import Footer from './components/Footer';
 import ScrollToTop from './components/ScrollToTop';
 import { toastError } from './utils/toast';
+import { Analytics } from './utils/analytics';
 import './App.css';
 
 function safeReturnTo(value) {
   const raw = typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') ? value : '/';
   return raw.startsWith('/login') ? '/' : raw;
+}
+
+/** Fires a page_view analytics event on every route change. */
+function PageTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    Analytics.pageView(location.pathname);
+  }, [location.pathname]);
+  return null;
 }
 
 function SessionExpiredRedirector() {
@@ -92,6 +102,7 @@ function App() {
     <AuthProvider>
       <Router>
         <ScrollToTop />
+        <PageTracker />
         <SessionExpiredRedirector />
         <div className="App">
           <Navbar />
