@@ -644,7 +644,7 @@ class AnalyticsEventAdmin(admin.ModelAdmin):
         return super().changelist_view(request, extra_context=extra_context)
 
     def analytics_dashboard_view(self, request):
-        from django.db.models import Count
+        from django.db.models import Count, Q
         from django.shortcuts import render
 
         today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -653,10 +653,11 @@ class AnalyticsEventAdmin(admin.ModelAdmin):
         # 1. Unique visitors today (distinct session IDs)
         unique_visitors = today_qs.values('session_id').distinct().count()
 
-        # 2. Top event pages (/events/<id>) by page_view count
+        # 2. Top event pages (/event/<id>, legacy /events/<id>) by page_view count
         top_pages = list(
             today_qs
-            .filter(event_type='page_view', path__startswith='/events/')
+            .filter(event_type='page_view')
+            .filter(Q(path__startswith='/event/') | Q(path__startswith='/events/'))
             .values('path')
             .annotate(views=Count('id'))
             .order_by('-views')[:10]

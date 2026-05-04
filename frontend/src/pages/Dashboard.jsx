@@ -632,7 +632,7 @@ const Dashboard = () => {
       toastError('לא ניתן להעתיק קישור — מזהה אירוע חסר');
       return;
     }
-    const url = `${window.location.origin}/events/${eventId}`;
+    const url = `${window.location.origin}/event/${eventId}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopiedListingId(listing.id);

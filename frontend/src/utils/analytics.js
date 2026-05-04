@@ -63,7 +63,7 @@ export function trackEvent(eventType, path, data = {}) {
 export const Analytics = {
   pageView: (path) => trackEvent('page_view', path),
   ticketViewed: (eventId) =>
-    trackEvent('ticket_viewed', `/events/${eventId}`, { event_id: eventId }),
+    trackEvent('ticket_viewed', `/event/${eventId}`, { event_id: eventId }),
   checkoutStart: (ticketId) =>
     trackEvent('checkout_start', window.location.pathname, { ticket_id: ticketId }),
   checkoutComplete: (orderId) =>
