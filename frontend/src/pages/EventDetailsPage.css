@@ -7,6 +7,8 @@
   margin: 0 auto;
   direction: rtl;
   box-sizing: border-box;
+  overflow-x: visible;
+  overflow-y: visible;
 }
 
 .event-header {
@@ -454,6 +456,7 @@
 
 .tickets-section {
   margin-top: var(--spacing-md);
+  overflow: visible;
 }
 
 /* Filters moved inside tickets-section — spacing before title row on desktop */
@@ -541,6 +544,17 @@
   direction: rtl;
   width: 100%;
   min-width: 0;
+  overflow: visible;
+}
+
+/* Map + ticket list: one scroll column on mobile/tablet; display:contents on desktop (see 992px+) */
+.event-details-map-list-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  overflow: visible;
 }
 
 /* Sticky Map Container — default order map-first for single-column (mobile/tablet); desktop overrides below */
@@ -614,15 +628,15 @@
   flex-shrink: 0;
 }
 
-/* Tickets List Container — below map on single-column layouts */
 .tickets-list-container {
   order: 1;
   width: 100%;
   max-width: 100%;
   background: white;
-  grid-column: 1 / -1;
   min-width: 0;
   box-sizing: border-box;
+  position: relative;
+  z-index: 0;
 }
 
 .tickets-grid {
@@ -633,6 +647,11 @@
 
 /* Desktop Split Screen Layout - Unbreakable 50/50 Flexbox */
 @media (min-width: 992px) {
+  /* Wrapper is layout-transparent: map + list are flex children of .tickets-split-container */
+  .event-details-map-list-stack {
+    display: contents;
+  }
+
   .tickets-split-container {
     display: flex !important;
     flex-direction: row !important;
@@ -1732,21 +1751,22 @@
     grid-template-columns: 1fr;
     gap: 16px;
     align-items: start;
+    overflow: visible;
   }
 
-  /* Sticky map + "מפת אולם" header as one unit (tablet / narrow desktop). top clears sticky filter row; not 0 so title stays below filters. */
+  /* Sticky map — below sticky filter bar; opaque stack so tickets scroll underneath */
   .venue-map-sticky-container {
-    grid-column: 1;
     margin-bottom: var(--spacing-sm);
     position: sticky;
-    top: calc(env(safe-area-inset-top, 0px) + 5.85rem);
-    z-index: 860;
+    top: calc(env(safe-area-inset-top, 0px) + 5.5rem);
+    z-index: 1000;
     align-self: start;
-    background: var(--bg-primary, #f8fafc);
+    background: var(--bg-primary, #ffffff);
     -webkit-overflow-scrolling: touch;
-    /* Solid edge so the title never ghosts over the ticket list while stuck */
-    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
-    scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 5.85rem + 0.35rem);
+    box-shadow:
+      0 8px 24px rgba(15, 23, 42, 0.1),
+      0 2px 0 rgba(15, 23, 42, 0.06);
+    scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 5.5rem + 0.35rem);
   }
 
   /* Header stays visible: no clipping from card overflow while stuck */
@@ -1765,10 +1785,6 @@
     z-index: 2;
     background: #f9fafb;
     flex-shrink: 0;
-  }
-
-  .tickets-list-container {
-    grid-column: 1;
   }
 
   .venue-map-card {
@@ -1858,27 +1874,29 @@
     max-width: 100%;
   }
 
-  /* Sticky filter/sort bar — stays reachable while scrolling the ticket list */
+  /* Sticky filter/sort bar — stays above the sticky map (higher z-index) */
   .tickets-section > .event-details-filters-sort-bar {
     position: sticky;
     top: env(safe-area-inset-top, 0px);
-    z-index: 900;
+    z-index: 1100;
     margin-bottom: 0.35rem;
     background: var(--bg-card, #ffffff);
     border-radius: var(--radius-md);
     box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
   }
 
-  /* Sticky seating map — sits below the sticky filter row (reserve ~5.85rem for toggle + padding + shadow) */
+  /* Match 991px sticky stack: map below filter, opaque layer so tickets scroll underneath */
   .venue-map-sticky-container {
     position: sticky;
-    top: calc(env(safe-area-inset-top, 0px) + 5.85rem);
-    z-index: 860;
+    top: calc(env(safe-area-inset-top, 0px) + 5.5rem);
+    z-index: 1000;
     margin-bottom: 0.35rem;
-    background: var(--bg-primary, #f8fafc);
+    background: var(--bg-primary, #ffffff);
     -webkit-overflow-scrolling: touch;
-    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
-    scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 5.85rem + 0.35rem);
+    box-shadow:
+      0 8px 24px rgba(15, 23, 42, 0.1),
+      0 2px 0 rgba(15, 23, 42, 0.06);
+    scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 5.5rem + 0.35rem);
   }
 
   .venue-map-sticky-container .venue-map-card {

@@ -1098,6 +1098,12 @@ const EventDetailsPage = () => {
             isBloomfieldVenue || isJerusalemArenaVenue ? ' tickets-split-container--bloomfield' : ''
           }`}
         >
+          {/*
+            Inner stack: map + list must be direct siblings under one parent that spans the full
+            scroll height so position:sticky on the map works with document scroll (desktop uses
+            display:contents on this wrapper — see EventDetailsPage.css).
+          */}
+          <div className="event-details-map-list-stack">
           {/* Sticky Map Container (Left side in RTL) */}
           <div className="venue-map-sticky-container">
             <div className="venue-map-card">
@@ -1171,7 +1177,7 @@ const EventDetailsPage = () => {
                 </div>
             </div>
           </div>
-          
+
           {/* Scrollable Tickets List (Right side in RTL) */}
           <div className="tickets-list-container">
             {ticketGroups.length > 0 ? (
@@ -1392,6 +1398,7 @@ const EventDetailsPage = () => {
                 )}
               </div>
             )}
+          </div>
           </div>
         </div>
       </div>
