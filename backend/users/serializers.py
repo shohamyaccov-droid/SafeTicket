@@ -1,3 +1,5 @@
+import json
+
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -343,8 +345,17 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class UpgradeToSellerSerializer(serializers.Serializer):
+    """
+    Buyer → seller onboarding. Bank payout is stored as JSON in User.payout_details
+    (Israeli clearing-house style fields).
+    """
+
     phone_number = serializers.CharField(max_length=30, required=True)
-    payout_details = serializers.CharField(required=True, min_length=4, max_length=4000)
+    account_holder_name = serializers.CharField(max_length=200, required=True, trim_whitespace=True)
+    id_number = serializers.CharField(max_length=20, required=True, trim_whitespace=True)
+    bank_name_or_code = serializers.CharField(max_length=120, required=True, trim_whitespace=True)
+    branch_number = serializers.CharField(max_length=20, required=True, trim_whitespace=True)
+    account_number = serializers.CharField(max_length=30, required=True, trim_whitespace=True)
     accepted_escrow_terms = serializers.BooleanField(required=True)
 
     def validate_phone_number(self, value):
@@ -357,6 +368,56 @@ class UpgradeToSellerSerializer(serializers.Serializer):
         if not value:
             raise serializers.ValidationError('יש לאשר את תנאי הנאמנות.')
         return value
+
+    def validate_account_holder_name(self, value):
+        s = (value or '').strip()
+        if len(s) < 2:
+            raise serializers.ValidationError('נא להזין שם בעל חשבון מלא.')
+        return s
+
+    def validate_id_number(self, value):
+        raw = (value or '').replace('-', '').replace(' ', '')
+        if not raw.isdigit():
+            raise serializers.ValidationError('תעודת זהות חייבת להכיל ספרות בלבד.')
+        if not (5 <= len(raw) <= 9):
+            raise serializers.ValidationError('נא להזין מספר זיהות תקין.')
+        return raw
+
+    def validate_branch_number(self, value):
+        s = (value or '').strip()
+        if not s.isdigit():
+            raise serializers.ValidationError('מספר סניף חייב להכיל ספרות בלבד.')
+        if len(s) < 1 or len(s) > 10:
+            raise serializers.ValidationError('נא להזין מספר סניף תקין.')
+        return s
+
+    def validate_account_number(self, value):
+        s = (value or '').strip()
+        if not s.isdigit():
+            raise serializers.ValidationError('מספר חשבון חייב להכיל ספרות בלבד.')
+        if len(s) < 4 or len(s) > 20:
+            raise serializers.ValidationError('נא להזין מספר חשבון תקין.')
+        return s
+
+    def validate_bank_name_or_code(self, value):
+        s = (value or '').strip()
+        if len(s) < 1:
+            raise serializers.ValidationError('נא לציין בנק (שם או מספר).')
+        return s
+
+    def validate(self, attrs):
+        payload = {
+            'account_holder_name': attrs['account_holder_name'].strip(),
+            'id_number': attrs['id_number'],
+            'bank_name_or_code': attrs['bank_name_or_code'].strip(),
+            'branch_number': attrs['branch_number'],
+            'account_number': attrs['account_number'],
+        }
+        dumped = json.dumps(payload, ensure_ascii=False)
+        if len(dumped) > 8000:
+            raise serializers.ValidationError('פרטי הבנק ארוכים מדי — נא לקצר.')
+        attrs['payout_details'] = dumped
+        return attrs
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):

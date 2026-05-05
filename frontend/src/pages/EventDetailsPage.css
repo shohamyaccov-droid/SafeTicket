@@ -1739,13 +1739,14 @@
     grid-column: 1;
     margin-bottom: var(--spacing-sm);
     position: sticky;
-    top: calc(env(safe-area-inset-top, 0px) + 4.35rem);
+    top: calc(env(safe-area-inset-top, 0px) + 5.85rem);
     z-index: 860;
     align-self: start;
     background: var(--bg-primary, #f8fafc);
     -webkit-overflow-scrolling: touch;
     /* Solid edge so the title never ghosts over the ticket list while stuck */
     box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
+    scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 5.85rem + 0.35rem);
   }
 
   /* Header stays visible: no clipping from card overflow while stuck */
@@ -1868,15 +1869,16 @@
     box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
   }
 
-  /* Sticky seating map — pinned under the filter bar (~68px collapsed row) */
+  /* Sticky seating map — sits below the sticky filter row (reserve ~5.85rem for toggle + padding + shadow) */
   .venue-map-sticky-container {
     position: sticky;
-    top: calc(env(safe-area-inset-top, 0px) + 4.35rem);
+    top: calc(env(safe-area-inset-top, 0px) + 5.85rem);
     z-index: 860;
     margin-bottom: 0.35rem;
     background: var(--bg-primary, #f8fafc);
     -webkit-overflow-scrolling: touch;
     box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
+    scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 5.85rem + 0.35rem);
   }
 
   .venue-map-sticky-container .venue-map-card {

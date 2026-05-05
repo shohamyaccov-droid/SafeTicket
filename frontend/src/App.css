@@ -6,7 +6,7 @@
   background: var(--bg-primary);
   max-width: 100%;
   min-width: 0;
-  overflow-x: visible;
+  overflow-x: hidden;
 }
 
 /* Ultra-wide: keep content comfortably centered (foldable / supermonitor) */
@@ -21,10 +21,11 @@
 .App > main {
   flex: 1;
   padding-top: 0;
-  /* Do not use overflow: clip/hidden here — it breaks position:sticky (event map + filters). Contain bleed in page roots. */
+  /* Keep overflow-x visible so nested sticky (e.g. event map) is not clipped by main; horizontal bleed handled at html/body/#root. */
   overflow-x: visible;
   width: 100%;
   max-width: 100%;
+  min-width: 0;
 }
 
 .button-spinner {

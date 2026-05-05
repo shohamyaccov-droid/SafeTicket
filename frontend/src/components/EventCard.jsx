@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 import { getFullImageUrl } from '../utils/formatters';
 
 /**
@@ -14,7 +15,6 @@ export default function EventCard({ event, formatEventDateHe, onNavigate }) {
   const venueLine = event.venue_detail?.name
     ? `${event.venue_detail.name}, ${event.city || ''}`.replace(/,\s*$/, '').trim()
     : [event.venue, event.city].filter(Boolean).join(', ');
-  const hasInventory = (event?.tickets_count ?? 0) > 0;
 
   return (
     <article
@@ -51,13 +51,7 @@ export default function EventCard({ event, formatEventDateHe, onNavigate }) {
         {subtitle ? <p className="home-carousel-card__artist">{subtitle}</p> : null}
         <p className="home-carousel-card__meta">{formatEventDateHe(event.date)}</p>
         {venueLine ? <p className="home-carousel-card__venue">{venueLine}</p> : null}
-        {hasInventory ? (
-          <p className="home-carousel-card__tickets">לרכישת כרטיסים</p>
-        ) : (
-          <p className="home-carousel-card__tickets home-carousel-card__tickets--none">
-            {event.high_demand ? 'אזל המלאי' : 'אין כרטיסים כרגע'}
-          </p>
-        )}
+        <p className="home-carousel-card__tickets">לרכישת כרטיסים</p>
       </div>
     </article>
   );
