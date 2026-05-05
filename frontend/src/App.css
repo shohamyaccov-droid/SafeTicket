@@ -6,7 +6,6 @@
   background: var(--bg-primary);
   max-width: 100%;
   min-width: 0;
-  overflow-x: hidden;
 }
 
 /* Ultra-wide: keep content comfortably centered (foldable / supermonitor) */
@@ -21,8 +20,6 @@
 .App > main {
   flex: 1;
   padding-top: 0;
-  /* Keep overflow-x visible so nested sticky (e.g. event map) is not clipped by main; horizontal bleed handled at html/body/#root. */
-  overflow-x: visible;
   width: 100%;
   max-width: 100%;
   min-width: 0;

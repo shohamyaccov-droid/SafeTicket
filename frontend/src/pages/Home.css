@@ -2,15 +2,11 @@
 
 .home-container {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 100vh;
   background: var(--bg-primary);
   direction: rtl;
-}
-
-@media (max-width: 768px) {
-  .home-container {
-    overflow-x: hidden;
-  }
 }
 
 .home-container--loading {

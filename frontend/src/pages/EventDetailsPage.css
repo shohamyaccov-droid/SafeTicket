@@ -554,7 +554,6 @@
   align-items: stretch;
   width: 100%;
   min-width: 0;
-  overflow: visible;
 }
 
 /* Sticky Map Container — default order map-first for single-column (mobile/tablet); desktop overrides below */
@@ -564,6 +563,8 @@
   max-width: 100%;
   margin-bottom: var(--spacing-lg);
   grid-column: 1 / -1;
+  /* flex: do not grow/shrink with sibling list — required for position:sticky in a column flex stack */
+  flex: 0 0 auto;
   align-self: flex-start;
   box-sizing: border-box;
 }
@@ -786,6 +787,8 @@
   cursor: pointer;
   position: relative;
   direction: rtl;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .split-badge {
@@ -837,6 +840,7 @@
   padding: 0.5rem 0;
   gap: 1rem;
   min-height: 64px;
+  min-width: 0;
 }
 
 /* Right Side: Section & Row Info */
@@ -1760,7 +1764,8 @@
     position: sticky;
     top: calc(env(safe-area-inset-top, 0px) + 5.5rem);
     z-index: 1000;
-    align-self: start;
+    flex: 0 0 auto;
+    align-self: flex-start;
     background: var(--bg-primary, #ffffff);
     -webkit-overflow-scrolling: touch;
     box-shadow:
@@ -1868,7 +1873,6 @@
 }
 
 @media (max-width: 768px) {
-  /* Avoid overflow-x: clip on ancestors — it breaks position:sticky for the venue map block */
   .event-details-container {
     padding: var(--spacing-md) var(--spacing-sm);
     max-width: 100%;
@@ -1890,6 +1894,8 @@
     position: sticky;
     top: calc(env(safe-area-inset-top, 0px) + 5.5rem);
     z-index: 1000;
+    flex: 0 0 auto;
+    align-self: flex-start;
     margin-bottom: 0.35rem;
     background: var(--bg-primary, #ffffff);
     -webkit-overflow-scrolling: touch;

@@ -100,7 +100,6 @@ a:hover {
 
 html {
   max-width: 100%;
-  overflow-x: hidden;
 }
 
 body {
@@ -109,8 +108,6 @@ body {
   width: 100%;
   max-width: 100%;
   min-height: 100vh;
-  /* Horizontal bleed containment; vertical scroll + sticky rely on overflow-y: visible (default). */
-  overflow-x: hidden;
   background: var(--bg-primary);
   direction: rtl;
   text-align: right;
@@ -120,7 +117,6 @@ body {
 #root {
   max-width: 100%;
   min-width: 0;
-  overflow-x: hidden;
 }
 
 /* Mobile edge padding - prevent content from touching screen edges */
