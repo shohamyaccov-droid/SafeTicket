@@ -6,11 +6,10 @@ import {
   VIEW_W,
   VIEW_H,
   CONCERT_BLOCKS,
-  STAGE_PATH_D,
+  CONCERT_SPACERS,
+  STAGE_RECT,
   STAGE_LABEL_CX,
   STAGE_LABEL_CY,
-  BOWL_PATH_D,
-  PITCH_FLOOR_D,
 } from '../utils/bloomfieldConcertGeometry';
 
 const FILL_DEFAULT = '#e5e7eb';
@@ -196,14 +195,15 @@ export default function BloomfieldConcertMap({
               </filter>
             </defs>
 
-            <rect width={VIEW_W} height={VIEW_H} fill="#fafafa" />
+            <rect width={VIEW_W} height={VIEW_H} fill="#f1f5f9" />
 
-            <path d={BOWL_PATH_D} fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
-
-            <path d={PITCH_FLOOR_D} fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1" />
-
-            <path
-              d={STAGE_PATH_D}
+            <rect
+              x={STAGE_RECT.x}
+              y={STAGE_RECT.y}
+              width={STAGE_RECT.w}
+              height={STAGE_RECT.h}
+              rx={4}
+              ry={4}
               fill={STAGE_FILL}
               stroke={STAGE_STROKE}
               strokeWidth="1.5"
@@ -235,6 +235,22 @@ export default function BloomfieldConcertMap({
               במה
             </text>
 
+            {CONCERT_SPACERS.map((s, idx) => (
+              <rect
+                key={`spacer-${idx}`}
+                x={s.x}
+                y={s.y}
+                width={s.w}
+                height={s.h}
+                rx={3}
+                ry={3}
+                fill="#e2e8f0"
+                stroke="#cbd5e1"
+                strokeWidth={STROKE_INACTIVE_W}
+                style={{ pointerEvents: 'none' }}
+              />
+            ))}
+
             {CONCERT_BLOCKS.map((b) => {
               const sid = String(b.id);
               const has = blocksWithListings.has(sid);
@@ -248,8 +264,8 @@ export default function BloomfieldConcertMap({
                   y={b.y}
                   width={b.w}
                   height={b.h}
-                  rx={4}
-                  ry={4}
+                  rx={3}
+                  ry={3}
                   fill={fill}
                   stroke={isHi ? '#0ea5e9' : STROKE_SECTION}
                   strokeWidth={isHi ? STROKE_HIGHLIGHT_W : STROKE_INACTIVE_W}
