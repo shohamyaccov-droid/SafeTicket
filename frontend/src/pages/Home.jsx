@@ -408,27 +408,31 @@ const Home = () => {
         </div>
       </section>
 
-      <BuyerGuarantee />
+      <div className="home-layout">
+        <aside className="home-layout__trust" aria-label="ביטחון קונים">
+          <BuyerGuarantee />
+        </aside>
 
-      {inventoryEvents.length === 0 ? (
-        <div className="home-empty-wrap">
-          <EmptyState
-            icon="🎫"
-            title="אין אירועים להצגה"
-            description="נסו לרענן מאוחר יותר או לשנות את החיפוש."
-            actionLabel="איפוס חיפוש"
-            onAction={() => setSearchQuerySynced('')}
-          />
-        </div>
-      ) : (
-        <div className="home-viagogo-rows viagogo-home-discover">
-          <CarouselSection slug="recommended" title="מומלצים" items={recommendedEvents} />
-          <CarouselSection slug="concerts" title="הופעות" items={concertEvents} />
-          <CarouselSection slug="sports" title="ספורט" items={sportsEvents} />
-          <CarouselSection slug="standup" title="סטנדאפ" items={standupEvents} />
-          <CarouselSection slug="theater" title="תיאטרון" items={theaterEvents} />
-        </div>
-      )}
+        {inventoryEvents.length === 0 ? (
+          <div className="home-empty-wrap home-layout__rows">
+            <EmptyState
+              icon="🎫"
+              title="אין אירועים להצגה"
+              description="נסו לרענן מאוחר יותר או לשנות את החיפוש."
+              actionLabel="איפוס חיפוש"
+              onAction={() => setSearchQuerySynced('')}
+            />
+          </div>
+        ) : (
+          <div className="home-viagogo-rows viagogo-home-discover home-layout__rows">
+            <CarouselSection slug="recommended" title="מומלצים" items={recommendedEvents} />
+            <CarouselSection slug="concerts" title="הופעות" items={concertEvents} />
+            <CarouselSection slug="sports" title="ספורט" items={sportsEvents} />
+            <CarouselSection slug="standup" title="סטנדאפ" items={standupEvents} />
+            <CarouselSection slug="theater" title="תיאטרון" items={theaterEvents} />
+          </div>
+        )}
+      </div>
     </div>
   );
 };

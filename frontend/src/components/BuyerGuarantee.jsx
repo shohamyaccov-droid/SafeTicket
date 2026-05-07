@@ -4,8 +4,6 @@ function IconRefundCard() {
   return (
     <svg
       className="buyer-guarantee__icon-svg"
-      width="32"
-      height="32"
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
@@ -33,8 +31,6 @@ function IconCommunityVerified() {
   return (
     <svg
       className="buyer-guarantee__icon-svg"
-      width="32"
-      height="32"
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
@@ -56,8 +52,6 @@ function IconSecureLock() {
   return (
     <svg
       className="buyer-guarantee__icon-svg"
-      width="32"
-      height="32"
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
@@ -88,55 +82,50 @@ const FEATURES = [
   {
     id: 'refund',
     icon: IconRefundCard,
-    text:
-      'אחריות כספית מלאה: האירוע בוטל? הכרטיס לא עבד בקופות? אתם מקבלים החזר כספי מלא באופן אוטומטי.',
+    headline: 'אחריות כספית מלאה',
+    exactDesktop: 'אחריות כספית מלאה: אנחנו מגבים כל עסקה. גיבוי כספי מלא לכל כרטיס שנקנה בפלטפורמה.',
   },
   {
     id: 'community',
     icon: IconCommunityVerified,
-    text: 'קהילה אמינה: כל המוכרים בפלטפורמה עוברים אימות זהות מקיף.',
+    headline: 'קהילה אמינה',
+    exactDesktop: 'קהילה אמינה: כל מוכר עובר אימות זהות מקיף.',
   },
   {
     id: 'secure',
     icon: IconSecureLock,
-    text:
-      'קנייה מאובטחת: הצטרפו למאות משתמשים שכבר קנו ומכרו כרטיסים בבטחה דרך הפלטפורמה שלנו.',
+    headline: 'קנייה מאובטחת',
+    exactDesktop: 'קנייה מאובטחת: הצטרפו למאות שקונים ומוכרים כרטיסים בבטחה בכל יום.',
   },
 ];
 
 export default function BuyerGuarantee() {
   return (
     <section className="buyer-guarantee" dir="rtl" aria-labelledby="buyer-guarantee-heading">
-      <div className="buyer-guarantee__inner">
+      <div className="buyer-guarantee__panel">
         <header className="buyer-guarantee__header">
           <h2 id="buyer-guarantee-heading" className="buyer-guarantee__title">
-            קונים כרטיסים בראש שקט – מוגנים ב-100% מהונאות
+            קונים בראש שקט – מוגנים ב-100%
           </h2>
           <p className="buyer-guarantee__subtitle">
-            התשלום שלכם מוחזק בנאמנות (Escrow) ומועבר למוכר אך ורק לאחר שהאירוע התקיים ונכנסתם אליו
-            בהצלחה. בלי עוקצים, בלי הפתעות.
+            התשלום שלכם מוחזק בנאמנות (Escrow) ומועבר למוכר רק לאחר שהאירוע התקיים בהצלחה. הביטחון שלכם
+            במקום הראשון.
           </p>
         </header>
 
-        <ul className="buyer-guarantee__grid">
-          {FEATURES.map(({ id, icon: Icon, text }) => (
+        <ul className="buyer-guarantee__features">
+          {FEATURES.map(({ id, icon: Icon, headline, exactDesktop }) => (
             <li key={id} className="buyer-guarantee__feature">
               <div className="buyer-guarantee__icon-wrap" aria-hidden>
                 <Icon />
               </div>
-              <p className="buyer-guarantee__feature-text">{text}</p>
+              <div className="buyer-guarantee__feature-copy">
+                <p className="buyer-guarantee__feature-headline">{headline}</p>
+                <p className="buyer-guarantee__feature-full">{exactDesktop}</p>
+              </div>
             </li>
           ))}
         </ul>
-
-        <p className="buyer-guarantee__footer">
-          <strong className="buyer-guarantee__footer-strong">הכסף שלכם מוגן</strong>
-          {', '}
-          <strong className="buyer-guarantee__footer-strong">הכרטיס שלכם מובטח</strong>
-          {', ולכם נשאר רק '}
-          <strong className="buyer-guarantee__footer-strong">ליהנות מהאירוע</strong>
-          .
-        </p>
       </div>
     </section>
   );

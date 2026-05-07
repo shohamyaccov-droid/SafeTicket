@@ -14,6 +14,64 @@
   padding-top: 1rem;
 }
 
+/* Trust widget (BuyerGuarantee) + event rows: desktop sidebar on physical left (RTL grid col 2) */
+.home-layout {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1099px) {
+  .home-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0 0.5rem 1.5rem;
+  }
+
+  .home-layout__trust {
+    order: 1;
+    width: 100%;
+  }
+
+  .home-layout__rows {
+    order: 2;
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (min-width: 1100px) {
+  .home-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) min(228px, 17vw);
+    gap: 0.65rem 1rem;
+    align-items: start;
+    padding: 0.25rem max(0.75rem, env(safe-area-inset-right)) 2.5rem
+      max(0.75rem, env(safe-area-inset-left));
+    max-width: min(1680px, 100%);
+    margin: 0 auto;
+    box-sizing: border-box;
+  }
+
+  .home-layout__rows {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .home-layout__trust {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+    position: sticky;
+    top: calc(env(safe-area-inset-top, 0px) + 5.25rem);
+    z-index: 2;
+    min-width: 0;
+  }
+}
+
 .home-fetch-banner {
   margin: 1rem auto 0;
   max-width: 1200px;
