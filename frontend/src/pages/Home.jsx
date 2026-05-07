@@ -39,6 +39,7 @@ const Home = () => {
   const [loadError, setLoadError] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') ?? '');
+  const resultsRef = useRef(null);
   const qFromUrl = searchParams.get('q') ?? '';
   useEffect(() => {
     setSearchQuery(qFromUrl);
@@ -343,6 +344,11 @@ const Home = () => {
                 placeholder="חפשו אמנים, אירועים או ערים"
                 value={searchQuery}
                 onChange={(e) => setSearchQuerySynced(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }}
                 dir="rtl"
                 enterKeyHint="search"
                 aria-label="חיפוש אירועים"
@@ -411,7 +417,7 @@ const Home = () => {
         </div>
       </section>
 
-      <div className="home-layout">
+      <div ref={resultsRef} className="home-layout">
         {inventoryEvents.length === 0 ? (
           <div className="home-empty-wrap home-layout__rows">
             <EmptyState

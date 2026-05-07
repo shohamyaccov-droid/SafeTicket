@@ -77,7 +77,7 @@
   min-height: 420px;
 }
 
-/* BuyerGuarantee: in-flow under search on small screens; absolute on physical left on desktop */
+/* BuyerGuarantee: hidden ≤768px; ≥769px it’s out of flow (absolute on .buyer-guarantee) */
 .hero-buyer-guarantee {
   width: 100%;
   max-width: 720px;
@@ -88,7 +88,7 @@
   z-index: 4;
 }
 
-@media (max-width: 1099px) {
+@media (max-width: 768px) {
   .hero-search-section {
     gap: 0.35rem;
     padding-bottom: 0;
@@ -101,8 +101,7 @@
   }
 
   .hero-buyer-guarantee {
-    margin-top: 0.15rem;
-    margin-bottom: 0.1rem;
+    display: none;
   }
 
   .hero-trust-ribbon {
@@ -124,16 +123,20 @@
   box-sizing: border-box;
 }
 
-@media (min-width: 1100px) {
+@media (min-width: 769px) {
   .hero-buyer-guarantee {
-    position: absolute;
-    left: max(2rem, env(safe-area-inset-left, 0px));
-    top: 47%;
-    transform: translateY(-50%);
-    width: min(224px, 19vw);
-    max-width: 232px;
+    width: 100%;
+    max-width: none;
     margin: 0;
     padding: 0;
+    flex: 0 0 0;
+    min-height: 0;
+    height: 0;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .hero-buyer-guarantee .buyer-guarantee {
     pointer-events: auto;
   }
 
@@ -142,7 +145,6 @@
   }
 
   .hero-stack {
-    padding-left: calc(min(232px, 19vw) + 2.5rem);
     min-height: min(340px, 65vh);
   }
 }

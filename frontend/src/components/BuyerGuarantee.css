@@ -1,4 +1,4 @@
-/* Compact trust widget — placement is controlled by Home (.hero-buyer-guarantee): hero-left on desktop, in-flow under search on mobile */
+/* Compact trust widget — ≥769px floats in hero via absolute .buyer-guarantee (positioning context: .hero-search-section); ≤768px hidden in Home */
 
 .buyer-guarantee {
   direction: rtl;
@@ -16,8 +16,8 @@
   -webkit-backdrop-filter: blur(10px);
 }
 
-/* ——— Mobile & tablet: slim strip under hero (3 columns, short labels) ——— */
-@media (max-width: 1099px) {
+/* ——— Narrow viewports: slim strip (only when shown in-flow; Home hides ≤768px) ——— */
+@media (max-width: 768px) {
   .buyer-guarantee__panel {
     padding: 0.5rem 0.65rem 0.6rem;
     margin: 0 auto;
@@ -115,7 +115,7 @@
 }
 
 /* Optional: slightly wider phones — show one-line hint under title */
-@media (min-width: 480px) and (max-width: 1099px) {
+@media (min-width: 480px) and (max-width: 768px) {
   .buyer-guarantee__subtitle {
     display: block;
     margin: 0 0 0.4rem;
@@ -130,11 +130,21 @@
   }
 }
 
-/* ——— Desktop: narrow vertical “verified” widget (physical left column via Home grid) ——— */
-@media (min-width: 1100px) {
+/* ——— Tablet/desktop: floated left, full copy (does not shift centered hero title/search) ——— */
+@media (min-width: 769px) {
+  .buyer-guarantee {
+    position: absolute;
+    left: max(2rem, env(safe-area-inset-left, 0px));
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+    width: min(320px, calc(100% - 4rem));
+    max-width: 320px;
+  }
+
   .buyer-guarantee__panel {
     padding: 0.75rem 0.65rem 0.85rem;
-    max-width: 220px;
+    max-width: 320px;
   }
 
   .buyer-guarantee__header {
