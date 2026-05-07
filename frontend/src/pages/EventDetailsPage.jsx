@@ -12,7 +12,7 @@ import BloomfieldStadiumMap from '../components/BloomfieldStadiumMap';
 import BloomfieldConcertMap from '../components/BloomfieldConcertMap';
 import BloomfieldTicketListPanel from '../components/BloomfieldTicketListPanel';
 import JerusalemArenaMap from '../components/JerusalemArenaMap';
-import { VENUE_MAPS, getVenueConfig, normalizeSection } from '../utils/venueMaps';
+import { VENUE_MAPS, VENUE_BLOOMFIELD_CONCERT, getVenueConfig, normalizeSection } from '../utils/venueMaps';
 import {
   enrichBloomfieldGroup,
   groupMatchesTicketQuantity,
@@ -728,6 +728,7 @@ const EventDetailsPage = () => {
       .filter(Boolean)
       .map((v) => String(v).trim());
 
+    if (candidates.some((v) => v === VENUE_BLOOMFIELD_CONCERT)) return VENUE_BLOOMFIELD_CONCERT;
     if (candidates.includes('אצטדיון בלומפילד')) return 'אצטדיון בלומפילד';
     if (candidates.includes('היכל מנורה מבטחים')) return 'היכל מנורה מבטחים';
     if (candidates.includes('פיס ארנה ירושלים')) return 'פיס ארנה ירושלים';
@@ -748,10 +749,13 @@ const EventDetailsPage = () => {
   }, [event]);
 
   const finalVenueNameForMap = canonicalVenueForMap || event?.venue || '';
-  const isBloomfieldVenue = canonicalVenueForMap === 'אצטדיון בלומפילד';
+  const isBloomfieldVenue =
+    canonicalVenueForMap === 'אצטדיון בלומפילד' || canonicalVenueForMap === VENUE_BLOOMFIELD_CONCERT;
   /** Concert layout (pitch + stage); football/soccer keeps BloomfieldStadiumMap. */
   const isBloomfieldConcertLayout =
-    isBloomfieldVenue && String(event?.category || '').toLowerCase() === 'concert';
+    canonicalVenueForMap === VENUE_BLOOMFIELD_CONCERT ||
+    (canonicalVenueForMap === 'אצטדיון בלומפילד' &&
+      String(event?.category || '').toLowerCase() === 'concert');
   const isMenoraVenue = canonicalVenueForMap === 'היכל מנורה מבטחים';
   const isJerusalemArenaVenue = canonicalVenueForMap === 'פיס ארנה ירושלים';
 

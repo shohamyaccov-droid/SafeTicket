@@ -31,6 +31,7 @@ SELLER_EMAIL = "seed_real_events@safeticket.demo"
 SELLER_USERNAME = "real_events_seed_seller"
 
 VENUE_BLOOMFIELD = "אצטדיון בלומפילד"
+VENUE_BLOOMFIELD_CONCERTS = "אצטדיון בלומפילד (הופעות)"
 VENUE_MENORA = "היכל מנורה מבטחים"
 VENUE_JERUSALEM_ARENA = "פיס ארנה ירושלים"
 
@@ -240,7 +241,7 @@ class Command(BaseCommand):
             artist=artist,
             name="אייל גולן - בלומפילד",
             date=when,
-            venue=VENUE_BLOOMFIELD,
+            venue=VENUE_BLOOMFIELD_CONCERTS,
             venue_place=self._get_venue(VENUE_BLOOMFIELD, "תל אביב"),
             city="תל אביב",
             category="concert",

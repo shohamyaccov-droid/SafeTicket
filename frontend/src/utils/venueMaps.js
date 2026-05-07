@@ -3,6 +3,9 @@
  * Maps venue names to their stadium map images and section coordinates
  */
 
+/** Event.venue value that forces BloomfieldConcertMap (see EventDetailsPage). */
+export const VENUE_BLOOMFIELD_CONCERT = 'אצטדיון בלומפילד (הופעות)';
+
 export const VENUE_MAPS = {
   // בלומפילד — static image fallback; interactive maps live in EventDetailsPage:
   // BloomfieldStadiumMap (sport) vs BloomfieldConcertMap (category concert).
@@ -187,6 +190,10 @@ export const translateSectionDisplay = (sectionName) => {
  */
 export const getVenueConfig = (venueName) => {
   if (!venueName) return null;
+
+  if (venueName.trim() === VENUE_BLOOMFIELD_CONCERT) {
+    return { config: VENUE_MAPS['בלומפילד'], matchedName: 'בלומפילד' };
+  }
   
   // Try exact match first
   if (VENUE_MAPS[venueName]) {

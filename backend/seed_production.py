@@ -165,7 +165,7 @@ SEED_LAUNCH_EVENTS: list[dict] = [
     {
         'name': 'אייל גולן - בלומפילד',
         'date': _il_dt(2026, 6, 18, 20, 0),
-        'venue': 'אצטדיון בלומפילד',
+        'venue': 'אצטדיון בלומפילד (הופעות)',
         'venue_struct': ('אצטדיון בלומפילד', 'תל אביב'),
         'city': 'תל אביב',
         'category': 'concert',
