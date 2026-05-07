@@ -1,4 +1,4 @@
-/* Compact trust widget: desktop = narrow vertical sidebar; mobile = thin 3-column strip */
+/* Compact trust widget — placement is controlled by Home (.hero-buyer-guarantee): hero-left on desktop, in-flow under search on mobile */
 
 .buyer-guarantee {
   direction: rtl;
