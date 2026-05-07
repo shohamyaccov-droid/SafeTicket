@@ -1,4 +1,4 @@
-/* Compact trust widget — ≥769px floats in hero via absolute .buyer-guarantee (positioning context: .hero-search-section); ≤768px hidden in Home */
+/* Trust widget — desktop: absolute in hero (no layout shift); mobile: stacks under search */
 
 .buyer-guarantee {
   direction: rtl;
@@ -16,157 +16,49 @@
   -webkit-backdrop-filter: blur(10px);
 }
 
-/* ——— Narrow viewports: slim strip (only when shown in-flow; Home hides ≤768px) ——— */
+/* ——— Mobile: full card under search, vertical features, generous spacing ——— */
 @media (max-width: 768px) {
-  .buyer-guarantee__panel {
-    padding: 0.5rem 0.65rem 0.6rem;
-    margin: 0 auto;
-    max-width: min(100%, 720px);
-  }
-
-  .buyer-guarantee__header {
-    margin-bottom: 0.45rem;
-    padding: 0 0.15rem;
-    text-align: center;
-  }
-
-  .buyer-guarantee__title {
-    margin: 0 0 0.2rem;
-    font-size: 0.78rem;
-    font-weight: 800;
-    line-height: 1.25;
-    letter-spacing: -0.01em;
-    color: #ffffff;
-  }
-
-  .buyer-guarantee__subtitle {
-    display: none;
-  }
-
-  .buyer-guarantee__features {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: row;
-    align-items: stretch;
-    gap: 0.35rem;
-  }
-
-  .buyer-guarantee__feature {
-    flex: 1 1 0;
-    min-width: 0;
-    margin: 0;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 0.25rem;
-    padding: 0.35rem 0.2rem;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-  }
-
-  .buyer-guarantee__icon-wrap {
-    flex-shrink: 0;
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    background: linear-gradient(145deg, rgba(220, 252, 231, 0.9), rgba(187, 247, 208, 0.4));
-    border: 1px solid rgba(34, 197, 94, 0.2);
-    color: #047857;
-  }
-
-  .buyer-guarantee__icon-svg {
-    display: block;
-    width: 15px;
-    height: 15px;
-  }
-
-  .buyer-guarantee__feature-copy {
-    min-width: 0;
-    width: 100%;
-  }
-
-  .buyer-guarantee__feature-headline {
-    margin: 0;
-    font-size: 0.62rem;
-    font-weight: 700;
-    line-height: 1.2;
-    color: #f1f5f9;
-  }
-
-  .buyer-guarantee__feature-full {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-}
-
-/* Optional: slightly wider phones — show one-line hint under title */
-@media (min-width: 480px) and (max-width: 768px) {
-  .buyer-guarantee__subtitle {
-    display: block;
-    margin: 0 0 0.4rem;
-    font-size: 0.68rem;
-    line-height: 1.35;
-    color: #e2e8f0;
-    text-align: center;
-  }
-
-  .buyer-guarantee__feature-headline {
-    font-size: 0.68rem;
-  }
-}
-
-/* ——— Tablet/desktop: floated left, full copy (does not shift centered hero title/search) ——— */
-@media (min-width: 769px) {
   .buyer-guarantee {
-    position: absolute;
-    left: max(2rem, env(safe-area-inset-left, 0px));
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 10;
-    width: min(320px, calc(100% - 4rem));
-    max-width: 320px;
+    position: static;
+    left: auto;
+    top: auto;
+    transform: none;
+    width: 100%;
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+    z-index: 4;
   }
 
   .buyer-guarantee__panel {
-    padding: 0.75rem 0.65rem 0.85rem;
-    max-width: 320px;
+    padding: 2rem 1.75rem;
+    margin: 0 auto;
+    max-width: min(100%, 640px);
   }
 
   .buyer-guarantee__header {
-    margin-bottom: 0.55rem;
-    padding-bottom: 0.5rem;
+    margin-bottom: 1.35rem;
+    padding: 0 0 1rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+    text-align: center;
   }
 
   .buyer-guarantee__title {
-    margin: 0 0 0.35rem;
-    font-size: 0.8rem;
+    margin: 0 0 0.55rem;
+    font-size: 0.95rem;
     font-weight: 800;
-    line-height: 1.3;
+    line-height: 1.35;
     letter-spacing: -0.015em;
     color: #ffffff;
   }
 
   .buyer-guarantee__subtitle {
+    display: block;
     margin: 0;
-    font-size: 0.68rem;
-    line-height: 1.45;
-    color: #f1f5f9;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    color: #e2e8f0;
+    text-align: center;
   }
 
   .buyer-guarantee__features {
@@ -175,7 +67,8 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
+    align-items: stretch;
+    gap: 1.15rem;
   }
 
   .buyer-guarantee__feature {
@@ -183,8 +76,120 @@
     display: flex;
     flex-direction: row;
     align-items: flex-start;
-    gap: 0.45rem;
-    padding: 0.4rem 0.35rem;
+    gap: 0.85rem;
+    padding: 0.85rem 0.9rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    text-align: right;
+    min-width: 0;
+  }
+
+  .buyer-guarantee__icon-wrap {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: linear-gradient(145deg, rgba(220, 252, 231, 0.95), rgba(187, 247, 208, 0.45));
+    border: 1px solid rgba(34, 197, 94, 0.22);
+    color: #047857;
+  }
+
+  .buyer-guarantee__icon-svg {
+    display: block;
+    width: 18px;
+    height: 18px;
+  }
+
+  .buyer-guarantee__feature-copy {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .buyer-guarantee__feature-headline {
+    display: none;
+  }
+
+  .buyer-guarantee__feature-full {
+    margin: 0;
+    position: static;
+    width: auto;
+    height: auto;
+    padding: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+    border: none;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    font-weight: 500;
+    color: #f1f5f9;
+  }
+
+  .buyer-guarantee__feature-full strong {
+    color: #ffffff;
+    font-weight: 700;
+  }
+}
+
+/* ——— Desktop / tablet: floated left, padded panel, spaced feature rows ——— */
+@media (min-width: 769px) {
+  .buyer-guarantee {
+    position: absolute;
+    left: max(1.5rem, env(safe-area-inset-left, 0px));
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+    width: min(340px, calc(100% - 2rem));
+    max-width: 340px;
+  }
+
+  .buyer-guarantee__panel {
+    padding: 2.25rem 2rem;
+    max-width: 340px;
+  }
+
+  .buyer-guarantee__header {
+    margin-bottom: 1.15rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  }
+
+  .buyer-guarantee__title {
+    margin: 0 0 0.5rem;
+    font-size: 0.88rem;
+    font-weight: 800;
+    line-height: 1.35;
+    letter-spacing: -0.015em;
+    color: #ffffff;
+  }
+
+  .buyer-guarantee__subtitle {
+    margin: 0;
+    font-size: 0.72rem;
+    line-height: 1.55;
+    color: #f1f5f9;
+  }
+
+  .buyer-guarantee__features {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1.05rem;
+  }
+
+  .buyer-guarantee__feature {
+    margin: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 0.65rem;
+    padding: 0.55rem 0.45rem;
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.14);
@@ -193,8 +198,8 @@
 
   .buyer-guarantee__icon-wrap {
     flex-shrink: 0;
-    width: 30px;
-    height: 30px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -206,8 +211,8 @@
 
   .buyer-guarantee__icon-svg {
     display: block;
-    width: 16px;
-    height: 16px;
+    width: 17px;
+    height: 17px;
   }
 
   .buyer-guarantee__feature-copy {
@@ -228,8 +233,8 @@
     clip: auto;
     white-space: normal;
     border: none;
-    font-size: 0.62rem;
-    line-height: 1.4;
+    font-size: 0.68rem;
+    line-height: 1.45;
     font-weight: 500;
     color: #f1f5f9;
   }
@@ -237,6 +242,24 @@
   .buyer-guarantee__feature-full strong {
     color: #ffffff;
     font-weight: 700;
+  }
+}
+
+/* Mid-width desktop: keep the floating card narrower so it stays clear of centered hero copy */
+@media (min-width: 769px) and (max-width: 1180px) {
+  .buyer-guarantee {
+    width: min(300px, calc(100vw * 0.28));
+    max-width: 300px;
+    left: max(1rem, env(safe-area-inset-left, 0px));
+  }
+
+  .buyer-guarantee__panel {
+    padding: 1.85rem 1.5rem;
+    max-width: 300px;
+  }
+
+  .buyer-guarantee__features {
+    gap: 0.9rem;
   }
 }
 

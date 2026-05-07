@@ -12,25 +12,30 @@ function rect(id, zone, x, y, w, h, label) {
   return { id, zone, x, y, w, h, label };
 }
 
-/** Row A (6): left→right A6…A1 */
-const ROW_A_Y = 138;
-const CELL_W = 52;
-const GAP = 5;
-const ROW_A_START_X = 318;
+/** Row A (6): left→right A6…A1 — larger cells, minimal gaps for dense pitch seating */
+const ROW_A_Y = 156;
+const CELL_W = 68;
+const GAP_H = 2;
+const GAP_V = 2;
+const ROW_H_AB = 48;
+const ROW_H_C = 46;
+const ROW_A_W = 6 * CELL_W + 5 * GAP_H;
+const ROW_A_START_X = VIEW_W / 2 - ROW_A_W / 2;
+const ROW_BC_START_X = ROW_A_START_X + (CELL_W + GAP_H) / 2;
 
 /** @type {ConcertBlockRect[]} */
 export const CONCERT_BLOCKS = [
   ...[6, 5, 4, 3, 2, 1].map((n, i) =>
-    rect(`A${n}`, 'pitch', ROW_A_START_X + i * (CELL_W + GAP), ROW_A_Y, CELL_W, 40, `A${n}`)
+    rect(`A${n}`, 'pitch', ROW_A_START_X + i * (CELL_W + GAP_H), ROW_A_Y, CELL_W, ROW_H_AB, `A${n}`)
   ),
   ...[5, 4, 3, 2, 1].map((n, i) =>
     rect(
       `B${n}`,
       'pitch',
-      ROW_A_START_X + CELL_W / 2 + 2 + i * (CELL_W + GAP),
-      ROW_A_Y + 40 + GAP,
+      ROW_BC_START_X + i * (CELL_W + GAP_H),
+      ROW_A_Y + ROW_H_AB + GAP_V,
       CELL_W,
-      40,
+      ROW_H_AB,
       `B${n}`
     )
   ),
@@ -38,10 +43,10 @@ export const CONCERT_BLOCKS = [
     rect(
       `C${n}`,
       'pitch',
-      ROW_A_START_X + CELL_W / 2 + 2 + i * (CELL_W + GAP),
-      ROW_A_Y + 40 + GAP + 40 + GAP,
+      ROW_BC_START_X + i * (CELL_W + GAP_H),
+      ROW_A_Y + ROW_H_AB + GAP_V + ROW_H_AB + GAP_V,
       CELL_W,
-      38,
+      ROW_H_C,
       `C${n}`
     )
   ),

@@ -197,16 +197,6 @@ export default function BloomfieldStadiumMap({
         </button>
       </div>
 
-      <div className="absolute top-2 left-1/2 z-[5] -translate-x-1/2">
-        <button
-          type="button"
-          onClick={panZoom.resetView}
-          className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white shadow-md hover:bg-slate-800"
-        >
-          Search this area
-        </button>
-      </div>
-
       <div
         className="absolute inset-0 cursor-grab touch-none active:cursor-grabbing"
         onPointerDown={panZoom.onPointerDown}
