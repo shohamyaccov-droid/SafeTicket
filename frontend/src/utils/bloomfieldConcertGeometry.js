@@ -12,16 +12,16 @@ function rect(id, zone, x, y, w, h, label) {
   return { id, zone, x, y, w, h, label };
 }
 
-/** Row A (6): left→right A6…A1 — larger cells, minimal gaps for dense pitch seating */
-const ROW_A_Y = 156;
-const CELL_W = 68;
-const GAP_H = 2;
-const GAP_V = 2;
-const ROW_H_AB = 48;
-const ROW_H_C = 46;
+/** Row A (6): left→right A6…A1 — dense pitch: large cells, 1px gaps, centered in floor */
+const GAP_H = 1;
+const GAP_V = 1;
+const CELL_W = 78;
+const ROW_H_AB = 68;
+const ROW_H_C = 66;
 const ROW_A_W = 6 * CELL_W + 5 * GAP_H;
 const ROW_A_START_X = VIEW_W / 2 - ROW_A_W / 2;
 const ROW_BC_START_X = ROW_A_START_X + (CELL_W + GAP_H) / 2;
+const ROW_A_Y = 118;
 
 /** @type {ConcertBlockRect[]} */
 export const CONCERT_BLOCKS = [
@@ -52,11 +52,11 @@ export const CONCERT_BLOCKS = [
   ),
 ];
 
-const WEST_X = 58;
-const WEST_W = 58;
-const WEST_TOP = 125;
-const WEST_H = 42;
-const WEST_GAP = 4;
+const WEST_X = 34;
+const WEST_W = 76;
+const WEST_TOP = 108;
+const WEST_H = 54;
+const WEST_GAP = 2;
 /** West stand: 106 top → 101 bottom */
 for (let n = 106, i = 0; n >= 101; n -= 1, i += 1) {
   CONCERT_BLOCKS.push(rect(String(n), 'west', WEST_X, WEST_TOP + i * (WEST_H + WEST_GAP), WEST_W, WEST_H, String(n)));
@@ -69,28 +69,30 @@ for (let n = 42, i = 0; n <= 47; n += 1, i += 1) {
 }
 
 /** South inner row 80A … 70A (11 blocks) */
-const SOUTH_INNER_Y = 428;
-const SOUTH_CELL_W = 46;
-const SOUTH_GAP = 3;
+const SOUTH_INNER_Y = 392;
+const SOUTH_CELL_W = 58;
+const SOUTH_GAP = 2;
 const SOUTH_ROW_W = 11 * SOUTH_CELL_W + 10 * SOUTH_GAP;
 const SOUTH_START_X = (VIEW_W - SOUTH_ROW_W) / 2;
+const SOUTH_INNER_H = 46;
 for (let i = 0; i <= 10; i += 1) {
   const num = 80 - i;
   const id = `${num}A`;
   CONCERT_BLOCKS.push(
-    rect(id, 'south', SOUTH_START_X + i * (SOUTH_CELL_W + SOUTH_GAP), SOUTH_INNER_Y, SOUTH_CELL_W, 36, id)
+    rect(id, 'south', SOUTH_START_X + i * (SOUTH_CELL_W + SOUTH_GAP), SOUTH_INNER_Y, SOUTH_CELL_W, SOUTH_INNER_H, id)
   );
 }
 
 /** South outer 80B … 71B */
-const SOUTH_OUTER_Y = SOUTH_INNER_Y + 36 + SOUTH_GAP;
+const SOUTH_OUTER_H = 44;
+const SOUTH_OUTER_Y = SOUTH_INNER_Y + SOUTH_INNER_H + SOUTH_GAP;
 for (let i = 0; i <= 9; i += 1) {
   const num = 80 - i;
   const id = `${num}B`;
   const rowW = 10 * SOUTH_CELL_W + 9 * SOUTH_GAP;
   const startX = (VIEW_W - rowW) / 2 + SOUTH_CELL_W * 0.55;
   CONCERT_BLOCKS.push(
-    rect(id, 'south', startX + i * (SOUTH_CELL_W + SOUTH_GAP), SOUTH_OUTER_Y, SOUTH_CELL_W, 34, id)
+    rect(id, 'south', startX + i * (SOUTH_CELL_W + SOUTH_GAP), SOUTH_OUTER_Y, SOUTH_CELL_W, SOUTH_OUTER_H, id)
   );
 }
 
@@ -115,28 +117,28 @@ export const STAGE_PATH_D = [
 export const STAGE_LABEL_CX = 500;
 export const STAGE_LABEL_CY = 48;
 
-/** U-bowl background (light grey) — simplified path around pitch + stands */
+/** U-bowl background — fuller ring closer to pitch */
 export const BOWL_PATH_D = [
-  'M 20 100',
-  'Q 20 40 120 36',
-  'H 880',
-  'Q 980 40 980 100',
-  'V 480',
-  'Q 980 560 880 580',
-  'H 120',
-  'Q 20 560 20 480',
+  'M 18 102',
+  'Q 18 36 118 30',
+  'H 882',
+  'Q 982 36 982 102',
+  'V 488',
+  'Q 982 568 878 588',
+  'H 122',
+  'Q 18 568 18 488',
   'Z',
 ].join(' ');
 
 export const PITCH_FLOOR_D = [
-  'M 280 115',
-  'H 720',
-  'Q 735 115 735 130',
-  'V 400',
-  'Q 735 415 720 415',
-  'H 280',
-  'Q 265 415 265 400',
-  'V 130',
-  'Q 265 115 280 115',
+  'M 256 108',
+  'H 744',
+  'Q 756 108 756 122',
+  'V 412',
+  'Q 756 426 744 426',
+  'H 256',
+  'Q 244 426 244 412',
+  'V 122',
+  'Q 244 108 256 108',
   'Z',
 ].join(' ');

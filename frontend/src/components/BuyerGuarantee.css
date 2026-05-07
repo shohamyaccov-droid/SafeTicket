@@ -1,4 +1,4 @@
-/* Trust widget — desktop: absolute in hero (no layout shift); mobile: stacks under search */
+/* Trust widget — wide desktop: narrow absolute card (inset from edge); tablet: in-flow under search */
 
 .buyer-guarantee {
   direction: rtl;
@@ -16,7 +16,7 @@
   -webkit-backdrop-filter: blur(10px);
 }
 
-/* ——— Mobile: full card under search, vertical features, generous spacing ——— */
+/* ——— Mobile: full card under search ——— */
 @media (max-width: 768px) {
   .buyer-guarantee {
     position: static;
@@ -135,42 +135,44 @@
   }
 }
 
-/* ——— Desktop / tablet: floated left, padded panel, spaced feature rows ——— */
-@media (min-width: 769px) {
+/* ——— Tablet / small laptop: in-flow, max 280px — avoids covering centered search ——— */
+@media (min-width: 769px) and (max-width: 1279px) {
   .buyer-guarantee {
-    position: absolute;
-    left: max(1.5rem, env(safe-area-inset-left, 0px));
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 10;
-    width: min(340px, calc(100% - 2rem));
-    max-width: 340px;
+    position: static;
+    left: auto;
+    top: auto;
+    transform: none;
+    width: 100%;
+    max-width: 280px;
+    margin-left: auto;
+    margin-right: auto;
+    z-index: 4;
   }
 
   .buyer-guarantee__panel {
-    padding: 2.25rem 2rem;
-    max-width: 340px;
+    padding: 1.65rem 1.35rem;
+    max-width: 280px;
+    margin: 0 auto;
   }
 
   .buyer-guarantee__header {
-    margin-bottom: 1.15rem;
-    padding-bottom: 1rem;
+    margin-bottom: 0.95rem;
+    padding-bottom: 0.85rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.18);
   }
 
   .buyer-guarantee__title {
-    margin: 0 0 0.5rem;
-    font-size: 0.88rem;
+    margin: 0 0 0.4rem;
+    font-size: 0.82rem;
     font-weight: 800;
     line-height: 1.35;
-    letter-spacing: -0.015em;
     color: #ffffff;
   }
 
   .buyer-guarantee__subtitle {
     margin: 0;
-    font-size: 0.72rem;
-    line-height: 1.55;
+    font-size: 0.68rem;
+    line-height: 1.5;
     color: #f1f5f9;
   }
 
@@ -180,7 +182,7 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 1.05rem;
+    gap: 0.85rem;
   }
 
   .buyer-guarantee__feature {
@@ -188,8 +190,8 @@
     display: flex;
     flex-direction: row;
     align-items: flex-start;
-    gap: 0.65rem;
-    padding: 0.55rem 0.45rem;
+    gap: 0.55rem;
+    padding: 0.45rem 0.35rem;
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.14);
@@ -198,8 +200,8 @@
 
   .buyer-guarantee__icon-wrap {
     flex-shrink: 0;
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -211,8 +213,117 @@
 
   .buyer-guarantee__icon-svg {
     display: block;
-    width: 17px;
-    height: 17px;
+    width: 16px;
+    height: 16px;
+  }
+
+  .buyer-guarantee__feature-headline {
+    display: none;
+  }
+
+  .buyer-guarantee__feature-full {
+    margin: 0;
+    position: static;
+    width: auto;
+    height: auto;
+    padding: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+    border: none;
+    font-size: 0.64rem;
+    line-height: 1.42;
+    font-weight: 500;
+    color: #f1f5f9;
+  }
+
+  .buyer-guarantee__feature-full strong {
+    color: #ffffff;
+    font-weight: 700;
+  }
+}
+
+/* ——— Wide desktop: absolute, physical left — narrow card stays clear of centered search ——— */
+@media (min-width: 1280px) {
+  .buyer-guarantee {
+    position: absolute;
+    left: max(1.25rem, env(safe-area-inset-left, 0px));
+    right: auto;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+    width: 280px;
+    max-width: 280px;
+    box-sizing: border-box;
+  }
+
+  .buyer-guarantee__panel {
+    padding: 1.85rem 1.5rem;
+    max-width: 280px;
+    box-sizing: border-box;
+  }
+
+  .buyer-guarantee__header {
+    margin-bottom: 1rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  }
+
+  .buyer-guarantee__title {
+    margin: 0 0 0.45rem;
+    font-size: 0.84rem;
+    font-weight: 800;
+    line-height: 1.35;
+    letter-spacing: -0.015em;
+    color: #ffffff;
+  }
+
+  .buyer-guarantee__subtitle {
+    margin: 0;
+    font-size: 0.68rem;
+    line-height: 1.5;
+    color: #f1f5f9;
+  }
+
+  .buyer-guarantee__features {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+
+  .buyer-guarantee__feature {
+    margin: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 0.55rem;
+    padding: 0.5rem 0.4rem;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    min-width: 0;
+  }
+
+  .buyer-guarantee__icon-wrap {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: linear-gradient(145deg, rgba(220, 252, 231, 0.95), rgba(187, 247, 208, 0.45));
+    border: 1px solid rgba(34, 197, 94, 0.22);
+    color: #047857;
+  }
+
+  .buyer-guarantee__icon-svg {
+    display: block;
+    width: 16px;
+    height: 16px;
   }
 
   .buyer-guarantee__feature-copy {
@@ -233,8 +344,8 @@
     clip: auto;
     white-space: normal;
     border: none;
-    font-size: 0.68rem;
-    line-height: 1.45;
+    font-size: 0.64rem;
+    line-height: 1.42;
     font-weight: 500;
     color: #f1f5f9;
   }
@@ -242,24 +353,6 @@
   .buyer-guarantee__feature-full strong {
     color: #ffffff;
     font-weight: 700;
-  }
-}
-
-/* Mid-width desktop: keep the floating card narrower so it stays clear of centered hero copy */
-@media (min-width: 769px) and (max-width: 1180px) {
-  .buyer-guarantee {
-    width: min(300px, calc(100vw * 0.28));
-    max-width: 300px;
-    left: max(1rem, env(safe-area-inset-left, 0px));
-  }
-
-  .buyer-guarantee__panel {
-    padding: 1.85rem 1.5rem;
-    max-width: 300px;
-  }
-
-  .buyer-guarantee__features {
-    gap: 0.9rem;
   }
 }
 

@@ -77,7 +77,7 @@
   min-height: 420px;
 }
 
-/* BuyerGuarantee: ≤768px in-flow under search; ≥769px floated (absolute on .buyer-guarantee) */
+/* BuyerGuarantee: in-flow ≤1279px (avoids overlapping centered search); collapsed aside + absolute card ≥1280px */
 .hero-buyer-guarantee {
   width: 100%;
   max-width: 720px;
@@ -128,7 +128,30 @@
   box-sizing: border-box;
 }
 
-@media (min-width: 769px) {
+/* Tablet / small laptop: stack narrow card under title+search — never covers the search bar */
+@media (min-width: 769px) and (max-width: 1279px) {
+  .hero-buyer-guarantee {
+    width: 100%;
+    max-width: 280px;
+    margin: 0.85rem auto 0;
+    padding: 0 1rem;
+    flex: 0 0 auto;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    pointer-events: auto;
+  }
+
+  .hero-trust-ribbon {
+    margin-top: 0.5rem;
+  }
+
+  .hero-stack {
+    min-height: min(340px, 65vh);
+  }
+}
+
+@media (min-width: 1280px) {
   .hero-buyer-guarantee {
     width: 100%;
     max-width: none;
