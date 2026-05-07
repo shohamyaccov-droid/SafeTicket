@@ -9,6 +9,7 @@ import Toast from '../components/Toast';
 import VenueMapPin from '../components/VenueMapPin';
 import InteractiveMenoraMap from '../components/InteractiveMenoraMap';
 import BloomfieldStadiumMap from '../components/BloomfieldStadiumMap';
+import BloomfieldConcertMap from '../components/BloomfieldConcertMap';
 import BloomfieldTicketListPanel from '../components/BloomfieldTicketListPanel';
 import JerusalemArenaMap from '../components/JerusalemArenaMap';
 import { VENUE_MAPS, getVenueConfig, normalizeSection } from '../utils/venueMaps';
@@ -16,6 +17,7 @@ import {
   enrichBloomfieldGroup,
   groupMatchesTicketQuantity,
 } from '../utils/bloomfieldListing';
+import { enrichBloomfieldConcertGroup } from '../utils/bloomfieldConcertListing';
 import { enrichJerusalemGroup } from '../utils/jerusalemListing';
 import {
   getTicketPrice,
@@ -747,6 +749,9 @@ const EventDetailsPage = () => {
 
   const finalVenueNameForMap = canonicalVenueForMap || event?.venue || '';
   const isBloomfieldVenue = canonicalVenueForMap === 'אצטדיון בלומפילד';
+  /** Concert layout (pitch + stage); football/soccer keeps BloomfieldStadiumMap. */
+  const isBloomfieldConcertLayout =
+    isBloomfieldVenue && String(event?.category || '').toLowerCase() === 'concert';
   const isMenoraVenue = canonicalVenueForMap === 'היכל מנורה מבטחים';
   const isJerusalemArenaVenue = canonicalVenueForMap === 'פיס ארנה ירושלים';
 
@@ -756,16 +761,17 @@ const EventDetailsPage = () => {
   }, [isBloomfieldVenue, ticketGroups, listingQuantityFilter]);
 
   const bloomfieldRows = useMemo(() => {
+    const enrichBf = isBloomfieldConcertLayout ? enrichBloomfieldConcertGroup : enrichBloomfieldGroup;
     return bloomfieldFilteredGroups.map((g) => {
       const stableId = stableListingGroupKey(g);
       return {
         stableId,
         group: g,
         firstTicket: g.tickets[0],
-        bloomfield: enrichBloomfieldGroup(g, stableId),
+        bloomfield: enrichBf(g, stableId),
       };
     });
-  }, [bloomfieldFilteredGroups]);
+  }, [bloomfieldFilteredGroups, isBloomfieldConcertLayout]);
 
   const bloomfieldMapHighlight = useMemo(() => {
     if (bloomfieldHoverId) return String(bloomfieldHoverId);
@@ -1145,6 +1151,16 @@ const EventDetailsPage = () => {
                     }
 
                     if (isBloomfieldVenue) {
+                      if (isBloomfieldConcertLayout) {
+                        return (
+                          <BloomfieldConcertMap
+                            rows={bloomfieldRows}
+                            highlightStableId={bloomfieldMapHighlight}
+                            onSelectGroup={handleBloomfieldMapSelect}
+                            onHoverGroup={setBloomfieldHoverId}
+                          />
+                        );
+                      }
                       return (
                         <BloomfieldStadiumMap
                           rows={bloomfieldRows}

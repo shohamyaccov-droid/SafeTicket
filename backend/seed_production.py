@@ -210,6 +210,14 @@ VENUE_SECTIONS: dict[tuple[str, str], list[str]] = {
         *[str(n) for n in range(301, 339)],
         *[str(n) for n in range(404, 407)],
         *[str(n) for n in range(419, 432)],
+        # Concert layout (BloomfieldConcertMap) — same venue, category=concert
+        *[f'A{n}' for n in range(1, 7)],
+        *[f'B{n}' for n in range(1, 6)],
+        *[f'C{n}' for n in range(1, 6)],
+        *[str(n) for n in range(101, 107)],
+        *[str(n) for n in range(42, 48)],
+        *[f'{n}A' for n in range(70, 81)],
+        *[f'{n}B' for n in range(71, 81)],
     ],
     ('פיס ארנה ירושלים', 'ירושלים'): [
         *[str(n) for n in range(101, 123)],

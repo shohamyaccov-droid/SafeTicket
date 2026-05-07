@@ -4,7 +4,8 @@
  */
 
 export const VENUE_MAPS = {
-  // בלומפילד - High-res seating chart
+  // בלומפילד — static image fallback; interactive maps live in EventDetailsPage:
+  // BloomfieldStadiumMap (sport) vs BloomfieldConcertMap (category concert).
   'בלומפילד': {
     imageUrl: 'https://www.sport5.co.il/Sip_Storage/FILES/0/size475x318/1126750.jpg',
     sections: {
