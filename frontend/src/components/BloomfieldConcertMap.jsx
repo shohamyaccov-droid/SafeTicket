@@ -274,7 +274,7 @@ export default function BloomfieldConcertMap({
                   textAnchor="middle"
                   dominantBaseline="central"
                   fill={has ? TEXT_ON_GREEN : TEXT_SECTION_MUTED}
-                  fontSize={sid.length > 3 ? 10 : 12.5}
+                  fontSize={sid.length > 3 ? 10.5 : 12}
                   fontWeight={has ? '800' : '600'}
                   fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
                   style={{
