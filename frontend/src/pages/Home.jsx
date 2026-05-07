@@ -5,6 +5,7 @@ import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import EmptyState from '../components/EmptyState';
 import EventCard from '../components/EventCard';
+import BuyerGuarantee from '../components/BuyerGuarantee';
 import { toastError } from '../utils/toast';
 import './Home.css';
 
@@ -406,6 +407,8 @@ const Home = () => {
           </div>
         </div>
       </section>
+
+      <BuyerGuarantee />
 
       {inventoryEvents.length === 0 ? (
         <div className="home-empty-wrap">

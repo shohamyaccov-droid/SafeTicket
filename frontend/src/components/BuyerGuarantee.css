@@ -1,0 +1,148 @@
+/* Buyer trust block — glass card on home, RTL */
+
+.buyer-guarantee {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 2rem 1.25rem 2.25rem;
+  box-sizing: border-box;
+  direction: rtl;
+  text-align: right;
+  background: linear-gradient(
+    180deg,
+    rgba(248, 250, 252, 0.96) 0%,
+    var(--bg-primary, #f8f9fa) 45%,
+    var(--bg-primary, #f8f9fa) 100%
+  );
+}
+
+.buyer-guarantee__inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 1.75rem 1.5rem 1.65rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 12px 40px rgba(15, 23, 42, 0.07),
+    0 2px 8px rgba(0, 69, 175, 0.04);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+@media (max-width: 480px) {
+  .buyer-guarantee {
+    padding: 1.35rem 1rem 1.75rem;
+  }
+
+  .buyer-guarantee__inner {
+    padding: 1.35rem 1.1rem 1.25rem;
+    border-radius: 14px;
+  }
+}
+
+.buyer-guarantee__header {
+  margin-bottom: 1.5rem;
+}
+
+.buyer-guarantee__title {
+  margin: 0 0 0.65rem;
+  font-size: clamp(1.25rem, 2.8vw, 1.65rem);
+  font-weight: 800;
+  line-height: 1.28;
+  letter-spacing: -0.02em;
+  color: var(--text-primary, #0f172a);
+}
+
+.buyer-guarantee__subtitle {
+  margin: 0;
+  font-size: clamp(0.95rem, 2vw, 1.05rem);
+  line-height: 1.55;
+  color: var(--text-secondary, #334155);
+  max-width: 58rem;
+}
+
+.buyer-guarantee__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 900px) {
+  .buyer-guarantee__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.15rem;
+    align-items: stretch;
+  }
+}
+
+.buyer-guarantee__feature {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.85rem;
+  margin: 0;
+  padding: 1rem 1.05rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  min-width: 0;
+}
+
+.buyer-guarantee__icon-wrap {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(220, 252, 231, 0.95), rgba(187, 247, 208, 0.45));
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  color: #047857;
+}
+
+.buyer-guarantee__icon-svg {
+  display: block;
+}
+
+.buyer-guarantee__feature-text {
+  margin: 0;
+  font-size: 0.94rem;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--text-primary, #1e293b);
+  min-width: 0;
+}
+
+.buyer-guarantee__footer {
+  margin: 1.35rem 0 0;
+  padding-top: 1.2rem;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+  font-size: clamp(0.95rem, 2vw, 1.05rem);
+  line-height: 1.55;
+  color: var(--text-secondary, #475569);
+  text-align: center;
+}
+
+.buyer-guarantee__footer-strong {
+  color: var(--primary-blue, #0045af);
+  font-weight: 700;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .buyer-guarantee__inner {
+    background: var(--bg-card, #ffffff);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .buyer-guarantee__feature {
+    background: var(--bg-card, #ffffff);
+  }
+}
