@@ -12,16 +12,16 @@ function rect(id, zone, x, y, w, h, label) {
   return { id, zone, x, y, w, h, label };
 }
 
-/** Row A (6): left→right A6…A1 — dense pitch: large cells, 1px gaps, centered in floor */
+/** Row A (6): A6…A1 — maximized to fill inner pitch; tight gaps; geometry centered in view */
 const GAP_H = 1;
-const GAP_V = 1;
-const CELL_W = 78;
-const ROW_H_AB = 68;
-const ROW_H_C = 66;
+const GAP_V = 2;
+const CELL_W = 129;
+const ROW_H_AB = 94;
+const ROW_H_C = 92;
 const ROW_A_W = 6 * CELL_W + 5 * GAP_H;
 const ROW_A_START_X = VIEW_W / 2 - ROW_A_W / 2;
 const ROW_BC_START_X = ROW_A_START_X + (CELL_W + GAP_H) / 2;
-const ROW_A_Y = 118;
+const ROW_A_Y = 98;
 
 /** @type {ConcertBlockRect[]} */
 export const CONCERT_BLOCKS = [
@@ -131,14 +131,14 @@ export const BOWL_PATH_D = [
 ].join(' ');
 
 export const PITCH_FLOOR_D = [
-  'M 256 108',
-  'H 744',
-  'Q 756 108 756 122',
-  'V 412',
-  'Q 756 426 744 426',
-  'H 256',
-  'Q 244 426 244 412',
-  'V 122',
-  'Q 244 108 256 108',
+  'M 106 88',
+  'H 894',
+  'Q 902 88 902 98',
+  'V 388',
+  'Q 902 398 894 398',
+  'H 106',
+  'Q 98 398 98 388',
+  'V 98',
+  'Q 98 88 106 88',
   'Z',
 ].join(' ');
