@@ -1255,6 +1255,13 @@
   display: block;
 }
 
+.home-carousel-card__badge--dates {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.72rem;
+}
+
 .home-carousel-card__badge {
   position: absolute;
   top: 8px;
@@ -1322,4 +1329,83 @@
   font-size: 0.78rem;
   font-weight: 600;
   color: #059669;
+}
+
+/* Date picker modal — grouped events (name + venue) */
+.home-date-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  direction: rtl;
+}
+
+.home-date-modal {
+  width: 100%;
+  max-width: 380px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+  padding: 1.1rem 1.15rem 1rem;
+  text-align: right;
+}
+
+.home-date-modal h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.home-date-modal-sub {
+  margin: 0 0 0.85rem;
+  font-size: 0.85rem;
+  color: #475569;
+  line-height: 1.35;
+}
+
+.home-date-modal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: min(52vh, 320px);
+  overflow-y: auto;
+}
+
+.home-date-modal-list button {
+  width: 100%;
+  text-align: right;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #0f172a;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.home-date-modal-list button:hover {
+  border-color: #0ea5e9;
+  background: #f0f9ff;
+}
+
+.home-date-modal-close {
+  margin-top: 0.75rem;
+  width: 100%;
+  padding: 0.55rem;
+  border-radius: 10px;
+  border: none;
+  background: #e2e8f0;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
 }

@@ -125,7 +125,7 @@ class InternationalLaunchE2ETest(TestCase):
         )
 
     def test_usd_full_negotiation_counter_accept_pay_and_fee_breakdown(self):
-        """International (USD): list → offer → seller counter → buyer accept → checkout → pay; verify 10%+5% fees."""
+        """International (USD): list → offer → seller counter → buyer accept → checkout → pay; verify 15% buyer fee + seller fee from settings."""
         pdf = SimpleUploadedFile('tix_us.pdf', _pdf_bytes(), content_type='application/pdf')
         self.client.force_authenticate(self.seller)
         r_list = self.client.post(
@@ -183,8 +183,8 @@ class InternationalLaunchE2ETest(TestCase):
 
         base = Decimal('120.00')
         _, fee_buyer, total = buyer_charge_from_base_amount(base)
-        self.assertEqual(fee_buyer, Decimal('12.00'))
-        self.assertEqual(total, Decimal('132.00'))
+        self.assertEqual(fee_buyer, Decimal('18.00'))
+        self.assertEqual(total, Decimal('138.00'))
 
         r_ord = self.client.post(
             '/api/users/orders/',
@@ -213,9 +213,9 @@ class InternationalLaunchE2ETest(TestCase):
         self.assertEqual(order.currency, 'USD')
         self.assertEqual(order.status, 'paid')
         self.assertEqual(order.final_negotiated_price, base)
-        self.assertEqual(order.buyer_service_fee, Decimal('12.00'))
-        self.assertEqual(order.seller_service_fee, Decimal('6.00'))
-        self.assertEqual(order.net_seller_revenue, Decimal('114.00'))
+        self.assertEqual(order.buyer_service_fee, Decimal('18.00'))
+        self.assertEqual(order.seller_service_fee, Decimal('0.00'))
+        self.assertEqual(order.net_seller_revenue, Decimal('120.00'))
         self.assertEqual(order.total_paid_by_buyer, total)
         self.assertEqual(Order.objects.filter(user=self.buyer, ticket_id=tid).count(), 1)
 
@@ -273,12 +273,13 @@ class InternationalLaunchReceiptAsyncE2E(TransactionTestCase):
 
         self.client.force_authenticate(self.buyer)
         base = Decimal('50')
+        _, _, total_expected = buyer_charge_from_base_amount(base)
         r_ord = self.client.post(
             '/api/users/orders/',
             {
                 'ticket': tid,
                 'quantity': 1,
-                'total_amount': str(base * Decimal('1.10')),
+                'total_amount': str(total_expected),
                 'event_name': self.event.name,
             },
             format='json',

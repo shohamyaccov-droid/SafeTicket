@@ -82,7 +82,7 @@ class GuestCheckoutConcurrencyQATest(TestCase):
             "guest_email": "guest_a@marathon.test",
             "guest_phone": "0500000001",
             "ticket_id": self.ticket.id,
-            "total_amount": "110.00",
+            "total_amount": "115.00",
             "quantity": 1,
             "event_name": self.event.name,
         }
@@ -124,7 +124,7 @@ class GuestCheckoutConcurrencyQATest(TestCase):
                 "guest_email": "guest_ok@marathon.test",
                 "guest_phone": "0500000003",
                 "ticket_id": self.ticket.id,
-                "total_amount": "110.00",
+                "total_amount": "115.00",
                 "quantity": 1,
                 "event_name": self.event.name,
             },

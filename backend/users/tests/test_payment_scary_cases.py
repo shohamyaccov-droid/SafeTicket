@@ -81,7 +81,7 @@ class PaymentScaryCaseTests(TestCase):
             ticket=ticket,
             ticket_ids=[ticket.id],
             status='pending_payment',
-            total_amount=Decimal('110.00'),
+            total_amount=Decimal('115.00'),
             currency='ILS',
             quantity=1,
             payme_transaction_id='txn_dup_123',
@@ -91,7 +91,7 @@ class PaymentScaryCaseTests(TestCase):
         payload = {
             'merchant_order_id': str(order.id),
             'transaction_id': 'txn_dup_123',
-            'sale_price': 11000,
+            'sale_price': 11500,
             'currency': 'ILS',
             'status': 'authorized',
         }

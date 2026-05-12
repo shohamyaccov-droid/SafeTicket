@@ -136,7 +136,7 @@ class OvernightE2EJourneyTest(TestCase):
             data=json.dumps(
                 {
                     "ticket_id": ticket_id,
-                    "amount": 110,
+                    "amount": 115,
                     "quantity": 1,
                     "timestamp": 1,
                 }
@@ -155,7 +155,7 @@ class OvernightE2EJourneyTest(TestCase):
                     "guest_email": "guest_overnight_e2e@test.local",
                     "guest_phone": "0501234567",
                     "ticket_id": ticket_id,
-                    "total_amount": "110.00",
+                    "total_amount": "115.00",
                     "quantity": 1,
                     "event_name": self.event.name,
                 }

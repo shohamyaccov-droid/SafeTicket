@@ -3,8 +3,9 @@ import { getFullImageUrl } from '../utils/formatters';
 
 /**
  * Homepage / carousel event tile. No exact inventory counts; waitlist signup only on event details.
+ * @param {number} [dateVariantCount] — when &gt; 1, shows a multi-date badge and meta line.
  */
-export default function EventCard({ event, formatEventDateHe, onNavigate }) {
+export default function EventCard({ event, formatEventDateHe, onNavigate, dateVariantCount }) {
   const img =
     getFullImageUrl(event.image_url) ||
     getFullImageUrl(event.artist_detail?.image_url) ||
@@ -15,6 +16,9 @@ export default function EventCard({ event, formatEventDateHe, onNavigate }) {
   const venueLine = event.venue_detail?.name
     ? `${event.venue_detail.name}, ${event.city || ''}`.replace(/,\s*$/, '').trim()
     : [event.venue, event.city].filter(Boolean).join(', ');
+
+  const multiDates =
+    typeof dateVariantCount === 'number' && Number.isFinite(dateVariantCount) && dateVariantCount > 1;
 
   return (
     <article
@@ -30,7 +34,12 @@ export default function EventCard({ event, formatEventDateHe, onNavigate }) {
       }}
     >
       <div className="home-carousel-card__media">
-        {event.high_demand ? (
+        {multiDates ? (
+          <span className="home-carousel-card__badge home-carousel-card__badge--dates" role="status">
+            {dateVariantCount} תאריכים זמינים
+          </span>
+        ) : null}
+        {!multiDates && event.high_demand ? (
           <span className="home-carousel-card__badge" role="status">
             ביקוש גבוה
           </span>
@@ -49,7 +58,9 @@ export default function EventCard({ event, formatEventDateHe, onNavigate }) {
       <div className="home-carousel-card__body">
         <h3 className="home-carousel-card__title">{title}</h3>
         {subtitle ? <p className="home-carousel-card__artist">{subtitle}</p> : null}
-        <p className="home-carousel-card__meta">{formatEventDateHe(event.date)}</p>
+        <p className="home-carousel-card__meta">
+          {multiDates ? `${dateVariantCount} תאריכים זמינים` : formatEventDateHe(event.date)}
+        </p>
         {venueLine ? <p className="home-carousel-card__venue">{venueLine}</p> : null}
         <p className="home-carousel-card__tickets">לרכישת כרטיסים</p>
       </div>

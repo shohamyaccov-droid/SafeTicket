@@ -386,4 +386,4 @@ class FullPlatformE2ETest(TestCase):
         self.assertEqual(ticket.status, 'sold')
         _, fee, total = buyer_charge_from_base_amount(Decimal('180.00'))
         self.assertEqual(total, neg_total)
-        self.assertEqual(fee, Decimal('18.00'))
+        self.assertEqual(fee, Decimal('27.00'))

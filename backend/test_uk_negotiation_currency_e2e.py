@@ -123,10 +123,10 @@ class UkNegotiationCurrencyE2ETest(TestCase):
         self.assertEqual(r_acc.status_code, 200, r_acc.content)
         line(f'[C2] Buyer accepted offer {oid1}')
 
-        # Step D — Checkout totals: £480 + 10% = £528
+        # Step D — Checkout totals: £480 + 15% buyer fee = £552
         base, fee, total = buyer_charge_from_base_amount(Decimal('480'))
-        self.assertEqual(float(fee), 48.0)
-        self.assertEqual(float(total), 528.0)
+        self.assertEqual(float(fee), 72.0)
+        self.assertEqual(float(total), 552.0)
         r_ord = self.client.post(
             '/api/users/orders/',
             {
@@ -153,11 +153,11 @@ class UkNegotiationCurrencyE2ETest(TestCase):
         self.assertEqual(r_pay.status_code, 200, r_pay.content)
         order = Order.objects.get(pk=order_id)
         self.assertEqual(order.currency, 'GBP')
-        self.assertEqual(order.buyer_service_fee, Decimal('48.00'))
-        self.assertEqual(order.seller_service_fee, Decimal('24.00'))
+        self.assertEqual(order.buyer_service_fee, Decimal('72.00'))
+        self.assertEqual(order.seller_service_fee, Decimal('0.00'))
         self.assertEqual(order.final_negotiated_price, Decimal('480.00'))
-        self.assertEqual(order.net_seller_revenue, Decimal('456.00'))
-        self.assertEqual(order.total_paid_by_buyer, Decimal('528.00'))
+        self.assertEqual(order.net_seller_revenue, Decimal('480.00'))
+        self.assertEqual(order.total_paid_by_buyer, Decimal('552.00'))
         line(
             f'[D2] Paid: currency={order.currency} buyer_fee={order.buyer_service_fee} '
             f'seller_fee={order.seller_service_fee} net_to_seller={order.net_seller_revenue} total={order.total_paid_by_buyer}'

@@ -12,14 +12,15 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from datetime import timedelta
 import json
-import math
+
+from users.pricing import expected_buy_now_total
 
 User = get_user_model()
 
 
 class PremiumOfferE2ETest(TestCase):
     """E2E test for premium offer modal and routing"""
-    
+
     def setUp(self):
         """Set up test users and ticket"""
         # Create users
@@ -285,7 +286,7 @@ class PremiumOfferE2ETest(TestCase):
 
     def test_purchased_ticket_removed_from_public_event_pool(self):
         """After successful checkout, sold ticket must not appear in GET /events/{id}/tickets/."""
-        expected_total = math.ceil(float(self.ticket.asking_price) * 1.10)
+        expected_total = float(expected_buy_now_total(self.ticket.asking_price, 1))
         pay_r = self.buyer_client.post(
             '/api/users/payments/simulate/',
             {'ticket_id': self.ticket.id, 'amount': expected_total, 'quantity': 1},

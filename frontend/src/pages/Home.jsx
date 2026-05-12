@@ -9,6 +9,8 @@ import BuyerGuarantee from '../components/BuyerGuarantee';
 import { toastError } from '../utils/toast';
 import './Home.css';
 
+/* eslint-disable react/prop-types -- CarouselSection is local to this page */
+
 function formatEventDateHe(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -31,6 +33,39 @@ function eventCategoryKey(event) {
   return s;
 }
 
+function groupKeyForEvent(ev) {
+  const name = String(ev?.name ?? '').trim();
+  const venue = String(ev?.venue ?? '').trim();
+  return `${name}\u0000${venue}`;
+}
+
+/**
+ * One carousel card per distinct (name, venue); multiple API rows merged.
+ * @param {object[]} list
+ * @returns {{ key: string, events: object[], displayEvent: object, count: number }[]}
+ */
+function groupEventsByNameAndVenue(list) {
+  const map = new Map();
+  for (const ev of list) {
+    const k = groupKeyForEvent(ev);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(ev);
+  }
+  const out = [];
+  for (const events of map.values()) {
+    if (!events.length) continue;
+    events.sort((a, b) => new Date(a.date) - new Date(b.date));
+    const displayEvent = events[0];
+    out.push({
+      key: `grp-${displayEvent.id}-${String(displayEvent.name)}-${String(displayEvent.venue)}`,
+      events,
+      displayEvent,
+      count: events.length,
+    });
+  }
+  return out;
+}
+
 const Home = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -40,6 +75,7 @@ const Home = () => {
   const [retryKey, setRetryKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') ?? '');
   const resultsRef = useRef(null);
+  const [datePickGroup, setDatePickGroup] = useState(null);
   const qFromUrl = searchParams.get('q') ?? '';
   useEffect(() => {
     setSearchQuery(qFromUrl);
@@ -101,10 +137,6 @@ const Home = () => {
     };
   }, [retryKey]);
 
-  const handleEventClick = (eventId) => {
-    navigate(`/event/${eventId}`);
-  };
-
   const todayStart = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -143,35 +175,61 @@ const Home = () => {
     return list;
   }, [events, searchQuery, todayStart]);
 
-  const recommendedEvents = useMemo(() => {
-    return [...inventoryEvents]
-      .sort((a, b) => (b.tickets_count || 0) - (a.tickets_count || 0))
+  const inventoryGroups = useMemo(() => groupEventsByNameAndVenue(inventoryEvents), [inventoryEvents]);
+
+  const recommendedGroups = useMemo(() => {
+    return [...inventoryGroups]
+      .sort((a, b) => {
+        const sumTickets = (g) =>
+          g.events.reduce((acc, ev) => acc + (Number(ev.tickets_count) || 0), 0);
+        return sumTickets(b) - sumTickets(a);
+      })
       .slice(0, 5);
-  }, [inventoryEvents]);
+  }, [inventoryGroups]);
 
-  const concertEvents = useMemo(
+  const concertGroups = useMemo(
     () =>
-      inventoryEvents.filter((e) => {
-        const c = eventCategoryKey(e);
-        return c === 'concert' || c === 'festival';
-      }),
-    [inventoryEvents]
+      inventoryGroups.filter((g) =>
+        g.events.some((e) => {
+          const c = eventCategoryKey(e);
+          return c === 'concert' || c === 'festival';
+        })
+      ),
+    [inventoryGroups]
   );
 
-  const sportsEvents = useMemo(
-    () => inventoryEvents.filter((e) => eventCategoryKey(e) === 'sport'),
-    [inventoryEvents]
+  const sportsGroups = useMemo(
+    () => inventoryGroups.filter((g) => g.events.some((e) => eventCategoryKey(e) === 'sport')),
+    [inventoryGroups]
   );
 
-  const standupEvents = useMemo(
-    () => inventoryEvents.filter((e) => eventCategoryKey(e) === 'standup'),
-    [inventoryEvents]
+  const standupGroups = useMemo(
+    () => inventoryGroups.filter((g) => g.events.some((e) => eventCategoryKey(e) === 'standup')),
+    [inventoryGroups]
   );
 
-  const theaterEvents = useMemo(
-    () => inventoryEvents.filter((e) => eventCategoryKey(e) === 'theater'),
-    [inventoryEvents]
+  const theaterGroups = useMemo(
+    () => inventoryGroups.filter((g) => g.events.some((e) => eventCategoryKey(e) === 'theater')),
+    [inventoryGroups]
   );
+
+  const handleGroupedNavigate = useCallback((group) => {
+    if (!group?.events?.length) return;
+    if (group.count <= 1) {
+      navigate(`/event/${group.displayEvent.id}`);
+      return;
+    }
+    setDatePickGroup(group);
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!datePickGroup) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setDatePickGroup(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [datePickGroup]);
 
   if (loading) {
     return (
@@ -302,12 +360,13 @@ const Home = () => {
             </svg>
           </button>
           <div ref={scrollRef} className="home-carousel-scroll viagogo-carousel-track" role="list">
-            {items.map((event) => (
-              <div key={event.id} className="home-carousel-item" role="listitem">
+            {items.map((group) => (
+              <div key={group.key} className="home-carousel-item" role="listitem">
                 <EventCard
-                  event={event}
+                  event={group.displayEvent}
                   formatEventDateHe={formatEventDateHe}
-                  onNavigate={() => handleEventClick(event.id)}
+                  dateVariantCount={group.count}
+                  onNavigate={() => handleGroupedNavigate(group)}
                 />
               </div>
             ))}
@@ -430,14 +489,61 @@ const Home = () => {
           </div>
         ) : (
           <div className="home-viagogo-rows viagogo-home-discover home-layout__rows">
-            <CarouselSection slug="recommended" title="מומלצים" items={recommendedEvents} />
-            <CarouselSection slug="concerts" title="הופעות" items={concertEvents} />
-            <CarouselSection slug="sports" title="ספורט" items={sportsEvents} />
-            <CarouselSection slug="standup" title="סטנדאפ" items={standupEvents} />
-            <CarouselSection slug="theater" title="תיאטרון" items={theaterEvents} />
+            <CarouselSection slug="recommended" title="מומלצים" items={recommendedGroups} />
+            <CarouselSection slug="concerts" title="הופעות" items={concertGroups} />
+            <CarouselSection slug="sports" title="ספורט" items={sportsGroups} />
+            <CarouselSection slug="standup" title="סטנדאפ" items={standupGroups} />
+            <CarouselSection slug="theater" title="תיאטרון" items={theaterGroups} />
           </div>
         )}
       </div>
+
+      {datePickGroup ? (
+        <div
+          className="home-date-modal-overlay"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDatePickGroup(null);
+          }}
+        >
+          <div
+            className="home-date-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="home-date-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="home-date-modal-title">{datePickGroup.displayEvent?.name || 'בחרו תאריך'}</h2>
+            <p className="home-date-modal-sub">
+              {(() => {
+                const ev = datePickGroup.displayEvent;
+                const v = ev?.venue_detail?.name
+                  ? `${ev.venue_detail.name}, ${ev.city || ''}`.replace(/,\s*$/, '').trim()
+                  : [ev?.venue, ev?.city].filter(Boolean).join(', ');
+                return v || 'בחרו מועד להמשך לרכישה';
+              })()}
+            </p>
+            <ul className="home-date-modal-list">
+              {datePickGroup.events.map((ev) => (
+                <li key={ev.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate(`/event/${ev.id}`);
+                      setDatePickGroup(null);
+                    }}
+                  >
+                    {formatEventDateHe(ev.date)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button type="button" className="home-date-modal-close" onClick={() => setDatePickGroup(null)}>
+              סגור
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

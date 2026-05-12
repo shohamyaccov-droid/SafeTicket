@@ -99,21 +99,29 @@ const FEATURES = [
   },
 ];
 
+const TRUST_TITLE = 'קונים ומוכרים בראש שקט';
+const TRUST_SUBTITLE =
+  'ביטחון מלא לשני הצדדים: הכסף מוגן אצלנו ומועבר למוכר רק לאחר שהאירוע הסתיים בהצלחה.';
+
 export default function BuyerGuarantee() {
   return (
     <section className="buyer-guarantee" dir="rtl" aria-labelledby="buyer-guarantee-heading">
       <div className="buyer-guarantee__panel">
         <header className="buyer-guarantee__header">
           <h2 id="buyer-guarantee-heading" className="buyer-guarantee__title">
-            קונים בראש שקט – מוגנים ב-100%
+            {TRUST_TITLE}
           </h2>
-          <p className="buyer-guarantee__subtitle">
-            התשלום שלכם מוחזק בנאמנות (Escrow) ומועבר למוכר רק לאחר שהאירוע התקיים בהצלחה. הביטחון שלכם
-            במקום הראשון.
-          </p>
+          <div className="buyer-guarantee__trust-icons" aria-hidden="true">
+            {FEATURES.map(({ id, icon: Icon }) => (
+              <span key={id} className="buyer-guarantee__trust-icon-chip">
+                <Icon />
+              </span>
+            ))}
+          </div>
+          <p className="buyer-guarantee__subtitle">{TRUST_SUBTITLE}</p>
         </header>
 
-        <ul className="buyer-guarantee__features">
+        <ul className="buyer-guarantee__features buyer-guarantee__features--expanded">
           {FEATURES.map(({ id, icon: Icon, headline, exactDesktop }) => (
             <li key={id} className="buyer-guarantee__feature">
               <div className="buyer-guarantee__icon-wrap" aria-hidden>

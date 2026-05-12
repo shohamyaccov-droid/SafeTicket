@@ -4,6 +4,9 @@ Run: cd backend && python manage.py test tests.test_payme_flow -v 2
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
@@ -22,7 +25,7 @@ User = get_user_model()
 @override_settings(
     PAYME_API_KEY='test_key',
     PAYME_MERCHANT_ID='test_merchant',
-    PAYME_WEBHOOK_SECRET='',
+    PAYME_WEBHOOK_SECRET='whsec_test',
 )
 class PaymeWebhookFlowTests(TestCase):
     def setUp(self):
@@ -68,12 +71,13 @@ class PaymeWebhookFlowTests(TestCase):
             user=self.buyer,
             ticket=self.ticket,
             status='pending_payment',
-            total_amount=Decimal('110.00'),
+            total_amount=Decimal('115.00'),
             currency='ILS',
             quantity=1,
             event_name=self.event.name,
             ticket_ids=[self.ticket.id],
             guest_email=None,
+            payme_transaction_id='webhook_txn_1',
         )
 
     @patch('users.payme_views.post_generate_sale')
@@ -103,8 +107,17 @@ class PaymeWebhookFlowTests(TestCase):
             'merchant_order_id': str(self.order.id),
             'status': 'success',
             'transaction_id': 'webhook_txn_1',
+            'sale_price': 11500,
+            'currency': 'ILS',
         }
-        res = self.client.post('/api/payments/webhook/', payload, format='json')
+        body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+        sig = hmac.new(b'whsec_test', body, hashlib.sha256).hexdigest()
+        res = self.client.post(
+            '/api/payments/webhook/',
+            body,
+            content_type='application/json',
+            HTTP_X_PAYME_SIGNATURE=sig,
+        )
         self.assertEqual(res.status_code, 200, res.content)
         self.assertTrue(res.data.get('finalized'), res.data)
         self.order.refresh_from_db()

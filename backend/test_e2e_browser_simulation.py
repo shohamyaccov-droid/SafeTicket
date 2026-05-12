@@ -6,7 +6,7 @@ E2E Browser Simulation: Strictly simulates a real browser's CORS preflight and r
 
 Run: python manage.py test test_e2e_browser_simulation -v 2
 """
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -14,6 +14,15 @@ User = get_user_model()
 ORIGIN = 'http://localhost:3000'
 
 
+@override_settings(
+    DEBUG=True,
+    CORS_ALLOWED_ORIGINS=[
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+    ],
+)
 class E2EBrowserSimulationTest(TestCase):
     """Simulates real browser CORS negotiation and login flow."""
 
