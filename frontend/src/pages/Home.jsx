@@ -187,31 +187,37 @@ const Home = () => {
       .slice(0, 5);
   }, [inventoryGroups]);
 
-  const concertGroups = useMemo(
+  const concertEvents = useMemo(
     () =>
-      inventoryGroups.filter((g) =>
-        g.events.some((e) => {
-          const c = eventCategoryKey(e);
-          return c === 'concert' || c === 'festival';
-        })
-      ),
-    [inventoryGroups]
+      inventoryEvents.filter((e) => {
+        const c = eventCategoryKey(e);
+        return c === 'concert' || c === 'festival';
+      }),
+    [inventoryEvents]
   );
 
-  const sportsGroups = useMemo(
-    () => inventoryGroups.filter((g) => g.events.some((e) => eventCategoryKey(e) === 'sport')),
-    [inventoryGroups]
+  const sportsEvents = useMemo(
+    () => inventoryEvents.filter((e) => eventCategoryKey(e) === 'sport'),
+    [inventoryEvents]
   );
 
-  const standupGroups = useMemo(
-    () => inventoryGroups.filter((g) => g.events.some((e) => eventCategoryKey(e) === 'standup')),
-    [inventoryGroups]
+  const standupEvents = useMemo(
+    () => inventoryEvents.filter((e) => eventCategoryKey(e) === 'standup'),
+    [inventoryEvents]
   );
 
-  const theaterGroups = useMemo(
-    () => inventoryGroups.filter((g) => g.events.some((e) => eventCategoryKey(e) === 'theater')),
-    [inventoryGroups]
+  const theaterEvents = useMemo(
+    () => inventoryEvents.filter((e) => eventCategoryKey(e) === 'theater'),
+    [inventoryEvents]
   );
+
+  const concertGroups = useMemo(() => groupEventsByNameAndVenue(concertEvents), [concertEvents]);
+
+  const sportsGroups = useMemo(() => groupEventsByNameAndVenue(sportsEvents), [sportsEvents]);
+
+  const standupGroups = useMemo(() => groupEventsByNameAndVenue(standupEvents), [standupEvents]);
+
+  const theaterGroups = useMemo(() => groupEventsByNameAndVenue(theaterEvents), [theaterEvents]);
 
   const handleGroupedNavigate = useCallback((group) => {
     if (!group?.events?.length) return;
