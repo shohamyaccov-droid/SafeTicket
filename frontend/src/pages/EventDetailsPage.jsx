@@ -219,7 +219,7 @@ const EventDetailsPage = () => {
   };
 
   // Helper function to get section name for venue map with flexible matching
-  const getSectionNameForMap = (ticket) => {
+  const getSectionNameForMap = useCallback((ticket) => {
     if (!ticket) return null;
     
     // Try to construct section name from ticket data
@@ -264,19 +264,58 @@ const EventDetailsPage = () => {
     }
     
     return null;
-  };
+  }, [event]);
 
-  // Fetch event and tickets data
+  // Fetch tickets with current filters and sorting. On network error returns null (caller must not treat as "sold out").
+  const fetchTickets = useCallback(
+    async (opts = {}) => {
+      const { rethrow = false } = opts;
+      try {
+        const params = {};
+        if (filters.minPrice) params.min_price = filters.minPrice;
+        if (filters.maxPrice) params.max_price = filters.maxPrice;
+        if (filters.minQuantity) params.min_quantity = filters.minQuantity;
+        params.sort = sortBy;
+        const ticketsResponse = await eventAPI.getEventTickets(eventId, params);
+        let ticketsData = [];
+        if (ticketsResponse.data) {
+          if (Array.isArray(ticketsResponse.data)) {
+            ticketsData = ticketsResponse.data;
+          } else if (ticketsResponse.data.results && Array.isArray(ticketsResponse.data.results)) {
+            ticketsData = ticketsResponse.data.results;
+          }
+        }
+        const raw = Array.isArray(ticketsData) ? ticketsData : [];
+        // Defense in depth: never show sold or zero-qty rows if API/cache is stale
+        const ticketsArray = raw.filter(
+          (t) =>
+            t &&
+            t.status !== 'sold' &&
+            t.status !== 'pending_payout' &&
+            Number(t.available_quantity) > 0
+        );
+        setTickets(ticketsArray);
+        return ticketsArray;
+      } catch (e) {
+        if (rethrow) throw e;
+        console.warn('[EventDetails] fetchTickets failed', e);
+        return null;
+      }
+    },
+    [eventId, filters.minPrice, filters.maxPrice, filters.minQuantity, sortBy]
+  );
+
+  const fetchTicketsRef = useRef(fetchTickets);
+  fetchTicketsRef.current = fetchTickets;
+
+  // Fetch event and tickets data (ref avoids re-fetching event when ticket-fetch deps change)
   useEffect(() => {
     const fetchEventData = async () => {
       try {
-        // Fetch event details
         const eventResponse = await eventAPI.getEvent(eventId);
         setEvent(eventResponse.data);
         Analytics.ticketViewed(eventId);
-
-        // Fetch tickets for this event with filters
-        await fetchTickets();
+        await fetchTicketsRef.current();
       } catch (error) {
         toastError('לא ניתן לטעון את האירוע. בדקו את החיבור או חזרו לדף הבית.');
       } finally {
@@ -293,53 +332,17 @@ const EventDetailsPage = () => {
   useEffect(() => {
     if (!eventId) return;
     const pollInterval = setInterval(() => {
-      fetchTickets();
+      fetchTicketsRef.current();
     }, 15000);
     return () => clearInterval(pollInterval);
   }, [eventId]);
-
-  // Fetch tickets with current filters and sorting. On network error returns null (caller must not treat as "sold out").
-  const fetchTickets = async (opts = {}) => {
-    const { rethrow = false } = opts;
-    try {
-      const params = {};
-      if (filters.minPrice) params.min_price = filters.minPrice;
-      if (filters.maxPrice) params.max_price = filters.maxPrice;
-      if (filters.minQuantity) params.min_quantity = filters.minQuantity;
-      params.sort = sortBy;
-      const ticketsResponse = await eventAPI.getEventTickets(eventId, params);
-      let ticketsData = [];
-      if (ticketsResponse.data) {
-        if (Array.isArray(ticketsResponse.data)) {
-          ticketsData = ticketsResponse.data;
-        } else if (ticketsResponse.data.results && Array.isArray(ticketsResponse.data.results)) {
-          ticketsData = ticketsResponse.data.results;
-        }
-      }
-      const raw = Array.isArray(ticketsData) ? ticketsData : [];
-      // Defense in depth: never show sold or zero-qty rows if API/cache is stale
-      const ticketsArray = raw.filter(
-        (t) =>
-          t &&
-          t.status !== 'sold' &&
-          t.status !== 'pending_payout' &&
-          Number(t.available_quantity) > 0
-      );
-      setTickets(ticketsArray);
-      return ticketsArray;
-    } catch (e) {
-      if (rethrow) throw e;
-      console.warn('[EventDetails] fetchTickets failed', e);
-      return null;
-    }
-  };
 
   // Refetch tickets when filters or sort change
   useEffect(() => {
     if (eventId) {
       fetchTickets();
     }
-  }, [filters, sortBy, eventId]);
+  }, [eventId, filters, sortBy, fetchTickets]);
 
   // Fetch artists for fallback image matching
   useEffect(() => {
@@ -451,7 +454,7 @@ const EventDetailsPage = () => {
     } catch {
       return {};
     }
-  }, [ticketGroups]);
+  }, [ticketGroups, getSectionNameForMap]);
 
   // Lowest seller asking price (base) per section — matches ticket cards and negotiation
   const lowestPricesPerSection = useMemo(() => {
@@ -472,7 +475,7 @@ const EventDetailsPage = () => {
       /* ignore map price aggregation errors */
     }
     return prices;
-  }, [ticketGroups]);
+  }, [ticketGroups, getSectionNameForMap]);
 
   // Handle section click from map (two-way binding) - Updated for Lower/Upper
   const handleSectionClick = useCallback((sectionId) => {
@@ -540,7 +543,7 @@ const EventDetailsPage = () => {
     } catch {
       /* invalid map interaction */
     }
-  }, [ticketGroups]);
+  }, [ticketGroups, getSectionNameForMap]);
 
   const handleBuy = async (ticketGroup) => {
     if (!ticketGroup) {
@@ -853,6 +856,10 @@ const EventDetailsPage = () => {
       <div className="event-details-container">
         <Helmet>
           <title>טוען אירוע | TradeTix</title>
+          <meta
+            name="description"
+            content="קנו או מכרו כרטיסים לאירועים בישראל ב-TradeTix. תשלום מאובטח והגנה מלאה על הכסף."
+          />
         </Helmet>
         <div className="loading-state">
           <p>טוען פרטי אירוע...</p>
@@ -901,11 +908,18 @@ const EventDetailsPage = () => {
     ? getFullImageUrl(heroImageRaw)
     : `https://via.placeholder.com/640x400/0f172a/e2e8f0?text=${encodeURIComponent((event.name || '').slice(0, 28))}`;
 
-  const eventTitle = (event.name || 'אירוע').trim();
-  const locationLine =
-    [event.venue, event.city].filter((s) => s && String(s).trim()).join(', ') || 'ישראל';
-  const metaDescription = `קנו או מכרו כרטיסים ל${eventTitle} ב-${locationLine} בביטחון מלא. קנייה מאובטחת, השהיית תשלום בנאמנות ו-0% עמלה למוכרים.`;
-  const documentTitle = `כרטיסים ל${eventTitle} | TradeTix`;
+  const eventName = (event.name || '').trim() || 'אירוע';
+  const venueFromEvent =
+    (event.venue && String(event.venue).trim()) ||
+    (event.venue_detail?.name && String(event.venue_detail.name).trim()) ||
+    '';
+  const venueForSeo = venueFromEvent || (event.city && String(event.city).trim()) || '';
+  const documentTitle = venueForSeo
+    ? `${eventName} ב-${venueForSeo} - כרטיסים | TradeTix`
+    : `${eventName} - כרטיסים | TradeTix`;
+  const metaDescription = venueForSeo
+    ? `קנו או מכרו כרטיסים ל-${eventName} ב-${venueForSeo}. תשלום מאובטח והגנה מלאה על הכסף.`
+    : `קנו או מכרו כרטיסים ל-${eventName}. תשלום מאובטח והגנה מלאה על הכסף.`;
 
   const pageCanonical =
     typeof window !== 'undefined' && eventId ? `${window.location.origin}/event/${eventId}` : '';

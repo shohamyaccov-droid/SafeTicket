@@ -1,5 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { eventAPI } from '../services/api';
 import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
@@ -65,6 +66,11 @@ function groupEventsByNameAndVenue(list) {
   }
   return out;
 }
+
+const HOME_PAGE_TITLE =
+  'TradeTix (טריידטיקס) | זירת מסחר בטוחה לקנייה ומכירת כרטיסים';
+const HOME_PAGE_DESCRIPTION =
+  'נתקעתם עם כרטיס? מחפשים כרטיס להופעה שנגמרה? טריידטיקס היא הפלטפורמה הבטוחה בישראל לקנייה ומכירת כרטיסים מיד שנייה.';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -240,6 +246,10 @@ const Home = () => {
   if (loading) {
     return (
       <div className="home-container home-container--loading">
+        <Helmet>
+          <title>{HOME_PAGE_TITLE}</title>
+          <meta name="description" content={HOME_PAGE_DESCRIPTION} />
+        </Helmet>
         <EventsPageSkeleton variant="home" />
       </div>
     );
@@ -384,6 +394,10 @@ const Home = () => {
 
   return (
     <div className="home-container">
+      <Helmet>
+        <title>{HOME_PAGE_TITLE}</title>
+        <meta name="description" content={HOME_PAGE_DESCRIPTION} />
+      </Helmet>
       {loadError && (
         <div className="home-fetch-banner" role="alert">
           <p>
