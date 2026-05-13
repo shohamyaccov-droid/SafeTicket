@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="TradeTix">
+  <rect width="100" height="100" fill="#000"/>
+  <g fill="none" stroke="#2563eb" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M50 8 L82 20 V48 Q82 72 50 92 Q18 72 18 48 V20 Z"/>
+    <rect x="32" y="34" width="36" height="22" rx="3" ry="3"/>
+    <path d="M62 38 V52" stroke-dasharray="2 3"/>
+  </g>
+</svg>
