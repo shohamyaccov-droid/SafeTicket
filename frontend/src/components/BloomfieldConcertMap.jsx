@@ -10,7 +10,6 @@ import {
   STAGE_RECT,
   STAGE_LABEL_CX,
   STAGE_LABEL_CY,
-  getConcertAmbientPolygons,
   concertBlockPolygonPoints,
 } from '../utils/bloomfieldConcertGeometry';
 import './BloomfieldConcertMap.css';
@@ -110,8 +109,6 @@ export default function BloomfieldConcertMap({
   onHoverGroup,
 }) {
   const panZoom = useVenueMapPanZoom({ minScale: 0.65, maxScale: 2.8, zoomStep: 0.14 });
-
-  const ambientPolygons = useMemo(() => getConcertAmbientPolygons(), []);
 
   const blocksWithListings = useMemo(() => {
     const s = new Set();
@@ -218,10 +215,6 @@ export default function BloomfieldConcertMap({
             </defs>
 
             <rect width={VIEW_W} height={VIEW_H} fill="#ffffff" />
-
-            {ambientPolygons.map((z) => (
-              <polygon key={z.id} className="ambient-block" points={z.points} />
-            ))}
 
             <rect
               x={STAGE_RECT.x}

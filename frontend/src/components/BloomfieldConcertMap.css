@@ -1,11 +1,4 @@
 /* Bloomfield concert map — venue blocks + selection emphasis */
-.ambient-block {
-  fill: none;
-  stroke: #d1d5db;
-  stroke-width: 1px;
-  pointer-events: none;
-}
-
 .bloomfield-concert-map__spacer {
   fill: #e8edf3;
   stroke: #cfd8e3;

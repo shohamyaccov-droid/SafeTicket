@@ -118,39 +118,10 @@ function rectPolygonPoints(x, y, w, h) {
 }
 
 /**
- * Orthogonal outline zones (styled as frames in BloomfieldConcertMap.css).
+ * Ambient outline zones are not used in the UI (clean white canvas). Kept for API compatibility.
  */
 export function getConcertAmbientPolygons() {
-  const padT = 24;
-  const padB = 48;
-  const topY = Math.min(oy - padT, STAGE_RECT.y + STAGE_RECT.h + 4);
-  const bottomY = southY1 + H + padB;
-
-  const westX = 16;
-  const westW = Math.max(48, xWest - westX - 16);
-  const bandH = bottomY - topY;
-
-  const eastX = xEast + W + 24;
-  const eastW = Math.max(48, VIEW_W - eastX - 16);
-
-  const southPadX = 56;
-  const southX = Math.min(southX0, southX1) - southPadX;
-  const southW = Math.max(southX0 + south11W, southX1 + south10W) - southX + southPadX * 2;
-  const southY = southY0 - 28;
-  const southH = bottomY - southY + 12;
-
-  const ringPad = 20;
-  const centerRingX = Math.min(STAGE_RECT.x, oxA) - ringPad;
-  const centerRingY = STAGE_RECT.y - ringPad;
-  const centerRingW = Math.max(STAGE_RECT.x + STAGE_RECT.w, oxA + pitchRowAW) - centerRingX + ringPad;
-  const centerRingH = oy + pitchH + ringPad - centerRingY;
-
-  return [
-    { id: 'ambient-west', points: rectPolygonPoints(westX, topY, westW, bandH) },
-    { id: 'ambient-east', points: rectPolygonPoints(eastX, topY, eastW, bandH) },
-    { id: 'ambient-south', points: rectPolygonPoints(southX, southY, southW, southH) },
-    { id: 'ambient-center-stage-ring', points: rectPolygonPoints(centerRingX, centerRingY, centerRingW, centerRingH) },
-  ];
+  return [];
 }
 
 export function concertBlockPolygonPoints(b) {
