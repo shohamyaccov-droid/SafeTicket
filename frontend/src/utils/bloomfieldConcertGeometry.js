@@ -1,16 +1,16 @@
 /**
  * Bloomfield concert layout — strict orthogonal grid (upright rectangles only).
+ * Coordinate space 2000×1280 (~2× legacy) for large-screen readability.
  * IDs must stay in sync with `concertBlockIdFromSection` in bloomfieldConcertListing.js.
  */
 
-export const VIEW_W = 1000;
-export const VIEW_H = 640;
+export const VIEW_W = 2000;
+export const VIEW_H = 1280;
 
-/** ~45% larger than legacy 40×30 for readability */
-export const CONCERT_CELL_W = 58;
-export const CONCERT_CELL_H = 44;
-export const CONCERT_GAP = 5;
-const GAP_ROW = 8;
+export const CONCERT_CELL_W = 104;
+export const CONCERT_CELL_H = 88;
+export const CONCERT_GAP = 10;
+const GAP_ROW = 16;
 
 const W = CONCERT_CELL_W;
 const H = CONCERT_CELL_H;
@@ -18,10 +18,8 @@ const G = CONCERT_GAP;
 const SX = W + G;
 const SY = H + GAP_ROW;
 
-/** Center floor ↔ single wing column */
-const AISLE_SIDE = 26;
-/** Last center row (C) ↔ back row (80A) */
-const AISLE_BACK = 18;
+const AISLE_SIDE = 52;
+const AISLE_BACK = 36;
 
 const centerX = VIEW_W / 2;
 
@@ -30,12 +28,11 @@ const pitchRowBCW = 5 * W + 4 * G;
 
 const oxA = centerX - pitchRowAW / 2;
 const oxBC = centerX - pitchRowBCW / 2;
-const oy = 88;
+const oy = 176;
 
 const pitchH = 3 * H + 2 * GAP_ROW;
 
-/** Y gap: bottom of wing column ↔ top of back row (80A) */
-const AISLE_WING_TO_SOUTH = 10;
+const AISLE_WING_TO_SOUTH = 20;
 
 /** @typedef {{ id: string, zone: 'pitch'|'west'|'east'|'south', x: number, y: number, w: number, h: number, label: string }} ConcertBlockRect */
 
@@ -48,7 +45,6 @@ function block(id, zone, x, y, label, hh = H) {
 /** @type {ConcertBlockRect[]} */
 export const CONCERT_BLOCKS = [];
 
-// --- Center floor (rows A, B, C)
 for (let i = 0; i < 6; i += 1) {
   const n = 6 - i;
   CONCERT_BLOCKS.push(block(`A${n}`, 'pitch', oxA + i * SX, oy, `A${n}`));
@@ -65,9 +61,9 @@ for (let i = 0; i < 5; i += 1) {
 const southY0 = oy + pitchH + AISLE_BACK;
 
 const wingSpanMax = southY0 - AISLE_WING_TO_SOUTH;
-const wingInterGap = 2;
+const wingInterGap = 4;
 const wingH = Math.max(
-  18,
+  36,
   Math.min(H, Math.floor((wingSpanMax - oy - 5 * wingInterGap) / 6))
 );
 const wingStep = wingH + wingInterGap;
@@ -106,10 +102,10 @@ for (let i = 0; i <= 9; i += 1) {
 export const CONCERT_SPACERS = /** @type {ConcertSpacerRect[]} */ ([]);
 
 export const STAGE_RECT = {
-  x: 248,
-  y: 18,
-  w: 504,
-  h: 76,
+  x: 496,
+  y: 36,
+  w: 1008,
+  h: 152,
 };
 
 export const STAGE_LABEL_CX = STAGE_RECT.x + STAGE_RECT.w / 2;
@@ -121,13 +117,44 @@ function rectPolygonPoints(x, y, w, h) {
   return `${x},${y} ${x1},${y} ${x1},${y1} ${x},${y1}`;
 }
 
-/** Background slabs removed — keep export for callers; returns nothing to draw. */
+/**
+ * Orthogonal outline zones (styled as frames in BloomfieldConcertMap.css).
+ */
 export function getConcertAmbientPolygons() {
-  return [];
+  const padT = 24;
+  const padB = 48;
+  const topY = Math.min(oy - padT, STAGE_RECT.y + STAGE_RECT.h + 4);
+  const bottomY = southY1 + H + padB;
+
+  const westX = 16;
+  const westW = Math.max(48, xWest - westX - 16);
+  const bandH = bottomY - topY;
+
+  const eastX = xEast + W + 24;
+  const eastW = Math.max(48, VIEW_W - eastX - 16);
+
+  const southPadX = 56;
+  const southX = Math.min(southX0, southX1) - southPadX;
+  const southW = Math.max(southX0 + south11W, southX1 + south10W) - southX + southPadX * 2;
+  const southY = southY0 - 28;
+  const southH = bottomY - southY + 12;
+
+  const ringPad = 20;
+  const centerRingX = Math.min(STAGE_RECT.x, oxA) - ringPad;
+  const centerRingY = STAGE_RECT.y - ringPad;
+  const centerRingW = Math.max(STAGE_RECT.x + STAGE_RECT.w, oxA + pitchRowAW) - centerRingX + ringPad;
+  const centerRingH = oy + pitchH + ringPad - centerRingY;
+
+  return [
+    { id: 'ambient-west', points: rectPolygonPoints(westX, topY, westW, bandH) },
+    { id: 'ambient-east', points: rectPolygonPoints(eastX, topY, eastW, bandH) },
+    { id: 'ambient-south', points: rectPolygonPoints(southX, southY, southW, southH) },
+    { id: 'ambient-center-stage-ring', points: rectPolygonPoints(centerRingX, centerRingY, centerRingW, centerRingH) },
+  ];
 }
 
 export function concertBlockPolygonPoints(b) {
   const { x, y, w, h } = b;
-  const inset = 1.5;
+  const inset = 3;
   return rectPolygonPoints(x + inset, y + inset, w - 2 * inset, h - 2 * inset);
 }

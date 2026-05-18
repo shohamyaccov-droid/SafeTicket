@@ -10,6 +10,7 @@ import {
   STAGE_RECT,
   STAGE_LABEL_CX,
   STAGE_LABEL_CY,
+  getConcertAmbientPolygons,
   concertBlockPolygonPoints,
 } from '../utils/bloomfieldConcertGeometry';
 import './BloomfieldConcertMap.css';
@@ -17,8 +18,8 @@ import './BloomfieldConcertMap.css';
 const STAGE_FILL = '#374151';
 const STAGE_STROKE = '#1f2937';
 const STROKE_SECTION = 'rgba(255,255,255,0.55)';
-const STROKE_INACTIVE_W = 1.15;
-const STROKE_HIGHLIGHT_W = 3;
+const STROKE_INACTIVE_W = 2;
+const STROKE_HIGHLIGHT_W = 5;
 
 function blockCenter(b) {
   return { cx: b.x + b.w / 2, cy: b.y + b.h / 2 };
@@ -110,6 +111,8 @@ export default function BloomfieldConcertMap({
 }) {
   const panZoom = useVenueMapPanZoom({ minScale: 0.65, maxScale: 2.8, zoomStep: 0.14 });
 
+  const ambientPolygons = useMemo(() => getConcertAmbientPolygons(), []);
+
   const blocksWithListings = useMemo(() => {
     const s = new Set();
     for (const r of rows) {
@@ -169,7 +172,7 @@ export default function BloomfieldConcertMap({
   };
 
   return (
-    <div className="bloomfield-map-root relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="bloomfield-map-root relative w-full aspect-[2000/1280] max-h-[min(720px,80vh)] min-h-[280px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="absolute top-2 left-2 z-[5] flex flex-col overflow-hidden rounded-md shadow-md">
         <button
           type="button"
@@ -204,28 +207,32 @@ export default function BloomfieldConcertMap({
         >
           <svg
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-            className="h-full w-full max-h-[540px] select-none overflow-visible"
+            className="h-full w-full max-h-[min(720px,80vh)] select-none overflow-visible"
             role="img"
             aria-label="מפת הושבה — אצטדיון בלומפילד — הופעה"
           >
             <defs>
               <filter id="bfc-seat-soft" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#0f172a" floodOpacity="0.08" />
+                <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#0f172a" floodOpacity="0.08" />
               </filter>
             </defs>
 
             <rect width={VIEW_W} height={VIEW_H} fill="#ffffff" />
+
+            {ambientPolygons.map((z) => (
+              <polygon key={z.id} className="ambient-block" points={z.points} />
+            ))}
 
             <rect
               x={STAGE_RECT.x}
               y={STAGE_RECT.y}
               width={STAGE_RECT.w}
               height={STAGE_RECT.h}
-              rx={6}
-              ry={6}
+              rx={12}
+              ry={12}
               fill={STAGE_FILL}
               stroke={STAGE_STROKE}
-              strokeWidth="1.5"
+              strokeWidth="3"
             />
             <text
               x={STAGE_LABEL_CX}
@@ -233,7 +240,7 @@ export default function BloomfieldConcertMap({
               textAnchor="middle"
               dominantBaseline="central"
               fill="#ffffff"
-              fontSize="14"
+              fontSize="28"
               fontWeight="800"
               fontFamily="system-ui, sans-serif"
               style={{ pointerEvents: 'none', userSelect: 'none' }}
@@ -242,11 +249,11 @@ export default function BloomfieldConcertMap({
             </text>
             <text
               x={STAGE_LABEL_CX}
-              y={STAGE_LABEL_CY + 15}
+              y={STAGE_LABEL_CY + 30}
               textAnchor="middle"
               dominantBaseline="central"
               fill="rgba(255,255,255,0.88)"
-              fontSize="10"
+              fontSize="20"
               fontWeight="600"
               fontFamily="system-ui, sans-serif"
               style={{ pointerEvents: 'none', userSelect: 'none' }}
@@ -285,7 +292,7 @@ export default function BloomfieldConcertMap({
               const pts = concertBlockPolygonPoints(b);
               const { cx, cy } = blockCenter(b);
               const lineCount = 1 + (status ? 1 : 0) + 1;
-              const startY = cy - (lineCount === 2 ? 11 : lineCount === 3 ? 22 : 8);
+              const startY = cy - (lineCount === 2 ? 22 : lineCount === 3 ? 44 : 16);
 
               return (
                 <g key={sid}>
@@ -321,15 +328,15 @@ export default function BloomfieldConcertMap({
                       fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
                       style={{ direction: 'ltr', unicodeBidi: 'isolate' }}
                     >
-                      <tspan x={cx} y={startY} fill={main} fontSize="17" fontWeight="800">
+                      <tspan x={cx} y={startY} fill={main} fontSize="34" fontWeight="800">
                         {priceLine}
                       </tspan>
                       {status ? (
-                        <tspan x={cx} dy="15" fill={sub} fontSize="12" fontWeight="700">
+                        <tspan x={cx} dy="30" fill={sub} fontSize="24" fontWeight="700">
                           {status}
                         </tspan>
                       ) : null}
-                      <tspan x={cx} dy={status ? '14' : '15'} fill={sec} fontSize="15" fontWeight="800">
+                      <tspan x={cx} dy={status ? '28' : '30'} fill={sec} fontSize="30" fontWeight="800">
                         {b.label}
                       </tspan>
                     </text>
@@ -341,7 +348,7 @@ export default function BloomfieldConcertMap({
                       textAnchor="middle"
                       dominantBaseline="central"
                       fill="#94a3b8"
-                      fontSize={sid.length > 3 ? 14 : 16}
+                      fontSize={sid.length > 3 ? 28 : 32}
                       fontWeight="700"
                       fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
                     >
