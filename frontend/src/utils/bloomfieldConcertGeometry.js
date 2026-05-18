@@ -1,18 +1,23 @@
 /**
- * Bloomfield concert layout — uniform rectangular grid (no curved seating geometry).
- * Every seat block uses the same width/height; stage is a distinct rectangle at the top.
+ * Bloomfield concert layout — grid aligned to real bowl zones (stage, wings, floor, back).
  * IDs must stay in sync with `concertBlockIdFromSection` in bloomfieldConcertListing.js.
+ *
+ * Zones (SVG y grows downward):
+ * - STAGE: top center (`STAGE_RECT`).
+ * - LEFT WING: two vertical columns — 106–104 (outer), 103–101 (inner, aisle to floor).
+ * - CENTER FLOOR: row A (6), rows B & C (5 each), B/C horizontally centered under A.
+ * - RIGHT WING: two vertical columns — 45–47 (inner), 42–44 (outer). 47 is bottom of inner column, not beside center rows.
+ * - BACK: 80A–70A (inner), 80B–71B (outer), full-width rows with aisle above.
  */
 
 export const VIEW_W = 1000;
 export const VIEW_H = 640;
 
-/** Single standard cell — all interactive blocks use these dimensions */
 export const CONCERT_CELL_W = 40;
 export const CONCERT_CELL_H = 30;
-/** Horizontal gap between seat blocks (same row / ring) */
+/** Gap between adjacent seat blocks (horizontal within a row, vertical between wing columns) */
 export const CONCERT_GAP = 5;
-/** Vertical gap between tier rows (pitch A/B/C and south rows) — wider than horizontal for aisles */
+/** Extra vertical gap between horizontal tiers (A/B/C and south rows) */
 const GAP_ROW = 10;
 
 const W = CONCERT_CELL_W;
@@ -21,10 +26,10 @@ const G = CONCERT_GAP;
 const SX = W + G;
 const SY = H + GAP_ROW;
 
-/** Lateral concourse: pitch bowl ↔ west / east stands */
-const AISLE_PITCH_STAND = 24;
-/** Back concourse: last pitch row ↔ south ring */
-const AISLE_PITCH_SOUTH = 30;
+/** Lateral aisle: center floor ↔ inner wing column */
+const AISLE_WING = 22;
+/** Aisle: last center row (C) ↔ back (south) seating */
+const AISLE_BACK = 28;
 
 /** @typedef {{ id: string, zone: 'pitch'|'west'|'east'|'south', x: number, y: number, w: number, h: number, label: string }} ConcertBlockRect */
 
@@ -32,63 +37,68 @@ function block(id, zone, x, y, label) {
   return { id, zone, x, y, w: W, h: H, label };
 }
 
-/** Inert grid cells (same size as seats) — pitch matrix padding */
 /** @typedef {{ x: number, y: number, w: number, h: number }} ConcertSpacerRect */
 
-/** Centered 6×3 pitch matrix; rows B/C use 5 seats + 1 spacer each */
-const pitchCols = 6;
-const pitchW = pitchCols * W + (pitchCols - 1) * G;
+/** Venue vertical centerline (used for centering floor + back rows) */
+const centerX = VIEW_W / 2;
+
+/** Row A: six blocks A6…A1 (left → right on screen) */
+const pitchRowAW = 6 * W + 5 * G;
+/** Rows B & C: five blocks each — width narrower than A; centered under A for symmetric “holes” */
+const pitchRowBCW = 5 * W + 4 * G;
+
+const oxA = centerX - pitchRowAW / 2;
+const oxBC = centerX - pitchRowBCW / 2;
+const oy = 96;
+
+/** Vertical span of the three center rows (top of A → bottom of C) */
 const pitchH = 3 * H + 2 * GAP_ROW;
-const ox = VIEW_W / 2 - pitchW / 2;
-const oy = 98;
 
 /** @type {ConcertBlockRect[]} */
 export const CONCERT_BLOCKS = [];
 
-// Row A: A6 … A1 (left → right)
+// --- Center floor: Row 1 — A6 … A1 (closest to stage)
 for (let i = 0; i < 6; i += 1) {
   const n = 6 - i;
-  CONCERT_BLOCKS.push(block(`A${n}`, 'pitch', ox + i * SX, oy, `A${n}`));
+  CONCERT_BLOCKS.push(block(`A${n}`, 'pitch', oxA + i * SX, oy, `A${n}`));
 }
 
-// Row B: spacer + B5 … B1
-CONCERT_BLOCKS.push(block('B5', 'pitch', ox + 1 * SX, oy + SY, 'B5'));
-CONCERT_BLOCKS.push(block('B4', 'pitch', ox + 2 * SX, oy + SY, 'B4'));
-CONCERT_BLOCKS.push(block('B3', 'pitch', ox + 3 * SX, oy + SY, 'B3'));
-CONCERT_BLOCKS.push(block('B2', 'pitch', ox + 4 * SX, oy + SY, 'B2'));
-CONCERT_BLOCKS.push(block('B1', 'pitch', ox + 5 * SX, oy + SY, 'B1'));
+// Row 2 — B5 … B1 (centered under A; aisle space left + right vs row A)
+for (let i = 0; i < 5; i += 1) {
+  const n = 5 - i;
+  CONCERT_BLOCKS.push(block(`B${n}`, 'pitch', oxBC + i * SX, oy + SY, `B${n}`));
+}
 
-// Row C: C5 … C1 + spacer
-CONCERT_BLOCKS.push(block('C5', 'pitch', ox + 0 * SX, oy + 2 * SY, 'C5'));
-CONCERT_BLOCKS.push(block('C4', 'pitch', ox + 1 * SX, oy + 2 * SY, 'C4'));
-CONCERT_BLOCKS.push(block('C3', 'pitch', ox + 2 * SX, oy + 2 * SY, 'C3'));
-CONCERT_BLOCKS.push(block('C2', 'pitch', ox + 3 * SX, oy + 2 * SY, 'C2'));
-CONCERT_BLOCKS.push(block('C1', 'pitch', ox + 4 * SX, oy + 2 * SY, 'C1'));
+// Row 3 — C5 … C1
+for (let i = 0; i < 5; i += 1) {
+  const n = 5 - i;
+  CONCERT_BLOCKS.push(block(`C${n}`, 'pitch', oxBC + i * SX, oy + 2 * SY, `C${n}`));
+}
 
-// West 2×3: 106,105,104 | 103,102,101 (outer west ← → inner west touching lateral aisle)
-const xWest1 = ox - AISLE_PITCH_STAND - W;
-const xWest0 = xWest1 - SX;
-CONCERT_BLOCKS.push(block('106', 'west', xWest0, oy + 0 * SY, '106'));
-CONCERT_BLOCKS.push(block('105', 'west', xWest0, oy + 1 * SY, '105'));
-CONCERT_BLOCKS.push(block('104', 'west', xWest0, oy + 2 * SY, '104'));
-CONCERT_BLOCKS.push(block('103', 'west', xWest1, oy + 0 * SY, '103'));
-CONCERT_BLOCKS.push(block('102', 'west', xWest1, oy + 1 * SY, '102'));
-CONCERT_BLOCKS.push(block('101', 'west', xWest1, oy + 2 * SY, '101'));
+// --- Left wing (entirely west of center floor): outer 106–104, inner 103–101
+const xWestInner = oxA - AISLE_WING - W;
+const xWestOuter = xWestInner - G - W;
+CONCERT_BLOCKS.push(block('106', 'west', xWestOuter, oy + 0 * SY, '106'));
+CONCERT_BLOCKS.push(block('105', 'west', xWestOuter, oy + 1 * SY, '105'));
+CONCERT_BLOCKS.push(block('104', 'west', xWestOuter, oy + 2 * SY, '104'));
+CONCERT_BLOCKS.push(block('103', 'west', xWestInner, oy + 0 * SY, '103'));
+CONCERT_BLOCKS.push(block('102', 'west', xWestInner, oy + 1 * SY, '102'));
+CONCERT_BLOCKS.push(block('101', 'west', xWestInner, oy + 2 * SY, '101'));
 
-// East 2×3: mirror west — inner column (45–47) touches lateral aisle, outer (42–44) farther east
-const xEastInner = ox + pitchW + AISLE_PITCH_STAND;
-const xEastOuter = xEastInner + SX;
-CONCERT_BLOCKS.push(block('42', 'east', xEastOuter, oy + 0 * SY, '42'));
-CONCERT_BLOCKS.push(block('43', 'east', xEastOuter, oy + 1 * SY, '43'));
-CONCERT_BLOCKS.push(block('44', 'east', xEastOuter, oy + 2 * SY, '44'));
+// --- Right wing (entirely east of center floor): inner 45–47 (aisle side), outer 42–44
+const xEastInner = oxA + pitchRowAW + AISLE_WING;
+const xEastOuter = xEastInner + W + G;
 CONCERT_BLOCKS.push(block('45', 'east', xEastInner, oy + 0 * SY, '45'));
 CONCERT_BLOCKS.push(block('46', 'east', xEastInner, oy + 1 * SY, '46'));
 CONCERT_BLOCKS.push(block('47', 'east', xEastInner, oy + 2 * SY, '47'));
+CONCERT_BLOCKS.push(block('42', 'east', xEastOuter, oy + 0 * SY, '42'));
+CONCERT_BLOCKS.push(block('43', 'east', xEastOuter, oy + 1 * SY, '43'));
+CONCERT_BLOCKS.push(block('44', 'east', xEastOuter, oy + 2 * SY, '44'));
 
-// South 80A–70A (11), 80B–71B (10) — centered on venue midline (row B half-step is classic bowl geometry)
-const southY0 = oy + pitchH + AISLE_PITCH_SOUTH;
+// --- Back seating: inner 80A–70A, outer 80B–71B
+const southY0 = oy + pitchH + AISLE_BACK;
 const south11W = 11 * W + 10 * G;
-const southX0 = VIEW_W / 2 - south11W / 2;
+const southX0 = centerX - south11W / 2;
 for (let i = 0; i <= 10; i += 1) {
   const num = 80 - i;
   const id = `${num}A`;
@@ -97,20 +107,16 @@ for (let i = 0; i <= 10; i += 1) {
 
 const southY1 = southY0 + SY;
 const south10W = 10 * W + 9 * G;
-const southX1 = VIEW_W / 2 - south10W / 2;
+const southX1 = centerX - south10W / 2;
 for (let i = 0; i <= 9; i += 1) {
   const num = 80 - i;
   const id = `${num}B`;
   CONCERT_BLOCKS.push(block(id, 'south', southX1 + i * SX, southY1, id));
 }
 
-/**
- * Intentionally empty: inner B/C “holes” and outer voids use the map background only.
- * (Previously drew gray spacer polygons that read as random empty seat blocks.)
- */
+/** No phantom spacer polygons — aisles are negative space (map background). */
 export const CONCERT_SPACERS = /** @type {ConcertSpacerRect[]} */ ([]);
 
-/** Stage — single flat rectangle (no curved path) */
 export const STAGE_RECT = {
   x: 248,
   y: 18,
@@ -121,15 +127,6 @@ export const STAGE_RECT = {
 export const STAGE_LABEL_CX = STAGE_RECT.x + STAGE_RECT.w / 2;
 export const STAGE_LABEL_CY = STAGE_RECT.y + STAGE_RECT.h / 2;
 
-/**
- * Chamfered rectangle → octagon points (clean modern edges, not a plain box).
- * @param {number} x
- * @param {number} y
- * @param {number} w
- * @param {number} h
- * @param {number} c
- * @returns {string}
- */
 function chamferedRectPoints(x, y, w, h, c) {
   const cc = Math.min(c, w / 2 - 0.5, h / 2 - 0.5);
   return [
@@ -147,29 +144,27 @@ function chamferedRectPoints(x, y, w, h, c) {
 }
 
 /**
- * Large light-gray ambient zones (non-seating / void) around the bowl.
- * @returns {{ id: string, points: string }[]}
+ * Large light-gray ambient zones (non-seating) outside wings + behind south rows.
  */
 export function getConcertAmbientPolygons() {
   const padT = 12;
-  const padB = 22;
-  const c = 18;
+  const padB = 24;
+  const c = 16;
   const topY = Math.min(oy - padT, STAGE_RECT.y + STAGE_RECT.h + 2);
   const bottomY = southY1 + H + padB;
 
-  const westInner = xWest0;
-  const westW = Math.max(32, westInner - 20 - 8);
+  const westW = Math.max(28, xWestOuter - 16 - 8);
   const west = chamferedRectPoints(8, topY, westW, bottomY - topY, c);
 
-  const eastStart = xEastOuter + W + 14;
-  const eastW = Math.max(32, VIEW_W - eastStart - 8);
+  const eastStart = xEastOuter + W + 12;
+  const eastW = Math.max(28, VIEW_W - eastStart - 8);
   const east = chamferedRectPoints(eastStart, topY, eastW, bottomY - topY, c);
 
-  const southMarginX = 40;
-  const southW = Math.min(VIEW_W - 20, south11W + southMarginX * 2);
-  const southX = VIEW_W / 2 - southW / 2;
-  const southTop = southY0 - 18;
-  const southH = bottomY - southTop + 6;
+  const southPadX = 36;
+  const southW = Math.min(VIEW_W - 20, south11W + southPadX * 2);
+  const southX = centerX - southW / 2;
+  const southTop = southY0 - 16;
+  const southH = bottomY - southTop + 8;
   const south = chamferedRectPoints(southX, southTop, southW, southH, 14);
 
   return [
@@ -180,51 +175,14 @@ export function getConcertAmbientPolygons() {
 }
 
 /**
- * Irregular quadrilateral from logical block — slight taper by zone for an integrated arena silhouette.
- * @param {{ id: string, zone: string, x: number, y: number, w: number, h: number, label: string }} b
- * @returns {string} SVG `points` for <polygon>
+ * Straight, axis-aligned seat tiles with a tiny inset for stroke (clean Viagogo-like blocks).
  */
 export function concertBlockPolygonPoints(b) {
-  const { x, y, w, h, zone } = b;
-  /** Small skew only — large skew made adjacent tiers look fused */
-  const skew = Math.min(3.5, w * 0.06);
-  const inset = 2;
-  if (zone === 'pitch') {
-    return [
-      [x + skew, y + inset],
-      [x + w - skew, y + inset],
-      [x + w - inset * 0.6, y + h - inset],
-      [x + inset * 0.6, y + h - inset],
-    ]
-      .map((p) => `${p[0]},${p[1]}`)
-      .join(' ');
-  }
-  if (zone === 'west') {
-    return [
-      [x + inset, y + inset],
-      [x + w - skew * 0.35, y + skew * 0.25 + inset],
-      [x + w - inset, y + h - skew * 0.25 - inset],
-      [x + inset, y + h - inset],
-    ]
-      .map((p) => `${p[0]},${p[1]}`)
-      .join(' ');
-  }
-  if (zone === 'east') {
-    return [
-      [x + skew * 0.35, y + skew * 0.25 + inset],
-      [x + w - inset, y + inset],
-      [x + w - inset, y + h - inset],
-      [x + skew * 0.25, y + h - inset],
-    ]
-      .map((p) => `${p[0]},${p[1]}`)
-      .join(' ');
-  }
-  return [
-    [x + inset, y + inset * 0.9],
-    [x + w - inset, y + inset],
-    [x + w - skew * 0.4, y + h - inset],
-    [x + skew * 0.4, y + h - inset],
-  ]
-    .map((p) => `${p[0]},${p[1]}`)
-    .join(' ');
+  const { x, y, w, h } = b;
+  const inset = 1.25;
+  const x0 = x + inset;
+  const y0 = y + inset;
+  const x1 = x + w - inset;
+  const y1 = y + h - inset;
+  return `${x0},${y0} ${x1},${y0} ${x1},${y1} ${x0},${y1}`;
 }
