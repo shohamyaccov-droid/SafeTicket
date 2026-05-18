@@ -1,11 +1,4 @@
-/* Bloomfield concert map — Viagogo-style venue blocks + selection emphasis */
-.bloomfield-concert-map__ambient {
-  fill: #e2e8f0;
-  stroke: #cbd5e1;
-  stroke-width: 1;
-  pointer-events: none;
-}
-
+/* Bloomfield concert map — venue blocks + selection emphasis */
 .bloomfield-concert-map__spacer {
   fill: #e8edf3;
   stroke: #cfd8e3;

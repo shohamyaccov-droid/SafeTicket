@@ -10,7 +10,6 @@ import {
   STAGE_RECT,
   STAGE_LABEL_CX,
   STAGE_LABEL_CY,
-  getConcertAmbientPolygons,
   concertBlockPolygonPoints,
 } from '../utils/bloomfieldConcertGeometry';
 import './BloomfieldConcertMap.css';
@@ -110,8 +109,6 @@ export default function BloomfieldConcertMap({
   onHoverGroup,
 }) {
   const panZoom = useVenueMapPanZoom({ minScale: 0.65, maxScale: 2.8, zoomStep: 0.14 });
-
-  const ambientPolygons = useMemo(() => getConcertAmbientPolygons(), []);
 
   const blocksWithListings = useMemo(() => {
     const s = new Set();
@@ -217,11 +214,7 @@ export default function BloomfieldConcertMap({
               </filter>
             </defs>
 
-            <rect width={VIEW_W} height={VIEW_H} fill="#f8fafc" />
-
-            {ambientPolygons.map((z) => (
-              <polygon key={z.id} className="bloomfield-concert-map__ambient" points={z.points} />
-            ))}
+            <rect width={VIEW_W} height={VIEW_H} fill="#ffffff" />
 
             <rect
               x={STAGE_RECT.x}
@@ -292,7 +285,7 @@ export default function BloomfieldConcertMap({
               const pts = concertBlockPolygonPoints(b);
               const { cx, cy } = blockCenter(b);
               const lineCount = 1 + (status ? 1 : 0) + 1;
-              const startY = cy - (lineCount === 2 ? 8 : lineCount === 3 ? 16 : 6);
+              const startY = cy - (lineCount === 2 ? 11 : lineCount === 3 ? 22 : 8);
 
               return (
                 <g key={sid}>
@@ -328,15 +321,15 @@ export default function BloomfieldConcertMap({
                       fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
                       style={{ direction: 'ltr', unicodeBidi: 'isolate' }}
                     >
-                      <tspan x={cx} y={startY} fill={main} fontSize="13.5" fontWeight="800">
+                      <tspan x={cx} y={startY} fill={main} fontSize="17" fontWeight="800">
                         {priceLine}
                       </tspan>
                       {status ? (
-                        <tspan x={cx} dy="13" fill={sub} fontSize="9.5" fontWeight="700">
+                        <tspan x={cx} dy="15" fill={sub} fontSize="12" fontWeight="700">
                           {status}
                         </tspan>
                       ) : null}
-                      <tspan x={cx} dy={status ? '12' : '13'} fill={sec} fontSize="11" fontWeight="800">
+                      <tspan x={cx} dy={status ? '14' : '15'} fill={sec} fontSize="15" fontWeight="800">
                         {b.label}
                       </tspan>
                     </text>
@@ -348,7 +341,7 @@ export default function BloomfieldConcertMap({
                       textAnchor="middle"
                       dominantBaseline="central"
                       fill="#94a3b8"
-                      fontSize={sid.length > 3 ? 10.5 : 12}
+                      fontSize={sid.length > 3 ? 14 : 16}
                       fontWeight="700"
                       fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
                     >
