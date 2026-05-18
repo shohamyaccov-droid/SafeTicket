@@ -58,25 +58,21 @@ for (let i = 0; i < 5; i += 1) {
   CONCERT_BLOCKS.push(block(`C${n}`, 'pitch', oxBC + i * SX, oy + 2 * SY, `C${n}`));
 }
 
-// --- Left wing: outer (106–104), inner (103–101), far left of floor + wide aisle
-const xWestInner = oxA - AISLE_SIDE - W;
-const xWestOuter = xWestInner - G - W;
-CONCERT_BLOCKS.push(block('106', 'west', xWestOuter, oy + 0 * SY, '106'));
-CONCERT_BLOCKS.push(block('105', 'west', xWestOuter, oy + 1 * SY, '105'));
-CONCERT_BLOCKS.push(block('104', 'west', xWestOuter, oy + 2 * SY, '104'));
-CONCERT_BLOCKS.push(block('103', 'west', xWestInner, oy + 0 * SY, '103'));
-CONCERT_BLOCKS.push(block('102', 'west', xWestInner, oy + 1 * SY, '102'));
-CONCERT_BLOCKS.push(block('101', 'west', xWestInner, oy + 2 * SY, '101'));
+// --- Left wing: ONE vertical column (far left), top → bottom 106…101
+const xWest = oxA - AISLE_SIDE - W;
+const leftWingIds = ['106', '105', '104', '103', '102', '101'];
+for (let i = 0; i < 6; i += 1) {
+  const id = leftWingIds[i];
+  CONCERT_BLOCKS.push(block(id, 'west', xWest, oy + i * SY, id));
+}
 
-// --- Right wing: inner (45–47), outer (42–44), far right of floor + wide aisle
-const xEastInner = oxA + pitchRowAW + AISLE_SIDE;
-const xEastOuter = xEastInner + W + G;
-CONCERT_BLOCKS.push(block('45', 'east', xEastInner, oy + 0 * SY, '45'));
-CONCERT_BLOCKS.push(block('46', 'east', xEastInner, oy + 1 * SY, '46'));
-CONCERT_BLOCKS.push(block('47', 'east', xEastInner, oy + 2 * SY, '47'));
-CONCERT_BLOCKS.push(block('42', 'east', xEastOuter, oy + 0 * SY, '42'));
-CONCERT_BLOCKS.push(block('43', 'east', xEastOuter, oy + 1 * SY, '43'));
-CONCERT_BLOCKS.push(block('44', 'east', xEastOuter, oy + 2 * SY, '44'));
+// --- Right wing: ONE vertical column (far right), top → bottom 42…47
+const xEast = oxA + pitchRowAW + AISLE_SIDE;
+const rightWingIds = ['42', '43', '44', '45', '46', '47'];
+for (let i = 0; i < 6; i += 1) {
+  const id = rightWingIds[i];
+  CONCERT_BLOCKS.push(block(id, 'east', xEast, oy + i * SY, id));
+}
 
 // --- Back: two straight horizontal rows (80A–70A, 80B–71B)
 const southY0 = oy + pitchH + AISLE_BACK;
@@ -126,10 +122,10 @@ export function getConcertAmbientPolygons() {
   const bottomY = southY1 + H + padB;
 
   const westX = 8;
-  const westW = Math.max(24, xWestOuter - westX - 8);
+  const westW = Math.max(24, xWest - westX - 8);
   const bandH = bottomY - topY;
 
-  const eastX = xEastOuter + W + 12;
+  const eastX = xEast + W + 12;
   const eastW = Math.max(24, VIEW_W - eastX - 8);
 
   const southPadX = 28;
