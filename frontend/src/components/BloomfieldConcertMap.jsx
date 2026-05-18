@@ -3,8 +3,6 @@ import { useMemo, useCallback } from 'react';
 import { useVenueMapPanZoom } from '../hooks/useVenueMapPanZoom';
 import { getTicketPrice, formatMoney, resolveTicketCurrency } from '../utils/priceFormat';
 import {
-  VIEW_W,
-  VIEW_H,
   CONCERT_BLOCKS,
   CONCERT_SPACERS,
   STAGE_RECT,
@@ -102,6 +100,40 @@ function availabilityLine(rep, floorPrice) {
   return null;
 }
 
+const VIEWBOX_PADDING = 40;
+
+function computeTightViewBox() {
+  let minX = STAGE_RECT.x;
+  let minY = STAGE_RECT.y;
+  let maxX = STAGE_RECT.x + STAGE_RECT.w;
+  let maxY = STAGE_RECT.y + STAGE_RECT.h;
+
+  for (const b of CONCERT_BLOCKS) {
+    minX = Math.min(minX, b.x);
+    minY = Math.min(minY, b.y);
+    maxX = Math.max(maxX, b.x + b.w);
+    maxY = Math.max(maxY, b.y + b.h);
+  }
+  for (const s of CONCERT_SPACERS) {
+    minX = Math.min(minX, s.x);
+    minY = Math.min(minY, s.y);
+    maxX = Math.max(maxX, s.x + s.w);
+    maxY = Math.max(maxY, s.y + s.h);
+  }
+
+  const vbX = minX - VIEWBOX_PADDING;
+  const vbY = minY - VIEWBOX_PADDING;
+  const vbW = maxX - minX + VIEWBOX_PADDING * 2;
+  const vbH = maxY - minY + VIEWBOX_PADDING * 2;
+  return {
+    vbX,
+    vbY,
+    vbW,
+    vbH,
+    viewBoxStr: `${vbX} ${vbY} ${vbW} ${vbH}`,
+  };
+}
+
 export default function BloomfieldConcertMap({
   rows = [],
   highlightStableId = null,
@@ -109,6 +141,8 @@ export default function BloomfieldConcertMap({
   onHoverGroup,
 }) {
   const panZoom = useVenueMapPanZoom({ minScale: 0.65, maxScale: 2.8, zoomStep: 0.14 });
+
+  const { viewBoxStr, vbX, vbY, vbW, vbH } = useMemo(() => computeTightViewBox(), []);
 
   const blocksWithListings = useMemo(() => {
     const s = new Set();
@@ -169,7 +203,7 @@ export default function BloomfieldConcertMap({
   };
 
   return (
-    <div className="bloomfield-map-root relative w-full aspect-[2000/1280] max-h-[min(720px,80vh)] min-h-[280px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="bloomfield-map-root relative h-full w-full min-h-[300px] max-h-[min(85vh,920px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="absolute top-2 left-2 z-[5] flex flex-col overflow-hidden rounded-md shadow-md">
         <button
           type="button"
@@ -198,13 +232,12 @@ export default function BloomfieldConcertMap({
         role="application"
         aria-label="מפת הושבה — הופעה בבלומפילד — גרירה להזזה, פלוס ומינוס לזום"
       >
-        <div
-          className="flex h-full w-full items-center justify-center will-change-transform"
-          style={panZoom.transformStyle}
-        >
+        <div className="h-full w-full will-change-transform" style={panZoom.transformStyle}>
           <svg
-            viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-            className="h-full w-full max-h-[min(720px,80vh)] select-none overflow-visible"
+            viewBox={viewBoxStr}
+            width="100%"
+            height="100%"
+            className="block h-full w-full select-none overflow-visible"
             role="img"
             aria-label="מפת הושבה — אצטדיון בלומפילד — הופעה"
           >
@@ -214,7 +247,7 @@ export default function BloomfieldConcertMap({
               </filter>
             </defs>
 
-            <rect width={VIEW_W} height={VIEW_H} fill="#ffffff" />
+            <rect x={vbX} y={vbY} width={vbW} height={vbH} fill="#ffffff" />
 
             <rect
               x={STAGE_RECT.x}
