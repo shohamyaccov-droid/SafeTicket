@@ -14,24 +14,34 @@ const Register = () => {
     password2: '',
   });
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
+    const { name } = e.target;
     if (error) setError('');
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    }
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: e.target.value,
     });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setFieldErrors({});
 
     if (formData.password !== formData.password2) {
-      setError('הסיסמאות אינן תואמות');
+      setFieldErrors({ password2: 'הסיסמאות אינן תואמות' });
       return;
     }
 
@@ -63,7 +73,7 @@ const Register = () => {
       <div className="auth-card">
         <h2>הרשמה</h2>
         {error && <div className="error-message">{error}</div>}
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <div className="form-group">
             <label htmlFor="first_name">שם פרטי</label>
             <input
@@ -75,7 +85,9 @@ const Register = () => {
               required
               placeholder="הזן שם פרטי"
               dir="rtl"
+              autoComplete="given-name"
             />
+            {fieldErrors.first_name ? <span className="field-error-text">{fieldErrors.first_name}</span> : null}
           </div>
           <div className="form-group">
             <label htmlFor="last_name">שם משפחה</label>
@@ -88,7 +100,9 @@ const Register = () => {
               required
               placeholder="הזן שם משפחה"
               dir="rtl"
+              autoComplete="family-name"
             />
+            {fieldErrors.last_name ? <span className="field-error-text">{fieldErrors.last_name}</span> : null}
           </div>
           <div className="form-group">
             <label htmlFor="email">אימייל</label>
@@ -100,7 +114,13 @@ const Register = () => {
               onChange={handleChange}
               required
               placeholder="your.email@example.com"
+              inputMode="email"
+              autoComplete="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck="false"
             />
+            {fieldErrors.email ? <span className="field-error-text">{fieldErrors.email}</span> : null}
           </div>
           <div className="form-group">
             <label htmlFor="password">סיסמה</label>
@@ -112,7 +132,10 @@ const Register = () => {
               onChange={handleChange}
               required
               placeholder="הזן סיסמה"
+              autoComplete="new-password"
+              autoCapitalize="none"
             />
+            {fieldErrors.password ? <span className="field-error-text">{fieldErrors.password}</span> : null}
           </div>
           <div className="form-group">
             <label htmlFor="password2">אימות סיסמה</label>
@@ -124,7 +147,10 @@ const Register = () => {
               onChange={handleChange}
               required
               placeholder="הזן סיסמה שוב"
+              autoComplete="new-password"
+              autoCapitalize="none"
             />
+            {fieldErrors.password2 ? <span className="field-error-text">{fieldErrors.password2}</span> : null}
           </div>
           <button type="submit" disabled={loading} className="auth-button">
             {loading ? 'נרשם...' : 'הרשמה'}
@@ -139,4 +165,3 @@ const Register = () => {
 };
 
 export default Register;
-

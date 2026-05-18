@@ -18,10 +18,12 @@
 .catalog-retry-btn {
   margin-top: 0.5rem;
   padding: 0.5rem 1.25rem;
+  min-height: 44px;
   border-radius: 10px;
   border: none;
   background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
   color: #fff;
+  font-size: max(16px, 1rem);
   font-weight: 600;
   cursor: pointer;
 }
@@ -174,12 +176,13 @@
 .form-group input[type="time"],
 .form-group select {
   width: 100%;
-  padding: 0.75rem;
+  padding: 0.875rem 0.75rem;
+  min-height: 44px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-card);
   color: var(--text-primary);
-  font-size: 1rem;
+  font-size: max(16px, 1rem);
   box-sizing: border-box;
   transition: border-color 0.2s ease;
   position: relative;
@@ -191,11 +194,12 @@
 .premium-select {
   width: 100%;
   padding: 12px 40px 12px 12px;
+  min-height: 44px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: var(--bg-card);
   color: var(--text-primary);
-  font-size: 1rem;
+  font-size: max(16px, 1rem);
   font-weight: 500;
   box-sizing: border-box;
   transition: all 0.2s ease;
@@ -270,6 +274,8 @@
 .quantity-select {
   cursor: pointer;
   direction: rtl;
+  min-height: 44px;
+  font-size: max(16px, 1rem);
 }
 
 .quantity-select:focus {
@@ -279,12 +285,13 @@
 
 .form-group input[type="file"] {
   width: 100%;
-  padding: 0.75rem;
+  padding: 0.875rem 0.75rem;
+  min-height: 44px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-card);
   color: var(--text-primary);
-  font-size: 1rem;
+  font-size: max(16px, 1rem);
   transition: border-color 0.2s ease;
 }
 
@@ -427,6 +434,7 @@
   align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
+  min-height: 44px;
   border: 2px solid var(--border-color);
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -522,12 +530,13 @@
 
 .auto-fill-btn {
   padding: 0.45rem 0.85rem;
+  min-height: 44px;
   background: var(--primary-blue);
   color: white;
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: max(16px, 0.85rem);
   margin-top: 0;
   white-space: nowrap;
 }
@@ -741,11 +750,12 @@
 .submit-button {
   width: 100%;
   padding: var(--spacing-md) var(--spacing-lg);
+  min-height: 48px;
   background: var(--primary-blue);
   color: white;
   border: none;
   border-radius: var(--radius-sm);
-  font-size: 1rem;
+  font-size: max(16px, 1rem);
   font-weight: 600;
   cursor: pointer;
   margin-top: var(--spacing-md);
@@ -923,12 +933,13 @@
 .artist-search-wrapper input,
 .event-search-wrapper input {
   width: 100%;
-  padding: 0.75rem;
+  padding: 0.875rem 0.75rem;
+  min-height: 44px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-card);
   color: var(--text-primary);
-  font-size: 1rem;
+  font-size: max(16px, 1rem);
   box-sizing: border-box;
   transition: border-color 0.2s ease;
   direction: rtl;
@@ -1076,8 +1087,10 @@
 
 .missing-event-primary-btn {
   padding: 0.55rem 1.1rem;
+  min-height: 44px;
   border: none;
   border-radius: 10px;
+  font-size: max(16px, 1rem);
   font-weight: 700;
   cursor: pointer;
   color: #fff;
@@ -1152,7 +1165,7 @@
 }
 
 .event-request-feedback.err {
-  color: #b91c1c;
+  color: rgb(239 68 68);
   font-size: 0.88rem;
   margin: 0.25rem 0 0;
 }
@@ -1394,6 +1407,48 @@
   }
   100% {
     transform: translateX(280%);
+  }
+}
+
+.sell-field-error {
+  margin: 0.35rem 0 0;
+  color: rgb(239 68 68);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.35;
+  direction: rtl;
+  text-align: right;
+}
+
+@media (max-width: 768px) {
+  .sell-submit--desktop-only {
+    display: none !important;
+  }
+
+  .sell-submit-sticky-wrap {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    padding: 0.75rem 1rem;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    background: #fff;
+    border-top: 1px solid #e5e7eb;
+    box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.12);
+  }
+
+  .sell-submit-sticky-btn {
+    width: 100%;
+    min-height: 48px;
+    margin-top: 0;
+  }
+}
+
+@media (min-width: 769px) {
+  .sell-submit-sticky-wrap {
+    display: none !important;
   }
 }
 

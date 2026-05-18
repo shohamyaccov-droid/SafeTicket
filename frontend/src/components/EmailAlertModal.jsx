@@ -73,6 +73,11 @@ const EmailAlertModal = ({ event, onClose, onSuccess }) => {
               placeholder="your@email.com"
               required
               disabled={loading}
+              inputMode="email"
+              autoComplete="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck="false"
             />
           </div>
           {error && <div className="email-alert-error">{error}</div>}

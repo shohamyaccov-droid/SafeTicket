@@ -89,6 +89,10 @@ export default function WaitlistSignupModal({ event, onClose }) {
               onChange={(ev) => setEmail(ev.target.value)}
               required
               autoComplete="email"
+              inputMode="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck="false"
               placeholder="you@example.com"
               dir="ltr"
             />

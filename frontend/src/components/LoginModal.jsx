@@ -123,6 +123,9 @@ export function LoginForm() {
           onChange={handleChange}
           required
           autoComplete="current-password"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck="false"
           enterKeyHint="go"
           placeholder="הזן סיסמה"
         />

@@ -117,6 +117,9 @@ const AccountSettingsTab = () => {
                 readOnly
                 className="settings-input-readonly"
                 dir="ltr"
+                inputMode="email"
+                autoComplete="email"
+                autoCapitalize="none"
               />
             </div>
             <div className="settings-field">

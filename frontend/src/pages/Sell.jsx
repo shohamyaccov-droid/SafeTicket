@@ -59,6 +59,17 @@ function validateTicketFiles(files, options = {}) {
   return '';
 }
 
+/* eslint-disable react/prop-types */
+function SellFieldError({ message }) {
+  if (!message) return null;
+  return (
+    <p className="sell-field-error" role="alert">
+      {message}
+    </p>
+  );
+}
+/* eslint-enable react/prop-types */
+
 const rangeOptions = (start, end) =>
   Array.from({ length: end - start + 1 }, (_, i) => {
     const value = String(start + i);
@@ -189,6 +200,7 @@ const Sell = () => {
   const [catalogError, setCatalogError] = useState(null);
   const [catalogRetryKey, setCatalogRetryKey] = useState(0);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [success, setSuccess] = useState(false);
   const [successWasIsrael, setSuccessWasIsrael] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -562,6 +574,11 @@ const Sell = () => {
       section: '',
     });
     setSellerListingTermsAccepted(false);
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.event;
+      return next;
+    });
   };
 
   const handleArtistChange = (e) => {
@@ -577,6 +594,11 @@ const Sell = () => {
       section: '',
     });
     setSellerListingTermsAccepted(false);
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.event;
+      return next;
+    });
   };
 
   const handleEventChange = (e) => {
@@ -592,6 +614,11 @@ const Sell = () => {
         listing_price: '',
       });
       setSellerListingTermsAccepted(false);
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.event;
+        return next;
+      });
       return;
     }
     
@@ -608,6 +635,11 @@ const Sell = () => {
         listing_price: '',
       });
       setSellerListingTermsAccepted(false);
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.event;
+        return next;
+      });
     }
   };
 
@@ -621,22 +653,31 @@ const Sell = () => {
 
         const fileError = validateTicketFiles(fileArray);
         if (fileError) {
-          setError(fileError);
+          setFieldErrors((prev) => ({ ...prev, upload_packages: fileError }));
           return;
         }
-        
+
         // Validate number of files matches quantity
         const requiredCount = formData.available_quantity || 1;
         if (fileArray.length !== requiredCount) {
-          setError(`נדרשים בדיוק ${requiredCount} קבצים (אחד לכל כרטיס). העלית ${fileArray.length} קבצים.`);
+          setFieldErrors((prev) => ({
+            ...prev,
+            upload_packages: `נדרשים בדיוק ${requiredCount} קבצים (אחד לכל כרטיס). העלית ${fileArray.length} קבצים.`,
+          }));
           return;
         }
-        
+
         setFormData({
           ...formData,
           pdf_files: fileArray,
         });
-        setError(''); // Clear any previous errors
+        setFieldErrors((prev) => {
+          const next = { ...prev };
+          delete next.upload_packages;
+          delete next.upload_mode;
+          return next;
+        });
+        setError('');
       }
     } else if (name === 'single_multi_page_pdf') {
       // Single file: multi-page PDF auto-split when quantity > 1; otherwise PDF or image OK
@@ -645,14 +686,20 @@ const Sell = () => {
         const qty = formData.available_quantity || 1;
         const fileError = ticketFileValidationError(file, { requirePdf: qty > 1 });
         if (fileError) {
-          setError(fileError);
+          setFieldErrors((prev) => ({ ...prev, upload_single: fileError }));
           return;
         }
-        setFormData(prev => ({
+        setFormData((prev) => ({
           ...prev,
           singleMultiPagePdf: file,
-          ticket_packages: (prev.ticket_packages || []).map(pkg => ({ ...pkg, pdf_file: null })),
+          ticket_packages: (prev.ticket_packages || []).map((pkg) => ({ ...pkg, pdf_file: null })),
         }));
+        setFieldErrors((prev) => {
+          const next = { ...prev };
+          delete next.upload_single;
+          delete next.upload_mode;
+          return next;
+        });
         setError('');
       }
     } else if (name && name.startsWith('pdf_file_package_')) {
@@ -662,7 +709,7 @@ const Sell = () => {
         const file = files[0];
         const fileError = ticketFileValidationError(file);
         if (fileError) {
-          setError(fileError);
+          setFieldErrors((prev) => ({ ...prev, upload_packages: fileError }));
           return;
         }
         // Always use functional updates so ticket_packages is never copied from a stale closure.
@@ -671,6 +718,12 @@ const Sell = () => {
           const cur = newPackages[index] || { seat_number: '', pdf_file: null };
           newPackages[index] = { ...cur, pdf_file: file };
           return { ...prev, ticket_packages: newPackages, singleMultiPagePdf: null };
+        });
+        setFieldErrors((prev) => {
+          const next = { ...prev };
+          delete next.upload_packages;
+          delete next.upload_mode;
+          return next;
         });
         setError('');
       }
@@ -683,12 +736,24 @@ const Sell = () => {
           newPackages[index] = { ...cur, seat_number: value };
           return { ...prev, ticket_packages: newPackages };
         });
+        setFieldErrors((prev) => {
+          if (!prev.seats) return prev;
+          const n = { ...prev };
+          delete n.seats;
+          return n;
+        });
       }
     } else if (name === 'start_seat') {
       // Handle start seat input - auto-generate seat numbers
       setFormData({
         ...formData,
         [name]: value,
+      });
+      setFieldErrors((prev) => {
+        if (!prev.start_seat) return prev;
+        const n = { ...prev };
+        delete n.start_seat;
+        return n;
       });
     } else if (type === 'checkbox') {
       setFormData({
@@ -697,10 +762,22 @@ const Sell = () => {
       });
     } else if (name === 'listing_price') {
       setFormData({ ...formData, listing_price: value });
+      setFieldErrors((prev) => {
+        if (!prev.listing_price) return prev;
+        const n = { ...prev };
+        delete n.listing_price;
+        return n;
+      });
     } else {
       setFormData({
         ...formData,
         [name]: value,
+      });
+      setFieldErrors((prev) => {
+        if (!prev[name]) return prev;
+        const n = { ...prev };
+        delete n[name];
+        return n;
       });
     }
 
@@ -709,6 +786,7 @@ const Sell = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setFieldErrors({});
     setSuccess(false);
     setUploadProgress(5);
     setUploadPhase('בודק את פרטי הכרטיס והקבצים...');
@@ -716,49 +794,49 @@ const Sell = () => {
     let progressTimer = null;
 
     if (!sellerListingTermsAccepted) {
-      setError('יש לאשר את תנאי ההצהרה כדי להמשיך');
+      setFieldErrors({ terms: 'יש לאשר את תנאי ההצהרה כדי להמשיך' });
       setLoading(false);
       return;
     }
 
     // Validate required fields
     if (!formData.event_id) {
-      setError('אנא בחר אירוע מהרשימה.');
+      setFieldErrors({ event: 'אנא בחר אירוע מהרשימה.' });
       setLoading(false);
       return;
     }
 
     const ilEvent = isIsraelEvent(formData.selectedEvent);
     if (formData.listing_price === '' || formData.listing_price == null) {
-      setError('נא להזין מחיר מכירה.');
+      setFieldErrors({ listing_price: 'נא להזין מחיר מכירה.' });
       setLoading(false);
       return;
     }
     const askVal = parseFloat(String(formData.listing_price).replace(',', '.'));
     if (!Number.isFinite(askVal) || askVal <= 0) {
-      setError('מחיר המכירה חייב להיות מספר חיובי.');
+      setFieldErrors({ listing_price: 'מחיר המכירה חייב להיות מספר חיובי.' });
       setLoading(false);
       return;
     }
-    
+
     // Validate ticket packages — seating + files (hybrid: structured section id or free-text גוש)
     const requiredCount = formData.available_quantity || 1;
-    
+
     // Ensure ticket_packages array is initialized
     if (!formData.ticket_packages || formData.ticket_packages.length !== requiredCount) {
-      setError(`אנא השלם את כל פרטי הכרטיסים (${requiredCount} כרטיסים נדרשים).`);
+      setFieldErrors({ packages: `אנא השלם את כל פרטי הכרטיסים (${requiredCount} כרטיסים נדרשים).` });
       setLoading(false);
       return;
     }
 
     const secValStrict = (formData.section || '').trim();
     if (!secValStrict) {
-      setError('נא לבחור גוש מהרשימה.');
+      setFieldErrors({ section: 'נא לבחור גוש מהרשימה.' });
       setLoading(false);
       return;
     }
     if (!(formData.row || '').trim()) {
-      setError('נא להזין שורה.');
+      setFieldErrors({ row: 'נא להזין שורה.' });
       setLoading(false);
       return;
     }
@@ -766,11 +844,11 @@ const Sell = () => {
       (pkg) => !pkg || !(pkg.seat_number || '').trim()
     );
     if (incompleteSeats) {
-      setError('נא להזין מספר כיסא לכל כרטיס.');
+      setFieldErrors({ seats: 'נא להזין מספר כיסא לכל כרטיס.' });
       setLoading(false);
       return;
     }
-    
+
     const useSingleFile = uploadMethod === 'single_file' && formData.singleMultiPagePdf && requiredCount >= 1;
     const useSeparateFiles = uploadMethod === 'separate_files';
 
@@ -778,37 +856,44 @@ const Sell = () => {
       if (useSingleFile) {
         const singleFileError = ticketFileValidationError(formData.singleMultiPagePdf, { requirePdf: true });
         if (singleFileError) {
-          setError(singleFileError);
+          setFieldErrors({ upload_single: singleFileError });
           setLoading(false);
           return;
         }
       } else if (useSeparateFiles) {
         const incompletePackages = formData.ticket_packages.some((pkg) => !pkg || !pkg.pdf_file);
         if (incompletePackages) {
-          setError('כל כרטיס חייב לכלול קובץ כרטיס (PDF או תמונה) ייחודי. אנא השלם את כל הפרטים.');
+          setFieldErrors({
+            upload_packages: 'כל כרטיס חייב לכלול קובץ כרטיס (PDF או תמונה) ייחודי. אנא השלם את כל הפרטים.',
+          });
           setLoading(false);
           return;
         }
         const pdfFiles = formData.ticket_packages.map((p) => p?.pdf_file).filter(Boolean);
         const uniquePdfs = new Set(pdfFiles.map((f) => f.name));
         if (uniquePdfs.size !== pdfFiles.length) {
-          setError('כל כרטיס חייב להיות עם קובץ ייחודי. לא ניתן להשתמש באותו קובץ פעמיים.');
+          setFieldErrors({
+            upload_packages: 'כל כרטיס חייב להיות עם קובץ ייחודי. לא ניתן להשתמש באותו קובץ פעמיים.',
+          });
           setLoading(false);
           return;
         }
         const invalidFiles = pdfFiles.filter((f) => !isTicketAttachmentFile(f));
         const fileError = validateTicketFiles(pdfFiles);
         if (invalidFiles.length > 0 || fileError) {
-          setError(fileError || 'נא להעלות לכל כרטיס קובץ PDF או תמונה (JPG, PNG).');
+          setFieldErrors({
+            upload_packages: fileError || 'נא להעלות לכל כרטיס קובץ PDF או תמונה (JPG, PNG).',
+          });
           setLoading(false);
           return;
         }
       } else {
-        setError(
-          uploadMethod === 'single_file'
-            ? 'אנא העלה קובץ PDF אחד המכיל את כל הכרטיסים.'
-            : 'אנא העלה קובץ (PDF או תמונה) לכל כרטיס.'
-        );
+        setFieldErrors({
+          upload_mode:
+            uploadMethod === 'single_file'
+              ? 'אנא העלה קובץ PDF אחד המכיל את כל הכרטיסים.'
+              : 'אנא העלה קובץ (PDF או תמונה) לכל כרטיס.',
+        });
         setLoading(false);
         return;
       }
@@ -816,31 +901,31 @@ const Sell = () => {
       // Single ticket (quantity === 1)
       if (useSeparateFiles) {
         if (!formData.ticket_packages?.[0]?.pdf_file) {
-          setError('אנא העלה קובץ כרטיס (PDF או תמונה).');
+          setFieldErrors({ upload_packages: 'אנא העלה קובץ כרטיס (PDF או תמונה).' });
           setLoading(false);
           return;
         }
         const pdfFile = formData.ticket_packages[0].pdf_file;
         const fileError = ticketFileValidationError(pdfFile);
         if (fileError) {
-          setError(fileError);
+          setFieldErrors({ upload_packages: fileError });
           setLoading(false);
           return;
         }
       } else if (useSingleFile) {
         if (!formData.singleMultiPagePdf) {
-          setError('אנא העלה קובץ כרטיס (PDF או תמונה).');
+          setFieldErrors({ upload_single: 'אנא העלה קובץ כרטיס (PDF או תמונה).' });
           setLoading(false);
           return;
         }
         const fileError = ticketFileValidationError(formData.singleMultiPagePdf);
         if (fileError) {
-          setError(fileError);
+          setFieldErrors({ upload_single: fileError });
           setLoading(false);
           return;
         }
       } else {
-        setError('אנא העלה קובץ כרטיס (PDF או תמונה).');
+        setFieldErrors({ upload_mode: 'אנא העלה קובץ כרטיס (PDF או תמונה).' });
         setLoading(false);
         return;
       }
@@ -895,7 +980,7 @@ const Sell = () => {
       // Single PDF auto-split: backend receives pdf_file_0, pdf_files_count=1
       const pdf0 = formData.singleMultiPagePdf;
       if (!(pdf0 instanceof File) && !(pdf0 instanceof Blob)) {
-        setError('שגיאה פנימית: קובץ כרטיס חסר. נסו לבחור את הקובץ שוב.');
+        setFieldErrors({ upload_single: 'שגיאה פנימית: קובץ כרטיס חסר. נסו לבחור את הקובץ שוב.' });
         setLoading(false);
         return;
       }
@@ -940,6 +1025,7 @@ const Sell = () => {
       const errorMessage = /cloudinary|storage|upload|media/i.test(raw)
         ? 'העלאת הקובץ נכשלה מול שירות האחסון. בדקו שהקובץ תקין ועד 5MB ונסו שוב בעוד רגע.'
         : apiErrorMessageHe(err, 'יצירת רשימת הכרטיס נכשלה. אנא נסה שוב.');
+      setFieldErrors({});
       setError(errorMessage);
       toastError(errorMessage);
     } finally {
@@ -997,7 +1083,7 @@ const Sell = () => {
           </div>
         </div>
       )}
-      <div className="listing-card sell-form-compact">
+      <div className="listing-card sell-form-compact sell-listing-card--mobile-cta">
         <div className="listing-card-header">
           <div className="secure-listing-header">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1013,7 +1099,7 @@ const Sell = () => {
         </div>
         {error && <div className="error-message">{error}</div>}
         
-        <form onSubmit={handleSubmit}>
+        <form id="sell-listing-form" onSubmit={handleSubmit} noValidate>
           {catalogError && (
             <div className="catalog-error-banner" role="alert">
               <p>
@@ -1118,6 +1204,7 @@ const Sell = () => {
                 {selectedCategory === 'concert' && !selectedArtistId && (
                   <small className="field-hint">אנא בחר אמן תחילה</small>
                 )}
+                <SellFieldError message={fieldErrors.event} />
               </div>
 
               {formData.selectedEvent ? (
@@ -1174,13 +1261,22 @@ const Sell = () => {
                 handleChange(e);
                 // Clear ticket packages when quantity changes - user must re-enter
                 if (newQuantity !== formData.available_quantity) {
-                  setFormData(prev => ({
+                  setFormData((prev) => ({
                     ...prev,
                     available_quantity: newQuantity,
                     ticket_packages: Array(newQuantity).fill(null).map(() => ({ seat_number: '', pdf_file: null })),
                     singleMultiPagePdf: null,
                     start_seat: '',
                   }));
+                  setFieldErrors((prev) => {
+                    const next = { ...prev };
+                    delete next.packages;
+                    delete next.seats;
+                    delete next.upload_packages;
+                    delete next.upload_single;
+                    delete next.upload_mode;
+                    return next;
+                  });
                   setError('');
                 }
               }}
@@ -1232,6 +1328,7 @@ const Sell = () => {
                     מוצגים רק הגושים התקינים לאולם שנבחר.
                   </small>
                 ) : null}
+                <SellFieldError message={fieldErrors.section} />
               </div>
               <div className="form-group">
                 <label htmlFor="row">שורה *</label>
@@ -1243,7 +1340,10 @@ const Sell = () => {
                   onChange={handleChange}
                   placeholder="לדוגמה: 5"
                   required
+                  inputMode="numeric"
+                  autoComplete="off"
                 />
+                <SellFieldError message={fieldErrors.row} />
               </div>
             </div>
             {formData.available_quantity > 1 && (
@@ -1259,6 +1359,7 @@ const Sell = () => {
                       onChange={handleChange}
                       placeholder="לדוגמה: 1"
                       min="1"
+                      inputMode="numeric"
                     />
                   </div>
                   <div className="form-group auto-seat-btn-wrap">
@@ -1272,7 +1373,7 @@ const Sell = () => {
                         const startSeat = parseInt(formData.start_seat, 10);
                         const quantity = formData.available_quantity || 1;
                         if (!startSeat || isNaN(startSeat)) {
-                          setError('אנא הזן מושב התחלה.');
+                          setFieldErrors((prev) => ({ ...prev, start_seat: 'אנא הזן מושב התחלה.' }));
                           return;
                         }
                         const newPackages = Array.from({ length: quantity }, (_, i) => {
@@ -1280,13 +1381,19 @@ const Sell = () => {
                           return { ...existing, seat_number: String(startSeat + i) };
                         });
                         setFormData((prev) => ({ ...prev, ticket_packages: newPackages }));
-                        setError('');
+                        setFieldErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.start_seat;
+                          delete next.seats;
+                          return next;
+                        });
                       }}
                     >
                       צור מספרי מושבים
                     </button>
                   </div>
                 </div>
+                <SellFieldError message={fieldErrors.start_seat} />
                 <small className="auto-seat-range-hint">
                   ימלא כיסאות {formData.start_seat || 'X'} עד{' '}
                   {formData.start_seat
@@ -1309,10 +1416,16 @@ const Sell = () => {
                   checked={uploadMethod === 'single_file'}
                   onChange={() => {
                     setUploadMethod('single_file');
-                    setFormData(prev => ({
+                    setFormData((prev) => ({
                       ...prev,
-                      ticket_packages: (prev.ticket_packages || []).map(p => ({ ...p, pdf_file: null })),
+                      ticket_packages: (prev.ticket_packages || []).map((p) => ({ ...p, pdf_file: null })),
                     }));
+                    setFieldErrors((prev) => {
+                      const next = { ...prev };
+                      delete next.upload_mode;
+                      delete next.upload_packages;
+                      return next;
+                    });
                     setError('');
                   }}
                 />
@@ -1329,7 +1442,13 @@ const Sell = () => {
                   checked={uploadMethod === 'separate_files'}
                   onChange={() => {
                     setUploadMethod('separate_files');
-                    setFormData(prev => ({ ...prev, singleMultiPagePdf: null }));
+                    setFormData((prev) => ({ ...prev, singleMultiPagePdf: null }));
+                    setFieldErrors((prev) => {
+                      const next = { ...prev };
+                      delete next.upload_mode;
+                      delete next.upload_single;
+                      return next;
+                    });
                     setError('');
                   }}
                 />
@@ -1346,6 +1465,7 @@ const Sell = () => {
                 לכמה כרטיסים בקובץ יחיד: העלו PDF מרובה עמודים, עמוד אחד לכל כרטיס. תמונות מתאימות רק במצב קובץ נפרד לכל כרטיס.
               </span>
             </div>
+            <SellFieldError message={fieldErrors.upload_mode} />
           </div>
 
           {/* Single file dropzone (Option A) */}
@@ -1377,12 +1497,16 @@ const Sell = () => {
               {formData.available_quantity > 1 && (
                 <small>המערכת תפצל רק קובצי PDF מרובי עמודים – כל עמוד יהפוך לכרטיס נפרד</small>
               )}
+              <SellFieldError message={fieldErrors.upload_single} />
             </div>
           )}
 
           {/* Ticket Cards - Seat only (+ PDF when separate_files) */}
           <div className="form-group ticket-packages-section">
             <label>כרטיסים למכירה *</label>
+            <SellFieldError message={fieldErrors.packages} />
+            <SellFieldError message={fieldErrors.seats} />
+            <SellFieldError message={fieldErrors.upload_packages} />
             {Array.from({ length: formData.available_quantity }, (_, index) => {
               const packageData = formData.ticket_packages[index] || { seat_number: '', pdf_file: null };
               return (
@@ -1406,6 +1530,8 @@ const Sell = () => {
                         onChange={handleChange}
                         required
                         placeholder="לדוגמה: 12"
+                        inputMode="numeric"
+                        autoComplete="off"
                       />
                     </div>
                     {uploadMethod === 'separate_files' && (
@@ -1447,6 +1573,7 @@ const Sell = () => {
                   value="pdf"
                   disabled
                   required
+                  className="premium-select"
                 >
                   <option value="pdf">כרטיס אלקטרוני (PDF או תמונה)</option>
                 </select>
@@ -1460,6 +1587,7 @@ const Sell = () => {
                   value={formData.split_type}
                   onChange={handleChange}
                   required
+                  className="premium-select"
                 >
                   <option value="כל כמות">כל כמות</option>
                   <option value="זוגות בלבד">זוגות בלבד</option>
@@ -1522,7 +1650,9 @@ const Sell = () => {
               min="1"
               step={sellCurrency === 'ILS' ? '1' : '0.01'}
               placeholder={sellSym}
+              inputMode={sellCurrency === 'ILS' ? 'numeric' : 'decimal'}
             />
+            <SellFieldError message={fieldErrors.listing_price} />
             <small className="sell-il-pricing-hint">
               זה המחיר שיוצג לקונים לפני עמלת השירות. אין צורך להזין מחיר מקורי או להעלות קבלה.
             </small>
@@ -1547,7 +1677,15 @@ const Sell = () => {
               id="sellerListingTerms"
               name="sellerListingTerms"
               checked={sellerListingTermsAccepted}
-              onChange={(e) => setSellerListingTermsAccepted(e.target.checked)}
+              onChange={(e) => {
+                setSellerListingTermsAccepted(e.target.checked);
+                setFieldErrors((prev) => {
+                  if (!prev.terms) return prev;
+                  const next = { ...prev };
+                  delete next.terms;
+                  return next;
+                });
+              }}
               className="terms-checkbox-input"
               required
             />
@@ -1557,8 +1695,9 @@ const Sell = () => {
                 : 'אני מסכים/ה לתנאי השימוש של TradeTix ומאשר/ת שהתשלום בגין המכירה יועבר אליי כ-24 שעות לאחר קיום האירוע, על מנת להבטיח קנייה בטוחה ואת אמינות הכרטיסים.'}
             </label>
           </div>
+          <SellFieldError message={fieldErrors.terms} />
 
-          <button type="submit" disabled={loading} className="submit-button">
+          <button type="submit" disabled={loading} className="submit-button sell-submit--desktop-only">
             {loading ? (
               <>
                 מפרסם כרטיס… <span className="button-spinner" aria-hidden />
@@ -1611,17 +1750,15 @@ const Sell = () => {
                     className="premium-select"
                     style={{ width: '100%', padding: '0.65rem', resize: 'vertical' }}
                   />
+                  {eventRequestFeedback?.type === 'error' ? (
+                    <SellFieldError message={eventRequestFeedback.text} />
+                  ) : null}
                 </div>
-                {eventRequestFeedback && (
-                  <p
-                    className={
-                      eventRequestFeedback.type === 'ok' ? 'event-request-feedback ok' : 'event-request-feedback err'
-                    }
-                    role="status"
-                  >
+                {eventRequestFeedback?.type === 'ok' ? (
+                  <p className="event-request-feedback ok" role="status">
                     {eventRequestFeedback.text}
                   </p>
-                )}
+                ) : null}
                 <div className="event-request-modal-actions">
                   <button
                     type="button"
@@ -1647,6 +1784,22 @@ const Sell = () => {
             </div>
           </div>
         )}
+        <div className="sell-submit-sticky-wrap">
+          <button
+            type="submit"
+            form="sell-listing-form"
+            disabled={loading}
+            className="submit-button sell-submit-sticky-btn"
+          >
+            {loading ? (
+              <>
+                מפרסם כרטיס… <span className="button-spinner" aria-hidden />
+              </>
+            ) : (
+              'הצע כרטיס למכירה'
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

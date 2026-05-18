@@ -1667,6 +1667,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   onChange={handleGuestChange}
                   required
                   placeholder="your.email@example.com"
+                  inputMode="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck="false"
                 />
               </div>
               <div className="form-group">
@@ -1679,6 +1684,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   onChange={handleGuestChange}
                   required
                   placeholder="050-1234567"
+                  inputMode="tel"
+                  autoComplete="tel"
                 />
               </div>
               {error && (

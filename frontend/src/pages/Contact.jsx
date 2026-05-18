@@ -106,6 +106,11 @@ const Contact = () => {
             onChange={handleChange}
             required
             placeholder="your.email@example.com"
+            inputMode="email"
+            autoComplete="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck="false"
           />
         </div>
 

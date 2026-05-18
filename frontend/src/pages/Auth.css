@@ -41,12 +41,13 @@
 .form-group input,
 .form-group select {
   width: 100%;
-  padding: 0.75rem;
+  padding: 0.875rem 0.75rem;
+  min-height: 44px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   background-color: var(--bg-card);
   color: var(--text-primary);
-  font-size: 1rem;
+  font-size: max(16px, 1rem);
   box-sizing: border-box;
   transition: border-color 0.2s ease;
   text-align: right;
@@ -72,6 +73,16 @@
 
 .login-form-mobile {
   touch-action: manipulation;
+}
+
+.field-error-text {
+  display: block;
+  margin-top: 0.35rem;
+  color: rgb(239 68 68);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: right;
+  direction: rtl;
 }
 
 .auth-button {

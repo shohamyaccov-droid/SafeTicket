@@ -616,6 +616,15 @@
   background-color: #ffffff;
 }
 
+/* Let vertical page scroll pass through the concert SVG map on touch devices */
+.bloomfield-concert-map-scroll-wrapper {
+  touch-action: pan-y;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .venue-map-footer-label {
   margin: 0;
   padding: 0.65rem 1rem 0.85rem;

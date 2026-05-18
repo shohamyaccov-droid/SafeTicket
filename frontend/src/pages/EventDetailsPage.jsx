@@ -1171,12 +1171,14 @@ const EventDetailsPage = () => {
                     if (isBloomfieldVenue) {
                       if (isBloomfieldConcertLayout) {
                         return (
-                          <BloomfieldConcertMap
-                            rows={bloomfieldRows}
-                            highlightStableId={bloomfieldMapHighlight}
-                            onSelectGroup={handleBloomfieldMapSelect}
-                            onHoverGroup={setBloomfieldHoverId}
-                          />
+                          <div className="bloomfield-concert-map-scroll-wrapper">
+                            <BloomfieldConcertMap
+                              rows={bloomfieldRows}
+                              highlightStableId={bloomfieldMapHighlight}
+                              onSelectGroup={handleBloomfieldMapSelect}
+                              onHoverGroup={setBloomfieldHoverId}
+                            />
+                          </div>
                         );
                       }
                       return (

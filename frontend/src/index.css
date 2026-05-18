@@ -166,29 +166,11 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
-/* Ensure all inputs have 16px+ font size to prevent iOS auto-zoom */
-input[type="text"],
-input[type="email"],
-input[type="tel"],
-input[type="number"],
-input[type="password"],
-input[type="search"],
-textarea,
-select {
-  font-size: 16px !important; /* Prevent iOS auto-zoom */
-}
-
-@media (min-width: 769px) {
-  input[type="text"],
-  input[type="email"],
-  input[type="tel"],
-  input[type="number"],
-  input[type="password"],
-  input[type="search"],
-  textarea,
-  select {
-    font-size: 1rem; /* Allow normal sizing on desktop */
-  }
+/* Minimum 16px on form controls site-wide — prevents iOS Safari input focus zoom */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]),
+select,
+textarea {
+  font-size: max(16px, 1rem) !important;
 }
 
 /* Scrollbar Styling */
