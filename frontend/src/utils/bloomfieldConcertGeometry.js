@@ -33,10 +33,13 @@ const oy = 96;
 
 const pitchH = 3 * H + 2 * GAP_ROW;
 
+/** Y gap: bottom of wing column ↔ top of back row (80A) */
+const AISLE_WING_TO_SOUTH = 14;
+
 /** @typedef {{ id: string, zone: 'pitch'|'west'|'east'|'south', x: number, y: number, w: number, h: number, label: string }} ConcertBlockRect */
 
-function block(id, zone, x, y, label) {
-  return { id, zone, x, y, w: W, h: H, label };
+function block(id, zone, x, y, label, hh = H) {
+  return { id, zone, x, y, w: W, h: hh, label };
 }
 
 /** @typedef {{ x: number, y: number, w: number, h: number }} ConcertSpacerRect */
@@ -58,12 +61,24 @@ for (let i = 0; i < 5; i += 1) {
   CONCERT_BLOCKS.push(block(`C${n}`, 'pitch', oxBC + i * SX, oy + 2 * SY, `C${n}`));
 }
 
+// --- Back row Y (needed before wings so column height does not overlap 80A)
+const southY0 = oy + pitchH + AISLE_BACK;
+
+/** Six wing cells in span [oy, southY0 - AISLE_WING_TO_SOUTH); tighter than floor SY */
+const wingSpanMax = southY0 - AISLE_WING_TO_SOUTH;
+const wingInterGap = 3;
+const wingH = Math.max(
+  16,
+  Math.min(H, Math.floor((wingSpanMax - oy - 5 * wingInterGap) / 6))
+);
+const wingStep = wingH + wingInterGap;
+
 // --- Left wing: ONE vertical column (far left), top → bottom 106…101
 const xWest = oxA - AISLE_SIDE - W;
 const leftWingIds = ['106', '105', '104', '103', '102', '101'];
 for (let i = 0; i < 6; i += 1) {
   const id = leftWingIds[i];
-  CONCERT_BLOCKS.push(block(id, 'west', xWest, oy + i * SY, id));
+  CONCERT_BLOCKS.push(block(id, 'west', xWest, oy + i * wingStep, id, wingH));
 }
 
 // --- Right wing: ONE vertical column (far right), top → bottom 42…47
@@ -71,11 +86,10 @@ const xEast = oxA + pitchRowAW + AISLE_SIDE;
 const rightWingIds = ['42', '43', '44', '45', '46', '47'];
 for (let i = 0; i < 6; i += 1) {
   const id = rightWingIds[i];
-  CONCERT_BLOCKS.push(block(id, 'east', xEast, oy + i * SY, id));
+  CONCERT_BLOCKS.push(block(id, 'east', xEast, oy + i * wingStep, id, wingH));
 }
 
 // --- Back: two straight horizontal rows (80A–70A, 80B–71B)
-const southY0 = oy + pitchH + AISLE_BACK;
 const south11W = 11 * W + 10 * G;
 const southX0 = centerX - south11W / 2;
 for (let i = 0; i <= 10; i += 1) {
