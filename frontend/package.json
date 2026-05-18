@@ -11,8 +11,10 @@
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "@posthog/react": "^1.9.0",
     "axios": "^1.6.2",
     "lucide-react": "^1.8.0",
+    "posthog-js": "^1.374.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-helmet-async": "^3.0.0",

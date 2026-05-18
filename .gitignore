@@ -2,6 +2,11 @@
 .DS_Store
 Thumbs.db
 
+# Frontend env (Vite secrets / local overrides)
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
 # Local / CI SQLite artifacts (never commit)
 backend/tmp_*.db
 backend/db.sqlite3
