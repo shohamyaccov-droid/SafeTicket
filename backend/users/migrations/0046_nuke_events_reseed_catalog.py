@@ -30,6 +30,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('users', '0045_ticketalert_phone'),
+        ('wallets', '0002_backfill_user_wallets'),
     ]
 
     operations = [

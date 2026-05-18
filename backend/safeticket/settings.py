@@ -123,6 +123,7 @@ INSTALLED_APPS = _INSTALLED_CORE + [
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'users',
+    'wallets',
 ]
 
 MIDDLEWARE = [

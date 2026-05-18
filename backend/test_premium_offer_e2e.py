@@ -18,6 +18,18 @@ from users.pricing import expected_buy_now_total
 User = get_user_model()
 
 
+@override_settings(
+    REST_FRAMEWORK={
+        **settings.REST_FRAMEWORK,
+        'DEFAULT_THROTTLE_RATES': {
+            **settings.REST_FRAMEWORK.get('DEFAULT_THROTTLE_RATES', {}),
+            'offers': '10000/minute',
+            'offers_mutations': '10000/minute',
+            'checkout': '10000/minute',
+            'checkout_reserve': '10000/minute',
+        },
+    }
+)
 class PremiumOfferE2ETest(TestCase):
     """E2E test for premium offer modal and routing"""
 
@@ -172,15 +184,6 @@ class PremiumOfferE2ETest(TestCase):
         print("  - Buyer does NOT see offer in 'Received': OK")
         print("  - Quick button calculations correct: OK")
 
-    @override_settings(
-        REST_FRAMEWORK={
-            **settings.REST_FRAMEWORK,
-            'DEFAULT_THROTTLE_RATES': {
-                **settings.REST_FRAMEWORK.get('DEFAULT_THROTTLE_RATES', {}),
-                'offers': '1000/min',
-            },
-        }
-    )
     def test_seller_can_accept_when_buyer_holds_checkout_reservation(self):
         """
         Regression: buyer may reserve (buy-now click) after placing an offer.
@@ -214,15 +217,6 @@ class PremiumOfferE2ETest(TestCase):
         self.assertEqual(response.status_code, 200, response.content.decode())
         self.assertEqual(response.json().get('status'), 'accepted')
 
-    @override_settings(
-        REST_FRAMEWORK={
-            **settings.REST_FRAMEWORK,
-            'DEFAULT_THROTTLE_RATES': {
-                **settings.REST_FRAMEWORK.get('DEFAULT_THROTTLE_RATES', {}),
-                'offers': '1000/min',
-            },
-        }
-    )
     def test_purchase_completed_true_after_paid_order(self):
         """Completed purchase (paid order + related_offer) → API exposes purchase_completed for UI lock."""
         response = self.buyer_client.post(
