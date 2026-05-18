@@ -1,0 +1,11 @@
+{
+  "name": "safeticket-concert-seating",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Scaled concert bowl geometry and map styles for SafeTicket",
+  "exports": {
+    "./geometry.js": "./geometry.js",
+    "./Map.css": "./Map.css"
+  }
+}
