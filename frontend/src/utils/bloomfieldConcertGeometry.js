@@ -126,3 +126,99 @@ export const STAGE_RECT = {
 
 export const STAGE_LABEL_CX = STAGE_RECT.x + STAGE_RECT.w / 2;
 export const STAGE_LABEL_CY = STAGE_RECT.y + STAGE_RECT.h / 2;
+
+/**
+ * Chamfered rectangle → octagon points (clean modern edges, not a plain box).
+ * @param {number} x
+ * @param {number} y
+ * @param {number} w
+ * @param {number} h
+ * @param {number} c
+ * @returns {string}
+ */
+function chamferedRectPoints(x, y, w, h, c) {
+  const cc = Math.min(c, w / 2 - 0.5, h / 2 - 0.5);
+  return [
+    [x + cc, y],
+    [x + w - cc, y],
+    [x + w, y + cc],
+    [x + w, y + h - cc],
+    [x + w - cc, y + h],
+    [x + cc, y + h],
+    [x, y + h - cc],
+    [x, y + cc],
+  ]
+    .map((p) => `${p[0]},${p[1]}`)
+    .join(' ');
+}
+
+/**
+ * Large light-gray ambient zones (non-seating / void) around the bowl.
+ * @returns {{ id: string, points: string }[]}
+ */
+export function getConcertAmbientPolygons() {
+  const pad = 10;
+  const c = 18;
+  const westW = Math.max(24, xWest0 - 20);
+  const west = chamferedRectPoints(8, oy - pad - 4, westW, southY2 + H + pad * 2 - (oy - pad - 4) + 4, c);
+  const eastStart = xEast1 + W + G + 4;
+  const eastW = Math.max(28, VIEW_W - eastStart - 12);
+  const east = chamferedRectPoints(eastStart, oy - pad - 4, eastW, southY2 + H + pad * 2 - (oy - pad - 4) + 4, c);
+  const southW = south11W + pad * 2 + 28;
+  const southX = VIEW_W / 2 - southW / 2;
+  const south = chamferedRectPoints(southX, southY2 - pad - 2, southW, H + pad * 2 + 18, 14);
+  return [
+    { id: 'ambient-west', points: west },
+    { id: 'ambient-east', points: east },
+    { id: 'ambient-south', points: south },
+  ];
+}
+
+/**
+ * Irregular quadrilateral from logical block — slight taper by zone for an integrated arena silhouette.
+ * @param {{ id: string, zone: string, x: number, y: number, w: number, h: number, label: string }} b
+ * @returns {string} SVG `points` for <polygon>
+ */
+export function concertBlockPolygonPoints(b) {
+  const { x, y, w, h, zone } = b;
+  const skew = Math.min(9, w * 0.18);
+  const inset = 1.5;
+  if (zone === 'pitch') {
+    return [
+      [x + skew, y + inset],
+      [x + w - skew, y + inset],
+      [x + w - inset * 0.6, y + h - inset],
+      [x + inset * 0.6, y + h - inset],
+    ]
+      .map((p) => `${p[0]},${p[1]}`)
+      .join(' ');
+  }
+  if (zone === 'west') {
+    return [
+      [x + inset, y + inset],
+      [x + w - skew * 0.35, y + skew * 0.25 + inset],
+      [x + w - inset, y + h - skew * 0.25 - inset],
+      [x + inset, y + h - inset],
+    ]
+      .map((p) => `${p[0]},${p[1]}`)
+      .join(' ');
+  }
+  if (zone === 'east') {
+    return [
+      [x + skew * 0.35, y + skew * 0.25 + inset],
+      [x + w - inset, y + inset],
+      [x + w - inset, y + h - inset],
+      [x + skew * 0.25, y + h - inset],
+    ]
+      .map((p) => `${p[0]},${p[1]}`)
+      .join(' ');
+  }
+  return [
+    [x + inset, y + inset * 0.9],
+    [x + w - inset, y + inset],
+    [x + w - skew * 0.4, y + h - inset],
+    [x + skew * 0.4, y + h - inset],
+  ]
+    .map((p) => `${p[0]},${p[1]}`)
+    .join(' ');
+}

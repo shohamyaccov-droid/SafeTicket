@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types -- project does not use PropTypes consistently */
-import { useState, useMemo, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useVenueMapPanZoom } from '../hooks/useVenueMapPanZoom';
 import { getTicketPrice, formatMoney, resolveTicketCurrency } from '../utils/priceFormat';
 import {
@@ -10,21 +10,16 @@ import {
   STAGE_RECT,
   STAGE_LABEL_CX,
   STAGE_LABEL_CY,
+  getConcertAmbientPolygons,
+  concertBlockPolygonPoints,
 } from '../utils/bloomfieldConcertGeometry';
+import './BloomfieldConcertMap.css';
 
-const FILL_DEFAULT = '#e5e7eb';
-const STROKE_SECTION = '#ffffff';
-const FILL_ACTIVE = '#a3e635';
 const STAGE_FILL = '#374151';
 const STAGE_STROKE = '#1f2937';
-const TEXT_SECTION_MUTED = '#9ca3af';
-const TEXT_ON_GREEN = '#14532d';
-const ROSE_600 = '#e11d48';
-const BEST_BADGE_FILL = '#14532d';
-const PIN_INVERTED = '#222222';
-
-const STROKE_INACTIVE_W = 1.25;
-const STROKE_HIGHLIGHT_W = 2.5;
+const STROKE_SECTION = 'rgba(255,255,255,0.55)';
+const STROKE_INACTIVE_W = 1.15;
+const STROKE_HIGHLIGHT_W = 3;
 
 function blockCenter(b) {
   return { cx: b.x + b.w / 2, cy: b.y + b.h / 2 };
@@ -54,42 +49,58 @@ function globalMinListingPrice(rows) {
   return minP;
 }
 
-function layoutPins(rows) {
-  const floorPrice = globalMinListingPrice(rows);
-  const byBlock = {};
+function globalMaxListingPrice(rows) {
+  let maxP = -Infinity;
   for (const row of rows) {
-    const bid = row.bloomfield?.blockId;
-    if (bid == null || bid === '') continue;
-    const k = String(bid);
-    if (!byBlock[k]) byBlock[k] = [];
-    byBlock[k].push(row);
+    const raw = parseFloat(getTicketPrice(row.firstTicket));
+    if (Number.isFinite(raw) && raw > maxP) maxP = raw;
   }
-  const pins = [];
-  for (const bid of Object.keys(byBlock)) {
-    const list = byBlock[bid];
-    const rep = pickCheapestRow(list);
-    if (!rep) continue;
-    const b = CONCERT_BLOCKS.find((x) => String(x.id) === String(bid));
-    if (!b) continue;
-    const { cx, cy } = blockCenter(b);
-    const t = rep.firstTicket;
-    const raw = parseFloat(getTicketPrice(t));
-    const cur = resolveTicketCurrency(t);
-    const priceLabel = formatMoney(Number.isFinite(raw) ? raw : 0, cur);
-    const n = rep.group.available_count ?? 0;
-    const isBestPrice =
-      Number.isFinite(raw) && Number.isFinite(floorPrice) && Math.abs(raw - floorPrice) < 0.005;
-    pins.push({
-      stableId: rep.stableId,
-      blockId: bid,
-      x: cx,
-      y: cy - 6,
-      priceLine: priceLabel,
-      urgency: n > 0 && n < 5 ? `${n} left` : null,
-      isBestPrice,
-    });
+  return maxP;
+}
+
+/** Higher price → deeper green (HSL). */
+function fillForPriceTier(minP, maxP, price) {
+  if (!Number.isFinite(price)) {
+    return { fill: '#d1d5db', tier: 0 };
   }
-  return pins;
+  const lo = Number.isFinite(minP) ? minP : price;
+  const hi = Number.isFinite(maxP) ? maxP : price;
+  const span = hi > lo ? hi - lo : 0;
+  const t = span > 0 ? Math.min(1, Math.max(0, (price - lo) / span)) : 0;
+  const L = 90 - t * 44;
+  const S = 36 + t * 34;
+  const H = 142 + t * 12;
+  return { fill: `hsl(${H}, ${S}%, ${L}%)`, tier: t };
+}
+
+function labelColorsForTier(tier) {
+  if (tier >= 0.58) {
+    return { main: '#f8fafc', sub: 'rgba(248,250,252,0.88)', sec: 'rgba(248,250,252,0.78)' };
+  }
+  return { main: '#0f172a', sub: '#334155', sec: '#1e293b' };
+}
+
+function availabilityLine(rep, floorPrice) {
+  const avail = rep.group?.available_count ?? 0;
+  const raw = parseFloat(getTicketPrice(rep.firstTicket));
+  const bf = rep.bloomfield;
+  if (bf?.isTopChoice) {
+    return 'Amazing';
+  }
+  if (avail > 0 && avail < 5) {
+    return `${avail} left`;
+  }
+  if (
+    Number.isFinite(raw) &&
+    Number.isFinite(floorPrice) &&
+    Math.abs(raw - floorPrice) < 0.02
+  ) {
+    return 'Best value';
+  }
+  if (avail >= 12) {
+    return `${avail} avail`;
+  }
+  return null;
 }
 
 export default function BloomfieldConcertMap({
@@ -98,8 +109,9 @@ export default function BloomfieldConcertMap({
   onSelectGroup,
   onHoverGroup,
 }) {
-  const [pinHoverId, setPinHoverId] = useState(null);
   const panZoom = useVenueMapPanZoom({ minScale: 0.65, maxScale: 2.8, zoomStep: 0.14 });
+
+  const ambientPolygons = useMemo(() => getConcertAmbientPolygons(), []);
 
   const blocksWithListings = useMemo(() => {
     const s = new Set();
@@ -117,15 +129,29 @@ export default function BloomfieldConcertMap({
     return raw != null && raw !== '' ? String(raw) : null;
   }, [rows, highlightStableId]);
 
-  const pins = useMemo(() => layoutPins(rows), [rows]);
+  const minP = useMemo(() => globalMinListingPrice(rows), [rows]);
+  const maxP = useMemo(() => globalMaxListingPrice(rows), [rows]);
+
+  const blockRowsById = useMemo(() => {
+    const m = {};
+    for (const r of rows) {
+      const bid = r.bloomfield?.blockId;
+      if (bid == null || bid === '') continue;
+      const k = String(bid);
+      if (!m[k]) m[k] = [];
+      m[k].push(r);
+    }
+    return m;
+  }, [rows]);
+
+  const floorPrice = Number.isFinite(minP) ? minP : null;
 
   const firstRowInBlock = useCallback(
     (blockId) => {
-      const b = String(blockId);
-      const list = rows.filter((r) => String(r.bloomfield?.blockId ?? '') === b);
+      const list = blockRowsById[String(blockId)] ?? [];
       return pickCheapestRow(list) ?? undefined;
     },
-    [rows]
+    [blockRowsById]
   );
 
   const handleBlockEnter = (blockId) => {
@@ -144,10 +170,6 @@ export default function BloomfieldConcertMap({
     const first = firstRowInBlock(blockId);
     if (first) onSelectGroup?.(first.stableId);
   };
-
-  const pinInverted = (stableId) =>
-    (highlightStableId != null && String(stableId) === String(highlightStableId)) ||
-    (pinHoverId != null && String(stableId) === String(pinHoverId));
 
   return (
     <div className="bloomfield-map-root relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -190,20 +212,24 @@ export default function BloomfieldConcertMap({
             aria-label="מפת הושבה — אצטדיון בלומפילד — הופעה"
           >
             <defs>
-              <filter id="bfc-pin-shadow" x="-40%" y="-40%" width="180%" height="180%">
-                <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000000" floodOpacity="0.12" />
+              <filter id="bfc-seat-soft" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#0f172a" floodOpacity="0.08" />
               </filter>
             </defs>
 
-            <rect width={VIEW_W} height={VIEW_H} fill="#f1f5f9" />
+            <rect width={VIEW_W} height={VIEW_H} fill="#f8fafc" />
+
+            {ambientPolygons.map((z) => (
+              <polygon key={z.id} className="bloomfield-concert-map__ambient" points={z.points} />
+            ))}
 
             <rect
               x={STAGE_RECT.x}
               y={STAGE_RECT.y}
               width={STAGE_RECT.w}
               height={STAGE_RECT.h}
-              rx={4}
-              ry={4}
+              rx={6}
+              ry={6}
               fill={STAGE_FILL}
               stroke={STAGE_STROKE}
               strokeWidth="1.5"
@@ -214,7 +240,7 @@ export default function BloomfieldConcertMap({
               textAnchor="middle"
               dominantBaseline="central"
               fill="#ffffff"
-              fontSize="13"
+              fontSize="14"
               fontWeight="800"
               fontFamily="system-ui, sans-serif"
               style={{ pointerEvents: 'none', userSelect: 'none' }}
@@ -223,11 +249,11 @@ export default function BloomfieldConcertMap({
             </text>
             <text
               x={STAGE_LABEL_CX}
-              y={STAGE_LABEL_CY + 14}
+              y={STAGE_LABEL_CY + 15}
               textAnchor="middle"
               dominantBaseline="central"
-              fill="rgba(255,255,255,0.85)"
-              fontSize="9"
+              fill="rgba(255,255,255,0.88)"
+              fontSize="10"
               fontWeight="600"
               fontFamily="system-ui, sans-serif"
               style={{ pointerEvents: 'none', userSelect: 'none' }}
@@ -235,178 +261,100 @@ export default function BloomfieldConcertMap({
               במה
             </text>
 
-            {CONCERT_SPACERS.map((s, idx) => (
-              <rect
-                key={`spacer-${idx}`}
-                x={s.x}
-                y={s.y}
-                width={s.w}
-                height={s.h}
-                rx={3}
-                ry={3}
-                fill="#e2e8f0"
-                stroke="#cbd5e1"
-                strokeWidth={STROKE_INACTIVE_W}
-                style={{ pointerEvents: 'none' }}
-              />
-            ))}
+            {CONCERT_SPACERS.map((s, idx) => {
+              const pts = [
+                [s.x + 2, s.y + 2],
+                [s.x + s.w - 2, s.y + 2],
+                [s.x + s.w - 1, s.y + s.h - 2],
+                [s.x + 1, s.y + s.h - 2],
+              ]
+                .map((p) => `${p[0]},${p[1]}`)
+                .join(' ');
+              return (
+                <polygon key={`spacer-${idx}`} className="bloomfield-concert-map__spacer" points={pts} />
+              );
+            })}
 
             {CONCERT_BLOCKS.map((b) => {
               const sid = String(b.id);
               const has = blocksWithListings.has(sid);
               const isHi = highlightBlockId === sid;
-              const fill = has ? FILL_ACTIVE : FILL_DEFAULT;
-              return (
-                <rect
-                  key={sid}
-                  data-section-id={sid}
-                  x={b.x}
-                  y={b.y}
-                  width={b.w}
-                  height={b.h}
-                  rx={3}
-                  ry={3}
-                  fill={fill}
-                  stroke={isHi ? '#0ea5e9' : STROKE_SECTION}
-                  strokeWidth={isHi ? STROKE_HIGHLIGHT_W : STROKE_INACTIVE_W}
-                  className="transition-[stroke,fill-opacity] duration-150 ease-out"
-                  style={{ cursor: has ? 'pointer' : 'default' }}
-                  onMouseEnter={() => handleBlockEnter(sid)}
-                  onMouseLeave={handleBlockLeave}
-                  onClick={() => handleBlockClick(sid)}
-                />
-              );
-            })}
-
-            {CONCERT_BLOCKS.map((b) => {
-              const sid = String(b.id);
-              const has = blocksWithListings.has(sid);
+              const rep = has ? firstRowInBlock(sid) : undefined;
+              const raw = rep ? parseFloat(getTicketPrice(rep.firstTicket)) : NaN;
+              const { fill, tier } = has
+                ? fillForPriceTier(minP, maxP, raw)
+                : { fill: '#d1d5db', tier: 0 };
+              const cur = rep ? resolveTicketCurrency(rep.firstTicket) : 'ILS';
+              const priceLine =
+                has && Number.isFinite(raw) ? formatMoney(raw, cur) : '';
+              const status = rep ? availabilityLine(rep, floorPrice) : null;
+              const { main, sub, sec } = has ? labelColorsForTier(tier) : { main: '#64748b', sub: '#94a3b8', sec: '#64748b' };
+              const pts = concertBlockPolygonPoints(b);
               const { cx, cy } = blockCenter(b);
-              return (
-                <text
-                  key={`lbl-${sid}`}
-                  x={cx}
-                  y={cy}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fill={has ? TEXT_ON_GREEN : TEXT_SECTION_MUTED}
-                  fontSize={sid.length > 3 ? 10.5 : 12}
-                  fontWeight={has ? '800' : '600'}
-                  fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-                  style={{
-                    pointerEvents: 'none',
-                    userSelect: 'none',
-                    writingMode: 'horizontal-tb',
-                  }}
-                >
-                  {b.label}
-                </text>
-              );
-            })}
-
-            {pins.map((p) => {
-              const hasUrgency = Boolean(p.urgency);
-              const bodyH = hasUrgency ? 34 : 26;
-              const bodyW = p.isBestPrice ? 118 : 100;
-              const pillR = bodyH / 2;
-              const bodyTop = -bodyH - 4;
-              const inverted = pinInverted(p.stableId);
-              const bg = inverted ? PIN_INVERTED : '#ffffff';
-              const stroke = inverted ? '#404040' : '#f3f4f6';
-              const lineFill = inverted ? '#ffffff' : '#000000';
-              const urgentFill = inverted ? '#fda4af' : ROSE_600;
-
-              const priceY = hasUrgency ? bodyTop + 12 : bodyTop + bodyH / 2;
-              const urgentY = bodyTop + 24;
+              const lineCount = 1 + (status ? 1 : 0) + 1;
+              const startY = cy - (lineCount === 2 ? 8 : lineCount === 3 ? 16 : 6);
 
               return (
-                <g
-                  key={p.blockId}
-                  transform={`translate(${p.x}, ${p.y})`}
-                  style={{ cursor: 'pointer' }}
-                  onMouseEnter={() => {
-                    setPinHoverId(p.stableId);
-                    onHoverGroup?.(p.stableId);
-                  }}
-                  onMouseLeave={() => {
-                    setPinHoverId(null);
-                    onHoverGroup?.(null);
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectGroup?.(p.stableId);
-                  }}
-                >
-                  <g filter="url(#bfc-pin-shadow)">
-                    <rect
-                      x={-bodyW / 2}
-                      y={bodyTop}
-                      width={bodyW}
-                      height={bodyH}
-                      rx={pillR}
-                      ry={pillR}
-                      fill={bg}
-                      stroke={stroke}
-                      strokeWidth={1}
-                    />
-                  </g>
-                  {p.isBestPrice ? (
-                    <g pointerEvents="none">
-                      <rect
-                        x={-bodyW / 2 + 7}
-                        y={bodyTop + (bodyH - 18) / 2}
-                        width={18}
-                        height={18}
-                        rx={4}
-                        ry={4}
-                        fill={BEST_BADGE_FILL}
-                      />
-                      <text
-                        x={-bodyW / 2 + 16}
-                        y={bodyTop + bodyH / 2}
-                        textAnchor="middle"
-                        dominantBaseline="central"
-                        fill="#ffffff"
-                        fontSize="10"
-                        fontWeight="800"
-                        style={{ direction: 'ltr' }}
-                      >
-                        $
-                      </text>
-                    </g>
-                  ) : null}
-                  <text
-                    x={p.isBestPrice ? 7 : 0}
-                    y={priceY}
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    fill={lineFill}
-                    fontSize="11.5"
-                    fontWeight="800"
-                    fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-                    style={{
-                      pointerEvents: 'none',
-                      direction: 'ltr',
-                      unicodeBidi: 'isolate',
+                <g key={sid}>
+                  <polygon
+                    data-section-id={sid}
+                    points={pts}
+                    fill={fill}
+                    stroke={isHi ? '#0ea5e9' : STROKE_SECTION}
+                    strokeWidth={isHi ? STROKE_HIGHLIGHT_W : STROKE_INACTIVE_W}
+                    filter={has ? 'url(#bfc-seat-soft)' : undefined}
+                    className={`bloomfield-concert-map__seat${has ? ' bloomfield-concert-map__seat--listed' : ''}${
+                      isHi ? ' bloomfield-concert-map__seat--active' : ''
+                    }`}
+                    style={{ transition: 'stroke 0.15s ease, stroke-width 0.15s ease' }}
+                    onMouseEnter={() => handleBlockEnter(sid)}
+                    onMouseLeave={handleBlockLeave}
+                    onClick={() => handleBlockClick(sid)}
+                    role={has ? 'button' : undefined}
+                    tabIndex={has ? 0 : undefined}
+                    onKeyDown={(e) => {
+                      if (!has) return;
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleBlockClick(sid);
+                      }
                     }}
-                  >
-                    {p.priceLine}
-                  </text>
-                  {hasUrgency ? (
+                    aria-label={has ? `${b.label}, ${priceLine}` : b.label}
+                  />
+                  {has ? (
                     <text
-                      x={p.isBestPrice ? 7 : 0}
-                      y={urgentY}
+                      className="bloomfield-concert-map__seat-label"
+                      textAnchor="middle"
+                      fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+                      style={{ direction: 'ltr', unicodeBidi: 'isolate' }}
+                    >
+                      <tspan x={cx} y={startY} fill={main} fontSize="13.5" fontWeight="800">
+                        {priceLine}
+                      </tspan>
+                      {status ? (
+                        <tspan x={cx} dy="13" fill={sub} fontSize="9.5" fontWeight="700">
+                          {status}
+                        </tspan>
+                      ) : null}
+                      <tspan x={cx} dy={status ? '12' : '13'} fill={sec} fontSize="11" fontWeight="800">
+                        {b.label}
+                      </tspan>
+                    </text>
+                  ) : (
+                    <text
+                      className="bloomfield-concert-map__seat-label"
+                      x={cx}
+                      y={cy}
                       textAnchor="middle"
                       dominantBaseline="central"
-                      fill={urgentFill}
-                      fontSize="9.5"
-                      fontWeight="600"
+                      fill="#94a3b8"
+                      fontSize={sid.length > 3 ? 10.5 : 12}
+                      fontWeight="700"
                       fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-                      style={{ pointerEvents: 'none', lineHeight: 1 }}
                     >
-                      {p.urgency}
+                      {b.label}
                     </text>
-                  ) : null}
+                  )}
                 </g>
               );
             })}

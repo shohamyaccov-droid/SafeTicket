@@ -1,0 +1,32 @@
+/* Bloomfield concert map — Viagogo-style venue blocks + selection emphasis */
+.bloomfield-concert-map__ambient {
+  fill: #e2e8f0;
+  stroke: #cbd5e1;
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.bloomfield-concert-map__spacer {
+  fill: #e8edf3;
+  stroke: #cfd8e3;
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.bloomfield-concert-map__seat {
+  cursor: default;
+  transition: filter 0.15s ease, stroke-width 0.15s ease, stroke 0.15s ease;
+}
+
+.bloomfield-concert-map__seat--listed {
+  cursor: pointer;
+}
+
+.bloomfield-concert-map__seat--active {
+  filter: drop-shadow(0 0 6px rgba(14, 165, 233, 0.55));
+}
+
+.bloomfield-concert-map__seat-label {
+  pointer-events: none;
+  user-select: none;
+}
