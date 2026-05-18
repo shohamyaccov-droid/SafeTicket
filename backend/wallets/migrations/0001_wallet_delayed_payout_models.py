@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('users', '0045_ticketalert_phone'),
+        ('users', '0046_nuke_events_reseed_catalog'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

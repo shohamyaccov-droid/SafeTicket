@@ -4,14 +4,30 @@ from django.db import migrations
 
 
 def nuke_events_and_tickets_then_reseed(apps, schema_editor):
+    """
+    Seed creates users. Wallet post_save must not touch DB until wallets.0001 creates tables —
+    wallets.signals sets SKIP_WALLET_SIGNAL while seeding.
+    """
+    try:
+        import wallets.signals as wallet_sig
+    except ImportError:
+        wallet_sig = None
+
+    if wallet_sig is not None:
+        wallet_sig.SKIP_WALLET_SIGNAL = True
+
     Ticket = apps.get_model('users', 'Ticket')
     Event = apps.get_model('users', 'Event')
     Ticket.objects.all().delete()
     Event.objects.all().delete()
 
-    from seed_production import run_after_total_wipe
+    try:
+        from seed_production import run_after_total_wipe
 
-    run_after_total_wipe()
+        run_after_total_wipe()
+    finally:
+        if wallet_sig is not None:
+            wallet_sig.SKIP_WALLET_SIGNAL = False
 
 
 def noop_reverse(apps, schema_editor):
@@ -30,7 +46,6 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('users', '0045_ticketalert_phone'),
-        ('wallets', '0002_backfill_user_wallets'),
     ]
 
     operations = [
