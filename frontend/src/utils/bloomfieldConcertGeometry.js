@@ -10,13 +10,21 @@ export const VIEW_H = 640;
 /** Single standard cell — all interactive blocks use these dimensions */
 export const CONCERT_CELL_W = 40;
 export const CONCERT_CELL_H = 30;
-export const CONCERT_GAP = 4;
+/** Horizontal gap between seat blocks (same row / ring) */
+export const CONCERT_GAP = 5;
+/** Vertical gap between tier rows (pitch A/B/C and south rows) — wider than horizontal for aisles */
+const GAP_ROW = 10;
 
 const W = CONCERT_CELL_W;
 const H = CONCERT_CELL_H;
 const G = CONCERT_GAP;
 const SX = W + G;
-const SY = H + G;
+const SY = H + GAP_ROW;
+
+/** Lateral concourse: pitch bowl ↔ west / east stands */
+const AISLE_PITCH_STAND = 24;
+/** Back concourse: last pitch row ↔ south ring */
+const AISLE_PITCH_SOUTH = 30;
 
 /** @typedef {{ id: string, zone: 'pitch'|'west'|'east'|'south', x: number, y: number, w: number, h: number, label: string }} ConcertBlockRect */
 
@@ -30,9 +38,9 @@ function block(id, zone, x, y, label) {
 /** Centered 6×3 pitch matrix; rows B/C use 5 seats + 1 spacer each */
 const pitchCols = 6;
 const pitchW = pitchCols * W + (pitchCols - 1) * G;
-const pitchH = 3 * H + 2 * G;
+const pitchH = 3 * H + 2 * GAP_ROW;
 const ox = VIEW_W / 2 - pitchW / 2;
-const oy = 102;
+const oy = 98;
 
 /** @type {ConcertBlockRect[]} */
 export const CONCERT_BLOCKS = [];
@@ -57,9 +65,9 @@ CONCERT_BLOCKS.push(block('C3', 'pitch', ox + 2 * SX, oy + 2 * SY, 'C3'));
 CONCERT_BLOCKS.push(block('C2', 'pitch', ox + 3 * SX, oy + 2 * SY, 'C2'));
 CONCERT_BLOCKS.push(block('C1', 'pitch', ox + 4 * SX, oy + 2 * SY, 'C1'));
 
-// West 2×3: 106,105,104 | 103,102,101
-const xWest0 = ox - G - 2 * SX;
-const xWest1 = ox - G - SX;
+// West 2×3: 106,105,104 | 103,102,101 (outer west ← → inner west touching lateral aisle)
+const xWest1 = ox - AISLE_PITCH_STAND - W;
+const xWest0 = xWest1 - SX;
 CONCERT_BLOCKS.push(block('106', 'west', xWest0, oy + 0 * SY, '106'));
 CONCERT_BLOCKS.push(block('105', 'west', xWest0, oy + 1 * SY, '105'));
 CONCERT_BLOCKS.push(block('104', 'west', xWest0, oy + 2 * SY, '104'));
@@ -67,18 +75,18 @@ CONCERT_BLOCKS.push(block('103', 'west', xWest1, oy + 0 * SY, '103'));
 CONCERT_BLOCKS.push(block('102', 'west', xWest1, oy + 1 * SY, '102'));
 CONCERT_BLOCKS.push(block('101', 'west', xWest1, oy + 2 * SY, '101'));
 
-// East 2×3: 42,43,44 | 45,46,47
-const xEast0 = ox + pitchW + G;
-const xEast1 = xEast0 + SX;
-CONCERT_BLOCKS.push(block('42', 'east', xEast0, oy + 0 * SY, '42'));
-CONCERT_BLOCKS.push(block('43', 'east', xEast0, oy + 1 * SY, '43'));
-CONCERT_BLOCKS.push(block('44', 'east', xEast0, oy + 2 * SY, '44'));
-CONCERT_BLOCKS.push(block('45', 'east', xEast1, oy + 0 * SY, '45'));
-CONCERT_BLOCKS.push(block('46', 'east', xEast1, oy + 1 * SY, '46'));
-CONCERT_BLOCKS.push(block('47', 'east', xEast1, oy + 2 * SY, '47'));
+// East 2×3: mirror west — inner column (45–47) touches lateral aisle, outer (42–44) farther east
+const xEastInner = ox + pitchW + AISLE_PITCH_STAND;
+const xEastOuter = xEastInner + SX;
+CONCERT_BLOCKS.push(block('42', 'east', xEastOuter, oy + 0 * SY, '42'));
+CONCERT_BLOCKS.push(block('43', 'east', xEastOuter, oy + 1 * SY, '43'));
+CONCERT_BLOCKS.push(block('44', 'east', xEastOuter, oy + 2 * SY, '44'));
+CONCERT_BLOCKS.push(block('45', 'east', xEastInner, oy + 0 * SY, '45'));
+CONCERT_BLOCKS.push(block('46', 'east', xEastInner, oy + 1 * SY, '46'));
+CONCERT_BLOCKS.push(block('47', 'east', xEastInner, oy + 2 * SY, '47'));
 
-// South 80A–70A (11), 80B–71B (10)
-const southY0 = oy + pitchH + G;
+// South 80A–70A (11), 80B–71B (10) — centered on venue midline (row B half-step is classic bowl geometry)
+const southY0 = oy + pitchH + AISLE_PITCH_SOUTH;
 const south11W = 11 * W + 10 * G;
 const southX0 = VIEW_W / 2 - south11W / 2;
 for (let i = 0; i <= 10; i += 1) {
@@ -87,7 +95,7 @@ for (let i = 0; i <= 10; i += 1) {
   CONCERT_BLOCKS.push(block(id, 'south', southX0 + i * SX, southY0, id));
 }
 
-const southY1 = southY0 + H + G;
+const southY1 = southY0 + SY;
 const south10W = 10 * W + 9 * G;
 const southX1 = VIEW_W / 2 - south10W / 2;
 for (let i = 0; i <= 9; i += 1) {
@@ -96,25 +104,11 @@ for (let i = 0; i <= 9; i += 1) {
   CONCERT_BLOCKS.push(block(id, 'south', southX1 + i * SX, southY1, id));
 }
 
-const southY2 = southY1 + H + G;
-const southSpacerRow = [];
-for (let i = 0; i < 11; i += 1) {
-  southSpacerRow.push({ x: southX0 + i * SX, y: southY2, w: W, h: H });
-}
-
-/** Spacers: same geometry as seats, non-interactive */
-export const CONCERT_SPACERS = /** @type {ConcertSpacerRect[]} */ ([
-  { x: ox + 0 * SX, y: oy + 1 * SY, w: W, h: H },
-  { x: ox + 5 * SX, y: oy + 2 * SY, w: W, h: H },
-  // Outer matrix padding — flush with side stands (3 rows)
-  { x: xWest0 - SX, y: oy + 0 * SY, w: W, h: H },
-  { x: xWest0 - SX, y: oy + 1 * SY, w: W, h: H },
-  { x: xWest0 - SX, y: oy + 2 * SY, w: W, h: H },
-  { x: xEast1 + SX, y: oy + 0 * SY, w: W, h: H },
-  { x: xEast1 + SX, y: oy + 1 * SY, w: W, h: H },
-  { x: xEast1 + SX, y: oy + 2 * SY, w: W, h: H },
-  ...southSpacerRow,
-]);
+/**
+ * Intentionally empty: inner B/C “holes” and outer voids use the map background only.
+ * (Previously drew gray spacer polygons that read as random empty seat blocks.)
+ */
+export const CONCERT_SPACERS = /** @type {ConcertSpacerRect[]} */ ([]);
 
 /** Stage — single flat rectangle (no curved path) */
 export const STAGE_RECT = {
@@ -157,16 +151,27 @@ function chamferedRectPoints(x, y, w, h, c) {
  * @returns {{ id: string, points: string }[]}
  */
 export function getConcertAmbientPolygons() {
-  const pad = 10;
+  const padT = 12;
+  const padB = 22;
   const c = 18;
-  const westW = Math.max(24, xWest0 - 20);
-  const west = chamferedRectPoints(8, oy - pad - 4, westW, southY2 + H + pad * 2 - (oy - pad - 4) + 4, c);
-  const eastStart = xEast1 + W + G + 4;
-  const eastW = Math.max(28, VIEW_W - eastStart - 12);
-  const east = chamferedRectPoints(eastStart, oy - pad - 4, eastW, southY2 + H + pad * 2 - (oy - pad - 4) + 4, c);
-  const southW = south11W + pad * 2 + 28;
+  const topY = Math.min(oy - padT, STAGE_RECT.y + STAGE_RECT.h + 2);
+  const bottomY = southY1 + H + padB;
+
+  const westInner = xWest0;
+  const westW = Math.max(32, westInner - 20 - 8);
+  const west = chamferedRectPoints(8, topY, westW, bottomY - topY, c);
+
+  const eastStart = xEastOuter + W + 14;
+  const eastW = Math.max(32, VIEW_W - eastStart - 8);
+  const east = chamferedRectPoints(eastStart, topY, eastW, bottomY - topY, c);
+
+  const southMarginX = 40;
+  const southW = Math.min(VIEW_W - 20, south11W + southMarginX * 2);
   const southX = VIEW_W / 2 - southW / 2;
-  const south = chamferedRectPoints(southX, southY2 - pad - 2, southW, H + pad * 2 + 18, 14);
+  const southTop = southY0 - 18;
+  const southH = bottomY - southTop + 6;
+  const south = chamferedRectPoints(southX, southTop, southW, southH, 14);
+
   return [
     { id: 'ambient-west', points: west },
     { id: 'ambient-east', points: east },
@@ -181,8 +186,9 @@ export function getConcertAmbientPolygons() {
  */
 export function concertBlockPolygonPoints(b) {
   const { x, y, w, h, zone } = b;
-  const skew = Math.min(9, w * 0.18);
-  const inset = 1.5;
+  /** Small skew only — large skew made adjacent tiers look fused */
+  const skew = Math.min(3.5, w * 0.06);
+  const inset = 2;
   if (zone === 'pitch') {
     return [
       [x + skew, y + inset],
