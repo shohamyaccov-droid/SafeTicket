@@ -10,7 +10,10 @@
  *   or storing any PII.
  */
 
-const ANALYTICS_ENDPOINT = '/api/users/analytics/track/';
+import { API_URL } from '../services/api';
+
+/** Absolute API URL — required when the SPA is on a separate static host from the API. */
+const ANALYTICS_ENDPOINT = `${API_URL.replace(/\/+$/, '')}/users/analytics/track/`;
 
 /** Lazily creates and caches the anonymous session ID for this browser session. */
 function getSessionId() {

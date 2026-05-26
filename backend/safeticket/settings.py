@@ -52,12 +52,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dummy-key-for-dev')
-
 # SECURITY WARNING: don't run with debug turned on in production!
 # Set DEBUG=true in .env only for local dev. On Render, leave unset or false so errors are not leaked.
 DEBUG = os.environ.get('DEBUG', 'False').lower() in ('1', 'true', 'yes')
+
+# SECURITY WARNING: keep the secret key used in production secret!
+_secret_key = (os.environ.get('SECRET_KEY') or '').strip()
+if _secret_key:
+    SECRET_KEY = _secret_key
+elif DEBUG:
+    SECRET_KEY = 'django-insecure-dummy-key-for-dev'
+else:
+    raise ImproperlyConfigured(
+        'SECRET_KEY environment variable must be set when DEBUG=False.'
+    )
 
 # Platform commission rates (Decimal).
 # New model: sellers pay 0% (cold-start subsidy); buyers pay 15% service fee added at checkout.
@@ -501,7 +509,16 @@ FX_RATES_TO_ILS = {
 }
 
 # Public origins for buyer receipt emails (no trailing slash). On Render set both explicitly.
-API_PUBLIC_ORIGIN = os.environ.get('API_PUBLIC_ORIGIN', 'http://127.0.0.1:8000').rstrip('/')
+_api_public_origin = (os.environ.get('API_PUBLIC_ORIGIN') or '').strip().rstrip('/')
+if _api_public_origin:
+    API_PUBLIC_ORIGIN = _api_public_origin
+elif DEBUG:
+    API_PUBLIC_ORIGIN = 'http://127.0.0.1:8000'
+else:
+    raise ImproperlyConfigured(
+        'API_PUBLIC_ORIGIN environment variable must be set when DEBUG=False '
+        '(public HTTPS URL of this API service, no trailing slash).'
+    )
 
 # Payme.io — keys from environment only (sandbox: PAYME_GENERATE_SALE_URL test host).
 PAYME_MERCHANT_ID = (os.environ.get('PAYME_MERCHANT_ID') or '').strip()
@@ -537,12 +554,26 @@ FRONTEND_ORIGIN = (
 ).rstrip('/')
 # Transactional templates: users/templates/emails/*.html (+ .txt); sent via users.notifications.
 
-# Cache for OTP storage (10 min TTL)
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+# Cache for OTP storage (10 min TTL). LocMem is per-worker; set REDIS_URL on Render for shared cache.
+_REDIS_URL = (os.environ.get('REDIS_URL') or '').strip()
+if _REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': _REDIS_URL,
+        }
     }
-}
+else:
+    if not DEBUG and _on_render:
+        _logger.critical(
+            'REDIS_URL is not set: OTP and other cache keys use LocMemCache and will not '
+            'be shared across Gunicorn workers. Link a Redis instance and set REDIS_URL.'
+        )
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    }
 
 # Production security headers (proxy + cross-origin cookies on Render)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

@@ -132,7 +132,7 @@ function normalizeApiBase(url) {
   return base;
 }
 
-const API_URL = normalizeApiBase(import.meta.env.VITE_API_URL);
+export const API_URL = normalizeApiBase(import.meta.env.VITE_API_URL);
 
 /** CSRF for X-CSRFToken: prefer JSON warmup cache (cross-origin); else cookie (same-site dev). */
 function getCsrfTokenForRequest() {
