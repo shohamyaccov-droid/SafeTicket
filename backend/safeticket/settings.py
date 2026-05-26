@@ -255,6 +255,14 @@ if not USE_CLOUDINARY:
 # MediaCloudinaryStorage / RawMediaCloudinaryStorage see a fully configured SDK (avoids admin upload quirks).
 STORAGES = {
     'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    # Ticket PDFs (Ticket.pdf_file) — always defined; Cloudinary overrides below when USE_CLOUDINARY.
+    'ticket_pdfs': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'OPTIONS': {
+            'location': MEDIA_ROOT,
+            'base_url': MEDIA_URL,
+        },
+    },
     'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
 }
 CLOUDINARY_STORAGE = {}

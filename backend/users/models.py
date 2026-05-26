@@ -103,14 +103,11 @@ def _ticket_pdf_storage():
     """
     Ticket PDFs must upload as resource_type=raw on Cloudinary.
     Images (Artist/Event/User) use STORAGES['default'] → MediaCloudinaryStorage.
+    Local/dev uses STORAGES['ticket_pdfs'] → FileSystemStorage (see settings.STORAGES).
     """
-    from django.conf import settings
+    from django.core.files.storage import storages
 
-    if getattr(settings, 'USE_CLOUDINARY', False):
-        from django.core.files.storage import storages
-
-        return storages['ticket_pdfs']
-    return None
+    return storages['ticket_pdfs']
 
 
 class Event(models.Model):
