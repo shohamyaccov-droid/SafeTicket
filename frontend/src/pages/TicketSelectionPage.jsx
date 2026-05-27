@@ -82,26 +82,17 @@ const TicketSelectionPage = () => {
   const handleContinueToCheckout = () => {
     try {
       const maxQty = ticket?.available_quantity ?? ticket?.quantity ?? 1;
-      console.info('[TicketSelection] handleContinueToCheckout', {
-        hasTicket: !!ticket,
-        ticketId: ticket?.id,
-        quantity,
-        maxQty,
-      });
       if (!ticket) {
-        console.error('[TicketSelection] handleContinueToCheckout: no ticket in state');
         toastError('כרטיס לא זמין');
         return;
       }
       if (quantity > 0 && quantity <= maxQty) {
         setSelectedTicket(ticket);
         setShowCheckout(true);
-        console.info('[TicketSelection] showCheckout set true');
       } else {
-        console.warn('[TicketSelection] invalid quantity for checkout', { quantity, maxQty });
+        toastError(`כמות לא תקינה. ניתן לבחור בין 1 ל-${maxQty} כרטיסים`);
       }
     } catch (e) {
-      console.error('[TicketSelection] handleContinueToCheckout failed', e);
       toastError('לא ניתן לפתוח את הקופה');
     }
   };
@@ -258,6 +249,7 @@ const TicketSelectionPage = () => {
                 }}
                 min="1"
                 max={maxQuantity}
+                inputMode="numeric"
               />
               <button
                 className="quantity-button"

@@ -147,7 +147,6 @@ const ArtistEventsPage = () => {
           loading="lazy"
           decoding="async"
           onError={(e) => {
-            console.warn('[TradeTix] artist header image failed', artist.name, e.currentTarget.src);
             e.currentTarget.onerror = null;
             e.currentTarget.src = `https://via.placeholder.com/400x300/0045af/ffffff?text=${encodeURIComponent(artist.name || 'Artist')}`;
           }}

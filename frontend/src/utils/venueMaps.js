@@ -237,7 +237,6 @@ export const getVenueConfig = (venueName) => {
   // Hardcoded safe config - NEVER return null, always return Menora as fallback
   const safeConfig = VENUE_MAPS['מנורה מבטחים'] || VENUE_MAPS['מנורה תל אביב'] || Object.values(VENUE_MAPS)[0];
   const safeName = Object.keys(VENUE_MAPS).find(k => VENUE_MAPS[k] === safeConfig) || 'מנורה מבטחים';
-  console.warn('⚠️ Venue not matched, using safe fallback:', safeName);
   return { config: safeConfig, matchedName: safeName };
 };
 

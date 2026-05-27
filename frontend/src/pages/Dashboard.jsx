@@ -624,7 +624,6 @@ const Dashboard = () => {
       w.addEventListener('beforeunload', () => URL.revokeObjectURL(blobUrl), { once: true });
       setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000);
     } catch (err) {
-      console.error('handleViewReceipt', err);
       toastError('טעינת הקבלה נכשלה. אנא נסה שוב מאוחר יותר.');
     }
   };

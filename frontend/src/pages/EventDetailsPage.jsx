@@ -298,7 +298,6 @@ const EventDetailsPage = () => {
         return ticketsArray;
       } catch (e) {
         if (rethrow) throw e;
-        console.warn('[EventDetails] fetchTickets failed', e);
         return null;
       }
     },
@@ -487,7 +486,6 @@ const EventDetailsPage = () => {
       }
       
       if (!validSections.includes(sectionId)) {
-        console.warn(`Invalid section: ${sectionId} - not in arena topology (valid: 1-12 Lower/Upper)`);
         return;
       }
       
@@ -547,7 +545,6 @@ const EventDetailsPage = () => {
 
   const handleBuy = async (ticketGroup) => {
     if (!ticketGroup) {
-      console.error('[EventDetails] handleBuy: missing ticketGroup');
       return;
     }
     if (buyOpeningRef.current) return;
@@ -558,7 +555,6 @@ const EventDetailsPage = () => {
       try {
         freshTickets = await fetchTickets({ rethrow: true });
       } catch (err) {
-        console.error('[EventDetails] handleBuy: fetchTickets failed', err);
         setToast({
           message: 'לא ניתן לרענן את הרשימה. בדקו את החיבור ונסו שוב.',
           type: 'error',
@@ -579,7 +575,6 @@ const EventDetailsPage = () => {
         return;
       }
       if (!matchingFresh.tickets?.length) {
-        console.error('[EventDetails] handleBuy: fresh group has no tickets', matchingFresh);
         setToast({
           message: 'שגיאה בטעינת הכרטיס. נסה שוב.',
           type: 'error',
@@ -600,7 +595,6 @@ const EventDetailsPage = () => {
       }
       setShowCheckout(true);
     } catch (err) {
-      console.error('[EventDetails] handleBuy failed', err);
       setToast({
         message: 'לא ניתן לפתוח תשלום. נסה שוב.',
         type: 'error',
@@ -693,7 +687,6 @@ const EventDetailsPage = () => {
       });
       setOfferSubmitted(true);
     } catch (error) {
-      console.error('[EventDetails] Submit offer failed', error);
       const errorMsg = apiErrorMessageHe(error, 'שגיאה בשליחת ההצעה');
       setToast({ message: errorMsg, type: 'error' });
     } finally {
@@ -1581,7 +1574,6 @@ const EventDetailsPage = () => {
                     onClick={() => {
                       try {
                         if (!selectedOfferTicket) {
-                          console.error('[EventDetails] Buy now: no selectedOfferTicket');
                           setToast({ message: 'אין כרטיס נבחר', type: 'error' });
                           return;
                         }
@@ -1620,7 +1612,6 @@ const EventDetailsPage = () => {
                         setQuantity(offerQuantity);
                         setShowCheckout(true);
                       } catch (err) {
-                        console.error('[EventDetails] Buy now from offer modal failed', err);
                         setToast({
                           message: 'לא ניתן לפתוח תשלום. נסה שוב.',
                           type: 'error',

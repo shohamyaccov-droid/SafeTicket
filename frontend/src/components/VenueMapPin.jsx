@@ -137,7 +137,6 @@ const VenueMapPin = ({ venueName, sectionName }) => {
               loading="lazy"
               decoding="async"
               onError={(e) => {
-                console.warn('⚠️ Image failed to load, using SVG fallback');
                 setImageError(true);
               }}
             />

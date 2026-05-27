@@ -1345,6 +1345,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     placeholder="1234 5678 9012 3456"
                     maxLength="19"
                     dir="ltr"
+                  inputMode="numeric"
+                  autoComplete="cc-number"
                   />
                 </div>
 
@@ -1361,6 +1363,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                       placeholder="MM/YY"
                       maxLength="5"
                       dir="ltr"
+                      inputMode="numeric"
+                      autoComplete="cc-exp"
                     />
                   </div>
 
@@ -1376,6 +1380,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                       placeholder="123"
                       maxLength="4"
                       dir="ltr"
+                      inputMode="numeric"
+                      autoComplete="cc-csc"
                     />
                   </div>
                 </div>
