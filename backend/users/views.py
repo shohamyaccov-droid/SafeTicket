@@ -42,8 +42,12 @@ logger = logging.getLogger(__name__)
 
 
 def csrf_required(view):
-    """Override DRF's csrf_exempt so CSRF is enforced for cookie-based auth."""
-    view.csrf_exempt = False
+    """
+    API endpoints are authenticated via JWT (Authorization/Cookie), not Django sessions.
+    On cross-origin iOS Safari, CSRF cookies can be blocked by ITP and cause false 403s.
+    Keep these DRF endpoints CSRF-exempt and rely on auth/permissions/throttles instead.
+    """
+    view.csrf_exempt = True
     return view
 
 
