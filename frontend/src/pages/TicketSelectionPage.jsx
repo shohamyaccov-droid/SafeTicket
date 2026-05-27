@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ticketAPI } from '../services/api';
 import CheckoutModal from '../components/CheckoutModal';
@@ -20,12 +20,18 @@ import './TicketSelectionPage.css';
 const TicketSelectionPage = () => {
   const { ticketId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [showCheckout, setShowCheckout] = useState(false);
+  const returnToEventId = useMemo(() => {
+    const eventIdFromState = location.state?.eventId;
+    const eventIdFromTicket = ticket?.event_id || ticket?.event?.id;
+    return eventIdFromState || eventIdFromTicket || null;
+  }, [location.state?.eventId, ticket]);
 
   useEffect(() => {
     const fetchTicket = async () => {
@@ -184,6 +190,17 @@ const TicketSelectionPage = () => {
             <button onClick={() => navigate(-1)} className="breadcrumb-link">
               ← חזרה
             </button>
+            {returnToEventId ? (
+              <>
+                <span className="breadcrumb-separator">/</span>
+                <button
+                  onClick={() => navigate(`/event/${returnToEventId}`)}
+                  className="breadcrumb-link breadcrumb-link--event"
+                >
+                  חזרה לאירוע
+                </button>
+              </>
+            ) : null}
             <span className="breadcrumb-separator">/</span>
             <span className="breadcrumb-current">{ticket.event_name}</span>
           </div>
@@ -320,6 +337,7 @@ const TicketSelectionPage = () => {
           >
             המשך לתשלום
           </button>
+          <p className="checkout-cta-hint">מעבר לתשלום מאובטח והצגת סיכום מלא לפני אישור.</p>
         </div>
 
         {/* Right Side - Venue Map */}

@@ -81,6 +81,22 @@ function formatCheckoutBackendError(err) {
   }
 }
 
+function toFriendlyCheckoutMessage(detail) {
+  const text = String(detail || '').trim();
+  if (!text) return 'לא הצלחנו להשלים את הפעולה כרגע. נסו שוב בעוד רגע.';
+  if (/csrf|forbidden|403/i.test(text)) return CHECKOUT_CSRF_HTML_MESSAGE;
+  if (/no longer available|not available|sold|נמכר/i.test(text)) {
+    return 'הכרטיס כבר לא זמין. רעננו את הרשימה ובחרו כרטיס אחר.';
+  }
+  if (/timeout|network|failed to fetch|ecconn/i.test(text)) {
+    return 'יש בעיית חיבור לשרת. בדקו את האינטרנט ונסו שוב.';
+  }
+  if (/invalid|quantity|כמות/i.test(text)) {
+    return 'הכמות שנבחרה אינה זמינה כרגע. עדכנו כמות ונסו שוב.';
+  }
+  return text;
+}
+
 function validateGuestContact(email, phone) {
   const em = String(email || '').trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
@@ -168,12 +184,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   }, [guestForm.email]);
 
   useEffect(() => {
-    console.info('[CheckoutModal] mount/update', {
-      hasTicket: !!ticket,
-      hasTicketGroup: !!ticketGroup,
-      ticketId: ticket?.id,
-      groupTicketsLen: ticketGroup?.tickets?.length,
-    });
+    // Keep mount effect for future diagnostics without noisy console logs in production.
   }, [ticket, ticketGroup]);
 
   // Get locked quantity from accepted offer if it exists (accepted_at = server truth after accept)
@@ -686,12 +697,6 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       })();
     } catch (err) {
       const res = err.response;
-      console.error('Checkout Error Payload:', res?.data);
-      console.error('[CheckoutModal] handlePaymentSubmit failed', {
-        status: res?.status,
-        data: res?.data,
-        message: err.message,
-      });
       const formatted = formatCheckoutBackendError(err);
       const detail =
         formatted ||
@@ -700,12 +705,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         (typeof res?.data === 'string' && !responseDataLooksLikeHtml(res.data) ? res.data : '') ||
         err.message ||
         '';
-      const userFacing =
-        detail === CHECKOUT_CSRF_HTML_MESSAGE
-          ? detail
-          : detail
-            ? `לא ניתן לשמור: ${detail}`
-            : 'שגיאה בתקשורת עם השרת';
+      const userFacing = toFriendlyCheckoutMessage(detail);
       setError(userFacing);
       toastError(userFacing);
       // Enterprise UX: Show Toast for "ticket was just sold" - beautiful feedback instead of raw alert
@@ -820,12 +820,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             (typeof res?.data?.detail === 'string' ? res.data.detail : '') ||
             err.message ||
             '';
-          const errorMsg =
-            suffix === CHECKOUT_CSRF_HTML_MESSAGE
-              ? suffix
-              : suffix
-                ? `לא ניתן לשמור: ${suffix}`
-                : 'לא ניתן לשמור את הכרטיס כרגע. אנא נסה שוב.';
+          const errorMsg = toFriendlyCheckoutMessage(suffix);
           setError(errorMsg);
           toastError(errorMsg);
         }
@@ -1144,7 +1139,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   if (step === 'payment' && !checkoutSucceeded) {
     return portalCheckoutRoot(
       <div className="modal-overlay checkout-modal-overlay" onClick={handleClose}>
-        <div className="modal-content checkout-modal-shell" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-content checkout-modal-shell checkout-modal-shell--payment" onClick={(e) => e.stopPropagation()}>
           <button type="button" className="close-button" onClick={handleClose} aria-label="סגירה">×</button>
           <p className="checkout-modal-brand">TradeTix</p>
           <div className="checkout-stepper" role="list" aria-label="שלבי קופה">
@@ -1493,7 +1488,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   // Info screen (initial)
   return portalCheckoutRoot(
     <div className="modal-overlay checkout-modal-overlay" onClick={handleClose}>
-      <div className="modal-content checkout-modal-shell" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content checkout-modal-shell checkout-modal-shell--info" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="close-button" onClick={handleClose} aria-label="סגירה">×</button>
         <p className="checkout-modal-brand">TradeTix</p>
         <div className="checkout-stepper" role="list" aria-label="שלבי קופה">

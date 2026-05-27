@@ -1,0 +1,55 @@
+.bloomfield-stadium-section {
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+.bloomfield-stadium-section.is-hover {
+  transform: scale(1.03);
+}
+
+.bloomfield-stadium-section.is-active {
+  filter: drop-shadow(0 0 4px rgba(37, 99, 235, 0.3));
+}
+
+.bloomfield-map-legend {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  z-index: 6;
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  padding: 0.45rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.12);
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.bloomfield-map-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.bloomfield-map-legend .swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+}
+
+.bloomfield-map-legend .swatch--available {
+  background: #60a5fa;
+}
+
+.bloomfield-map-legend .swatch--selected {
+  background: #a5b4fc;
+}
+
+.bloomfield-map-legend .swatch--unavailable {
+  background: #dbe4f3;
+}

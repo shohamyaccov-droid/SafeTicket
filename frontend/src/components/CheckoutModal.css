@@ -1447,6 +1447,15 @@
   box-shadow:
     0 25px 50px -12px rgba(0, 69, 175, 0.22),
     0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  transition: min-height 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+}
+
+.modal-content.checkout-modal-shell.checkout-modal-shell--info {
+  min-height: 540px;
+}
+
+.modal-content.checkout-modal-shell.checkout-modal-shell--payment {
+  min-height: 620px;
 }
 
 .checkout-modal-brand {

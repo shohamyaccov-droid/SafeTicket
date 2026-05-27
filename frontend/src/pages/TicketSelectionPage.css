@@ -81,6 +81,10 @@
   color: var(--primary-blue-hover);
 }
 
+.breadcrumb-link--event {
+  font-weight: 700;
+}
+
 .breadcrumb-separator {
   color: var(--text-tertiary);
 }
@@ -384,6 +388,13 @@
 .continue-checkout-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.checkout-cta-hint {
+  margin: 0.55rem 0 0;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--text-tertiary);
 }
 
 /* Right Side - Venue Map */

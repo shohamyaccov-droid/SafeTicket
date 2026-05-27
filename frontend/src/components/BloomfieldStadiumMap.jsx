@@ -17,16 +17,18 @@ import {
   PITCH_RX,
   PITCH_RY,
 } from '../utils/bloomfieldSectionGeometry';
+import './BloomfieldStadiumMap.css';
 
-const FILL_DEFAULT = '#f3f4f6';
+const FILL_DEFAULT = '#dbe4f3';
+const FILL_HOVER = '#a5b4fc';
 const STROKE_SECTION = '#ffffff';
-const FILL_ACTIVE = '#a3e635';
-const PITCH_GRASS = '#82c91e';
+const FILL_ACTIVE = '#60a5fa';
+const PITCH_GRASS = '#2f855a';
 const LINE_WHITE = '#ffffff';
 const PIN_INVERTED = '#222222';
 /** Muted labels (Viagogo reference); active listings on green use dark text for contrast */
-const TEXT_SECTION_MUTED = '#9ca3af';
-const TEXT_ON_GREEN = '#14532d';
+const TEXT_SECTION_MUTED = '#64748b';
+const TEXT_ON_GREEN = '#0f172a';
 const ROSE_600 = '#e11d48';
 const BEST_BADGE_FILL = '#14532d';
 
@@ -120,6 +122,7 @@ export default function BloomfieldStadiumMap({
   onHoverGroup,
 }) {
   const [pinHoverId, setPinHoverId] = useState(null);
+  const [hoverBlockId, setHoverBlockId] = useState(null);
   const panZoom = useVenueMapPanZoom({ minScale: 0.65, maxScale: 2.8, zoomStep: 0.14 });
 
   const blocksWithListings = useMemo(() => {
@@ -154,11 +157,13 @@ export default function BloomfieldStadiumMap({
   const handleBlockEnter = (blockId) => {
     const has = blocksWithListings.has(String(blockId));
     if (!has) return;
+    setHoverBlockId(String(blockId));
     const first = firstRowInBlock(blockId);
     onHoverGroup?.(first?.stableId ?? null);
   };
 
   const handleBlockLeave = () => {
+    setHoverBlockId(null);
     onHoverGroup?.(null);
   };
 
@@ -221,11 +226,15 @@ export default function BloomfieldStadiumMap({
               <filter id="bf-pin-shadow" x="-40%" y="-40%" width="180%" height="180%">
                 <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000000" floodOpacity="0.12" />
               </filter>
+              <linearGradient id="bf-stage-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#1e3a8a" />
+                <stop offset="100%" stopColor="#312e81" />
+              </linearGradient>
             </defs>
 
-            <rect width={VIEW_W} height={VIEW_H} fill="#ffffff" />
+            <rect width={VIEW_W} height={VIEW_H} fill="#f8fafc" />
 
-            <path d={BOWL_OUTER_D} fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
+            <path d={BOWL_OUTER_D} fill="#eef2ff" stroke="#cbd5e1" strokeWidth="1.1" />
 
             <path d={GAP_ROUNDRECT_D} fill="#ffffff" stroke="none" />
 
@@ -234,7 +243,8 @@ export default function BloomfieldStadiumMap({
               const sid = String(sec.id);
               const has = blocksWithListings.has(sid);
               const isHi = highlightBlockId === sid;
-              const fill = has ? FILL_ACTIVE : FILL_DEFAULT;
+              const isHover = hoverBlockId === sid;
+              const fill = has ? (isHover ? FILL_HOVER : FILL_ACTIVE) : FILL_DEFAULT;
               return (
                 <path
                   key={sid}
@@ -243,10 +253,10 @@ export default function BloomfieldStadiumMap({
                   fill={fill}
                   fillOpacity={1}
                   shapeRendering="geometricPrecision"
-                  stroke={isHi ? '#0ea5e9' : STROKE_SECTION}
-                  strokeWidth={isHi ? STROKE_HIGHLIGHT_W : STROKE_INACTIVE_W}
+                  stroke={isHi || isHover ? '#1d4ed8' : STROKE_SECTION}
+                  strokeWidth={isHi || isHover ? STROKE_HIGHLIGHT_W : STROKE_INACTIVE_W}
                   strokeLinejoin={isHi ? 'round' : 'miter'}
-                  className="transition-[stroke,fill-opacity] duration-150 ease-out"
+                  className={`bloomfield-stadium-section transition-[stroke,fill-opacity,transform] duration-150 ease-out${isHover ? ' is-hover' : ''}${isHi ? ' is-active' : ''}`}
                   style={{ cursor: has ? 'pointer' : 'default' }}
                   onMouseEnter={() => handleBlockEnter(sid)}
                   onMouseLeave={handleBlockLeave}
@@ -267,13 +277,15 @@ export default function BloomfieldStadiumMap({
                   textAnchor="middle"
                   dominantBaseline="central"
                   fill={has ? TEXT_ON_GREEN : TEXT_SECTION_MUTED}
-                  fontSize="8"
-                  fontWeight={has ? '800' : '500'}
+                  fontSize="8.5"
+                  fontWeight={has ? '800' : '600'}
                   fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
                   style={{
                     pointerEvents: 'none',
                     userSelect: 'none',
                     writingMode: 'horizontal-tb',
+                    letterSpacing: '0.02em',
+                    textRendering: 'geometricPrecision',
                   }}
                 >
                   {sec.faceLabel}
@@ -282,12 +294,12 @@ export default function BloomfieldStadiumMap({
             })}
 
             <rect
-              x={PITCH_X}
-              y={PITCH_Y}
-              width={PITCH_W}
-              height={PITCH_H}
-              rx={PITCH_RX}
-              ry={PITCH_RY}
+              x={PITCH_X + 2}
+              y={PITCH_Y + 2}
+              width={PITCH_W - 4}
+              height={PITCH_H - 4}
+              rx={PITCH_RX - 1}
+              ry={PITCH_RY - 1}
               fill={PITCH_GRASS}
               stroke={LINE_WHITE}
               strokeWidth="1.25"
@@ -310,6 +322,30 @@ export default function BloomfieldStadiumMap({
               stroke={LINE_WHITE}
               strokeWidth="1.25"
             />
+
+            <rect
+              x={CX - 72}
+              y={PITCH_Y - 30}
+              width={144}
+              height={24}
+              rx={12}
+              ry={12}
+              fill="url(#bf-stage-gradient)"
+              stroke="#1e40af"
+              strokeWidth="1"
+            />
+            <text
+              x={CX}
+              y={PITCH_Y - 18}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fill="#ffffff"
+              fontSize="10.5"
+              fontWeight="800"
+              style={{ letterSpacing: '0.12em', pointerEvents: 'none', userSelect: 'none' }}
+            >
+              STAGE
+            </text>
 
             <rect
               x={CX - penW / 2}
@@ -438,6 +474,17 @@ export default function BloomfieldStadiumMap({
             })}
           </svg>
         </div>
+      </div>
+      <div className="bloomfield-map-legend" aria-hidden="true">
+        <span className="bloomfield-map-legend__item">
+          <i className="swatch swatch--available" /> זמין
+        </span>
+        <span className="bloomfield-map-legend__item">
+          <i className="swatch swatch--selected" /> נבחר
+        </span>
+        <span className="bloomfield-map-legend__item">
+          <i className="swatch swatch--unavailable" /> לא זמין
+        </span>
       </div>
     </div>
   );
