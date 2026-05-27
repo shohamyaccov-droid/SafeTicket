@@ -101,6 +101,12 @@ for (let i = 0; i <= 9; i += 1) {
 
 export const CONCERT_SPACERS = /** @type {ConcertSpacerRect[]} */ ([]);
 
+/** Total interactive blocks on BloomfieldConcertMap (pitch + wings + south arcs). */
+export const CONCERT_BLOCK_COUNT = CONCERT_BLOCKS.length;
+
+/** Section labels in map display order — keep in sync with CONCERT_BLOCKS. */
+export const CONCERT_SECTION_NAMES = CONCERT_BLOCKS.map((b) => b.label);
+
 export const STAGE_RECT = {
   x: 496,
   y: 36,

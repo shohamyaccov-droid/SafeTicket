@@ -596,6 +596,15 @@
   text-align: right;
 }
 
+.venue-map-card-subtitle {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #64748b;
+  direction: rtl;
+  text-align: right;
+}
+
 .venue-map-card-content {
   padding: 0;
   flex: 1;

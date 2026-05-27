@@ -1,20 +1,23 @@
 /* eslint-disable react/prop-types -- project does not use PropTypes consistently */
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 import { useVenueMapPanZoom } from '../hooks/useVenueMapPanZoom';
 import { getTicketPrice, formatMoney, resolveTicketCurrency } from '../utils/priceFormat';
 import {
   CONCERT_BLOCKS,
+  CONCERT_BLOCK_COUNT,
   CONCERT_SPACERS,
   STAGE_RECT,
   STAGE_LABEL_CX,
   STAGE_LABEL_CY,
   concertBlockPolygonPoints,
 } from '../utils/bloomfieldConcertGeometry';
+import './BloomfieldStadiumMap.css';
 import './BloomfieldConcertMap.css';
 
-const STAGE_FILL = '#374151';
-const STAGE_STROKE = '#1f2937';
-const STROKE_SECTION = 'rgba(255,255,255,0.55)';
+const FILL_EMPTY = '#dbe4f3';
+const FILL_EMPTY_HOVER = '#a5b4fc';
+const STROKE_SECTION = '#ffffff';
+const STROKE_EMPTY = '#c7d2e8';
 const STROKE_INACTIVE_W = 2;
 const STROKE_HIGHLIGHT_W = 5;
 
@@ -140,6 +143,7 @@ export default function BloomfieldConcertMap({
   onSelectGroup,
   onHoverGroup,
 }) {
+  const [hoverBlockId, setHoverBlockId] = useState(null);
   const panZoom = useVenueMapPanZoom({ minScale: 0.65, maxScale: 2.8, zoomStep: 0.14 });
 
   const { viewBoxStr, vbX, vbY, vbW, vbH } = useMemo(() => computeTightViewBox(), []);
@@ -186,6 +190,7 @@ export default function BloomfieldConcertMap({
   );
 
   const handleBlockEnter = (blockId) => {
+    setHoverBlockId(String(blockId));
     const has = blocksWithListings.has(String(blockId));
     if (!has) return;
     const first = firstRowInBlock(blockId);
@@ -193,6 +198,7 @@ export default function BloomfieldConcertMap({
   };
 
   const handleBlockLeave = () => {
+    setHoverBlockId(null);
     onHoverGroup?.(null);
   };
 
@@ -245,6 +251,10 @@ export default function BloomfieldConcertMap({
               <filter id="bfc-seat-soft" x="-20%" y="-20%" width="140%" height="140%">
                 <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#0f172a" floodOpacity="0.08" />
               </filter>
+              <linearGradient id="bfc-stage-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#4f46e5" />
+                <stop offset="100%" stopColor="#1e293b" />
+              </linearGradient>
             </defs>
 
             <rect x={vbX} y={vbY} width={vbW} height={vbH} fill="#ffffff" />
@@ -256,9 +266,10 @@ export default function BloomfieldConcertMap({
               height={STAGE_RECT.h}
               rx={12}
               ry={12}
-              fill={STAGE_FILL}
-              stroke={STAGE_STROKE}
+              fill="url(#bfc-stage-gradient)"
+              stroke="#312e81"
               strokeWidth="3"
+              filter="url(#bfc-seat-soft)"
             />
             <text
               x={STAGE_LABEL_CX}
@@ -305,11 +316,12 @@ export default function BloomfieldConcertMap({
               const sid = String(b.id);
               const has = blocksWithListings.has(sid);
               const isHi = highlightBlockId === sid;
+              const isHover = hoverBlockId === sid;
               const rep = has ? firstRowInBlock(sid) : undefined;
               const raw = rep ? parseFloat(getTicketPrice(rep.firstTicket)) : NaN;
               const { fill, tier } = has
                 ? fillForPriceTier(minP, maxP, raw)
-                : { fill: '#d1d5db', tier: 0 };
+                : { fill: isHover ? FILL_EMPTY_HOVER : FILL_EMPTY, tier: 0 };
               const cur = rep ? resolveTicketCurrency(rep.firstTicket) : 'ILS';
               const priceLine =
                 has && Number.isFinite(raw) ? formatMoney(raw, cur) : '';
@@ -326,12 +338,12 @@ export default function BloomfieldConcertMap({
                     data-section-id={sid}
                     points={pts}
                     fill={fill}
-                    stroke={isHi ? '#0ea5e9' : STROKE_SECTION}
+                    stroke={isHi ? '#0ea5e9' : has ? STROKE_SECTION : STROKE_EMPTY}
                     strokeWidth={isHi ? STROKE_HIGHLIGHT_W : STROKE_INACTIVE_W}
                     filter={has ? 'url(#bfc-seat-soft)' : undefined}
                     className={`bloomfield-concert-map__seat${has ? ' bloomfield-concert-map__seat--listed' : ''}${
                       isHi ? ' bloomfield-concert-map__seat--active' : ''
-                    }`}
+                    }${isHover ? ' bloomfield-concert-map__seat--hover' : ''}`}
                     style={{ transition: 'stroke 0.15s ease, stroke-width 0.15s ease' }}
                     onMouseEnter={() => handleBlockEnter(sid)}
                     onMouseLeave={handleBlockLeave}
@@ -373,7 +385,7 @@ export default function BloomfieldConcertMap({
                       y={cy}
                       textAnchor="middle"
                       dominantBaseline="central"
-                      fill="#94a3b8"
+                      fill="#475569"
                       fontSize={sid.length > 3 ? 28 : 32}
                       fontWeight="700"
                       fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
@@ -386,6 +398,19 @@ export default function BloomfieldConcertMap({
             })}
           </svg>
         </div>
+      </div>
+
+      <div className="bloomfield-map-legend bloomfield-concert-map-legend" aria-hidden="true">
+        <span className="bloomfield-map-legend__item">
+          <span className="swatch swatch--available" /> זמין במלאי
+        </span>
+        <span className="bloomfield-map-legend__item">
+          <span className="swatch swatch--selected" /> נבחר
+        </span>
+        <span className="bloomfield-map-legend__item">
+          <span className="swatch swatch--unavailable" /> ללא מודעות
+        </span>
+        <span className="bloomfield-map-legend__meta">{CONCERT_BLOCK_COUNT} גושים · פריסת הופעה</span>
       </div>
     </div>
   );

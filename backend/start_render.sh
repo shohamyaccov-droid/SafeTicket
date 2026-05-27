@@ -34,6 +34,9 @@ python manage.py migrate --noinput
 echo "[start_render] Idempotent production seed (skips if DB unavailable)..."
 python seed_production.py
 
+echo "[start_render] Bloomfield concert venue label (Eyal Golan / concert events)..."
+python manage.py fix_eyal_golan_bloomfield_concert_venue || true
+
 echo "[start_render] Admin promotion hook..."
 python fix_admin.py
 

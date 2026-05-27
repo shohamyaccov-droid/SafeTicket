@@ -19,6 +19,11 @@ class Command(BaseCommand):
     help = 'Set venue to Bloomfield concert label for events whose name contains אייל גולן.'
 
     def handle(self, *args, **options):
-        qs = Event.objects.filter(name__icontains='אייל גולן')
-        n = qs.update(venue=VENUE_BLOOMFIELD_CONCERT)
-        self.stdout.write(self.style.SUCCESS(f'Updated venue for {n} event(s).'))
+        from django.db.models import Q
+
+        qs = Event.objects.filter(
+            Q(name__icontains='אייל גולן')
+            | (Q(category__iexact='concert') & Q(name__icontains='בלומפילד'))
+        )
+        n = qs.update(venue=VENUE_BLOOMFIELD_CONCERT, category='concert')
+        self.stdout.write(self.style.SUCCESS(f'Updated venue/category for {n} event(s).'))

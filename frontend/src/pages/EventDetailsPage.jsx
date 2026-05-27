@@ -13,6 +13,7 @@ import BloomfieldConcertMap from '../components/BloomfieldConcertMap';
 import BloomfieldTicketListPanel from '../components/BloomfieldTicketListPanel';
 import JerusalemArenaMap from '../components/JerusalemArenaMap';
 import { VENUE_MAPS, VENUE_BLOOMFIELD_CONCERT, getVenueConfig, normalizeSection } from '../utils/venueMaps';
+import { CONCERT_BLOCK_COUNT } from '../utils/bloomfieldConcertGeometry';
 import {
   enrichBloomfieldGroup,
   groupMatchesTicketQuantity,
@@ -1126,6 +1127,11 @@ const EventDetailsPage = () => {
             <div className="venue-map-card">
               <div className="venue-map-card-header">
                 <h2>מפת אולם</h2>
+                {isBloomfieldConcertLayout ? (
+                  <p className="venue-map-card-subtitle">
+                    {CONCERT_BLOCK_COUNT} גושים · פריסת הופעה בבלומפילד
+                  </p>
+                ) : null}
               </div>
                 <div className="venue-map-card-content">
                   {(() => {

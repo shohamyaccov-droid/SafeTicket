@@ -8,6 +8,8 @@ import BecomeSellerModal from '../components/BecomeSellerModal';
 import { toastError } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
 import { iso4217FromCountry, currencySymbol, formatAmountForCurrency } from '../utils/priceFormat';
+import { VENUE_BLOOMFIELD_CONCERT } from '../utils/venueMaps';
+import { CONCERT_BLOCK_COUNT, CONCERT_SECTION_NAMES } from '../utils/bloomfieldConcertGeometry';
 import './Sell.css';
 
 const SELL_PAGE_BUILD_TAG = import.meta.env.VITE_BUILD_ID || 'local-dev';
@@ -86,6 +88,30 @@ const BLOOMFIELD_SECTION_OPTIONS = [
   ...rangeOptions(419, 431),
 ];
 
+const BLOOMFIELD_CONCERT_SECTION_OPTIONS = CONCERT_SECTION_NAMES.map((name) => ({
+  value: name,
+  label: `גוש ${name}`,
+  structured: false,
+}));
+
+function isBloomfieldConcertEvent(eventLike) {
+  if (!eventLike) return false;
+  const venue = String(eventLike.venue || '').trim();
+  const category = String(eventLike.category || '').toLowerCase();
+  const hay = [
+    eventLike.venue_detail?.name,
+    eventLike.venue,
+    eventLike.name,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return (
+    venue === VENUE_BLOOMFIELD_CONCERT
+    || (hay.includes('בלומפילד') && category === 'concert')
+    || (hay.includes('אייל גולן') && hay.includes('בלומפילד'))
+  );
+}
+
 function canonicalVenueName(eventLike) {
   const values = [
     eventLike?.venue_detail?.name,
@@ -96,6 +122,9 @@ function canonicalVenueName(eventLike) {
     .filter(Boolean)
     .map((v) => String(v).trim());
   const haystack = values.join(' ');
+  if (values.some((v) => v === VENUE_BLOOMFIELD_CONCERT) || isBloomfieldConcertEvent(eventLike)) {
+    return VENUE_BLOOMFIELD_CONCERT;
+  }
   if (haystack.includes('בלומפילד')) return 'אצטדיון בלומפילד';
   if (haystack.includes('פיס ארנה') || haystack.includes('ארנה ירושלים')) return 'פיס ארנה ירושלים';
   if (haystack.includes('מנורה') || haystack.includes('מבטחים')) return 'היכל מנורה מבטחים';
@@ -111,6 +140,9 @@ function generatedSectionOptionsForVenue(venueName) {
         { value: `${number} עליון`, label: `גוש ${number} עליון`, structured: false },
       ];
     }).flat();
+  }
+  if (venueName === VENUE_BLOOMFIELD_CONCERT) {
+    return BLOOMFIELD_CONCERT_SECTION_OPTIONS;
   }
   if (venueName === 'אצטדיון בלומפילד') {
     return BLOOMFIELD_SECTION_OPTIONS;
@@ -473,10 +505,16 @@ const Sell = () => {
     const eventForSections = detailMatchesSelection ? eventDetail : formData.selectedEvent;
     const venueDetail = eventForSections?.venue_detail;
     const structured = venueDetail?.sections;
+    const concertLayout = isBloomfieldConcertEvent(eventForSections);
     if (Array.isArray(structured) && structured.length > 0) {
       const selectedVenueId = venueDetail?.id ? String(venueDetail.id) : '';
+      const concertNameSet = concertLayout ? new Set(CONCERT_SECTION_NAMES) : null;
       return [...structured]
         .filter((section) => !selectedVenueId || String(section.venue_id || selectedVenueId) === selectedVenueId)
+        .filter((section) => {
+          if (!concertNameSet) return true;
+          return concertNameSet.has(String(section.name || '').trim());
+        })
         .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'he', { numeric: true }))
         .map((section) => ({
           value: String(section.id),
@@ -1214,7 +1252,9 @@ const Sell = () => {
                     <span>
                       {selectedVenueLabel || formData.selectedEvent.venue} ·{' '}
                       {sectionOptions.length > 0
-                        ? `${sectionOptions.length} גושים זמינים לבחירה`
+                        ? isBloomfieldConcertEvent(formData.selectedEvent)
+                          ? `${CONCERT_BLOCK_COUNT} גושים בפריסת הופעה (${sectionOptions.length} זמינים לבחירה)`
+                          : `${sectionOptions.length} גושים זמינים לבחירה`
                         : 'טוען גושים לאולם'}
                     </span>
                   </div>
@@ -1691,8 +1731,8 @@ const Sell = () => {
             />
             <label htmlFor="sellerListingTerms" className="terms-checkbox-label">
               {ilSelected
-                ? 'אני מסכים/ה לתנאי השימוש של TradeTix ומצהיר/ה שהמחיר שהזנתי חוקי. ידוע לי שהכרטיס יפורסם לאחר אישור הנהלה, ושהתשלום יועבר אליי כ-24 שעות לאחר קיום האירוע.'
-                : 'אני מסכים/ה לתנאי השימוש של TradeTix ומאשר/ת שהתשלום בגין המכירה יועבר אליי כ-24 שעות לאחר קיום האירוע, על מנת להבטיח קנייה בטוחה ואת אמינות הכרטיסים.'}
+                ? 'אני מסכים/ה לתנאי השימוש של TradeTix ומצהיר/ה שהמחיר שהזנתי חוקי. ידוע לי שהכרטיס יפורסם לאחר אישור הנהלה, ושהתשלום יועבר אליי תוך יום עסקים אחד לאחר קיום האירוע.'
+                : 'אני מסכים/ה לתנאי השימוש של TradeTix ומאשר/ת שהתשלום בגין המכירה יועבר אליי תוך יום עסקים אחד לאחר קיום האירוע, על מנת להבטיח קנייה בטוחה ואת אמינות הכרטיסים.'}
             </label>
           </div>
           <SellFieldError message={fieldErrors.terms} />

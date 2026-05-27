@@ -1,18 +1,23 @@
 /* Bloomfield concert map — venue blocks + selection emphasis */
 .bloomfield-concert-map__spacer {
-  fill: #e8edf3;
-  stroke: #cfd8e3;
+  fill: #eef2f8;
+  stroke: #dbe4f3;
   stroke-width: 1;
   pointer-events: none;
 }
 
 .bloomfield-concert-map__seat {
   cursor: default;
-  transition: filter 0.15s ease, stroke-width 0.15s ease, stroke 0.15s ease;
+  transition: fill 0.15s ease, filter 0.15s ease, stroke-width 0.15s ease, stroke 0.15s ease;
 }
 
 .bloomfield-concert-map__seat--listed {
   cursor: pointer;
+}
+
+.bloomfield-concert-map__seat--listed:hover,
+.bloomfield-concert-map__seat--hover {
+  filter: brightness(1.04);
 }
 
 .bloomfield-concert-map__seat--active {
@@ -22,4 +27,18 @@
 .bloomfield-concert-map__seat-label {
   pointer-events: none;
   user-select: none;
+}
+
+.bloomfield-concert-map-legend {
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  max-width: min(100%, 420px);
+}
+
+.bloomfield-concert-map-legend .bloomfield-map-legend__meta {
+  width: 100%;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-top: 0.15rem;
 }
