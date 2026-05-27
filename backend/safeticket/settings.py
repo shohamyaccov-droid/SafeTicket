@@ -429,6 +429,8 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_EXPOSE_HEADERS = ['Content-Disposition']
 _RENDER_WEB_ORIGIN = 'https://safeticket-web.onrender.com'
 _RENDER_API_ORIGIN = 'https://safeticket-api.onrender.com'
+_PROD_WEB_ORIGIN = 'https://tradetix.co.il'
+_PROD_WEB_WWW_ORIGIN = 'https://www.tradetix.co.il'
 _FRONTEND_FROM_ENV = os.environ.get('FRONTEND_ORIGIN', '').strip().rstrip('/')
 if DEBUG:
     CORS_ALLOWED_ORIGINS = _env_origin_list(
@@ -467,6 +469,8 @@ CORS_ALLOWED_ORIGINS = _merge_unique_origins(
     CORS_ALLOWED_ORIGINS,
     _RENDER_WEB_ORIGIN,
     _RENDER_API_ORIGIN,
+    _PROD_WEB_ORIGIN,
+    _PROD_WEB_WWW_ORIGIN,
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     *([_FRONTEND_FROM_ENV] if _FRONTEND_FROM_ENV else []),
@@ -475,6 +479,8 @@ CSRF_TRUSTED_ORIGINS = _merge_unique_origins(
     CSRF_TRUSTED_ORIGINS,
     _RENDER_WEB_ORIGIN,
     _RENDER_API_ORIGIN,
+    _PROD_WEB_ORIGIN,
+    _PROD_WEB_WWW_ORIGIN,
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     *([_FRONTEND_FROM_ENV] if _FRONTEND_FROM_ENV else []),
@@ -485,11 +491,15 @@ CSRF_TRUSTED_ORIGINS = _merge_unique_origins(
     CSRF_TRUSTED_ORIGINS,
     'https://safeticket-web.onrender.com',
     'https://safeticket-api.onrender.com',
+    'https://tradetix.co.il',
+    'https://www.tradetix.co.il',
 )
 CORS_ALLOWED_ORIGINS = _merge_unique_origins(
     CORS_ALLOWED_ORIGINS,
     'https://safeticket-web.onrender.com',
     'https://safeticket-api.onrender.com',
+    'https://tradetix.co.il',
+    'https://www.tradetix.co.il',
 )
 
 # JWT HttpOnly cookie names
