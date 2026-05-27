@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 import { useState } from 'react';
 import { authAPI } from '../services/api';
+import { toastError } from '../utils/toast';
 import './BecomeSellerModal.css';
 
 const initialBank = {
@@ -91,10 +92,14 @@ export default function BecomeSellerModal({ open, onClose, onSuccess }) {
       onSuccess?.();
     } catch (err) {
       const d = err.response?.data;
-      const msg =
+      let msg =
         typeof d === 'object' && d !== null
           ? Object.values(d).flat().filter(Boolean).join(' ') || err.message
           : err.message;
+      if (err.response?.status === 403) {
+        msg = 'תקשורת לשרת נדחתה, אנא רענן את העמוד ונסה שוב';
+      }
+      toastError(msg || 'שגיאה בשדרוג החשבון.');
       setError(msg || 'שגיאה בשדרוג החשבון.');
     } finally {
       setSaving(false);

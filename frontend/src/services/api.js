@@ -42,11 +42,43 @@ function _writeLs(key, val) {
   }
 }
 
+function hydrateAccessFromStorage() {
+  let s = _readLs(BEARER_ACCESS_KEY);
+  if (!s) {
+    const legacy = _readLs(LEGACY_ACCESS_KEY);
+    if (legacy) {
+      _writeLs(BEARER_ACCESS_KEY, legacy);
+      s = legacy;
+    }
+  }
+  if (!s) {
+    try {
+      const sessionLegacy =
+        sessionStorage.getItem('tradetix_bearer_access') ||
+        sessionStorage.getItem('safeticket_bearer_access');
+      if (sessionLegacy) {
+        _writeLs(BEARER_ACCESS_KEY, sessionLegacy);
+        sessionStorage.removeItem('tradetix_bearer_access');
+        sessionStorage.removeItem('safeticket_bearer_access');
+        s = sessionLegacy;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  if (s) {
+    bearerAccessToken = s;
+  }
+}
+
 /**
  * Bearer for API calls: localStorage is source of truth (iOS Safari reload / multi-tab).
  * Memory is synced from LS when present so other code sees the same value.
  */
 export function getEffectiveBearerAccess() {
+  if (!bearerAccessToken) {
+    hydrateAccessFromStorage();
+  }
   try {
     const fromLs = localStorage.getItem(BEARER_ACCESS_KEY);
     if (fromLs && fromLs !== '') {
@@ -84,6 +116,8 @@ hydrateRefreshFromStorage();
 const _storedAccess = _readLs(BEARER_ACCESS_KEY);
 if (_storedAccess) {
   bearerAccessToken = _storedAccess;
+} else {
+  hydrateAccessFromStorage();
 }
 
 function getRefreshForBearerFallback() {
@@ -391,7 +425,10 @@ export const authAPI = {
   login: (data) => api.post('/users/login/', data, creds),
   logout: () => api.post('/users/logout/', {}, creds),
   getProfile: () => api.get('/users/profile/', creds),
-  upgradeToSeller: (data) => api.post('/users/me/upgrade-to-seller/', data, creds),
+  upgradeToSeller: async (data) => {
+    await ensureCsrfToken();
+    return api.post('/users/me/upgrade-to-seller/', data, creds);
+  },
   getDashboard: () => api.get('/users/dashboard/', creds),
   getCsrf: async () => {
     const response = await api.get('/users/csrf/', creds);
