@@ -1,0 +1,143 @@
+.interactive-stadium-map {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  direction: ltr;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+.interactive-stadium-map__canvas-wrap {
+  width: 100%;
+  overflow: auto;
+  background: #f8fafc;
+}
+
+.interactive-stadium-map__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 280px;
+  max-height: min(72vh, 640px);
+}
+
+.interactive-stadium-map__section {
+  transition: fill 0.15s ease, stroke 0.15s ease, stroke-width 0.15s ease;
+}
+
+.interactive-stadium-map__section.is-selected {
+  filter: drop-shadow(0 0 6px rgba(14, 165, 233, 0.45));
+}
+
+.interactive-stadium-map__stage-label {
+  fill: #ffffff;
+  font-size: 22px;
+  font-weight: 800;
+  font-family: system-ui, sans-serif;
+  pointer-events: none;
+  user-select: none;
+}
+
+.interactive-stadium-map__price-label {
+  fill: #14532d;
+  font-size: 15px;
+  font-weight: 800;
+  font-family: system-ui, sans-serif;
+  pointer-events: none;
+  user-select: none;
+}
+
+.interactive-stadium-map__tickets-label {
+  fill: #166534;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: system-ui, sans-serif;
+  pointer-events: none;
+  user-select: none;
+}
+
+.interactive-stadium-map__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border-top: 1px solid #e5e7eb;
+  background: #ffffff;
+  min-height: 64px;
+}
+
+.interactive-stadium-map__bar--visible {
+  background: #f0fdf4;
+}
+
+.interactive-stadium-map__bar-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+  direction: ltr;
+  text-align: left;
+}
+
+.interactive-stadium-map__bar-section {
+  font-weight: 700;
+  color: #111827;
+  font-size: 0.95rem;
+}
+
+.interactive-stadium-map__bar-price {
+  font-weight: 800;
+  color: #15803d;
+  font-size: 1.1rem;
+}
+
+.interactive-stadium-map__bar-tickets {
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.interactive-stadium-map__bar-hint {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+  direction: ltr;
+  text-align: left;
+}
+
+.interactive-stadium-map__bar-cta {
+  flex-shrink: 0;
+  padding: 0.6rem 1.1rem;
+  border: none;
+  border-radius: 8px;
+  background: #16a34a;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.interactive-stadium-map__bar-cta:hover {
+  background: #15803d;
+}
+
+.interactive-stadium-map__bar-cta:focus-visible {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .interactive-stadium-map__bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .interactive-stadium-map__bar-cta {
+    width: 100%;
+    text-align: center;
+  }
+}
