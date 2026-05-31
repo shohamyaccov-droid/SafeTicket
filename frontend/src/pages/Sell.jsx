@@ -94,6 +94,32 @@ const BLOOMFIELD_CONCERT_SECTION_OPTIONS = CONCERT_SECTION_NAMES.map((name) => (
   structured: false,
 }));
 
+/** Merge for_sell artists API with concert artists inferred from for_sell events (belt-and-suspenders). */
+function mergeSellCatalogArtists(artistsFromApi, upcomingEvents) {
+  const byId = new Map();
+  for (const artist of artistsFromApi || []) {
+    if (artist?.id != null) {
+      byId.set(Number(artist.id), artist);
+    }
+  }
+  for (const ev of upcomingEvents || []) {
+    const cat = String(ev.category || '').toLowerCase();
+    if (cat !== 'concert') continue;
+    const detail = ev.artist_detail;
+    const id = detail?.id ?? ev.artist;
+    if (id == null) continue;
+    const numId = Number(id);
+    if (byId.has(numId)) continue;
+    byId.set(numId, {
+      id: numId,
+      name: detail?.name || ev.artist_name || `Artist #${numId}`,
+      image_url: detail?.image_url,
+      total_tickets_count: 0,
+    });
+  }
+  return [...byId.values()].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'he'));
+}
+
 function isBloomfieldConcertEvent(eventLike) {
   if (!eventLike) return false;
   const venue = String(eventLike.venue || '').trim();
@@ -282,7 +308,6 @@ const Sell = () => {
           if (Array.isArray(artRes.data)) artistsData = artRes.data;
           else if (artRes.data.results && Array.isArray(artRes.data.results)) artistsData = artRes.data.results;
         }
-        artistsData = artistsData.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         let eventsData = [];
         if (evRes.data) {
           if (Array.isArray(evRes.data)) eventsData = evRes.data;
@@ -295,6 +320,7 @@ const Sell = () => {
             return new Date(event.date) >= now;
           })
           .sort((a, b) => new Date(a.date) - new Date(b.date));
+        artistsData = mergeSellCatalogArtists(artistsData, upcomingEvents);
         if (!cancelled) {
           setArtists(artistsData);
           setEvents(upcomingEvents);

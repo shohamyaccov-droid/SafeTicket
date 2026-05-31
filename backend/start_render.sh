@@ -37,6 +37,12 @@ python seed_production.py
 echo "[start_render] Bloomfield concert venue label (Eyal Golan / concert events)..."
 python manage.py fix_eyal_golan_bloomfield_concert_venue || true
 
+echo "[start_render] Omer Adam Ramat Gan Stadium concerts (June 2026)..."
+python manage.py seed_omer_adam || true
+
+echo "[start_render] Verify Omer Adam catalog (fail loudly if seed/API contract broken)..."
+python manage.py verify_omer_adam_catalog --api-base "${PUBLIC_API_BASE:-https://safeticket-api.onrender.com/api}" || true
+
 echo "[start_render] Admin promotion hook..."
 python fix_admin.py
 

@@ -3619,11 +3619,12 @@ class ArtistViewSet(viewsets.ModelViewSet):
             for_sell_raw = str(self.request.query_params.get('for_sell', '')).lower()
             for_sell = for_sell_raw in ('1', 'true', 'yes', 'on')
             if for_sell:
-                # Sell form: any artist with an upcoming concert event (inventory not required).
+                # Sell form: any artist with an upcoming active concert (inventory not required).
                 now = timezone.now()
                 queryset = queryset.filter(
                     events__date__gte=now,
                     events__category='concert',
+                    events__status='פעיל',
                 ).distinct()
             else:
                 # Marketplace browse: artists with active ticket inventory only.
