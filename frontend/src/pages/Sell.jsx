@@ -274,7 +274,7 @@ const Sell = () => {
       setCatalogError(null);
       try {
         const [artRes, evRes] = await Promise.all([
-          artistAPI.getArtists({ signal }),
+          artistAPI.getArtists({ signal, params: { for_sell: '1' } }),
           eventAPI.getEvents({ signal, params: { for_sell: '1' } }),
         ]);
         let artistsData = [];

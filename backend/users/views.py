@@ -3615,20 +3615,30 @@ class ArtistViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         queryset = Artist.objects.all().order_by('name')
-        # List view: one aggregate per artist (avoid N+1 in total_tickets_count)
         if self.action == 'list':
-            queryset = (
-                queryset.annotate(
-                    _artist_tickets_total=Coalesce(
-                        Sum(
-                            'events__tickets__available_quantity',
-                            filter=Q(events__tickets__status='active'),
-                        ),
-                        Value(0),
+            for_sell_raw = str(self.request.query_params.get('for_sell', '')).lower()
+            for_sell = for_sell_raw in ('1', 'true', 'yes', 'on')
+            if for_sell:
+                # Sell form: any artist with an upcoming concert event (inventory not required).
+                now = timezone.now()
+                queryset = queryset.filter(
+                    events__date__gte=now,
+                    events__category='concert',
+                ).distinct()
+            else:
+                # Marketplace browse: artists with active ticket inventory only.
+                queryset = (
+                    queryset.annotate(
+                        _artist_tickets_total=Coalesce(
+                            Sum(
+                                'events__tickets__available_quantity',
+                                filter=Q(events__tickets__status='active'),
+                            ),
+                            Value(0),
+                        )
                     )
+                    .filter(_artist_tickets_total__gt=0)
                 )
-                .filter(_artist_tickets_total__gt=0)
-            )
         search = self.request.query_params.get('search', None)
         if search:
             queryset = queryset.filter(name__icontains=search)
