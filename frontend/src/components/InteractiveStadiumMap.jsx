@@ -104,6 +104,11 @@ const SECTIONS_BASE = [
   },
 ];
 
+/** Section ids used for ticket ↔ map matching (excludes STAGE). */
+export const INTERACTIVE_STADIUM_SECTION_IDS = SECTIONS_BASE.filter((s) => s.id !== 'STAGE').map(
+  (s) => s.id
+);
+
 /**
  * @param {SectionGeometry} section
  * @returns {{ cx: number, cy: number }}

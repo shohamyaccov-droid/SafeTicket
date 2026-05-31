@@ -12,7 +12,12 @@ import BloomfieldStadiumMap from '../components/BloomfieldStadiumMap';
 import BloomfieldConcertMap from '../components/BloomfieldConcertMap';
 import BloomfieldTicketListPanel from '../components/BloomfieldTicketListPanel';
 import JerusalemArenaMap from '../components/JerusalemArenaMap';
-import { VENUE_MAPS, VENUE_BLOOMFIELD_CONCERT, getVenueConfig, normalizeSection } from '../utils/venueMaps';
+import InteractiveStadiumMap from '../components/InteractiveStadiumMap';
+import { VENUE_MAPS, VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN, getVenueConfig, normalizeSection } from '../utils/venueMaps';
+import {
+  buildRamatGanActiveListingsSummary,
+  ramatGanSectionIdFromTicket,
+} from '../utils/ramatGanStadiumListing';
 import { CONCERT_BLOCK_COUNT } from '../utils/bloomfieldConcertGeometry';
 import {
   enrichBloomfieldGroup,
@@ -101,6 +106,9 @@ const EventDetailsPage = () => {
   const [listingQuantityFilter, setListingQuantityFilter] = useState(1);
   const [bloomfieldHoverId, setBloomfieldHoverId] = useState(null);
   const [jerusalemHoverId, setJerusalemHoverId] = useState(null);
+  /** Ramat Gan map: filter ticket list by stadium section id (e.g. "11A"). */
+  const [ramatGanSectionFilter, setRamatGanSectionFilter] = useState(null);
+  const [ramatGanSelectedSectionId, setRamatGanSelectedSectionId] = useState(null);
   const [artists, setArtists] = useState([]);
   /** Prevents double-opens / race when Buy Now refetches listings before showing checkout. */
   const buyOpeningRef = useRef(false);
@@ -227,11 +235,27 @@ const EventDetailsPage = () => {
     if (ticket.section) {
       const section = String(ticket.section).trim();
 
+      const venueHay = [
+        event?.venue,
+        event?.venue_detail?.name,
+        event?.name,
+      ]
+        .filter(Boolean)
+        .join(' ');
+
+      const isRamatGanHall =
+        venueHay.includes(VENUE_RAMAT_GAN) ||
+        (venueHay.includes('רמת גן') && venueHay.includes('אצטדיון'));
+      if (isRamatGanHall) {
+        const mapId = ramatGanSectionIdFromTicket(ticket);
+        if (mapId) return mapId;
+      }
+
       // Menora (היכל מנורה): real bowl labels 101–112 / 301–312 → SVG ids "1 Lower" … "12 Upper"
-      const venueHay = [event?.venue, event?.name].filter(Boolean).join(' ');
       const isMenoraHall =
         (venueHay.includes('מנורה') || venueHay.includes('מבטחים')) &&
         !venueHay.includes('בלומפילד') &&
+        !isRamatGanHall &&
         !/פיס\s*ארנה|ארנה\s*ירושלים/i.test(venueHay) &&
         !(venueHay.includes('ירושלים') && venueHay.includes('ארנה'));
       if (isMenoraHall) {
@@ -721,9 +745,16 @@ const EventDetailsPage = () => {
 
   const canonicalVenueForMap = useMemo(() => {
     if (!event) return '';
-    const candidates = [event?.venue, event?.venue_detail?.name]
+    const candidates = [event?.venue, event?.venue_detail?.name, event?.name]
       .filter(Boolean)
       .map((v) => String(v).trim());
+
+    if (
+      candidates.some((v) => v === VENUE_RAMAT_GAN || v.includes(VENUE_RAMAT_GAN)) ||
+      candidates.some((v) => v.includes('רמת גן') && v.includes('אצטדיון'))
+    ) {
+      return VENUE_RAMAT_GAN;
+    }
 
     if (candidates.some((v) => v === VENUE_BLOOMFIELD_CONCERT)) return VENUE_BLOOMFIELD_CONCERT;
     if (candidates.includes('אצטדיון בלומפילד')) return 'אצטדיון בלומפילד';
@@ -755,6 +786,50 @@ const EventDetailsPage = () => {
       String(event?.category || '').toLowerCase() === 'concert');
   const isMenoraVenue = canonicalVenueForMap === 'היכל מנורה מבטחים';
   const isJerusalemArenaVenue = canonicalVenueForMap === 'פיס ארנה ירושלים';
+  const isRamatGanVenue = canonicalVenueForMap === VENUE_RAMAT_GAN;
+
+  useEffect(() => {
+    setRamatGanSectionFilter(null);
+    setRamatGanSelectedSectionId(null);
+  }, [eventId]);
+
+  const ramatGanActiveListingsSummary = useMemo(
+    () => (isRamatGanVenue ? buildRamatGanActiveListingsSummary(ticketGroups) : {}),
+    [isRamatGanVenue, ticketGroups]
+  );
+
+  const ramatGanDisplayGroups = useMemo(() => {
+    if (!isRamatGanVenue || !ramatGanSectionFilter) return ticketGroups;
+    return ticketGroups.filter((g) => {
+      const sid = ramatGanSectionIdFromTicket(g.tickets?.[0]);
+      return sid && sid === ramatGanSectionFilter;
+    });
+  }, [isRamatGanVenue, ramatGanSectionFilter, ticketGroups]);
+
+  const handleRamatGanSectionSelect = useCallback(
+    (sectionId) => {
+      if (!sectionId) return;
+      setRamatGanSectionFilter(sectionId);
+      setRamatGanSelectedSectionId(sectionId);
+      const matchingGroup = ticketGroups.find(
+        (g) => ramatGanSectionIdFromTicket(g.tickets?.[0]) === sectionId
+      );
+      if (matchingGroup) {
+        const gid = matchingGroup.listing_group_id ?? matchingGroup.id;
+        setActiveTicketId(gid);
+        setTimeout(() => {
+          try {
+            document
+              .querySelector(`[data-ticket-group-id="${gid}"]`)
+              ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          } catch {
+            /* ignore */
+          }
+        }, 80);
+      }
+    },
+    [ticketGroups]
+  );
 
   const bloomfieldFilteredGroups = useMemo(() => {
     if (!isBloomfieldVenue) return ticketGroups;
@@ -1113,8 +1188,10 @@ const EventDetailsPage = () => {
         </div>
         <div
           className={`tickets-split-container${
-            isBloomfieldVenue || isJerusalemArenaVenue ? ' tickets-split-container--bloomfield' : ''
-          }`}
+            isBloomfieldVenue || isJerusalemArenaVenue || isRamatGanVenue
+              ? ' tickets-split-container--bloomfield'
+              : ''
+          }${isRamatGanVenue ? ' tickets-split-container--ramat-gan' : ''}`}
         >
           {/*
             Inner stack: map + list must be direct siblings under one parent that spans the full
@@ -1132,6 +1209,12 @@ const EventDetailsPage = () => {
                     {CONCERT_BLOCK_COUNT} גושים · פריסת הופעה בבלומפילד
                   </p>
                 ) : null}
+                {isRamatGanVenue ? (
+                  <p className="venue-map-card-subtitle">
+                    מפת אצטדיון רמת גן · בחרו גוש לסינון הכרטיסים
+                    {ramatGanSectionFilter ? ` · מציג: ${ramatGanSectionFilter}` : ''}
+                  </p>
+                ) : null}
               </div>
                 <div className="venue-map-card-content">
                   {(() => {
@@ -1144,6 +1227,19 @@ const EventDetailsPage = () => {
                         const section = getSectionNameForMap(activeGroup.tickets[0]);
                         if (section) activeSectionName = section;
                       }
+                    }
+
+                    if (isRamatGanVenue) {
+                      return (
+                        <div className="ramat-gan-map-scroll-wrapper">
+                          <InteractiveStadiumMap
+                            activeListingsSummary={ramatGanActiveListingsSummary}
+                            onSelectSection={handleRamatGanSectionSelect}
+                            selectedSectionId={ramatGanSelectedSectionId}
+                            onSelectedSectionChange={setRamatGanSelectedSectionId}
+                          />
+                        </div>
+                      );
                     }
 
                     if (isMenoraVenue) {
@@ -1269,7 +1365,24 @@ const EventDetailsPage = () => {
                   />
                 ) : (
                 <div className="tickets-grid">
-            {ticketGroups.map((group) => {
+            {isRamatGanVenue && ramatGanSectionFilter ? (
+              <div className="ramat-gan-section-filter-banner" role="status">
+                <span>
+                  מציג כרטיסים בגוש <strong>{ramatGanSectionFilter}</strong>
+                </span>
+                <button
+                  type="button"
+                  className="ramat-gan-section-filter-clear"
+                  onClick={() => {
+                    setRamatGanSectionFilter(null);
+                    setRamatGanSelectedSectionId(null);
+                  }}
+                >
+                  הצג את כל הכרטיסים
+                </button>
+              </div>
+            ) : null}
+            {(isRamatGanVenue ? ramatGanDisplayGroups : ticketGroups).map((group) => {
               const seatRange = getSeatRange(group);
               const hasPdf = group.tickets.some((t) => t.has_pdf_file || t.pdf_file_url);
               const isVerified = group.seller_is_verified;
