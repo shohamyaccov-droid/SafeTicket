@@ -1712,27 +1712,32 @@ const Sell = () => {
           </div>
 
           <div className="terms-checkbox-container sell-single-compliance">
-            <input
-              type="checkbox"
-              id="sellerListingTerms"
-              name="sellerListingTerms"
-              checked={sellerListingTermsAccepted}
-              onChange={(e) => {
-                setSellerListingTermsAccepted(e.target.checked);
-                setFieldErrors((prev) => {
-                  if (!prev.terms) return prev;
-                  const next = { ...prev };
-                  delete next.terms;
-                  return next;
-                });
-              }}
-              className="terms-checkbox-input"
-              required
-            />
-            <label htmlFor="sellerListingTerms" className="terms-checkbox-label">
-              {ilSelected
-                ? 'אני מסכים/ה לתנאי השימוש של TradeTix ומצהיר/ה שהמחיר שהזנתי חוקי. ידוע לי שהכרטיס יפורסם לאחר אישור הנהלה, ושהתשלום יועבר אליי תוך יום עסקים אחד לאחר קיום האירוע.'
-                : 'אני מסכים/ה לתנאי השימוש של TradeTix ומאשר/ת שהתשלום בגין המכירה יועבר אליי תוך יום עסקים אחד לאחר קיום האירוע, על מנת להבטיח קנייה בטוחה ואת אמינות הכרטיסים.'}
+            <label className="terms-checkbox-label">
+              <input
+                type="checkbox"
+                id="sellerListingTerms"
+                name="sellerListingTerms"
+                checked={sellerListingTermsAccepted}
+                onChange={(e) => {
+                  setSellerListingTermsAccepted(e.target.checked);
+                  setFieldErrors((prev) => {
+                    if (!prev.terms) return prev;
+                    const next = { ...prev };
+                    delete next.terms;
+                    return next;
+                  });
+                }}
+                className="terms-checkbox-input"
+                required
+              />
+              <span>
+                אני מאשר/ת את{' '}
+                <a href="/terms" target="_blank" rel="noopener noreferrer">
+                  תקנון האתר
+                </a>
+                , ומצהיר/ה כי המחיר המבוקש אינו עולה על העלות המקורית של הכרטיס. כמו כן, ידוע לי שהתשלום
+                יועבר אליי מספר ימי עסקים לאחר קיום האירוע, כדי להבטיח קנייה בטוחה לרוכש.
+              </span>
             </label>
           </div>
           <SellFieldError message={fieldErrors.terms} />
