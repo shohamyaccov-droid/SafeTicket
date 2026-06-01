@@ -70,8 +70,13 @@ const MAP_BUILD_ID = import.meta.env.VITE_BUILD_ID || 'dev';
 /** Other sections that need manual anchors (not bottom grandstands). */
 const LABEL_POSITION_OVERRIDES = {
   STAGE: { cx: 544, cy: 355 },
-  B5: { cx: 404, cy: 543 },
+  B5: { cx: 537, cy: 225 },
+  A1: { cx: 332, cy: 526 },
   D12: { cx: 465, cy: 551 },
+  C7: { cx: 752, cy: 369 },
+  C8: { cx: 749, cy: 445 },
+  C9: { cx: 750, cy: 523 },
+  D13: { cx: 389, cy: 553 },
 };
 
 /**
@@ -423,7 +428,7 @@ export default function InteractiveStadiumMap({
 
             return (
               <g
-                key={`shape-${section.id}`}
+                key={`shape-${section.id}-${section.path?.slice(0, 12) ?? 'p'}`}
                 data-section-id={section.id}
                 className={`interactive-stadium-map__section-group interactive-stadium-map__section-group--${section.status}${
                   isSelected ? ' is-selected' : ''
@@ -464,7 +469,7 @@ export default function InteractiveStadiumMap({
 
               return (
                 <g
-                  key={`label-${section.id}`}
+                  key={`label-${section.id}-${section.path?.slice(0, 12) ?? 'p'}`}
                   className={`interactive-stadium-map__section-group interactive-stadium-map__section-group--${section.status}${
                     isSelected ? ' is-selected' : ''
                   }`}
