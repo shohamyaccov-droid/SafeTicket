@@ -33,81 +33,19 @@ const SECTION_HOVER = {
   stage: '#374151',
 };
 
+import {
+  RAMAT_GAN_STADIUM_VIEWBOX,
+  RAMAT_GAN_STADIUM_SECTIONS_BASE,
+  INTERACTIVE_STADIUM_SECTION_IDS,
+} from '../utils/ramatGanStadiumGeometry.generated.js';
+
+export { INTERACTIVE_STADIUM_SECTION_IDS };
+
 const SECTION_STROKE = '#ffffff';
-const VIEWBOX = '0 0 1000 820';
+const VIEWBOX = RAMAT_GAN_STADIUM_VIEWBOX;
 
-/** Static geometry + default demo values; listing props override status/price/ticketsLeft. */
-const SECTIONS_BASE = [
-  { id: '6C', label: '6C', points: '158,192 252,192 252,230 158,235', status: 'unavailable' },
-  { id: '9A', label: '9A', points: '256,165 365,165 365,225 256,225', status: 'unavailable' },
-  { id: '9B', label: '9B', points: '369,165 465,165 465,225 369,225', status: 'unavailable' },
-  { id: '11A', label: '11A', points: '469,165 558,165 558,225 469,225', status: 'available', price: '₪509', ticketsLeft: 9 },
-  { id: '11B', label: '11B', points: '562,165 652,165 652,225 562,225', status: 'unavailable' },
-  { id: '13A', label: '13A', points: '656,165 748,165 748,225 656,225', status: 'available', price: '₪580', ticketsLeft: 2 },
-  { id: '13B', label: '13B', points: '752,165 845,165 845,225 752,225', status: 'unavailable' },
-  { id: '6B', label: '6B', points: '148,235 252,228 252,275 148,283', status: 'available', price: '₪398', ticketsLeft: 2 },
-  { id: '6A', label: '6A', points: '140,287 252,278 252,352 140,362', status: 'available', price: '₪420' },
-  { id: '13C', label: '13C', points: '848,228 900,222 910,278 852,278', status: 'unavailable' },
-  { id: '16A', label: '16A', points: '903,282 952,276 962,352 906,352', status: 'unavailable' },
-  { id: '16B', label: '16B', points: '908,356 964,356 968,432 912,432', status: 'unavailable' },
-  { id: '16C', label: '16C', points: '913,436 968,436 970,510 916,510', status: 'unavailable' },
-  { id: 'A3', label: 'A3', points: '262,272 360,272 360,338 262,338', status: 'available', price: '₪569', ticketsLeft: 4 },
-  { id: 'A2', label: 'A2', points: '262,342 360,342 360,405 262,405', status: 'available', price: '₪563' },
-  { id: 'A1', label: 'A1', points: '262,409 360,409 360,468 262,468', status: 'available', price: '₪486' },
-  { id: 'B4', label: 'B4', points: '363,272 440,272 440,388 363,388', status: 'unavailable' },
-  { id: 'B5', label: 'B5', points: '443,258 537,258 537,358 443,358', status: 'unavailable' },
-  { id: 'B6', label: 'B6', points: '550,258 634,258 634,358 550,358', status: 'available', price: '₪711' },
-  { id: 'C7', label: 'C7', points: '637,272 722,272 722,378 637,378', status: 'unavailable' },
-  { id: 'C8', label: 'C8', points: '637,382 722,382 722,452 637,452', status: 'unavailable' },
-  { id: 'C9', label: 'C9', points: '637,456 722,456 722,515 637,515', status: 'available', price: '₪496' },
-  { id: 'D14', label: 'D14', points: '318,471 400,471 400,545 318,545', status: 'unavailable' },
-  { id: 'D13', label: 'D13', points: '403,458 468,458 468,545 403,545', status: 'available', price: '₪592', ticketsLeft: 2 },
-  { id: 'D12', label: 'D12', points: '471,471 545,471 545,545 471,545', status: 'unavailable' },
-  { id: 'D11', label: 'D11', points: '548,458 618,458 618,545 548,545', status: 'available', price: '₪711' },
-  { id: 'D10', label: 'D10', points: '621,458 692,458 692,545 621,545', status: 'unavailable' },
-  { id: 'ACCESSIBLE', label: 'Accessible', points: '148,472 258,472 258,545 148,545', status: 'unavailable' },
-  { id: 'STAGE', label: 'Stage', points: '443,362 537,362 537,512 443,512', status: 'stage' },
-  {
-    id: '4',
-    label: '4',
-    path: 'M 148,572 L 292,568 L 285,792 Q 213,815 148,792 Z',
-    status: 'available',
-    price: '₪292',
-  },
-  {
-    id: '3',
-    label: '3',
-    path: 'M 295,568 L 452,562 L 447,793 L 288,793 Z',
-    status: 'available',
-    price: '₪381',
-  },
-  {
-    id: '2-3',
-    label: '2-3',
-    path: 'M 455,560 L 570,560 L 567,795 L 451,795 Z',
-    status: 'available',
-    price: '₪381',
-  },
-  {
-    id: '2',
-    label: '2',
-    path: 'M 573,562 L 710,568 L 705,793 L 570,793 Z',
-    status: 'available',
-    price: '₪316',
-  },
-  {
-    id: '1',
-    label: '1',
-    path: 'M 713,568 L 858,572 L 855,792 Q 787,815 712,792 Z',
-    status: 'available',
-    price: '₪316',
-  },
-];
-
-/** Section ids used for ticket ↔ map matching (excludes STAGE). */
-export const INTERACTIVE_STADIUM_SECTION_IDS = SECTIONS_BASE.filter((s) => s.id !== 'STAGE').map(
-  (s) => s.id
-);
+/** Traced paths from Untitled.svg; listing props override status/price/ticketsLeft. */
+const SECTIONS_BASE = RAMAT_GAN_STADIUM_SECTIONS_BASE;
 
 /**
  * @param {SectionGeometry} section

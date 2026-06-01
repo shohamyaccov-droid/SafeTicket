@@ -1,4 +1,4 @@
-import { INTERACTIVE_STADIUM_SECTION_IDS } from '../components/InteractiveStadiumMap';
+import { INTERACTIVE_STADIUM_SECTION_IDS } from './ramatGanStadiumGeometry.generated.js';
 
 const SECTION_ID_SET = new Set(INTERACTIVE_STADIUM_SECTION_IDS);
 

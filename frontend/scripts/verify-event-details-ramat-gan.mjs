@@ -10,21 +10,28 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const eventPage = readFileSync(path.join(root, 'src/pages/EventDetailsPage.jsx'), 'utf8');
 const listingUtil = readFileSync(path.join(root, 'src/utils/ramatGanStadiumListing.js'), 'utf8');
 
+const geometry = readFileSync(path.join(root, 'src/utils/ramatGanStadiumGeometry.generated.js'), 'utf8');
+const mapJsx = readFileSync(path.join(root, 'src/components/InteractiveStadiumMap.jsx'), 'utf8');
+
 const checks = [
-  ['imports InteractiveStadiumMap', /import InteractiveStadiumMap from/],
-  ['imports VENUE_RAMAT_GAN', /VENUE_RAMAT_GAN/],
-  ['isRamatGanVenue flag', /isRamatGanVenue/],
-  ['ramatGanActiveListingsSummary', /ramatGanActiveListingsSummary/],
-  ['onSelectSection handler', /handleRamatGanSectionSelect/],
-  ['renders InteractiveStadiumMap', /<InteractiveStadiumMap/],
-  ['venue_place in canonical venue', /venue_detail\?\.name/],
-  ['section filter banner', /ramat-gan-section-filter-banner/],
-  ['listing util exports', /buildRamatGanActiveListingsSummary/],
+  ['imports InteractiveStadiumMap', /import InteractiveStadiumMap from/, eventPage],
+  ['imports VENUE_RAMAT_GAN', /VENUE_RAMAT_GAN/, eventPage],
+  ['isRamatGanVenue flag', /isRamatGanVenue/, eventPage],
+  ['ramatGanActiveListingsSummary', /ramatGanActiveListingsSummary/, eventPage],
+  ['onSelectSection handler', /handleRamatGanSectionSelect/, eventPage],
+  ['renders InteractiveStadiumMap', /<InteractiveStadiumMap/, eventPage],
+  ['venue_place in canonical venue', /venue_detail\?\.name/, eventPage],
+  ['section filter banner', /ramat-gan-section-filter-banner/, eventPage],
+  ['listing util exports', /buildRamatGanActiveListingsSummary/, listingUtil],
+  ['geometry viewBox 1080', /0 0 1080 1080/, geometry],
+  ['geometry STAGE path', /486\.5 316\.5H600\.5/, geometry],
+  ['map imports traced geometry', /ramatGanStadiumGeometry/, mapJsx],
+  ['34 sections in geometry', () => (geometry.match(/id: '/g) || []).length === 34],
 ];
 
 let failed = 0;
-for (const [label, re] of checks) {
-  const ok = re.test(label.includes('listing') ? listingUtil : eventPage);
+for (const [label, re, src] of checks) {
+  const ok = typeof re === 'function' ? re() : re.test(src);
   console.log(ok ? `OK  ${label}` : `FAIL ${label}`);
   if (!ok) failed += 1;
 }
