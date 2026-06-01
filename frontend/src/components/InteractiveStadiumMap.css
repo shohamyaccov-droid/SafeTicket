@@ -41,7 +41,11 @@
 }
 
 .interactive-stadium-map__section.is-selected {
-  filter: drop-shadow(0 2px 8px rgba(21, 128, 61, 0.35));
+  filter: drop-shadow(0 3px 10px rgba(154, 52, 18, 0.45));
+}
+
+.interactive-stadium-map__section--stage {
+  stroke: #94a3b8;
 }
 
 .interactive-stadium-map__section.is-hover.is-clickable {
@@ -62,13 +66,14 @@
 }
 
 .interactive-stadium-map__section-group--available .interactive-stadium-map__section-id-label {
-  fill: #052e16;
-  stroke: rgba(255, 255, 255, 0.75);
+  fill: #ffffff;
+  stroke: rgba(124, 45, 18, 0.4);
+  stroke-width: 2.5px;
 }
 
 .interactive-stadium-map__section-group--available.is-selected .interactive-stadium-map__section-id-label {
   fill: #ffffff;
-  stroke: rgba(0, 0, 0, 0.15);
+  stroke: rgba(0, 0, 0, 0.2);
 }
 
 .interactive-stadium-map__stage-label {
@@ -82,14 +87,18 @@
 }
 
 .interactive-stadium-map__price-label {
-  fill: #14532d;
+  fill: #ffedd5;
   font-weight: 700;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   pointer-events: none;
   user-select: none;
-  stroke: rgba(255, 255, 255, 0.7);
+  stroke: rgba(124, 45, 18, 0.35);
   stroke-width: 2px;
   paint-order: stroke fill;
+}
+
+.interactive-stadium-map__section-group--available .interactive-stadium-map__price-label {
+  fill: #fff7ed;
 }
 
 .interactive-stadium-map__bar {
@@ -104,7 +113,7 @@
 }
 
 .interactive-stadium-map__bar--visible {
-  background: linear-gradient(180deg, #f0fdf4 0%, #ecfdf5 100%);
+  background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
 }
 
 .interactive-stadium-map__bar-info {
@@ -124,7 +133,7 @@
 
 .interactive-stadium-map__bar-price {
   font-weight: 800;
-  color: #15803d;
+  color: #c2410c;
   font-size: 1.1rem;
 }
 
@@ -146,7 +155,7 @@
   padding: 0.6rem 1.1rem;
   border: none;
   border-radius: 8px;
-  background: #16a34a;
+  background: #ea580c;
   color: #fff;
   font-weight: 700;
   font-size: 0.9rem;
@@ -155,7 +164,7 @@
 }
 
 .interactive-stadium-map__bar-cta:hover {
-  background: #15803d;
+  background: #c2410c;
 }
 
 .interactive-stadium-map__bar-cta:focus-visible {

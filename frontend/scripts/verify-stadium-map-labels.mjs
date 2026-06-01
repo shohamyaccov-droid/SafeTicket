@@ -40,8 +40,14 @@ if (cx < 400 || cx > 700 || cy < 250 || cy > 450) {
 
 const mapSrc = readFileSync(path.join(root, 'src/components/InteractiveStadiumMap.jsx'), 'utf8');
 const checks = [
-  ['#22c55e available fill', /available: '#22c55e'/],
-  ['#15803d selected fill', /selected: '#15803d'/],
+  ['#ea580c available fill', /available: '#ea580c'/],
+  ['#c2410c hover fill', /availableHover: '#c2410c'/],
+  ['#9a3412 selected fill', /selected: '#9a3412'/],
+  ['polygon centroid', /polygonCentroid/],
+  ['LABEL_OFFSETS B5', /LABEL_OFFSETS[\s\S]*B5:\s*\{\s*dx:\s*15,\s*dy:\s*-10\s*\}/],
+  ['resolveLabelCoordinates', /resolveLabelCoordinates/],
+  ['stage slate fill', /stage: '#334155'/],
+  ['stage grey stroke', /stageStroke: '#94a3b8'/],
   ['section-id-label class', /interactive-stadium-map__section-id-label/],
   ['pointerEvents none on labels', /pointerEvents="none"/],
 ];

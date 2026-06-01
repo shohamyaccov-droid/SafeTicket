@@ -35,23 +35,30 @@ export { INTERACTIVE_STADIUM_SECTION_IDS };
 const VIEWBOX = RAMAT_GAN_STADIUM_VIEWBOX;
 const SECTIONS_BASE = RAMAT_GAN_STADIUM_SECTIONS_BASE;
 
+/** TRADETIX brand — matches primary CTA orange (#ea580c) across the site. */
 const COLORS = {
   stroke: '#ffffff',
   unavailable: '#e5e7eb',
   unavailableHover: '#d1d5db',
-  available: '#22c55e',
-  availableHover: '#16a34a',
-  selected: '#15803d',
-  stage: '#1f2937',
-  stageHover: '#374151',
-  label: '#111827',
-  labelOnDark: '#ffffff',
-  labelMuted: '#374151',
-  price: '#14532d',
+  available: '#ea580c',
+  availableHover: '#c2410c',
+  selected: '#9a3412',
+  stage: '#334155',
+  stageHover: '#475569',
+  stageStroke: '#94a3b8',
 };
 
 const STROKE_WIDTH = 2.5;
 const STROKE_WIDTH_SELECTED = 3.5;
+
+/**
+ * Manual label nudges (viewBox units) for concave / irregular sections where
+ * polygon centroid still sits outside the visible hull.
+ * @type {Record<string, { dx?: number, dy?: number }>}
+ */
+const LABEL_OFFSETS = {
+  B5: { dx: 15, dy: -10 },
+};
 
 /**
  * Parse SVG path commands (M/L/H/V/C/Z) into vertex list for bbox/centroid.
@@ -130,7 +137,46 @@ function getPathVertices(d) {
 }
 
 /**
- * Bounding-box center for polygon points or path vertices.
+ * Shoelace polygon centroid (area-weighted); better than bbox center for concave sections.
+ * @param {{ x: number, y: number }[]} vertices
+ * @returns {{ cx: number, cy: number }}
+ */
+function polygonCentroid(vertices) {
+  const pts = vertices.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+  if (pts.length < 3) {
+    if (!pts.length) return { cx: 540, cy: 540 };
+    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+    const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+    return { cx, cy };
+  }
+
+  let twiceArea = 0;
+  let cxAcc = 0;
+  let cyAcc = 0;
+  const n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const cross = pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+    twiceArea += cross;
+    cxAcc += (pts[i].x + pts[j].x) * cross;
+    cyAcc += (pts[i].y + pts[j].y) * cross;
+  }
+
+  if (Math.abs(twiceArea) < 1e-4) {
+    const cx = pts.reduce((s, p) => s + p.x, 0) / n;
+    const cy = pts.reduce((s, p) => s + p.y, 0) / n;
+    return { cx, cy };
+  }
+
+  const area = twiceArea / 2;
+  return {
+    cx: cxAcc / (6 * area),
+    cy: cyAcc / (6 * area),
+  };
+}
+
+/**
+ * Polygon centroid + bbox metrics for font scaling.
  * @param {{ x: number, y: number }[]} vertices
  * @returns {LabelPlacement}
  */
@@ -149,17 +195,34 @@ function placementFromVertices(vertices) {
     minY = Math.min(minY, y);
     maxY = Math.max(maxY, y);
   }
+  const { cx, cy } = polygonCentroid(vertices);
   const width = maxX - minX;
   const height = maxY - minY;
   return {
-    cx: (minX + maxX) / 2,
-    cy: (minY + maxY) / 2,
+    cx,
+    cy,
     minX,
     minY,
     maxX,
     maxY,
     width,
     height,
+  };
+}
+
+/**
+ * Apply optional manual nudge after centroid calculation.
+ * @param {string} sectionId
+ * @param {LabelPlacement} placement
+ */
+export function resolveLabelCoordinates(sectionId, placement) {
+  const off = LABEL_OFFSETS[sectionId];
+  if (!off) {
+    return { cx: placement.cx, cy: placement.cy };
+  }
+  return {
+    cx: placement.cx + (off.dx ?? 0),
+    cy: placement.cy + (off.dy ?? 0),
   };
 }
 
@@ -342,10 +405,14 @@ export default function InteractiveStadiumMap({
             const fill = resolveSectionFill(section, isSelected, isHover);
             const clickable = section.status === 'available';
             const placement = placementById[section.id];
-            const { cx, cy } = placement;
+            const { cx, cy } = resolveLabelCoordinates(section.id, placement);
             const idFontSize = sectionIdFontSize(placement);
+            const priceFontSize = Math.max(9, idFontSize - 2);
             const showPrice = section.status === 'available' && section.price;
-            const priceOffset = showPrice ? idFontSize * 0.95 : 0;
+            const stackHalfGap = showPrice ? (idFontSize + priceFontSize) * 0.52 : 0;
+            const idY = cy - stackHalfGap;
+            const priceY = cy + stackHalfGap;
+            const isStage = section.status === 'stage';
 
             const commonHandlers = clickable
               ? {
@@ -366,7 +433,7 @@ export default function InteractiveStadiumMap({
 
             const shapeProps = {
               fill,
-              stroke: COLORS.stroke,
+              stroke: isStage ? COLORS.stageStroke : COLORS.stroke,
               strokeWidth: isSelected ? STROKE_WIDTH_SELECTED : STROKE_WIDTH,
               className: `interactive-stadium-map__section interactive-stadium-map__section--${section.status}${
                 isSelected ? ' is-selected' : ''
@@ -388,7 +455,7 @@ export default function InteractiveStadiumMap({
                   <path d={section.path} {...shapeProps} />
                 ) : null}
 
-                {section.status === 'stage' ? (
+                {isStage ? (
                   <text
                     x={cx}
                     y={cy}
@@ -403,7 +470,7 @@ export default function InteractiveStadiumMap({
                   <>
                     <text
                       x={cx}
-                      y={showPrice ? cy - priceOffset : cy}
+                      y={idY}
                       textAnchor="middle"
                       dominantBaseline="central"
                       className="interactive-stadium-map__section-id-label"
@@ -415,11 +482,11 @@ export default function InteractiveStadiumMap({
                     {showPrice ? (
                       <text
                         x={cx}
-                        y={cy + priceOffset}
+                        y={priceY}
                         textAnchor="middle"
                         dominantBaseline="central"
                         className="interactive-stadium-map__price-label"
-                        fontSize={Math.max(9, idFontSize - 3)}
+                        fontSize={priceFontSize}
                         pointerEvents="none"
                       >
                         {section.price}
