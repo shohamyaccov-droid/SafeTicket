@@ -56,13 +56,16 @@ const STROKE_WIDTH_SELECTED = 3.5;
  * These five IDs NEVER use bbox/centroid math; values are injected directly into <text x y>.
  * @type {Record<string, { x: number, y: number }>}
  */
+/** Bbox centers for multi-subpath bottom blocks (1080×1080 viewBox). */
 const BOTTOM_GRANDSTAND_LABEL_COORDS = {
-  '4': { x: 250, y: 740 },
-  '3': { x: 380, y: 760 },
-  '2': { x: 540, y: 770 },
-  '1': { x: 700, y: 760 },
-  D10: { x: 830, y: 740 },
+  '4': { x: 234, y: 772 },
+  '3': { x: 369, y: 797 },
+  '2': { x: 545, y: 805 },
+  '1': { x: 718, y: 795 },
+  D10: { x: 841, y: 768 },
 };
+
+const MAP_BUILD_ID = import.meta.env.VITE_BUILD_ID || 'dev';
 
 /** Other sections that need manual anchors (not bottom grandstands). */
 const LABEL_POSITION_OVERRIDES = {
@@ -389,16 +392,6 @@ export default function InteractiveStadiumMap({
             const isHover = hoverId === section.id;
             const fill = resolveSectionFill(section, isSelected, isHover);
             const clickable = section.status === 'available';
-            const placement = placementById[section.id];
-            const grandstandCoords = BOTTOM_GRANDSTAND_LABEL_COORDS[section.id];
-            const labelX = grandstandCoords ? grandstandCoords.x : resolveLabelCoordinates(section.id, placement).cx;
-            const labelY = grandstandCoords ? grandstandCoords.y : resolveLabelCoordinates(section.id, placement).cy;
-            const idFontSize = sectionIdFontSize(placement);
-            const priceFontSize = Math.max(9, idFontSize - 2);
-            const showPrice = section.status === 'available' && section.price;
-            const stackHalfGap = showPrice ? (idFontSize + priceFontSize) * 0.52 : 0;
-            const idY = labelY - stackHalfGap;
-            const priceY = labelY + stackHalfGap;
             const isStage = section.status === 'stage';
 
             const commonHandlers = clickable
@@ -430,7 +423,7 @@ export default function InteractiveStadiumMap({
 
             return (
               <g
-                key={section.id}
+                key={`shape-${section.id}`}
                 data-section-id={section.id}
                 className={`interactive-stadium-map__section-group interactive-stadium-map__section-group--${section.status}${
                   isSelected ? ' is-selected' : ''
@@ -441,49 +434,84 @@ export default function InteractiveStadiumMap({
                 ) : section.path ? (
                   <path d={section.path} {...shapeProps} />
                 ) : null}
-
-                {isStage ? (
-                  <text
-                    x={labelX}
-                    y={labelY}
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    className="interactive-stadium-map__stage-label"
-                    pointerEvents="none"
-                  >
-                    STAGE
-                  </text>
-                ) : (
-                  <>
-                    <text
-                      x={labelX}
-                      y={idY}
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      className="interactive-stadium-map__section-id-label"
-                      fontSize={idFontSize}
-                      pointerEvents="none"
-                    >
-                      {section.id}
-                    </text>
-                    {showPrice ? (
-                      <text
-                        x={labelX}
-                        y={priceY}
-                        textAnchor="middle"
-                        dominantBaseline="central"
-                        className="interactive-stadium-map__price-label"
-                        fontSize={priceFontSize}
-                        pointerEvents="none"
-                      >
-                        {section.price}
-                      </text>
-                    ) : null}
-                  </>
-                )}
               </g>
             );
           })}
+
+          <g
+            className="interactive-stadium-map__labels-layer"
+            pointerEvents="none"
+            data-map-build={MAP_BUILD_ID}
+          >
+            {sections.map((section) => {
+              const isSelected = selectedSectionId === section.id;
+              const placement = placementById[section.id];
+              const grandstandCoords = BOTTOM_GRANDSTAND_LABEL_COORDS[section.id];
+              const labelX = grandstandCoords
+                ? grandstandCoords.x
+                : resolveLabelCoordinates(section.id, placement).cx;
+              const labelY = grandstandCoords
+                ? grandstandCoords.y
+                : resolveLabelCoordinates(section.id, placement).cy;
+              const idFontSize = sectionIdFontSize(placement);
+              const priceFontSize = Math.max(9, idFontSize - 2);
+              const showPrice = section.status === 'available' && section.price;
+              const stackHalfGap = showPrice ? (idFontSize + priceFontSize) * 0.52 : 0;
+              const isStage = section.status === 'stage';
+
+              return (
+                <g
+                  key={`label-${section.id}`}
+                  transform={`translate(${labelX}, ${labelY})`}
+                  className={`interactive-stadium-map__section-group interactive-stadium-map__section-group--${section.status}${
+                    isSelected ? ' is-selected' : ''
+                  }`}
+                  data-section-id={section.id}
+                  data-label-anchor={grandstandCoords ? 'grandstand-fixed' : 'auto'}
+                >
+                  {isStage ? (
+                    <text
+                      x={0}
+                      y={0}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      alignmentBaseline="middle"
+                      className="interactive-stadium-map__stage-label"
+                    >
+                      STAGE
+                    </text>
+                  ) : (
+                    <>
+                      <text
+                        x={0}
+                        y={showPrice ? -stackHalfGap : 0}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        alignmentBaseline="middle"
+                        className="interactive-stadium-map__section-id-label"
+                        fontSize={idFontSize}
+                      >
+                        {section.id}
+                      </text>
+                      {showPrice ? (
+                        <text
+                          x={0}
+                          y={stackHalfGap}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          alignmentBaseline="middle"
+                          className="interactive-stadium-map__price-label"
+                          fontSize={priceFontSize}
+                        >
+                          {section.price}
+                        </text>
+                      ) : null}
+                    </>
+                  )}
+                </g>
+              );
+            })}
+          </g>
         </svg>
       </div>
 

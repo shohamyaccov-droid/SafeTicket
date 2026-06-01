@@ -101,11 +101,11 @@ while ((pm = pathRe.exec(geo))) {
 }
 
 const exactGrandstands = {
-  '4': { x: 250, y: 740 },
-  '3': { x: 380, y: 760 },
-  '2': { x: 540, y: 770 },
-  '1': { x: 700, y: 760 },
-  D10: { x: 830, y: 740 },
+  '4': { x: 234, y: 772 },
+  '3': { x: 369, y: 797 },
+  '2': { x: 545, y: 805 },
+  '1': { x: 718, y: 795 },
+  D10: { x: 841, y: 768 },
 };
 
 let failed = 0;
@@ -153,8 +153,12 @@ for (const [id, { x, y }] of Object.entries(exactGrandstands)) {
     if (!ok) failed += 1;
   }
 }
-if (!/grandstandCoords \? grandstandCoords\.x/.test(mapSrc)) {
+if (!/grandstandCoords[\s\S]*?\? grandstandCoords\.x/.test(mapSrc)) {
   console.log('FAIL render loop does not use BOTTOM_GRANDSTAND_LABEL_COORDS directly');
+  failed += 1;
+}
+if (!/transform=\{`translate\(\$\{labelX\}, \$\{labelY\}\)`\}/.test(mapSrc)) {
+  console.log('FAIL labels are not positioned via translate(labelX, labelY)');
   failed += 1;
 }
 

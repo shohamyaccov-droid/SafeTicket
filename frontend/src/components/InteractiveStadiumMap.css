@@ -32,6 +32,10 @@
   fill: #fafafa;
 }
 
+.interactive-stadium-map__labels-layer {
+  pointer-events: none;
+}
+
 .interactive-stadium-map__section {
   transition: fill 0.18s ease, stroke 0.18s ease, stroke-width 0.18s ease, filter 0.18s ease;
 }
