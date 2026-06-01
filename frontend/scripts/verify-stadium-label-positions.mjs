@@ -91,7 +91,7 @@ const mapSrc = readFileSync(path.join(root, 'src/components/InteractiveStadiumMa
 const geo = readFileSync(path.join(root, 'src/utils/ramatGanStadiumGeometry.generated.js'), 'utf8');
 
 const entryRe =
-  /(?:['"]([\w-]+)['"]|([A-Za-z][\w-]*))\s*:\s*\{\s*cx:\s*([\d.]+)\s*,\s*cy:\s*([\d.]+)\s*\}/g;
+  /(?:['"]([\w-]+)['"]|([A-Za-z][\w-]*))\s*:\s*\{\s*(?:cx:\s*([\d.]+)\s*,\s*cy:\s*([\d.]+)|x:\s*([\d.]+)\s*,\s*y:\s*([\d.]+))\s*\}/g;
 
 const pathsById = {};
 const pathRe = /id: '([^']+)'[^}]+path: '([^']+)'/g;
@@ -100,13 +100,22 @@ while ((pm = pathRe.exec(geo))) {
   pathsById[pm[1]] = pm[2];
 }
 
+const exactGrandstands = {
+  '4': { x: 250, y: 740 },
+  '3': { x: 380, y: 760 },
+  '2': { x: 540, y: 770 },
+  '1': { x: 700, y: 760 },
+  D10: { x: 830, y: 740 },
+};
+
 let failed = 0;
 let em;
 entryRe.lastIndex = 0;
 while ((em = entryRe.exec(mapSrc))) {
   const id = em[1] || em[2];
-  const cx = parseFloat(em[3]);
-  const cy = parseFloat(em[4]);
+  if (exactGrandstands[id]) continue;
+  const cx = parseFloat(em[3] ?? em[5]);
+  const cy = parseFloat(em[4] ?? em[6]);
   const pathD = pathsById[id];
   if (!pathD) {
     console.log(`SKIP ${id} (no path in geometry)`);
@@ -123,16 +132,30 @@ while ((em = entryRe.exec(mapSrc))) {
   if (!ok) failed += 1;
 }
 
-const mustHave = ['1', '2', '3', '4', 'D10'];
-for (const id of mustHave) {
-  const key = id === 'D10' ? 'D10' : id;
-  const hasKey =
-    new RegExp(`['"]${key}['"]\\s*:\\s*\\{`).test(mapSrc) ||
-    new RegExp(`\\b${key}\\s*:\\s*\\{`).test(mapSrc);
-  if (!hasKey) {
-    console.log(`FAIL missing override for ${id}`);
+for (const [id, { x, y }] of Object.entries(exactGrandstands)) {
+  const key = id === 'D10' ? 'D10' : `'${id}'`;
+  const pat = new RegExp(`${key.replace("'", "['\"]")}\\s*:\\s*\\{\\s*x:\\s*${x}\\s*,\\s*y:\\s*${y}`);
+  if (!pat.test(mapSrc)) {
+    console.log(`FAIL BOTTOM_GRANDSTAND missing exact coords for ${id} (${x}, ${y})`);
     failed += 1;
+  } else {
+    console.log(`OK  BOTTOM_GRANDSTAND ${id} hardcoded (${x}, ${y})`);
   }
+  const pathD = pathsById[id];
+  if (pathD) {
+    const bb = pathBBox(pathD);
+    const ok = insideBBox(x, y, bb, 8);
+    console.log(
+      ok ? 'OK  ' : 'WARN',
+      `${id} inside bbox`,
+      `x${bb.minX.toFixed(0)}-${bb.maxX.toFixed(0)} y${bb.minY.toFixed(0)}-${bb.maxY.toFixed(0)}`
+    );
+    if (!ok) failed += 1;
+  }
+}
+if (!/grandstandCoords \? grandstandCoords\.x/.test(mapSrc)) {
+  console.log('FAIL render loop does not use BOTTOM_GRANDSTAND_LABEL_COORDS directly');
+  failed += 1;
 }
 
 if (failed) {

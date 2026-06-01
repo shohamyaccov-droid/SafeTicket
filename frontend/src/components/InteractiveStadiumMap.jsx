@@ -52,17 +52,21 @@ const STROKE_WIDTH = 2.5;
 const STROKE_WIDTH_SELECTED = 3.5;
 
 /**
- * Absolute label anchors (1080×1080 viewBox). Used instead of auto-placement for
- * multi-subpath / concave grandstands where shoelace centroids fall outside the shape.
- * @type {Record<string, { cx: number, cy: number }>}
+ * Bottom grandstand labels — fixed viewBox coordinates (1080×1080).
+ * These five IDs NEVER use bbox/centroid math; values are injected directly into <text x y>.
+ * @type {Record<string, { x: number, y: number }>}
  */
+const BOTTOM_GRANDSTAND_LABEL_COORDS = {
+  '4': { x: 250, y: 740 },
+  '3': { x: 380, y: 760 },
+  '2': { x: 540, y: 770 },
+  '1': { x: 700, y: 760 },
+  D10: { x: 830, y: 740 },
+};
+
+/** Other sections that need manual anchors (not bottom grandstands). */
 const LABEL_POSITION_OVERRIDES = {
   STAGE: { cx: 544, cy: 355 },
-  '4': { cx: 234, cy: 772 },
-  '3': { cx: 369, cy: 797 },
-  '2': { cx: 545, cy: 805 },
-  '1': { cx: 718, cy: 795 },
-  D10: { cx: 841, cy: 768 },
   B5: { cx: 404, cy: 543 },
   D12: { cx: 465, cy: 551 },
 };
@@ -196,6 +200,10 @@ function placementFromVertices(vertices) {
  * @param {LabelPlacement} placement
  */
 export function resolveLabelCoordinates(sectionId, placement) {
+  const grandstand = BOTTOM_GRANDSTAND_LABEL_COORDS[sectionId];
+  if (grandstand) {
+    return { cx: grandstand.x, cy: grandstand.y };
+  }
   const hard = LABEL_POSITION_OVERRIDES[sectionId];
   if (hard) {
     return { cx: hard.cx, cy: hard.cy };
@@ -382,13 +390,15 @@ export default function InteractiveStadiumMap({
             const fill = resolveSectionFill(section, isSelected, isHover);
             const clickable = section.status === 'available';
             const placement = placementById[section.id];
-            const { cx, cy } = resolveLabelCoordinates(section.id, placement);
+            const grandstandCoords = BOTTOM_GRANDSTAND_LABEL_COORDS[section.id];
+            const labelX = grandstandCoords ? grandstandCoords.x : resolveLabelCoordinates(section.id, placement).cx;
+            const labelY = grandstandCoords ? grandstandCoords.y : resolveLabelCoordinates(section.id, placement).cy;
             const idFontSize = sectionIdFontSize(placement);
             const priceFontSize = Math.max(9, idFontSize - 2);
             const showPrice = section.status === 'available' && section.price;
             const stackHalfGap = showPrice ? (idFontSize + priceFontSize) * 0.52 : 0;
-            const idY = cy - stackHalfGap;
-            const priceY = cy + stackHalfGap;
+            const idY = labelY - stackHalfGap;
+            const priceY = labelY + stackHalfGap;
             const isStage = section.status === 'stage';
 
             const commonHandlers = clickable
@@ -434,8 +444,8 @@ export default function InteractiveStadiumMap({
 
                 {isStage ? (
                   <text
-                    x={cx}
-                    y={cy}
+                    x={labelX}
+                    y={labelY}
                     textAnchor="middle"
                     dominantBaseline="central"
                     className="interactive-stadium-map__stage-label"
@@ -446,7 +456,7 @@ export default function InteractiveStadiumMap({
                 ) : (
                   <>
                     <text
-                      x={cx}
+                      x={labelX}
                       y={idY}
                       textAnchor="middle"
                       dominantBaseline="central"
@@ -458,7 +468,7 @@ export default function InteractiveStadiumMap({
                     </text>
                     {showPrice ? (
                       <text
-                        x={cx}
+                        x={labelX}
                         y={priceY}
                         textAnchor="middle"
                         dominantBaseline="central"
