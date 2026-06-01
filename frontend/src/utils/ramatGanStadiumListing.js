@@ -2,11 +2,6 @@ import { INTERACTIVE_STADIUM_SECTION_IDS } from './ramatGanStadiumGeometry.gener
 
 const SECTION_ID_SET = new Set(INTERACTIVE_STADIUM_SECTION_IDS);
 
-/** Legacy / alternate names from older map labels → Viagogo ids. */
-const SECTION_ID_ALIASES = {
-  '9B': 'B5',
-};
-
 /**
  * Normalize ticket.section to InteractiveStadiumMap section id (e.g. "11A", "2-3").
  * @param {string|null|undefined} raw
@@ -17,8 +12,6 @@ export function ramatGanSectionIdFromSection(raw) {
   let s = String(raw).trim();
   s = s.replace(/^גוש\s*/i, '').replace(/^section\s*/i, '').trim();
   const compact = s.replace(/\s+/g, '').toUpperCase();
-  const aliased = SECTION_ID_ALIASES[compact] ?? SECTION_ID_ALIASES[s];
-  if (aliased && SECTION_ID_SET.has(aliased)) return aliased;
   if (SECTION_ID_SET.has(compact)) return compact;
   if (SECTION_ID_SET.has(s)) return s;
   const hyphenMatch = compact.match(/^(\d)-(\d)$/);

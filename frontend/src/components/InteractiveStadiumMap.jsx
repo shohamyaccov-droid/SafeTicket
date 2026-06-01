@@ -70,13 +70,15 @@ const MAP_BUILD_ID = import.meta.env.VITE_BUILD_ID || 'dev';
 /** Other sections that need manual anchors (not bottom grandstands). */
 const LABEL_POSITION_OVERRIDES = {
   STAGE: { cx: 544, cy: 355 },
-  B5: { cx: 537, cy: 225 },
+  B5: { cx: 541, cy: 452 },
+  '11A': { cx: 537, cy: 225 },
   A1: { cx: 332, cy: 526 },
-  D12: { cx: 465, cy: 551 },
+  D12: { cx: 543, cy: 565 },
+  D13: { cx: 465, cy: 551 },
+  D14: { cx: 389, cy: 553 },
   C7: { cx: 752, cy: 369 },
   C8: { cx: 749, cy: 445 },
   C9: { cx: 750, cy: 523 },
-  D13: { cx: 389, cy: 553 },
 };
 
 /**
