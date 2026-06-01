@@ -101,11 +101,11 @@ while ((pm = pathRe.exec(geo))) {
 }
 
 const exactGrandstands = {
-  '4': { x: 234, y: 772 },
-  '3': { x: 369, y: 797 },
-  '2': { x: 545, y: 805 },
-  '1': { x: 718, y: 795 },
-  D10: { x: 841, y: 768 },
+  '4': { x: 234, y: 720 },
+  '3': { x: 369, y: 735 },
+  '2': { x: 545, y: 745 },
+  '1': { x: 718, y: 735 },
+  D10: { x: 841, y: 720 },
 };
 
 let failed = 0;
@@ -157,8 +157,12 @@ if (!/grandstandCoords[\s\S]*?\? grandstandCoords\.x/.test(mapSrc)) {
   console.log('FAIL render loop does not use BOTTOM_GRANDSTAND_LABEL_COORDS directly');
   failed += 1;
 }
-if (!/transform=\{`translate\(\$\{labelX\}, \$\{labelY\}\)`\}/.test(mapSrc)) {
-  console.log('FAIL labels are not positioned via translate(labelX, labelY)');
+if (!/dy="\.3em"/.test(mapSrc)) {
+  console.log('FAIL labels do not use dy=".3em" for vertical centering');
+  failed += 1;
+}
+if (/dominantBaseline/.test(mapSrc)) {
+  console.log('FAIL dominantBaseline still present on map labels');
   failed += 1;
 }
 

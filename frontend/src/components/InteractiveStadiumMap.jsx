@@ -56,13 +56,12 @@ const STROKE_WIDTH_SELECTED = 3.5;
  * These five IDs NEVER use bbox/centroid math; values are injected directly into <text x y>.
  * @type {Record<string, { x: number, y: number }>}
  */
-/** Bbox centers for multi-subpath bottom blocks (1080×1080 viewBox). */
 const BOTTOM_GRANDSTAND_LABEL_COORDS = {
-  '4': { x: 234, y: 772 },
-  '3': { x: 369, y: 797 },
-  '2': { x: 545, y: 805 },
-  '1': { x: 718, y: 795 },
-  D10: { x: 841, y: 768 },
+  '4': { x: 234, y: 720 },
+  '3': { x: 369, y: 735 },
+  '2': { x: 545, y: 745 },
+  '1': { x: 718, y: 735 },
+  D10: { x: 841, y: 720 },
 };
 
 const MAP_BUILD_ID = import.meta.env.VITE_BUILD_ID || 'dev';
@@ -459,10 +458,12 @@ export default function InteractiveStadiumMap({
               const stackHalfGap = showPrice ? (idFontSize + priceFontSize) * 0.52 : 0;
               const isStage = section.status === 'stage';
 
+              const idY = labelY - stackHalfGap;
+              const priceY = labelY + stackHalfGap;
+
               return (
                 <g
                   key={`label-${section.id}`}
-                  transform={`translate(${labelX}, ${labelY})`}
                   className={`interactive-stadium-map__section-group interactive-stadium-map__section-group--${section.status}${
                     isSelected ? ' is-selected' : ''
                   }`}
@@ -471,11 +472,10 @@ export default function InteractiveStadiumMap({
                 >
                   {isStage ? (
                     <text
-                      x={0}
-                      y={0}
+                      x={labelX}
+                      y={labelY}
                       textAnchor="middle"
-                      dominantBaseline="middle"
-                      alignmentBaseline="middle"
+                      dy=".3em"
                       className="interactive-stadium-map__stage-label"
                     >
                       STAGE
@@ -483,11 +483,10 @@ export default function InteractiveStadiumMap({
                   ) : (
                     <>
                       <text
-                        x={0}
-                        y={showPrice ? -stackHalfGap : 0}
+                        x={labelX}
+                        y={showPrice ? idY : labelY}
                         textAnchor="middle"
-                        dominantBaseline="middle"
-                        alignmentBaseline="middle"
+                        dy=".3em"
                         className="interactive-stadium-map__section-id-label"
                         fontSize={idFontSize}
                       >
@@ -495,11 +494,10 @@ export default function InteractiveStadiumMap({
                       </text>
                       {showPrice ? (
                         <text
-                          x={0}
-                          y={stackHalfGap}
+                          x={labelX}
+                          y={priceY}
                           textAnchor="middle"
-                          dominantBaseline="middle"
-                          alignmentBaseline="middle"
+                          dy=".3em"
                           className="interactive-stadium-map__price-label"
                           fontSize={priceFontSize}
                         >
