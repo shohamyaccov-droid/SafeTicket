@@ -27,6 +27,9 @@ const checks = [
   ['geometry STAGE path', /486\.5 316\.5H600\.5/, geometry],
   ['map imports traced geometry', /ramatGanStadiumGeometry/, mapJsx],
   ['34 sections in geometry', () => (geometry.match(/id: '/g) || []).length === 34],
+  ['section id labels', /interactive-stadium-map__section-id-label/, mapJsx],
+  ['path vertex parser', /getPathVertices/, mapJsx],
+  ['svg background rect', /interactive-stadium-map__bg/, mapJsx],
 ];
 
 let failed = 0;
