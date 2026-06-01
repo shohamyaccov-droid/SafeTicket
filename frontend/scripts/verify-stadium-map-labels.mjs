@@ -43,9 +43,11 @@ const checks = [
   ['#ea580c available fill', /available: '#ea580c'/],
   ['#c2410c hover fill', /availableHover: '#c2410c'/],
   ['#9a3412 selected fill', /selected: '#9a3412'/],
-  ['polygon centroid', /polygonCentroid/],
-  ['LABEL_OFFSETS B5', /LABEL_OFFSETS[\s\S]*B5:\s*\{\s*dx:\s*15,\s*dy:\s*-10\s*\}/],
+  ['LABEL_POSITION_OVERRIDES', /LABEL_POSITION_OVERRIDES/],
+  ['grandstand override 2', /'2':\s*\{\s*cx:\s*545,\s*cy:\s*805\s*\}/],
+  ['grandstand override D10', /D10:\s*\{\s*cx:\s*841,\s*cy:\s*768\s*\}/],
   ['resolveLabelCoordinates', /resolveLabelCoordinates/],
+  ['no shoelace centroid', () => !/polygonCentroid/.test(mapSrc)],
   ['stage slate fill', /stage: '#334155'/],
   ['stage grey stroke', /stageStroke: '#94a3b8'/],
   ['section-id-label class', /interactive-stadium-map__section-id-label/],
@@ -54,7 +56,7 @@ const checks = [
 
 let failed = 0;
 for (const [label, re] of checks) {
-  const ok = re.test(mapSrc);
+  const ok = typeof re === 'function' ? re() : re.test(mapSrc);
   console.log(ok ? `OK  ${label}` : `FAIL ${label}`);
   if (!ok) failed += 1;
 }

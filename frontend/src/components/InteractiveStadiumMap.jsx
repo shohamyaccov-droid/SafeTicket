@@ -52,12 +52,19 @@ const STROKE_WIDTH = 2.5;
 const STROKE_WIDTH_SELECTED = 3.5;
 
 /**
- * Manual label nudges (viewBox units) for concave / irregular sections where
- * polygon centroid still sits outside the visible hull.
- * @type {Record<string, { dx?: number, dy?: number }>}
+ * Absolute label anchors (1080×1080 viewBox). Used instead of auto-placement for
+ * multi-subpath / concave grandstands where shoelace centroids fall outside the shape.
+ * @type {Record<string, { cx: number, cy: number }>}
  */
-const LABEL_OFFSETS = {
-  B5: { dx: 15, dy: -10 },
+const LABEL_POSITION_OVERRIDES = {
+  STAGE: { cx: 544, cy: 355 },
+  '4': { cx: 234, cy: 772 },
+  '3': { cx: 369, cy: 797 },
+  '2': { cx: 545, cy: 805 },
+  '1': { cx: 718, cy: 795 },
+  D10: { cx: 841, cy: 768 },
+  B5: { cx: 404, cy: 543 },
+  D12: { cx: 465, cy: 551 },
 };
 
 /**
@@ -137,46 +144,28 @@ function getPathVertices(d) {
 }
 
 /**
- * Shoelace polygon centroid (area-weighted); better than bbox center for concave sections.
+ * Bounding-box center from parsed path vertices (safe for multi-subpath grandstands).
  * @param {{ x: number, y: number }[]} vertices
  * @returns {{ cx: number, cy: number }}
  */
-function polygonCentroid(vertices) {
+function bboxCenterFromVertices(vertices) {
   const pts = vertices.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
-  if (pts.length < 3) {
-    if (!pts.length) return { cx: 540, cy: 540 };
-    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
-    const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-    return { cx, cy };
+  if (!pts.length) return { cx: 540, cy: 540 };
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const { x, y } of pts) {
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
   }
-
-  let twiceArea = 0;
-  let cxAcc = 0;
-  let cyAcc = 0;
-  const n = pts.length;
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n;
-    const cross = pts[i].x * pts[j].y - pts[j].x * pts[i].y;
-    twiceArea += cross;
-    cxAcc += (pts[i].x + pts[j].x) * cross;
-    cyAcc += (pts[i].y + pts[j].y) * cross;
-  }
-
-  if (Math.abs(twiceArea) < 1e-4) {
-    const cx = pts.reduce((s, p) => s + p.x, 0) / n;
-    const cy = pts.reduce((s, p) => s + p.y, 0) / n;
-    return { cx, cy };
-  }
-
-  const area = twiceArea / 2;
-  return {
-    cx: cxAcc / (6 * area),
-    cy: cyAcc / (6 * area),
-  };
+  return { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
 }
 
 /**
- * Polygon centroid + bbox metrics for font scaling.
+ * Bbox center + extents for font scaling.
  * @param {{ x: number, y: number }[]} vertices
  * @returns {LabelPlacement}
  */
@@ -195,35 +184,23 @@ function placementFromVertices(vertices) {
     minY = Math.min(minY, y);
     maxY = Math.max(maxY, y);
   }
-  const { cx, cy } = polygonCentroid(vertices);
   const width = maxX - minX;
   const height = maxY - minY;
-  return {
-    cx,
-    cy,
-    minX,
-    minY,
-    maxX,
-    maxY,
-    width,
-    height,
-  };
+  const { cx, cy } = bboxCenterFromVertices(vertices);
+  return { cx, cy, minX, minY, maxX, maxY, width, height };
 }
 
 /**
- * Apply optional manual nudge after centroid calculation.
+ * Final label anchor: hardcoded override wins, else auto bbox center.
  * @param {string} sectionId
  * @param {LabelPlacement} placement
  */
 export function resolveLabelCoordinates(sectionId, placement) {
-  const off = LABEL_OFFSETS[sectionId];
-  if (!off) {
-    return { cx: placement.cx, cy: placement.cy };
+  const hard = LABEL_POSITION_OVERRIDES[sectionId];
+  if (hard) {
+    return { cx: hard.cx, cy: hard.cy };
   }
-  return {
-    cx: placement.cx + (off.dx ?? 0),
-    cy: placement.cy + (off.dy ?? 0),
-  };
+  return { cx: placement.cx, cy: placement.cy };
 }
 
 /**
