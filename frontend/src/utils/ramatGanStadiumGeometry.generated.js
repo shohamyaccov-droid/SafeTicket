@@ -27,14 +27,14 @@ export const RAMAT_GAN_STADIUM_SECTIONS_BASE = [
   { id: 'D13', label: 'D13', path: 'M811 273L795 253.5V186.5L860 225L811 273Z', status: 'unavailable' },
   { id: 'D12', label: 'D12', path: 'M435 601V505.369L493.033 501L495 601H435Z', status: 'unavailable' },
   { id: 'D11', label: 'D11', path: 'M589.5 529.5L614 487.5H648.5V599.5H589.5V529.5Z', status: 'unavailable' },
-  { id: 'D10', label: 'D10', path: 'M754.733 767L798.5 898L956 842L898.386 711M754.733 767L725.5 679.5L866.5 638.5L898.386 711M754.733 767L898.386 711', status: 'unavailable' },
+  { id: 'D10', label: 'D10', path: 'M753 603.5H659.5L654.5 486.5L753 603.5Z', status: 'unavailable' },
   { id: 'ACCESSIBLE', label: 'Accessible', path: 'M387 187.5H468V254.5H387V187.5Z', status: 'unavailable' },
   { id: 'STAGE', label: 'Stage', path: 'M486.5 316.5H600.5V387H575V350H507V394H486.5V316.5Z', status: 'stage' },
   { id: '4', label: '4', path: 'M321.502 752.5L347 679.5L201.5 655.5L176.283 713.5L121.5 839.5L274 888.5L321.502 752.5ZM176.283 713.5L321.502 752.5', status: 'unavailable' },
   { id: '3', label: '3', path: 'M451.5 781.5V682H361.5L333.064 762L286.5 893L451.5 912.5V781.5ZM333.064 762L451.5 781.5', status: 'unavailable' },
-  { id: '2-3', label: '2-3', path: 'M753 603.5H659.5L654.5 486.5L753 603.5Z', status: 'unavailable' },
-  { id: '2', label: '2', path: 'M463 774.948V912.351L626 927V774.948M463 774.948V682H626V774.948M463 774.948H626', status: 'unavailable' },
-  { id: '1', label: '1', path: 'M643 776.5V682L713.5 670L744.026 757M643 776.5V920L793.5 898L744.026 757M643 776.5L744.026 757', status: 'unavailable' },
+  { id: '2-3', label: '2-3', path: 'M463 774.948V912.351L626 927V774.948M463 774.948V682H626V774.948M463 774.948H626', status: 'unavailable' },
+  { id: '2', label: '2', path: 'M643 776.5V682L713.5 670L744.026 757M643 776.5V920L793.5 898L744.026 757M643 776.5L744.026 757', status: 'unavailable' },
+  { id: '1', label: '1', path: 'M754.733 767L798.5 898L956 842L898.386 711M754.733 767L725.5 679.5L866.5 638.5L898.386 711M754.733 767L898.386 711', status: 'unavailable' },
 ];
 
 export const INTERACTIVE_STADIUM_SECTION_IDS = RAMAT_GAN_STADIUM_SECTIONS_BASE.filter((s) => s.id !== 'STAGE').map((s) => s.id);

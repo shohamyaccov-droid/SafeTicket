@@ -56,12 +56,13 @@ const STROKE_WIDTH_SELECTED = 3.5;
  * These five IDs NEVER use bbox/centroid math; values are injected directly into <text x y>.
  * @type {Record<string, { x: number, y: number }>}
  */
+/** Viagogo bottom row (left → right): 4, 3, 2-3, 2, 1 */
 const BOTTOM_GRANDSTAND_LABEL_COORDS = {
   '4': { x: 234, y: 720 },
   '3': { x: 369, y: 735 },
-  '2': { x: 545, y: 745 },
-  '1': { x: 718, y: 735 },
-  D10: { x: 841, y: 720 },
+  '2-3': { x: 545, y: 745 },
+  '2': { x: 718, y: 735 },
+  '1': { x: 841, y: 720 },
 };
 
 const MAP_BUILD_ID = import.meta.env.VITE_BUILD_ID || 'dev';
