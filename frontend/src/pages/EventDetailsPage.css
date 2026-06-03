@@ -641,6 +641,7 @@
   border-radius: 0;
   flex: 1;
   min-height: 0;
+  height: 100%;
 }
 
 .ramat-gan-section-filter-banner {
@@ -675,16 +676,29 @@
 
 .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card-content {
   background-color: #ffffff;
-  min-height: 480px;
+  min-height: min(72vh, 820px);
+  max-height: none;
+  padding: 0;
 }
 
 .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card {
-  min-height: 520px;
+  min-height: min(76vh, 880px);
+}
+
+.tickets-split-container.tickets-split-container--ramat-gan .ramat-gan-map-scroll-wrapper {
+  flex: 1;
+  min-height: min(68vh, 780px);
+}
+
+.tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__canvas-wrap {
+  min-height: min(64vh, 740px);
 }
 
 .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__svg {
-  min-height: 460px;
-  max-height: min(88vh, 960px);
+  min-height: min(60vh, 700px);
+  max-height: none;
+  width: 100%;
+  height: 100%;
 }
 
 .venue-map-footer-label {
@@ -763,13 +777,13 @@
   }
 
   .tickets-split-container.tickets-split-container--ramat-gan .venue-map-sticky-container {
-    flex: 0 0 58% !important;
-    max-width: 58% !important;
+    flex: 0 0 62% !important;
+    max-width: 62% !important;
   }
 
   .tickets-split-container.tickets-split-container--ramat-gan .tickets-list-container {
-    flex: 0 0 40% !important;
-    max-width: 40% !important;
+    flex: 0 0 36% !important;
+    max-width: 36% !important;
   }
 }
 
@@ -1887,13 +1901,14 @@
   }
 
   .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card-content {
-    min-height: max(320px, min(52vh, 420px));
-    max-height: min(62vh, 520px);
+    min-height: max(360px, min(58vh, 520px));
+    max-height: none;
+    padding: 0;
   }
 
   .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__svg {
-    min-height: 300px;
-    max-height: min(60vh, 500px);
+    min-height: max(340px, min(54vh, 500px));
+    max-height: none;
   }
 
   /* Interactive Menora map — room to read full court/stage */

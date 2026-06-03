@@ -8,8 +8,9 @@ import BecomeSellerModal from '../components/BecomeSellerModal';
 import { toastError } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
 import { iso4217FromCountry, currencySymbol, formatAmountForCurrency } from '../utils/priceFormat';
-import { VENUE_BLOOMFIELD_CONCERT } from '../utils/venueMaps';
+import { VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN } from '../utils/venueMaps';
 import { CONCERT_BLOCK_COUNT, CONCERT_SECTION_NAMES } from '../utils/bloomfieldConcertGeometry';
+import { isRamatGanVenueEvent, ramatGanSellSectionOptions } from '../utils/ramatGanSellSections';
 import './Sell.css';
 
 const SELL_PAGE_BUILD_TAG = import.meta.env.VITE_BUILD_ID || 'local-dev';
@@ -154,6 +155,7 @@ function canonicalVenueName(eventLike) {
   if (haystack.includes('בלומפילד')) return 'אצטדיון בלומפילד';
   if (haystack.includes('פיס ארנה') || haystack.includes('ארנה ירושלים')) return 'פיס ארנה ירושלים';
   if (haystack.includes('מנורה') || haystack.includes('מבטחים')) return 'היכל מנורה מבטחים';
+  if (isRamatGanVenueEvent(eventLike)) return VENUE_RAMAT_GAN;
   return values[0] || '';
 }
 
@@ -175,6 +177,9 @@ function generatedSectionOptionsForVenue(venueName) {
   }
   if (venueName === 'פיס ארנה ירושלים') {
     return [...rangeOptions(101, 122), ...rangeOptions(301, 330)];
+  }
+  if (venueName === VENUE_RAMAT_GAN) {
+    return ramatGanSellSectionOptions();
   }
   return [];
 }
@@ -532,6 +537,8 @@ const Sell = () => {
     const venueDetail = eventForSections?.venue_detail;
     const structured = venueDetail?.sections;
     const concertLayout = isBloomfieldConcertEvent(eventForSections);
+    const staticFallback = generatedSectionOptionsForVenue(canonicalVenueName(eventForSections || {}));
+
     if (Array.isArray(structured) && structured.length > 0) {
       const selectedVenueId = venueDetail?.id ? String(venueDetail.id) : '';
       const concertNameSet = concertLayout ? new Set(CONCERT_SECTION_NAMES) : null;
@@ -549,12 +556,28 @@ const Sell = () => {
           venueId: venueDetail?.id ? String(venueDetail.id) : '',
         }));
     }
-    if (venueDetail?.id) {
+
+    if (staticFallback.length > 0) {
+      return staticFallback;
+    }
+
+    // Venue exists in DB but sections not seeded yet — wait only if no static map exists
+    if (venueDetail?.id && selectedEventId && !detailMatchesSelection) {
       return [];
     }
-    const venueName = canonicalVenueName(eventForSections || {});
-    return generatedSectionOptionsForVenue(venueName);
+    return [];
   }, [eventDetail, formData.event_id, formData.selectedEvent]);
+
+  const sectionsStillLoading = useMemo(() => {
+    if (!formData.event_id) return false;
+    if (sectionOptions.length > 0) return false;
+    const selectedEventId = String(formData.event_id);
+    const detailMatchesSelection = eventDetail && String(eventDetail.id) === selectedEventId;
+    if (detailMatchesSelection) return false;
+    const eventForSections = formData.selectedEvent;
+    const staticFallback = generatedSectionOptionsForVenue(canonicalVenueName(eventForSections || {}));
+    return staticFallback.length === 0;
+  }, [formData.event_id, formData.selectedEvent, eventDetail, sectionOptions.length]);
 
   const selectedVenueLabel = canonicalVenueName(
     eventDetail && String(eventDetail.id) === String(formData.event_id)
@@ -1281,7 +1304,9 @@ const Sell = () => {
                         ? isBloomfieldConcertEvent(formData.selectedEvent)
                           ? `${CONCERT_BLOCK_COUNT} גושים בפריסת הופעה (${sectionOptions.length} זמינים לבחירה)`
                           : `${sectionOptions.length} גושים זמינים לבחירה`
-                        : 'טוען גושים לאולם'}
+                        : sectionsStillLoading
+                          ? 'טוען גושים לאולם'
+                          : 'לא נמצאו גושים לאולם זה'}
                     </span>
                   </div>
                 </div>
@@ -1374,7 +1399,7 @@ const Sell = () => {
                   onChange={handleChange}
                   className="section-dropdown premium-select"
                   required
-                  disabled={!formData.event_id || sectionOptions.length === 0}
+                  disabled={!formData.event_id || sectionOptions.length === 0 || sectionsStillLoading}
                 >
                   <option value="">
                     {!formData.event_id

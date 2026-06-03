@@ -50,17 +50,17 @@ export { INTERACTIVE_STADIUM_SECTION_IDS };
 const VIEWBOX = RAMAT_GAN_STADIUM_VIEWBOX;
 const SECTIONS_BASE = RAMAT_GAN_STADIUM_SECTIONS_BASE;
 
-/** TRADETIX brand — matches primary CTA orange (#ea580c) across the site. */
+/** TRADETIX brand — soft teal base, orange on hover/available. */
 const COLORS = {
   stroke: '#ffffff',
-  unavailable: '#e5e7eb',
-  unavailableHover: '#d1d5db',
+  unavailable: '#bae6fd',
+  unavailableHover: '#ea580c',
   available: '#ea580c',
   availableHover: '#c2410c',
   selected: '#9a3412',
-  stage: '#334155',
-  stageHover: '#475569',
-  stageStroke: '#94a3b8',
+  stage: '#1e293b',
+  stageHover: '#334155',
+  stageStroke: '#64748b',
 };
 
 const STROKE_WIDTH = 2.5;
@@ -417,20 +417,25 @@ export default function InteractiveStadiumMap({
             const fill = resolveSectionFill(section, isSelected, isHover);
             const clickable = section.status === 'available';
             const isStage = section.status === 'stage';
+            const interactive = !isStage;
 
-            const commonHandlers = clickable
+            const commonHandlers = interactive
               ? {
                   onMouseEnter: () => setHoverId(section.id),
                   onMouseLeave: () => setHoverId(null),
-                  onClick: () => handleSectionClick(section),
-                  onKeyDown: (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleSectionClick(section);
-                    }
-                  },
-                  role: 'button',
-                  tabIndex: 0,
+                  ...(clickable
+                    ? {
+                        onClick: () => handleSectionClick(section),
+                        onKeyDown: (e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleSectionClick(section);
+                          }
+                        },
+                        role: 'button',
+                        tabIndex: 0,
+                      }
+                    : {}),
                   style: { cursor: 'pointer' },
                 }
               : { style: { cursor: 'default' } };
@@ -441,7 +446,7 @@ export default function InteractiveStadiumMap({
               strokeWidth: isSelected ? STROKE_WIDTH_SELECTED : STROKE_WIDTH,
               className: `interactive-stadium-map__section interactive-stadium-map__section--${section.status}${
                 isSelected ? ' is-selected' : ''
-              }${isHover ? ' is-hover' : ''}${clickable ? ' is-clickable' : ''}`,
+              }${isHover ? ' is-hover' : ''}${clickable ? ' is-clickable' : ''}${interactive && !clickable ? ' is-interactive' : ''}`,
               ...commonHandlers,
             };
 
