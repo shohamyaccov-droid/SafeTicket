@@ -15,7 +15,8 @@ const geo = readFileSync(
 const EXPECTED_BY_PATH_PREFIX = {
   'M119 375.5': '6A',
   'M215 222': '6C',
-  'M541.5 377.5': 'B5',
+  'M486.5 316.5': 'B5',
+  'M541.5 377.5': 'STAGE',
   'M689 253.5': '13A',
   'M811 273': '13B',
   'M816.5 277': '13C',
@@ -35,7 +36,6 @@ const EXPECTED_BY_PATH_PREFIX = {
   'M351 600.5': 'D14',
   'M435 601': 'D13',
   'M387 187.5': '9B',
-  'M486.5 316.5': 'STAGE',
   'M321.502 752.5': '4',
   'M451.5 781.5': '3',
   'M463 774.948': '2-3',
@@ -63,8 +63,8 @@ const rightSideChecks = [
   { prefix: 'M895.5 355', expected: '16A', note: 'below 13C' },
   { prefix: 'M948.5 310.5', expected: '16B', note: 'below 16A' },
   { prefix: 'M970 395', expected: '16C', note: 'bottom-right outer edge' },
-  { prefix: 'M541.5 377.5', expected: 'B5', note: 'U-shaped top center' },
-  { prefix: 'M486.5 316.5', expected: 'STAGE', note: 'center diamond stage' },
+  { prefix: 'M486.5 316.5', expected: 'B5', note: 'U-shaped top center' },
+  { prefix: 'M541.5 377.5', expected: 'STAGE', note: 'center diamond stage' },
 ];
 
 for (const check of rightSideChecks) {

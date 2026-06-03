@@ -675,6 +675,16 @@
 
 .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card-content {
   background-color: #ffffff;
+  min-height: 480px;
+}
+
+.tickets-split-container.tickets-split-container--ramat-gan .venue-map-card {
+  min-height: 520px;
+}
+
+.tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__svg {
+  min-height: 460px;
+  max-height: min(88vh, 960px);
 }
 
 .venue-map-footer-label {
@@ -750,6 +760,16 @@
   .tickets-split-container.tickets-split-container--bloomfield .tickets-list-container {
     flex: 0 0 39% !important;
     max-width: 39% !important;
+  }
+
+  .tickets-split-container.tickets-split-container--ramat-gan .venue-map-sticky-container {
+    flex: 0 0 58% !important;
+    max-width: 58% !important;
+  }
+
+  .tickets-split-container.tickets-split-container--ramat-gan .tickets-list-container {
+    flex: 0 0 40% !important;
+    max-width: 40% !important;
   }
 }
 
@@ -1864,6 +1884,16 @@
     max-height: min(42vh, 320px);
     display: flex;
     flex-direction: column;
+  }
+
+  .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card-content {
+    min-height: max(320px, min(52vh, 420px));
+    max-height: min(62vh, 520px);
+  }
+
+  .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__svg {
+    min-height: 300px;
+    max-height: min(60vh, 500px);
   }
 
   /* Interactive Menora map — room to read full court/stage */

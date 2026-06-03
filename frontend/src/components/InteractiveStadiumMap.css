@@ -15,7 +15,7 @@
   width: 100%;
   overflow: auto;
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-  padding: 0.5rem;
+  padding: 0.25rem;
   box-sizing: border-box;
 }
 
@@ -23,8 +23,8 @@
   display: block;
   width: 100%;
   height: auto;
-  min-height: 280px;
-  max-height: min(72vh, 720px);
+  min-height: 420px;
+  max-height: min(88vh, 960px);
   border-radius: 8px;
 }
 

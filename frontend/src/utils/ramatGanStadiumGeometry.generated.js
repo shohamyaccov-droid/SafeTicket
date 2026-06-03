@@ -4,7 +4,7 @@ export const RAMAT_GAN_STADIUM_VIEWBOX = '0 0 1080 1080';
 export const RAMAT_GAN_STADIUM_SECTIONS_BASE = [
   { id: '6A', label: '6A', path: 'M119 375.5H181L187.5 345L139.5 303.5L119 324.5V375.5Z', status: 'unavailable' },
   { id: '6C', label: '6C', path: 'M215 222L280 189.5L286 258.5L264.5 273L215 222Z', status: 'unavailable' },
-  { id: 'B5', label: 'B5', path: 'M541.5 377.5L447 451L541.5 526.5L635 451L541.5 377.5Z', status: 'unavailable' },
+  { id: 'STAGE', label: 'Stage', path: 'M541.5 377.5L447 451L541.5 526.5L635 451L541.5 377.5Z', status: 'stage' },
   { id: '13A', label: '13A', path: 'M689 253.5H785V192.5H689V253.5Z', status: 'unavailable' },
   { id: '13B', label: '13B', path: 'M811 273L795 253.5V186.5L860 225L811 273Z', status: 'unavailable' },
   { id: '13C', label: '13C', path: 'M816.5 277L856 316.5L904 269.5L864 230L816.5 277Z', status: 'unavailable' },
@@ -30,7 +30,7 @@ export const RAMAT_GAN_STADIUM_SECTIONS_BASE = [
   { id: 'D11', label: 'D11', path: 'M589.5 529.5L614 487.5H648.5V599.5H589.5V529.5Z', status: 'unavailable' },
   { id: 'D10', label: 'D10', path: 'M753 603.5H659.5L654.5 486.5L753 603.5Z', status: 'unavailable' },
   { id: '9B', label: '9B', path: 'M387 187.5H468V254.5H387V187.5Z', status: 'unavailable' },
-  { id: 'STAGE', label: 'Stage', path: 'M486.5 316.5H600.5V387H575V350H507V394H486.5V316.5Z', status: 'stage' },
+  { id: 'B5', label: 'B5', path: 'M486.5 316.5H600.5V387H575V350H507V394H486.5V316.5Z', status: 'unavailable' },
   { id: '4', label: '4', path: 'M321.502 752.5L347 679.5L201.5 655.5L176.283 713.5L121.5 839.5L274 888.5L321.502 752.5ZM176.283 713.5L321.502 752.5', status: 'unavailable' },
   { id: '3', label: '3', path: 'M451.5 781.5V682H361.5L333.064 762L286.5 893L451.5 912.5V781.5ZM333.064 762L451.5 781.5', status: 'unavailable' },
   { id: '2-3', label: '2-3', path: 'M463 774.948V912.351L626 927V774.948M463 774.948V682H626V774.948M463 774.948H626', status: 'unavailable' },

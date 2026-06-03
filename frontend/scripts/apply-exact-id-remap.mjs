@@ -34,7 +34,9 @@ const PATH_PREFIX_TO_ID = {
   'M414.5 470.5': 'A2',
   'M258.5 540.5': 'A1',
   'M350 310.5': 'B4',
-  'M541.5 377.5': 'B5',
+  // Center: U-notch (M486.5) = B5; diamond rhombus (M541.5) = STAGE (Viagogo reference)
+  'M486.5 316.5': 'B5',
+  'M541.5 377.5': 'STAGE',
   'M665.526 406': 'B6',
   'M745 326.5': 'C7',
   'M825.5 473.5': 'C8',
@@ -44,7 +46,6 @@ const PATH_PREFIX_TO_ID = {
   'M543.5 552.5': 'D12',
   'M589.5 529.5': 'D11',
   'M753 603.5': 'D10',
-  'M486.5 316.5': 'STAGE',
   // Bottom grandstand (left → right)
   'M321.502 752.5': '4',
   'M451.5 781.5': '3',
@@ -65,17 +66,18 @@ const sectionRe = /\{\s*id:\s*'([^']+)',\s*label:\s*'([^']*)',\s*path:\s*'([^']+
 const sections = [];
 let m;
 while ((m = sectionRe.exec(src)) !== null) {
-  const [, , , pathD, status] = m;
-  sections.push({ path: pathD, status });
+  const [, , , pathD] = m;
+  sections.push({ path: pathD });
 }
 
-const out = sections.map(({ path: pathD, status }) => {
+const out = sections.map(({ path: pathD }) => {
   const key = Object.keys(PATH_PREFIX_TO_ID).find((k) => pathD.startsWith(k));
   if (!key) {
     console.error('No PATH_PREFIX_TO_ID for path starting:', pathD.slice(0, 24));
     process.exit(1);
   }
   const id = PATH_PREFIX_TO_ID[key];
+  const status = id === 'STAGE' ? 'stage' : 'unavailable';
   return { id, label: labelForId(id), path: pathD, status };
 });
 

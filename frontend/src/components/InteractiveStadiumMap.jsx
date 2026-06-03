@@ -84,8 +84,8 @@ const MAP_BUILD_ID = import.meta.env.VITE_BUILD_ID || 'dev';
 
 /** Other sections that need manual anchors (not bottom grandstands). */
 const LABEL_POSITION_OVERRIDES = {
-  STAGE: { cx: 544, cy: 355 },
-  B5: { cx: 541, cy: 452 },
+  B5: { cx: 544, cy: 355 },
+  STAGE: { cx: 541, cy: 452 },
   '11A': { cx: 537, cy: 225 },
   A1: { cx: 332, cy: 526 },
   D12: { cx: 543, cy: 565 },
