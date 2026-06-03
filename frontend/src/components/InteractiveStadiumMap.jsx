@@ -5,7 +5,22 @@ import {
   RAMAT_GAN_STADIUM_SECTIONS_BASE,
   INTERACTIVE_STADIUM_SECTION_IDS,
 } from '../utils/ramatGanStadiumGeometry.generated.js';
+import { STADIUM_CONFIG } from '../config/ramatGanMapConfig.js';
 import './InteractiveStadiumMap.css';
+
+const CONFIG_BY_SVG_PATH_ID = Object.fromEntries(
+  STADIUM_CONFIG.map((entry) => [entry.svgPathId, entry])
+);
+
+/** @param {string} svgPathId */
+function getDbId(svgPathId) {
+  return CONFIG_BY_SVG_PATH_ID[svgPathId]?.dbId ?? svgPathId;
+}
+
+/** @param {string} svgPathId */
+function getDisplayName(svgPathId) {
+  return CONFIG_BY_SVG_PATH_ID[svgPathId]?.displayName ?? svgPathId;
+}
 
 export { INTERACTIVE_STADIUM_SECTION_IDS };
 
@@ -282,7 +297,7 @@ function mergeSectionWithListings(base, activeListingsSummary) {
     return { ...base, status: 'stage', price: undefined, ticketsLeft: undefined };
   }
 
-  const listing = activeListingsSummary?.[base.id];
+  const listing = activeListingsSummary?.[getDbId(base.id)];
   const ticketsLeft = listing?.ticketsLeft ?? 0;
   const hasStock =
     listing != null &&
@@ -344,13 +359,10 @@ export default function InteractiveStadiumMap({
     return m;
   }, [sections]);
 
-  const sectionsById = useMemo(() => {
-    const m = {};
-    for (const s of sections) m[s.id] = s;
-    return m;
-  }, [sections]);
-
-  const selectedSection = selectedSectionId ? sectionsById[selectedSectionId] : null;
+  const selectedSection = useMemo(() => {
+    if (!selectedSectionId) return null;
+    return sections.find((s) => getDbId(s.id) === selectedSectionId) ?? null;
+  }, [sections, selectedSectionId]);
 
   const setSelected = useCallback(
     (id) => {
@@ -366,14 +378,14 @@ export default function InteractiveStadiumMap({
     (section) => {
       if (section.status === 'stage') return;
       if (section.status !== 'available') return;
-      setSelected(section.id);
+      setSelected(getDbId(section.id));
     },
     [setSelected]
   );
 
   const handleViewTickets = useCallback(() => {
     if (!selectedSection || selectedSection.status !== 'available') return;
-    onSelectSection?.(selectedSection.id);
+    onSelectSection?.(getDbId(selectedSection.id));
   }, [onSelectSection, selectedSection]);
 
   return (
@@ -395,7 +407,8 @@ export default function InteractiveStadiumMap({
           />
 
           {sections.map((section) => {
-            const isSelected = selectedSectionId === section.id;
+            const sectionDbId = getDbId(section.id);
+            const isSelected = selectedSectionId === sectionDbId;
             const isHover = hoverId === section.id;
             const fill = resolveSectionFill(section, isSelected, isHover);
             const clickable = section.status === 'available';
@@ -451,7 +464,8 @@ export default function InteractiveStadiumMap({
             data-map-build={MAP_BUILD_ID}
           >
             {sections.map((section) => {
-              const isSelected = selectedSectionId === section.id;
+              const sectionDbId = getDbId(section.id);
+              const isSelected = selectedSectionId === sectionDbId;
               const placement = placementById[section.id];
               const grandstandCoords = BOTTOM_GRANDSTAND_LABEL_COORDS[section.id];
               const labelX = grandstandCoords
@@ -498,7 +512,7 @@ export default function InteractiveStadiumMap({
                         className="interactive-stadium-map__section-id-label"
                         fontSize={idFontSize}
                       >
-                        {section.id}
+                        {getDisplayName(section.id)}
                       </text>
                       {showPrice ? (
                         <text
@@ -531,7 +545,7 @@ export default function InteractiveStadiumMap({
           <>
             <div className="interactive-stadium-map__bar-info">
               <span className="interactive-stadium-map__bar-section">
-                Section {selectedSection.label}
+                Section {getDisplayName(selectedSection.id)}
               </span>
               <span className="interactive-stadium-map__bar-price">{selectedSection.price}</span>
               {selectedSection.ticketsLeft != null ? (
