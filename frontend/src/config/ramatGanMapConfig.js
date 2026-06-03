@@ -13,6 +13,7 @@ export const STADIUM_CONFIG = [
   { svgPathId: 'ACCESSIBLE', displayName: 'ACCESSIBLE', dbId: 'ACCESSIBLE' },
   { svgPathId: '16A', displayName: '16A', dbId: '16A' },
   { svgPathId: '16B', displayName: '16B', dbId: '16B' },
+  { svgPathId: '16C', displayName: '16C', dbId: '16C' },
   { svgPathId: '11B', displayName: '11B', dbId: '11B' },
   { svgPathId: 'D12', displayName: 'D12', dbId: 'D12' },
   { svgPathId: 'A3', displayName: 'A3', dbId: 'A3' },

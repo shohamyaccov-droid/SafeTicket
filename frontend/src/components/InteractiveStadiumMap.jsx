@@ -94,6 +94,10 @@ const LABEL_POSITION_OVERRIDES = {
   C7: { cx: 752, cy: 369 },
   C8: { cx: 749, cy: 445 },
   C9: { cx: 750, cy: 523 },
+  '13C': { cx: 860, cy: 273 },
+  '16A': { cx: 904, cy: 316 },
+  '16B': { cx: 936, cy: 350 },
+  '16C': { cx: 934, cy: 450 },
 };
 
 /**

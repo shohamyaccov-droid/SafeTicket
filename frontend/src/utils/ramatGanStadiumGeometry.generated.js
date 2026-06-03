@@ -1,5 +1,5 @@
 /** Auto-generated from Untitled.svg — re-run: node scripts/parse-ramat-gan-svg.mjs */
-/** Section IDs: strict remap (scripts/apply-exact-id-remap.mjs) */
+/** Section IDs: absolute path-prefix map (scripts/apply-exact-id-remap.mjs) */
 export const RAMAT_GAN_STADIUM_VIEWBOX = '0 0 1080 1080';
 export const RAMAT_GAN_STADIUM_SECTIONS_BASE = [
   { id: '6A', label: '6A', path: 'M119 375.5H181L187.5 345L139.5 303.5L119 324.5V375.5Z', status: 'unavailable' },
@@ -8,11 +8,11 @@ export const RAMAT_GAN_STADIUM_SECTIONS_BASE = [
   { id: '13A', label: '13A', path: 'M689 253.5H785V192.5H689V253.5Z', status: 'unavailable' },
   { id: '13B', label: '13B', path: 'M811 273L795 253.5V186.5L860 225L811 273Z', status: 'unavailable' },
   { id: '13C', label: '13C', path: 'M816.5 277L856 316.5L904 269.5L864 230L816.5 277Z', status: 'unavailable' },
-  { id: '13C', label: '13C', path: 'M895.5 355L866 327.5L911 276L941.5 307.5L895.5 355Z', status: 'unavailable' },
+  { id: '16A', label: '16A', path: 'M895.5 355L866 327.5L911 276L941.5 307.5L895.5 355Z', status: 'unavailable' },
   { id: '6B', label: '6B', path: 'M212.5 234L143.5 295L196.5 342L261.5 278L212.5 234Z', status: 'unavailable' },
   { id: 'ACCESSIBLE', label: 'Accessible', path: 'M103 525L161 497.5L211.5 575L152.5 608.5L103 525Z', status: 'unavailable' },
-  { id: '16A', label: '16A', path: 'M948.5 310.5L903 363.5L898 389H974L968 332L948.5 310.5Z', status: 'unavailable' },
-  { id: '16B', label: '16B', path: 'M970 395H897.5V504H970V395Z', status: 'unavailable' },
+  { id: '16B', label: '16B', path: 'M948.5 310.5L903 363.5L898 389H974L968 332L948.5 310.5Z', status: 'unavailable' },
+  { id: '16C', label: '16C', path: 'M970 395H897.5V504H970V395Z', status: 'unavailable' },
   { id: '11B', label: '11B', path: 'M686 188.5H601.5V254.5H686V188.5Z', status: 'unavailable' },
   { id: 'D12', label: 'D12', path: 'M543.5 552.5L499 531.5V598.5H583V531.5L543.5 552.5Z', status: 'unavailable' },
   { id: 'A3', label: 'A3', path: 'M323.5 330L250.5 408L417.5 418.5V408L323.5 330Z', status: 'unavailable' },
