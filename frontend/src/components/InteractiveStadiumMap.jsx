@@ -272,6 +272,103 @@ function sectionIdFontSize(placement) {
   return 18;
 }
 
+/** @param {LabelPlacement} placement */
+function bubbleAnchor(sectionId, placement) {
+  const grandstand = BOTTOM_GRANDSTAND_LABEL_COORDS[sectionId];
+  if (grandstand) {
+    return { x: grandstand.x, y: placement.minY - 10 };
+  }
+  const label = resolveLabelCoordinates(sectionId, placement);
+  const yAbove = Math.min(placement.minY + 12, label.cy - 22);
+  return { x: label.cx, y: yAbove };
+}
+
+/**
+ * Viagogo-style price bubble in viewBox coordinates (scales with SVG).
+ * @param {object} props
+ */
+function PriceBubble({
+  x,
+  y,
+  priceLabel,
+  isBestDeal,
+  isSelected,
+  isHover,
+  onActivate,
+  onMouseEnter,
+  onMouseLeave,
+  animationDelay = 0,
+}) {
+  const bubbleH = 26;
+  const pinH = 7;
+  const iconW = isBestDeal ? 18 : 0;
+  const textW = Math.max(44, priceLabel.length * 9.5);
+  const bubbleW = textW + iconW + 16;
+  const bx = x - bubbleW / 2;
+  const by = y - bubbleH - pinH;
+  const pinY = by + bubbleH;
+
+  return (
+    <g
+      className={`interactive-stadium-map__price-bubble${
+        isSelected ? ' is-selected' : ''
+      }${isHover ? ' is-hover' : ''}${isBestDeal ? ' is-best-deal' : ''}`}
+      style={{ animationDelay: `${animationDelay}ms` }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onActivate();
+      }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onActivate();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`מחיר מ-${priceLabel}`}
+    >
+      <rect
+        x={bx}
+        y={by}
+        width={bubbleW}
+        height={bubbleH}
+        rx={13}
+        className="interactive-stadium-map__price-bubble-bg"
+      />
+      {isBestDeal ? (
+        <text
+          x={bx + 12}
+          y={by + bubbleH / 2 + 1}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          className="interactive-stadium-map__price-bubble-deal-icon"
+          fontSize={13}
+        >
+          🔥
+        </text>
+      ) : null}
+      <text
+        x={bx + bubbleW / 2 + (isBestDeal ? 8 : 0)}
+        y={by + bubbleH / 2 + 1}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        className="interactive-stadium-map__price-bubble-text"
+        fontSize={13}
+        fontWeight={700}
+      >
+        {priceLabel}
+      </text>
+      <polygon
+        points={`${x},${pinY + pinH} ${x - 7},${pinY} ${x + 7},${pinY}`}
+        className="interactive-stadium-map__price-bubble-pin"
+      />
+    </g>
+  );
+}
+
 /**
  * @param {SectionGeometry} section
  * @param {boolean} isSelected
@@ -363,6 +460,30 @@ export default function InteractiveStadiumMap({
     return m;
   }, [sections]);
 
+  /** Lowest listing price across the whole stadium (for "best deal" badge). */
+  const stadiumMinPrice = useMemo(() => {
+    let min = Infinity;
+    for (const entry of Object.values(activeListingsSummary || {})) {
+      const p = Number(entry?.minPrice);
+      if (Number.isFinite(p) && p > 0) min = Math.min(min, p);
+    }
+    return min === Infinity ? null : min;
+  }, [activeListingsSummary]);
+
+  /** One bubble per dbId — skip duplicates if geometry splits a section. */
+  const priceBubbleSections = useMemo(() => {
+    const seen = new Set();
+    const rows = [];
+    for (const section of sections) {
+      if (section.status !== 'available' || !section.price) continue;
+      const dbId = getDbId(section.id);
+      if (seen.has(dbId)) continue;
+      seen.add(dbId);
+      rows.push(section);
+    }
+    return rows;
+  }, [sections]);
+
   const selectedSection = useMemo(() => {
     if (!selectedSectionId) return null;
     return sections.find((s) => getDbId(s.id) === selectedSectionId) ?? null;
@@ -378,13 +499,15 @@ export default function InteractiveStadiumMap({
     [onSelectedSectionChange, selectedSectionIdProp]
   );
 
-  const handleSectionClick = useCallback(
+  const handleSectionActivate = useCallback(
     (section) => {
       if (section.status === 'stage') return;
       if (section.status !== 'available') return;
-      setSelected(getDbId(section.id));
+      const dbId = getDbId(section.id);
+      setSelected(dbId);
+      onSelectSection?.(dbId);
     },
-    [setSelected]
+    [onSelectSection, setSelected]
   );
 
   const handleViewTickets = useCallback(() => {
@@ -425,11 +548,11 @@ export default function InteractiveStadiumMap({
                   onMouseLeave: () => setHoverId(null),
                   ...(clickable
                     ? {
-                        onClick: () => handleSectionClick(section),
+                        onClick: () => handleSectionActivate(section),
                         onKeyDown: (e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
-                            handleSectionClick(section);
+                            handleSectionActivate(section);
                           }
                         },
                         role: 'button',
@@ -484,13 +607,7 @@ export default function InteractiveStadiumMap({
                 ? grandstandCoords.y
                 : resolveLabelCoordinates(section.id, placement).cy;
               const idFontSize = sectionIdFontSize(placement);
-              const priceFontSize = Math.max(9, idFontSize - 2);
-              const showPrice = section.status === 'available' && section.price;
-              const stackHalfGap = showPrice ? (idFontSize + priceFontSize) * 0.52 : 0;
               const isStage = section.status === 'stage';
-
-              const idY = labelY - stackHalfGap;
-              const priceY = labelY + stackHalfGap;
 
               return (
                 <g
@@ -512,32 +629,50 @@ export default function InteractiveStadiumMap({
                       STAGE
                     </text>
                   ) : (
-                    <>
-                      <text
-                        x={labelX}
-                        y={showPrice ? idY : labelY}
-                        textAnchor="middle"
-                        dy=".3em"
-                        className="interactive-stadium-map__section-id-label"
-                        fontSize={idFontSize}
-                      >
-                        {getDisplayName(section.id)}
-                      </text>
-                      {showPrice ? (
-                        <text
-                          x={labelX}
-                          y={priceY}
-                          textAnchor="middle"
-                          dy=".3em"
-                          className="interactive-stadium-map__price-label"
-                          fontSize={priceFontSize}
-                        >
-                          {section.price}
-                        </text>
-                      ) : null}
-                    </>
+                    <text
+                      x={labelX}
+                      y={labelY}
+                      textAnchor="middle"
+                      dy=".3em"
+                      className="interactive-stadium-map__section-id-label"
+                      fontSize={idFontSize}
+                    >
+                      {getDisplayName(section.id)}
+                    </text>
                   )}
                 </g>
+              );
+            })}
+          </g>
+
+          <g className="interactive-stadium-map__price-bubbles-layer" aria-hidden={false}>
+            {priceBubbleSections.map((section, bubbleIndex) => {
+              const sectionDbId = getDbId(section.id);
+              const isSelected = selectedSectionId === sectionDbId;
+              const isHover = hoverId === section.id;
+              const placement = placementById[section.id];
+              const anchor = bubbleAnchor(section.id, placement);
+              const listing = activeListingsSummary?.[sectionDbId];
+              const minPrice = Math.round(Number(listing?.minPrice));
+              const isBestDeal =
+                stadiumMinPrice != null &&
+                Number.isFinite(minPrice) &&
+                minPrice === Math.round(stadiumMinPrice);
+
+              return (
+                <PriceBubble
+                  key={`bubble-${sectionDbId}`}
+                  x={anchor.x}
+                  y={anchor.y}
+                  priceLabel={section.price}
+                  isBestDeal={isBestDeal}
+                  isSelected={isSelected}
+                  isHover={isHover}
+                  onActivate={() => handleSectionActivate(section)}
+                  onMouseEnter={() => setHoverId(section.id)}
+                  onMouseLeave={() => setHoverId(null)}
+                  animationDelay={bubbleIndex * 35}
+                />
               );
             })}
           </g>
