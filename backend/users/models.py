@@ -1,5 +1,9 @@
+from decimal import Decimal
+
 from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 
 class User(AbstractUser):
@@ -16,7 +20,31 @@ class User(AbstractUser):
     payout_details = models.TextField(
         blank=True,
         default='',
-        help_text='PayPal email, bank transfer details, etc. (seller onboarding)',
+        help_text='Legacy JSON blob from seller onboarding (see structured bank fields below)',
+    )
+    account_holder_name = models.CharField(
+        max_length=200,
+        blank=True,
+        default='',
+        help_text='Legal name on the seller bank account (for manual payouts)',
+    )
+    bank_name = models.CharField(
+        max_length=120,
+        blank=True,
+        default='',
+        help_text='Bank name or Israeli bank code',
+    )
+    branch_number = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        help_text='Bank branch number',
+    )
+    account_number = models.CharField(
+        max_length=30,
+        blank=True,
+        default='',
+        help_text='Bank account number for seller payouts',
     )
     accepted_escrow_terms = models.BooleanField(default=False)
     escrow_terms_accepted_at = models.DateTimeField(null=True, blank=True)
@@ -699,6 +727,74 @@ class Order(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+
+
+class Payout(models.Model):
+    """
+    Admin clearinghouse ledger: one row per paid order owed to the ticket seller.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        PROCESSING = 'PROCESSING', 'Processing'
+        PAID = 'PAID', 'Paid'
+
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.PROTECT,
+        related_name='seller_payout',
+    )
+    seller = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='payouts',
+    )
+    total_sale_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text='Total amount paid by the buyer',
+    )
+    platform_commission = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text='TRADETIX platform fees (buyer + seller service fees)',
+    )
+    net_payout = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text='Amount owed to the seller (total_sale_amount − platform_commission)',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['seller', 'status']),
+        ]
+
+    def __str__(self):
+        return f'Payout #{self.pk} order={self.order_id} seller={self.seller_id} {self.status}'
+
+    def save(self, *args, **kwargs):
+        if self.total_sale_amount is not None and self.platform_commission is not None:
+            self.net_payout = (
+                Decimal(self.total_sale_amount) - Decimal(self.platform_commission)
+            ).quantize(Decimal('0.01'))
+        if self.status == self.Status.PAID and not self.paid_at:
+            self.paid_at = timezone.now()
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        if self.net_payout is not None and self.net_payout < 0:
+            raise ValidationError({'net_payout': 'Net payout cannot be negative.'})
 
 
 class TicketAlert(models.Model):

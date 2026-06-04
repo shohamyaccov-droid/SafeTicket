@@ -24,7 +24,7 @@ def nuke_events_and_tickets_then_reseed(apps, schema_editor):
     try:
         from seed_production import run_after_total_wipe
 
-        run_after_total_wipe()
+        run_after_total_wipe(historical_apps=apps)
     finally:
         if wallet_sig is not None:
             wallet_sig.SKIP_WALLET_SIGNAL = False

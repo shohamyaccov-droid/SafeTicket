@@ -45,6 +45,10 @@ class UpgradeToSellerBankDetailsTests(TestCase):
         self.assertEqual(data['bank_name_or_code'], '10')
         self.assertEqual(data['branch_number'], '123')
         self.assertEqual(data['account_number'], '987654')
+        self.assertEqual(self.buyer.account_holder_name, 'ישראל ישראלי')
+        self.assertEqual(self.buyer.bank_name, '10')
+        self.assertEqual(self.buyer.branch_number, '123')
+        self.assertEqual(self.buyer.account_number, '987654')
 
     def test_rejects_invalid_id_number(self):
         self.client.force_authenticate(self.buyer)

@@ -1190,6 +1190,10 @@ def upgrade_to_seller(request):
     u = request.user
     u.phone_number = ser.validated_data['phone_number']
     u.payout_details = ser.validated_data['payout_details']
+    u.account_holder_name = ser.validated_data['account_holder_name']
+    u.bank_name = ser.validated_data['bank_name_or_code']
+    u.branch_number = ser.validated_data['branch_number']
+    u.account_number = ser.validated_data['account_number']
     u.accepted_escrow_terms = True
     u.escrow_terms_accepted_at = timezone.now()
     u.role = 'seller'
@@ -1197,6 +1201,10 @@ def upgrade_to_seller(request):
         update_fields=[
             'phone_number',
             'payout_details',
+            'account_holder_name',
+            'bank_name',
+            'branch_number',
+            'account_number',
             'accepted_escrow_terms',
             'escrow_terms_accepted_at',
             'role',

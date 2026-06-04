@@ -84,10 +84,20 @@ from django.db import OperationalError, transaction
 from django.utils import timezone
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import make_password
 
 from users.models import Artist, Event, Ticket, Venue, VenueSection
 
 User = get_user_model()
+_seed_historical_apps = None
+
+
+def _user_model():
+    """Live User during normal seed; historical User model during data migrations."""
+    if _seed_historical_apps is not None:
+        return _seed_historical_apps.get_model('users', 'User')
+    return User
+
 
 ADMIN_EMAIL = 'shohamyaccov@gmail.com'
 # Temporary login for /admin after seed — rotate after first sign-in.
@@ -385,16 +395,16 @@ def _download_to_imagefield(instance, field_name: str, url: str) -> None:
 
 
 def seed_admin() -> None:
-    qs = User.objects.filter(email__iexact=ADMIN_EMAIL)
+    qs = _user_model().objects.filter(email__iexact=ADMIN_EMAIL)
     if not qs.exists():
         _seed_log(f'[seed] WARNING: no user {ADMIN_EMAIL!r} — register first, then re-run seed.')
         return
     u = qs.first()
-    u.set_password(ADMIN_TEMP_PASSWORD)
+    u.password = make_password(ADMIN_TEMP_PASSWORD)
     u.is_superuser = True
     u.is_staff = True
     u.role = 'seller'
-    u.save()
+    u.save(update_fields=['password', 'is_superuser', 'is_staff', 'role'])
     _seed_log(f'[seed] admin OK: {u.username} (password reset, staff, superuser, seller)')
 
 
@@ -403,7 +413,7 @@ def seed_qa_user() -> None:
     Ensure QA bot user exists with staff/superuser; password set to QA_USER_PASSWORD (not logged).
     Role seller so ticket upload E2E works without role changes.
     """
-    u, created = User.objects.update_or_create(
+    u, created = _user_model().objects.update_or_create(
         username=QA_USER_USERNAME,
         defaults={
             'email': QA_USER_EMAIL,
@@ -413,8 +423,8 @@ def seed_qa_user() -> None:
             'is_email_verified': True,
         },
     )
-    u.set_password(QA_USER_PASSWORD)
-    u.save()
+    u.password = make_password(QA_USER_PASSWORD)
+    u.save(update_fields=['password'])
     action = 'created' if created else 'updated'
     _seed_log(
         f'[seed] QA user {action}: {QA_USER_USERNAME} <{QA_USER_EMAIL}> (staff, superuser, seller; password not printed)'
@@ -444,7 +454,7 @@ def seed_artists() -> None:
 
 def seed_launch_events_and_tickets() -> None:
     """Four official launch shows + verified listing inventory (feed requires active tickets)."""
-    seller = User.objects.filter(username=QA_USER_USERNAME).first()
+    seller = _user_model().objects.filter(username=QA_USER_USERNAME).first()
     if not seller:
         _seed_log('[seed] launch inventory skipped — QA user missing')
         return
@@ -485,7 +495,7 @@ def seed_launch_events_and_tickets() -> None:
         for price in row['prices']:
             dec_price = Decimal(price)
             row_key = f'launch-tier-{price}'
-            existing = Ticket.objects.filter(event=ev, seller=seller, seat_row=row_key).first()
+            existing = Ticket.objects.filter(event=ev, seller_id=seller.pk, seat_row=row_key).first()
             if existing:
                 if existing.original_price != dec_price:
                     existing.original_price = dec_price
@@ -493,7 +503,7 @@ def seed_launch_events_and_tickets() -> None:
                     existing.save(update_fields=['original_price', 'asking_price', 'updated_at'])
                 continue
             t = Ticket(
-                seller=seller,
+                seller_id=seller.pk,
                 event=ev,
                 event_name=ev.name,
                 event_date=ev.date,
@@ -597,13 +607,21 @@ def _seed_all(*, skip_prune: bool = False) -> None:
     _seed_log(f'[seed] done: {Artist.objects.count()} artists, {Event.objects.count()} events total in DB')
 
 
-def run_after_total_wipe() -> None:
+def run_after_total_wipe(historical_apps=None) -> None:
     """
     Rebuild catalog after all Event/Ticket rows were removed (e.g. data migration).
     Skips prune — DB is already clean.
+
+    Pass ``historical_apps`` from RunPython so User queries match the migration-era schema.
     """
-    _seed_all(skip_prune=True)
-    assert_catalog_event_inventory()
+    global _seed_historical_apps
+    prev = _seed_historical_apps
+    _seed_historical_apps = historical_apps
+    try:
+        _seed_all(skip_prune=True)
+        assert_catalog_event_inventory()
+    finally:
+        _seed_historical_apps = prev
 
 
 def main() -> int:

@@ -18,6 +18,7 @@ from .models import (
     EventRequest,
     Offer,
     Order,
+    Payout,
     Ticket,
     User,
     Venue,
@@ -90,6 +91,19 @@ class UserAdmin(BaseUserAdmin):
     # Properly handle fieldsets for Django 6.0 compatibility
     fieldsets = list(BaseUserAdmin.fieldsets) + [
         ('Additional Info', {'fields': ('role', 'phone_number', 'profile_image')}),
+        (
+            'Seller payout (bank transfer)',
+            {
+                'fields': (
+                    'account_holder_name',
+                    'bank_name',
+                    'branch_number',
+                    'account_number',
+                    'payout_details',
+                ),
+                'classes': ('collapse',),
+            },
+        ),
     ]
     
     # Properly handle add_fieldsets for Django 6.0 compatibility  
@@ -549,6 +563,95 @@ class OrderAdmin(admin.ModelAdmin):
     list_filter = ['status', 'created_at']
     search_fields = ['user__username', 'guest_email', 'event_name']
     readonly_fields = ['created_at', 'updated_at', 'payment_confirm_token']
+
+
+@admin.register(Payout)
+class PayoutAdmin(admin.ModelAdmin):
+    list_display = [
+        'id',
+        'seller',
+        'order',
+        'total_sale_amount',
+        'platform_commission',
+        'net_payout',
+        'status',
+        'seller_bank_summary',
+        'paid_at',
+        'created_at',
+    ]
+    list_filter = ['status', 'created_at', 'paid_at']
+    search_fields = [
+        'seller__username',
+        'seller__email',
+        'order__id',
+        'order__event_name',
+        'seller__account_holder_name',
+        'seller__account_number',
+    ]
+    readonly_fields = [
+        'created_at',
+        'seller_bank_details_panel',
+        'order',
+        'seller',
+    ]
+    list_select_related = ['seller', 'order']
+    ordering = ['-created_at']
+    fieldsets = (
+        (
+            'Payout',
+            {
+                'fields': (
+                    'order',
+                    'seller',
+                    'status',
+                    'total_sale_amount',
+                    'platform_commission',
+                    'net_payout',
+                    'paid_at',
+                    'created_at',
+                ),
+            },
+        ),
+        (
+            'Seller bank details (for manual transfer)',
+            {
+                'fields': ('seller_bank_details_panel',),
+            },
+        ),
+    )
+
+    @admin.display(description='Bank (seller)')
+    def seller_bank_summary(self, obj):
+        if not obj or not obj.seller_id:
+            return '—'
+        s = obj.seller
+        bank = (s.bank_name or '').strip() or '—'
+        acct = (s.account_number or '').strip()
+        tail = f'…{acct[-4:]}' if len(acct) >= 4 else (acct or '—')
+        return f'{bank} / {tail}'
+
+    @admin.display(description='Seller bank details')
+    def seller_bank_details_panel(self, obj):
+        if not obj or not obj.seller_id:
+            return format_html('<span style="color:#64748b;">No seller linked</span>')
+        s = obj.seller
+        rows = [
+            ('Account holder', (s.account_holder_name or '').strip() or '—'),
+            ('Bank', (s.bank_name or '').strip() or '—'),
+            ('Branch', (s.branch_number or '').strip() or '—'),
+            ('Account number', (s.account_number or '').strip() or '—'),
+            ('Email', (s.email or '').strip() or '—'),
+            ('Phone', (s.phone_number or '').strip() or '—'),
+        ]
+        lines = ''.join(
+            f'<tr><th style="text-align:right;padding:6px 12px 6px 0;color:#475569;">{label}</th>'
+            f'<td style="padding:6px 0;font-weight:600;">{value}</td></tr>'
+            for label, value in rows
+        )
+        return format_html(
+            '<table style="border-collapse:collapse;direction:rtl;">{}</table>',
+            mark_safe(lines),
+        )
 
 
 @admin.register(Offer)
