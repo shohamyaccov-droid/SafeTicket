@@ -21,7 +21,7 @@ def _signed_payme_request(payload, secret='whsec_test'):
     body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
     signature = hmac.new(secret.encode('utf-8'), body, hashlib.sha256).hexdigest()
     return APIRequestFactory().post(
-        '/api/payments/webhook/',
+        '/api/payments/webhook/payme/',
         data=body,
         content_type='application/json',
         HTTP_X_PAYME_SIGNATURE=signature,

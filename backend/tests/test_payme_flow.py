@@ -113,7 +113,7 @@ class PaymeWebhookFlowTests(TestCase):
         body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
         sig = hmac.new(b'whsec_test', body, hashlib.sha256).hexdigest()
         res = self.client.post(
-            '/api/payments/webhook/',
+            '/api/payments/webhook/payme/',
             body,
             content_type='application/json',
             HTTP_X_PAYME_SIGNATURE=sig,

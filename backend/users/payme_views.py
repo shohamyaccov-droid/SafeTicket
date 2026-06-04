@@ -1,6 +1,6 @@
 """
 Payme HTTP handlers: hosted-checkout init + PSP webhooks.
-Webhook lives at /api/payments/webhook/ (see safeticket.urls).
+Payme webhook lives at /api/payments/webhook/payme/ (see safeticket.urls).
 """
 from __future__ import annotations
 
