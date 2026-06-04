@@ -14,6 +14,7 @@
 }
 
 .interactive-stadium-map__canvas-wrap {
+  position: relative;
   flex: 1 1 auto;
   width: 100%;
   min-height: 0;
@@ -24,6 +25,69 @@
   background: linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%);
   padding: 0;
   box-sizing: border-box;
+}
+
+.interactive-stadium-map__zoom-controls {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+
+.interactive-stadium-map__zoom-btn {
+  width: 40px;
+  height: 40px;
+  min-height: 44px;
+  min-width: 44px;
+  border: none;
+  background: #fff;
+  color: #0f172a;
+  font-size: 1.2rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.interactive-stadium-map__zoom-btn + .interactive-stadium-map__zoom-btn {
+  border-top: 1px solid #e2e8f0;
+}
+
+.interactive-stadium-map__zoom-btn:hover {
+  background: #f8fafc;
+  color: #0284c7;
+}
+
+.interactive-stadium-map__viewport {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.interactive-stadium-map__viewport:active {
+  cursor: grabbing;
+}
+
+.interactive-stadium-map__transform {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform;
 }
 
 .interactive-stadium-map__svg {
@@ -255,6 +319,18 @@
 .interactive-stadium-map__bar-cta:focus-visible {
   outline: 2px solid #0ea5e9;
   outline-offset: 2px;
+}
+
+@media (max-width: 768px) {
+  .interactive-stadium-map__svg {
+    min-height: 0;
+    max-height: 100%;
+    aspect-ratio: 1 / 1;
+  }
+
+  .interactive-stadium-map__bar-cta {
+    min-height: 44px;
+  }
 }
 
 @media (max-width: 640px) {

@@ -1,5 +1,6 @@
 /* eslint-disable react/prop-types -- project does not use PropTypes consistently */
 import { useMemo, useState, useCallback } from 'react';
+import { useVenueMapPanZoom } from '../hooks/useVenueMapPanZoom';
 import {
   RAMAT_GAN_STADIUM_VIEWBOX,
   RAMAT_GAN_STADIUM_SECTIONS_BASE,
@@ -440,6 +441,7 @@ export default function InteractiveStadiumMap({
 }) {
   const [internalSelectedId, setInternalSelectedId] = useState(null);
   const [hoverId, setHoverId] = useState(null);
+  const panZoom = useVenueMapPanZoom({ minScale: 0.55, maxScale: 3, zoomStep: 0.14 });
 
   const selectedSectionId =
     selectedSectionIdProp !== undefined && selectedSectionIdProp !== null
@@ -518,12 +520,46 @@ export default function InteractiveStadiumMap({
   return (
     <div className="interactive-stadium-map">
       <div className="interactive-stadium-map__canvas-wrap">
-        <svg
-          viewBox={VIEWBOX}
-          className="interactive-stadium-map__svg"
-          role="img"
-          aria-label="מפת אצטדיון אינטראקטיבית"
+        <div
+          className="interactive-stadium-map__zoom-controls"
+          onPointerDown={(e) => e.stopPropagation()}
         >
+          <button
+            type="button"
+            className="interactive-stadium-map__zoom-btn"
+            onClick={panZoom.zoomIn}
+            aria-label="התקרבות"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            className="interactive-stadium-map__zoom-btn"
+            onClick={panZoom.zoomOut}
+            aria-label="התרחקות"
+          >
+            −
+          </button>
+        </div>
+        <div
+          className="interactive-stadium-map__viewport"
+          onPointerDown={panZoom.onPointerDown}
+          onPointerMove={panZoom.onPointerMove}
+          onPointerUp={panZoom.onPointerUp}
+          onPointerCancel={panZoom.onPointerUp}
+          role="application"
+          aria-label="מפת אצטדיון — גרור להזזה, צבוט להגדלה, או השתמש בכפתורי פלוס ומינוס"
+        >
+          <div
+            className="interactive-stadium-map__transform"
+            style={panZoom.transformStyle}
+          >
+            <svg
+              viewBox={VIEWBOX}
+              className="interactive-stadium-map__svg"
+              role="img"
+              aria-label="מפת אצטדיון אינטראקטיבית"
+            >
           <rect
             className="interactive-stadium-map__bg"
             x="0"
@@ -676,7 +712,9 @@ export default function InteractiveStadiumMap({
               );
             })}
           </g>
-        </svg>
+            </svg>
+          </div>
+        </div>
       </div>
 
       <div

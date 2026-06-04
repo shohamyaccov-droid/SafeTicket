@@ -626,14 +626,23 @@
 }
 
 /* Let vertical page scroll pass through the concert SVG map on touch devices */
-.bloomfield-concert-map-scroll-wrapper,
-.ramat-gan-map-scroll-wrapper {
+.bloomfield-concert-map-scroll-wrapper {
   touch-action: pan-y;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   width: 100%;
+}
+
+.ramat-gan-map-scroll-wrapper {
+  touch-action: none;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow: hidden;
 }
 
 .ramat-gan-map-scroll-wrapper .interactive-stadium-map {
@@ -676,29 +685,34 @@
 
 .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card-content {
   background-color: #ffffff;
-  min-height: min(72vh, 820px);
-  max-height: none;
   padding: 0;
 }
 
-.tickets-split-container.tickets-split-container--ramat-gan .venue-map-card {
-  min-height: min(76vh, 880px);
-}
+@media (min-width: 992px) {
+  .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card-content {
+    min-height: min(72vh, 820px);
+    max-height: none;
+  }
 
-.tickets-split-container.tickets-split-container--ramat-gan .ramat-gan-map-scroll-wrapper {
-  flex: 1;
-  min-height: min(68vh, 780px);
-}
+  .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card {
+    min-height: min(76vh, 880px);
+  }
 
-.tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__canvas-wrap {
-  min-height: min(64vh, 740px);
-}
+  .tickets-split-container.tickets-split-container--ramat-gan .ramat-gan-map-scroll-wrapper {
+    flex: 1;
+    min-height: min(68vh, 780px);
+  }
 
-.tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__svg {
-  min-height: min(60vh, 700px);
-  max-height: none;
-  width: 100%;
-  height: 100%;
+  .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__canvas-wrap {
+    min-height: min(64vh, 740px);
+  }
+
+  .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__svg {
+    min-height: min(60vh, 700px);
+    max-height: none;
+    width: 100%;
+    height: 100%;
+  }
 }
 
 .venue-map-footer-label {
@@ -1900,15 +1914,32 @@
     flex-direction: column;
   }
 
+  .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card {
+    min-height: 0;
+  }
+
   .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card-content {
-    min-height: max(360px, min(58vh, 520px));
-    max-height: none;
+    min-height: max(200px, min(32vh, 280px));
+    max-height: min(38vh, 320px);
+    height: min(38vh, 320px);
     padding: 0;
   }
 
+  .tickets-split-container.tickets-split-container--ramat-gan .ramat-gan-map-scroll-wrapper {
+    min-height: 0;
+    max-height: 100%;
+  }
+
+  .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map,
+  .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__canvas-wrap {
+    min-height: 0;
+    max-height: 100%;
+    height: 100%;
+  }
+
   .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__svg {
-    min-height: max(340px, min(54vh, 500px));
-    max-height: none;
+    min-height: 0;
+    max-height: 100%;
   }
 
   /* Interactive Menora map — room to read full court/stage */
@@ -1982,6 +2013,72 @@
   .event-details-container {
     padding: var(--spacing-md) var(--spacing-sm);
     max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .tickets-section {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  /* Ramat Gan: compact map so first tickets peek above the fold */
+  .tickets-split-container.tickets-split-container--ramat-gan .venue-map-sticky-container {
+    margin-bottom: 0.25rem;
+  }
+
+  .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card {
+    min-height: 0;
+    max-height: none;
+  }
+
+  .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card-content {
+    min-height: 180px;
+    height: min(35vh, 300px);
+    max-height: min(35vh, 300px) !important;
+    padding: 0;
+  }
+
+  .tickets-split-container.tickets-split-container--ramat-gan .ramat-gan-map-scroll-wrapper {
+    min-height: 0;
+    max-height: 100%;
+    flex: 1;
+  }
+
+  .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map {
+    border-radius: 0;
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
+  }
+
+  .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__canvas-wrap,
+  .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__viewport,
+  .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__transform {
+    min-height: 0;
+    max-height: 100%;
+    height: 100%;
+  }
+
+  .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__svg {
+    min-height: 0 !important;
+    max-height: 100%;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+  }
+
+  .tickets-split-container.tickets-split-container--ramat-gan .venue-map-footer-label {
+    padding: 0.4rem 0.65rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__bar {
+    min-height: 48px;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__bar-cta {
+    min-height: 44px;
   }
 
   /* Sticky filter/sort bar — stays above the sticky map (higher z-index) */

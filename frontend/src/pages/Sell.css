@@ -4,6 +4,9 @@
   justify-content: center;
   align-items: flex-start;
   padding: var(--spacing-md) var(--spacing-md);
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .catalog-error-banner {
@@ -1435,6 +1438,17 @@
 }
 
 @media (max-width: 768px) {
+  .sell-container {
+    padding-left: max(var(--spacing-sm), env(safe-area-inset-left));
+    padding-right: max(var(--spacing-sm), env(safe-area-inset-right));
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .listing-card {
+    max-width: 100%;
+    min-width: 0;
+  }
+
   .sell-submit--desktop-only {
     display: none !important;
   }
