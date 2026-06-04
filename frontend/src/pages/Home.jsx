@@ -6,11 +6,17 @@ import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import EmptyState from '../components/EmptyState';
 import EventCard from '../components/EventCard';
+import PerformerCard from '../components/PerformerCard';
+import EmailAlertModal from '../components/EmailAlertModal';
 import BuyerGuarantee from '../components/BuyerGuarantee';
 import { toastError } from '../utils/toast';
+import {
+  eventCategoryKey,
+  groupEventsByPerformer,
+  filterLastMinuteEvents,
+  sortPerformersByDemand,
+} from '../utils/homeDiscover';
 import './Home.css';
-
-/* eslint-disable react/prop-types -- CarouselSection is local to this page */
 
 function formatEventDateHe(iso) {
   if (!iso) return '';
@@ -23,48 +29,6 @@ function formatEventDateHe(iso) {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-/** Normalize API category (DB uses concert|sport|theater|standup|festival). */
-function eventCategoryKey(event) {
-  const raw = event?.category;
-  if (raw == null || raw === '') return '';
-  const s = String(raw).toLowerCase().trim();
-  if (['concert', 'festival', 'sport', 'theater', 'standup'].includes(s)) return s;
-  return s;
-}
-
-function groupKeyForEvent(ev) {
-  const name = String(ev?.name ?? '').trim();
-  const venue = String(ev?.venue ?? '').trim();
-  return `${name}\u0000${venue}`;
-}
-
-/**
- * One carousel card per distinct (name, venue); multiple API rows merged.
- * @param {object[]} list
- * @returns {{ key: string, events: object[], displayEvent: object, count: number }[]}
- */
-function groupEventsByNameAndVenue(list) {
-  const map = new Map();
-  for (const ev of list) {
-    const k = groupKeyForEvent(ev);
-    if (!map.has(k)) map.set(k, []);
-    map.get(k).push(ev);
-  }
-  const out = [];
-  for (const events of map.values()) {
-    if (!events.length) continue;
-    events.sort((a, b) => new Date(a.date) - new Date(b.date));
-    const displayEvent = events[0];
-    out.push({
-      key: `grp-${displayEvent.id}-${String(displayEvent.name)}-${String(displayEvent.venue)}`,
-      events,
-      displayEvent,
-      count: events.length,
-    });
-  }
-  return out;
 }
 
 const HOME_PAGE_TITLE =
@@ -82,7 +46,9 @@ const Home = () => {
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') ?? '');
   const resultsRef = useRef(null);
   const [datePickGroup, setDatePickGroup] = useState(null);
+  const [waitlistEvent, setWaitlistEvent] = useState(null);
   const qFromUrl = searchParams.get('q') ?? '';
+
   useEffect(() => {
     setSearchQuery(qFromUrl);
   }, [qFromUrl]);
@@ -149,7 +115,6 @@ const Home = () => {
     return d;
   }, []);
 
-  /** Marketplace rows: events with tickets, or high_demand “coming soon” (waitlist) events. */
   const inventoryEvents = useMemo(() => {
     let list = [...(events || [])].filter((event) => {
       if (!event?.date) return false;
@@ -181,58 +146,59 @@ const Home = () => {
     return list;
   }, [events, searchQuery, todayStart]);
 
-  const inventoryGroups = useMemo(() => groupEventsByNameAndVenue(inventoryEvents), [inventoryEvents]);
+  const allPerformers = useMemo(
+    () => sortPerformersByDemand(groupEventsByPerformer(inventoryEvents)),
+    [inventoryEvents]
+  );
 
-  const recommendedGroups = useMemo(() => {
-    return [...inventoryGroups]
-      .sort((a, b) => {
-        const sumTickets = (g) =>
-          g.events.reduce((acc, ev) => acc + (Number(ev.tickets_count) || 0), 0);
-        return sumTickets(b) - sumTickets(a);
-      })
-      .slice(0, 5);
-  }, [inventoryGroups]);
+  const lastMinuteEvents = useMemo(
+    () => filterLastMinuteEvents(inventoryEvents, todayStart, 4),
+    [inventoryEvents, todayStart]
+  );
 
-  const concertEvents = useMemo(
-    () =>
-      inventoryEvents.filter((e) => {
+  const recommendedPerformers = useMemo(() => allPerformers.slice(0, 8), [allPerformers]);
+
+  const performersByCategory = useCallback(
+    (cat) => {
+      const filtered = inventoryEvents.filter((e) => {
         const c = eventCategoryKey(e);
-        return c === 'concert' || c === 'festival';
-      }),
+        if (cat === 'concert') return c === 'concert' || c === 'festival';
+        return c === cat;
+      });
+      return sortPerformersByDemand(groupEventsByPerformer(filtered));
+    },
     [inventoryEvents]
   );
 
-  const sportsEvents = useMemo(
-    () => inventoryEvents.filter((e) => eventCategoryKey(e) === 'sport'),
-    [inventoryEvents]
+  const concertPerformers = useMemo(() => performersByCategory('concert'), [performersByCategory]);
+  const sportsPerformers = useMemo(() => performersByCategory('sport'), [performersByCategory]);
+  const standupPerformers = useMemo(() => performersByCategory('standup'), [performersByCategory]);
+  const theaterPerformers = useMemo(() => performersByCategory('theater'), [performersByCategory]);
+
+  const handlePerformerNavigate = useCallback(
+    (group) => {
+      if (!group?.events?.length) return;
+      if (group.artistId != null && group.artistId !== '') {
+        navigate(`/artist/${group.artistId}`);
+        return;
+      }
+      if (group.eventCount <= 1) {
+        navigate(`/event/${group.events[0].id}`);
+        return;
+      }
+      setDatePickGroup({
+        displayEvent: group.events[0],
+        events: group.events,
+        count: group.eventCount,
+      });
+    },
+    [navigate]
   );
 
-  const standupEvents = useMemo(
-    () => inventoryEvents.filter((e) => eventCategoryKey(e) === 'standup'),
-    [inventoryEvents]
-  );
-
-  const theaterEvents = useMemo(
-    () => inventoryEvents.filter((e) => eventCategoryKey(e) === 'theater'),
-    [inventoryEvents]
-  );
-
-  const concertGroups = useMemo(() => groupEventsByNameAndVenue(concertEvents), [concertEvents]);
-
-  const sportsGroups = useMemo(() => groupEventsByNameAndVenue(sportsEvents), [sportsEvents]);
-
-  const standupGroups = useMemo(() => groupEventsByNameAndVenue(standupEvents), [standupEvents]);
-
-  const theaterGroups = useMemo(() => groupEventsByNameAndVenue(theaterEvents), [theaterEvents]);
-
-  const handleGroupedNavigate = useCallback((group) => {
-    if (!group?.events?.length) return;
-    if (group.count <= 1) {
-      navigate(`/event/${group.displayEvent.id}`);
-      return;
-    }
-    setDatePickGroup(group);
-  }, [navigate]);
+  const openWaitlist = useCallback((event) => {
+    if (!event?.id) return;
+    setWaitlistEvent(event);
+  }, []);
 
   useEffect(() => {
     if (!datePickGroup) return undefined;
@@ -255,18 +221,21 @@ const Home = () => {
     );
   }
 
-  /** Horizontal row with arrow controls (Viagogo-style); RTL-aware scroll. */
-  const CarouselSection = ({ title, items, slug }) => {
+  /** @typedef {'performer'|'event'|'lastMinute'} CarouselKind */
+
+  /**
+   * Horizontal discovery row (Viagogo-style structure, TradeTix styling).
+   * @param {{ title: string, slug?: string, kind: CarouselKind, performers?: object[], events?: object[] }} props
+   */
+  const CarouselSection = ({ title, slug, kind, performers = [], events = [] }) => {
     const id = slug || String(title).replace(/\s+/g, '-');
     const scrollRef = useRef(null);
     const [canPrev, setCanPrev] = useState(false);
     const [canNext, setCanNext] = useState(false);
 
-    /**
-     * Track uses direction:ltr + flex-direction:row-reverse (see Home.css) so scrollLeft is always 0…max.
-     * scrollLeft === max shows the head of the row (first events on the visual right for Hebrew).
-     * scrollLeft === 0 shows the tail (scroll "next" = decrease scrollLeft).
-     */
+    const items =
+      kind === 'performer' ? performers : kind === 'lastMinute' || kind === 'event' ? events : [];
+
     const updateArrows = useCallback(() => {
       const el = scrollRef.current;
       if (!el) return;
@@ -278,19 +247,15 @@ const Home = () => {
       }
       const sl = el.scrollLeft;
       const eps = 8;
-      const atHead = sl >= max - eps;
-      const atTail = sl <= eps;
-      setCanPrev(!atHead);
-      setCanNext(!atTail);
+      setCanPrev(sl < max - eps);
+      setCanNext(sl > eps);
     }, []);
 
     const snapCarouselToHead = useCallback(() => {
       const el = scrollRef.current;
       if (!el) return;
       const max = el.scrollWidth - el.clientWidth;
-      if (max > 0) {
-        el.scrollLeft = max;
-      }
+      if (max > 0) el.scrollLeft = max;
     }, []);
 
     useLayoutEffect(() => {
@@ -302,9 +267,7 @@ const Home = () => {
       updateArrows();
       const el = scrollRef.current;
       if (!el) return;
-      const ro = new ResizeObserver(() => {
-        updateArrows();
-      });
+      const ro = new ResizeObserver(() => updateArrows());
       ro.observe(el);
       el.addEventListener('scroll', updateArrows, { passive: true });
       return () => {
@@ -328,16 +291,14 @@ const Home = () => {
     const goNext = () => {
       const el = scrollRef.current;
       if (!el) return;
-      const step = Math.round(el.clientWidth * 0.72);
-      el.scrollBy({ left: -step, behavior: 'smooth' });
+      el.scrollBy({ left: -Math.round(el.clientWidth * 0.72), behavior: 'smooth' });
       scheduleArrowSync(el);
     };
 
     const goPrev = () => {
       const el = scrollRef.current;
       if (!el) return;
-      const step = Math.round(el.clientWidth * 0.72);
-      el.scrollBy({ left: step, behavior: 'smooth' });
+      el.scrollBy({ left: Math.round(el.clientWidth * 0.72), behavior: 'smooth' });
       scheduleArrowSync(el);
     };
 
@@ -360,7 +321,7 @@ const Home = () => {
             disabled={!canPrev}
             aria-label="גלילה אחורה ברשימה"
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
               <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
@@ -371,21 +332,40 @@ const Home = () => {
             disabled={!canNext}
             aria-label="גלילה קדימה ברשימה"
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
               <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
           <div ref={scrollRef} className="home-carousel-scroll viagogo-carousel-track" role="list">
-            {items.map((group) => (
-              <div key={group.key} className="home-carousel-item" role="listitem">
-                <EventCard
-                  event={group.displayEvent}
-                  formatEventDateHe={formatEventDateHe}
-                  dateVariantCount={group.count}
-                  onNavigate={() => handleGroupedNavigate(group)}
-                />
-              </div>
-            ))}
+            {kind === 'performer'
+              ? performers.map((group) => (
+                  <div key={group.key} className="home-carousel-item home-carousel-item--performer" role="listitem">
+                    <PerformerCard
+                      performerName={group.performerName}
+                      imageUrl={group.imageUrl}
+                      eventCount={group.eventCount}
+                      hasTickets={group.hasTickets}
+                      waitlistOnly={group.waitlistOnly}
+                      onNavigate={() => handlePerformerNavigate(group)}
+                      onNotify={() => openWaitlist(group.events[0])}
+                    />
+                  </div>
+                ))
+              : events.map((ev) => (
+                  <div
+                    key={`ev-${ev.id}`}
+                    className={`home-carousel-item${kind === 'lastMinute' ? ' home-carousel-item--last-minute' : ''}`}
+                    role="listitem"
+                  >
+                    <EventCard
+                      event={ev}
+                      formatEventDateHe={formatEventDateHe}
+                      variant={kind === 'lastMinute' ? 'lastMinute' : 'default'}
+                      onNavigate={() => navigate(`/event/${ev.id}`)}
+                      onNotify={() => openWaitlist(ev)}
+                    />
+                  </div>
+                ))}
           </div>
         </div>
       </section>
@@ -438,7 +418,6 @@ const Home = () => {
                 height="24"
                 viewBox="0 0 24 24"
                 fill="none"
-                xmlns="http://www.w3.org/2000/svg"
                 aria-hidden
               >
                 <path
@@ -458,7 +437,7 @@ const Home = () => {
         <div className="hero-trust-ribbon" role="list" aria-label="שלושת השלבים עם TradeTix">
           <div className="hero-trust-item" role="listitem">
             <span className="hero-trust-icon" aria-hidden="true">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
                 <path d="M20 20L16.5 16.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
@@ -472,7 +451,7 @@ const Home = () => {
           </span>
           <div className="hero-trust-item" role="listitem">
             <span className="hero-trust-icon" aria-hidden="true">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <path d="M12 3L20 7V12C20 16.418 16.418 20 12 21C7.582 20 4 16.418 4 12V7L12 3Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
                 <path d="M9 12L11 14L15 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -486,7 +465,7 @@ const Home = () => {
           </span>
           <div className="hero-trust-item" role="listitem">
             <span className="hero-trust-icon" aria-hidden="true">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <path d="M4 10L12 4L20 10V20H4V10Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
                 <path d="M9 20V12H15V20" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
               </svg>
@@ -509,11 +488,22 @@ const Home = () => {
           </div>
         ) : (
           <div className="home-viagogo-rows viagogo-home-discover home-layout__rows">
-            <CarouselSection slug="recommended" title="מומלצים" items={recommendedGroups} />
-            <CarouselSection slug="concerts" title="הופעות" items={concertGroups} />
-            <CarouselSection slug="sports" title="ספורט" items={sportsGroups} />
-            <CarouselSection slug="standup" title="סטנדאפ" items={standupGroups} />
-            <CarouselSection slug="theater" title="תיאטרון" items={theaterGroups} />
+            <CarouselSection
+              slug="last-minute"
+              title="כרטיסים של הדקה ה-90"
+              kind="lastMinute"
+              events={lastMinuteEvents}
+            />
+            <CarouselSection
+              slug="recommended"
+              title="הופעות מומלצות"
+              kind="performer"
+              performers={recommendedPerformers}
+            />
+            <CarouselSection slug="concerts" title="הופעות" kind="performer" performers={concertPerformers} />
+            <CarouselSection slug="sports" title="ספורט" kind="performer" performers={sportsPerformers} />
+            <CarouselSection slug="standup" title="סטנדאפ" kind="performer" performers={standupPerformers} />
+            <CarouselSection slug="theater" title="תיאטרון" kind="performer" performers={theaterPerformers} />
           </div>
         )}
       </div>
@@ -563,6 +553,10 @@ const Home = () => {
             </button>
           </div>
         </div>
+      ) : null}
+
+      {waitlistEvent ? (
+        <EmailAlertModal event={waitlistEvent} onClose={() => setWaitlistEvent(null)} />
       ) : null}
     </div>
   );

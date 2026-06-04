@@ -2,10 +2,18 @@
 import { getFullImageUrl } from '../utils/formatters';
 
 /**
- * Homepage / carousel event tile. No exact inventory counts; waitlist signup only on event details.
- * @param {number} [dateVariantCount] — when &gt; 1, shows a multi-date badge and meta line.
+ * Homepage event tile.
+ * @param {'default'|'lastMinute'|'waitlist'} [variant]
+ * @param {number} [dateVariantCount] — multi-date badge when grouped (legacy)
  */
-export default function EventCard({ event, formatEventDateHe, onNavigate, dateVariantCount }) {
+export default function EventCard({
+  event,
+  formatEventDateHe,
+  onNavigate,
+  onNotify,
+  dateVariantCount,
+  variant = 'default',
+}) {
   const img =
     getFullImageUrl(event.image_url) ||
     getFullImageUrl(event.artist_detail?.image_url) ||
@@ -20,13 +28,24 @@ export default function EventCard({ event, formatEventDateHe, onNavigate, dateVa
   const multiDates =
     typeof dateVariantCount === 'number' && Number.isFinite(dateVariantCount) && dateVariantCount > 1;
 
+  const isLastMinute = variant === 'lastMinute';
+  const isWaitlist = variant === 'waitlist';
+
+  const handleNotify = (e) => {
+    e.stopPropagation();
+    onNotify?.();
+  };
+
   return (
     <article
-      className="home-carousel-card"
-      role="link"
+      className={`home-carousel-card${isLastMinute ? ' home-carousel-card--last-minute' : ''}${
+        isWaitlist ? ' home-carousel-card--waitlist' : ''
+      }`}
+      role={isWaitlist ? 'group' : 'link'}
       tabIndex={0}
-      onClick={onNavigate}
+      onClick={isWaitlist ? undefined : onNavigate}
       onKeyDown={(e) => {
+        if (isWaitlist) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onNavigate?.();
@@ -34,13 +53,21 @@ export default function EventCard({ event, formatEventDateHe, onNavigate, dateVa
       }}
     >
       <div className="home-carousel-card__media">
+        {isLastMinute ? (
+          <span className="home-carousel-card__badge home-carousel-card__badge--urgent" role="status">
+            <span className="home-carousel-card__badge-icon" aria-hidden>
+              ⏱
+            </span>
+            נמכר מהר
+          </span>
+        ) : null}
         {multiDates ? (
           <span className="home-carousel-card__badge home-carousel-card__badge--dates" role="status">
             {dateVariantCount} תאריכים זמינים
           </span>
         ) : null}
-        {!multiDates && event.high_demand ? (
-          <span className="home-carousel-card__badge" role="status">
+        {!isLastMinute && !multiDates && event.high_demand ? (
+          <span className="home-carousel-card__badge home-carousel-card__badge--demand" role="status">
             ביקוש גבוה
           </span>
         ) : null}
@@ -62,7 +89,13 @@ export default function EventCard({ event, formatEventDateHe, onNavigate, dateVa
           {multiDates ? `${dateVariantCount} תאריכים זמינים` : formatEventDateHe(event.date)}
         </p>
         {venueLine ? <p className="home-carousel-card__venue">{venueLine}</p> : null}
-        <p className="home-carousel-card__tickets">לרכישת כרטיסים</p>
+        {isWaitlist ? (
+          <button type="button" className="home-carousel-card__notify-btn" onClick={handleNotify}>
+            התראת כרטיסים
+          </button>
+        ) : (
+          <p className="home-carousel-card__tickets">לרכישת כרטיסים</p>
+        )}
       </div>
     </article>
   );
