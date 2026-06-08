@@ -17,14 +17,14 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from users.models import Artist, Event, Order, Ticket
+from users.models import Artist, Event, Order, SellerPayout, Ticket
 
 User = get_user_model()
 
 
 @override_settings(
-    PAYME_API_KEY='test_key',
-    PAYME_MERCHANT_ID='test_merchant',
+    PAYME_SELLER_ID='MPL-TEST-SELLER',
+    PAYME_API_URL='https://testpay.payme.io/api',
     PAYME_WEBHOOK_SECRET='whsec_test',
 )
 class PaymeWebhookFlowTests(TestCase):
@@ -72,6 +72,7 @@ class PaymeWebhookFlowTests(TestCase):
             ticket=self.ticket,
             status='pending_payment',
             total_amount=Decimal('115.00'),
+            total_paid_by_buyer=Decimal('115.00'),
             currency='ILS',
             quantity=1,
             event_name=self.event.name,
@@ -80,12 +81,13 @@ class PaymeWebhookFlowTests(TestCase):
             payme_transaction_id='webhook_txn_1',
         )
 
-    @patch('users.payme_views.post_generate_sale')
-    def test_payme_init_returns_redirect(self, mock_post):
-        mock_post.return_value = (
-            200,
-            {'redirect_url': 'https://testpay.payme.io/hosted/test', 'transaction_id': 'txn_123'},
-        )
+    @patch('users.payme_views.generate_payme_sale_for_order')
+    def test_payme_init_returns_redirect(self, mock_generate):
+        mock_generate.return_value = {
+            'payme_sale_url': 'https://testpay.payme.io/hosted/test',
+            'transaction_id': 'txn_123',
+            'raw': {'status_code': 0},
+        }
         self.client.force_authenticate(self.buyer)
         res = self.client.post(
             '/api/users/payments/payme/init/',
@@ -98,8 +100,24 @@ class PaymeWebhookFlowTests(TestCase):
         )
         self.assertEqual(res.status_code, 200, res.content)
         self.assertIn('redirect_url', res.data)
+        self.assertIn('payme_sale_url', res.data)
+        self.assertEqual(res.data['redirect_url'], 'https://testpay.payme.io/hosted/test')
         self.order.refresh_from_db()
         self.assertEqual(self.order.payme_transaction_id, 'txn_123')
+
+    @override_settings(PAYME_SELLER_ID='')
+    def test_payme_init_503_when_not_configured(self):
+        self.client.force_authenticate(self.buyer)
+        res = self.client.post(
+            '/api/users/payments/payme/init/',
+            {
+                'order_id': self.order.id,
+                'success_url': 'http://localhost/s',
+                'failure_url': 'http://localhost/f',
+            },
+            format='json',
+        )
+        self.assertEqual(res.status_code, 503)
 
     def test_webhook_marks_paid_via_finalize(self):
         """Webhook success + merchant_order_id runs finalize (inventory + paid)."""
@@ -125,3 +143,62 @@ class PaymeWebhookFlowTests(TestCase):
         self.assertEqual(self.order.payme_status, 'success')
         self.ticket.refresh_from_db()
         self.assertEqual(self.ticket.status, 'sold')
+        self.assertTrue(SellerPayout.objects.filter(order=self.order).exists())
+
+    def test_webhook_rejects_invalid_json(self):
+        res = self.client.post(
+            '/api/payments/webhook/payme/',
+            b'not-json',
+            content_type='application/json',
+        )
+        self.assertEqual(res.status_code, 400)
+
+    def test_webhook_rejects_missing_merchant_order_id(self):
+        payload = {'status': 'success', 'transaction_id': 'x'}
+        body = json.dumps(payload).encode('utf-8')
+        sig = hmac.new(b'whsec_test', body, hashlib.sha256).hexdigest()
+        res = self.client.post(
+            '/api/payments/webhook/payme/',
+            body,
+            content_type='application/json',
+            HTTP_X_PAYME_SIGNATURE=sig,
+        )
+        self.assertEqual(res.status_code, 400)
+
+    def test_webhook_idempotent_when_already_paid(self):
+        self.order.status = 'paid'
+        self.order.save(update_fields=['status'])
+        payload = {
+            'merchant_order_id': str(self.order.id),
+            'status': 'success',
+            'transaction_id': 'webhook_txn_1',
+            'sale_price': 11500,
+            'currency': 'ILS',
+        }
+        body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+        sig = hmac.new(b'whsec_test', body, hashlib.sha256).hexdigest()
+        res = self.client.post(
+            '/api/payments/webhook/payme/',
+            body,
+            content_type='application/json',
+            HTTP_X_PAYME_SIGNATURE=sig,
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.data.get('finalized'))
+
+    def test_webhook_rejects_bad_signature(self):
+        payload = {
+            'merchant_order_id': str(self.order.id),
+            'status': 'success',
+            'transaction_id': 'webhook_txn_1',
+            'sale_price': 11500,
+            'currency': 'ILS',
+        }
+        body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+        res = self.client.post(
+            '/api/payments/webhook/payme/',
+            body,
+            content_type='application/json',
+            HTTP_X_PAYME_SIGNATURE='bad-signature',
+        )
+        self.assertEqual(res.status_code, 403)

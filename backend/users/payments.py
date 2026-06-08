@@ -85,10 +85,13 @@ def log_payme(stage: str, *, order_id: int | None = None, payload: Any = None, r
 
 
 def get_payme_config() -> dict[str, Any]:
+    seller_id = getattr(settings, 'PAYME_SELLER_ID', '') or getattr(settings, 'PAYME_MERCHANT_ID', '') or ''
     return {
-        'merchant_id': getattr(settings, 'PAYME_MERCHANT_ID', '') or '',
+        'seller_id': seller_id,
+        'merchant_id': getattr(settings, 'PAYME_MERCHANT_ID', '') or seller_id,
         'api_key': getattr(settings, 'PAYME_API_KEY', '') or '',
         'api_secret': getattr(settings, 'PAYME_API_SECRET', '') or '',
+        'api_url': getattr(settings, 'PAYME_API_URL', 'https://testpay.payme.io/api'),
         'generate_sale_url': getattr(settings, 'PAYME_GENERATE_SALE_URL', 'https://testpay.payme.io/api/generate-sale'),
         'webhook_secret': getattr(settings, 'PAYME_WEBHOOK_SECRET', '') or '',
         'sub_seller_payee_id': getattr(settings, 'PAYME_SUB_SELLER_PAYEE_ID', '') or '',
@@ -180,6 +183,7 @@ def extract_redirect_url(payme_response: Any) -> str | None:
     if not isinstance(payme_response, dict):
         return None
     for key in (
+        'payme_sale_url',
         'redirect_url',
         'sale_url',
         'payment_url',
@@ -450,6 +454,10 @@ def finalize_pending_order_to_paid(order_id: int, source: str = 'payme') -> tupl
             order.payment_confirm_token = None
             order.save(update_fields=['status', 'payment_confirm_token', 'updated_at'])
             _apply_order_pricing_fields(order, negotiated_offer, ticket_ref, order.quantity)
+
+            from users.payout_ledger import ensure_seller_payout_for_order
+
+            ensure_seller_payout_for_order(order)
     except ValueError as e:
         logger.warning('finalize_pending_order_to_paid order_id=%s: %s', order_id, e)
         return False, str(e)

@@ -13,16 +13,13 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from services.payme_service import PayMeError, PayMeSettings, generate_payme_sale_for_order
+
 from .models import Order
 from .payments import (
-    build_marketplace_generate_sale_body,
-    extract_redirect_url,
-    extract_transaction_id,
     finalize_pending_order_to_paid,
-    get_payme_config,
     log_payme,
     normalize_payme_webhook_status,
-    post_generate_sale,
     verify_payme_webhook_request,
 )
 
@@ -37,6 +34,13 @@ def payme_webhook(request):
     Payme → TradeTix status updates. Configure Payme dashboard to POST here.
     """
     raw_body = request.body or b''
+    logger.info(
+        'PayMe webhook incoming bytes=%s content_type=%s remote_addr=%s',
+        len(raw_body),
+        request.content_type,
+        request.META.get('REMOTE_ADDR'),
+    )
+
     try:
         payload = json.loads(raw_body or b'{}')
     except Exception as e:
@@ -44,7 +48,17 @@ def payme_webhook(request):
         return Response({'error': 'invalid json'}, status=status.HTTP_400_BAD_REQUEST)
 
     if not isinstance(payload, dict):
+        log_payme('webhook_invalid_payload_type', payload={'type': type(payload).__name__})
         return Response({'error': 'expected object'}, status=status.HTTP_400_BAD_REQUEST)
+
+    log_payme(
+        'webhook_incoming',
+        payload={
+            'keys': list(payload.keys()),
+            'merchant_order_id': payload.get('merchant_order_id') or payload.get('merchantOrderId'),
+            'status': payload.get('status') or payload.get('payment_status'),
+        },
+    )
 
     oid_raw = (
         payload.get('merchant_order_id')
@@ -115,10 +129,9 @@ def payme_init_checkout(request):
     Create Payme hosted session for an existing pending_payment order.
     Auth: logged-in owner OR guest_email matching order.
     """
-    cfg = get_payme_config()
-    if not (cfg.get('api_key') or cfg.get('merchant_id')):
+    if not PayMeSettings.from_django().is_configured:
         return Response(
-            {'error': 'Payme is not configured (set PAYME_API_KEY / PAYME_MERCHANT_ID).'},
+            {'error': 'Payme is not configured (set PAYME_SELLER_ID).'},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
@@ -154,30 +167,35 @@ def payme_init_checkout(request):
     if not success_url or not failure_url:
         return Response({'error': 'success_url and failure_url required'}, status=status.HTTP_400_BAD_REQUEST)
 
-    body = build_marketplace_generate_sale_body(
-        order,
-        buyer_email=buyer_email,
-        success_url=success_url,
-        failure_url=failure_url,
-    )
-
     try:
-        http_status, payme_response = post_generate_sale(body)
-    except Exception as e:
-        log_payme('init_post_error', order_id=oid, exc=e)
-        return Response({'error': 'Payme request failed'}, status=status.HTTP_502_BAD_GATEWAY)
-
-    redirect_url = extract_redirect_url(payme_response)
-    p_tid = extract_transaction_id(payme_response)
-
-    if http_status >= 400 or not redirect_url or not p_tid:
-        log_payme('init_unexpected_response', order_id=oid, response={'http': http_status, 'body': payme_response})
+        result = generate_payme_sale_for_order(
+            order,
+            buyer_email=buyer_email,
+            success_url=success_url,
+            failure_url=failure_url,
+        )
+    except PayMeError as exc:
+        log_payme(
+            'init_payme_error',
+            order_id=oid,
+            response={'error': str(exc), 'http': exc.http_status},
+        )
         return Response(
             {
-                'error': 'Payme did not return a redirect URL and transaction ID',
-                'payme_http_status': http_status,
-                'payme_response': payme_response,
+                'error': str(exc),
+                'payme_http_status': exc.http_status,
+                'payme_response': exc.payload,
             },
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    p_tid = result.get('transaction_id')
+    payme_sale_url = result['payme_sale_url']
+
+    if not p_tid:
+        log_payme('init_missing_transaction_id', order_id=oid, response=result.get('raw'))
+        return Response(
+            {'error': 'Payme did not return a transaction ID', 'payme_response': result.get('raw')},
             status=status.HTTP_502_BAD_GATEWAY,
         )
 
@@ -188,9 +206,10 @@ def payme_init_checkout(request):
     return Response(
         {
             'order_id': order.id,
-            'redirect_url': redirect_url,
+            'redirect_url': payme_sale_url,
+            'payme_sale_url': payme_sale_url,
             'payme_transaction_id': p_tid,
-            'payme_raw': payme_response,
+            'payme_raw': result.get('raw'),
         },
         status=status.HTTP_200_OK,
     )

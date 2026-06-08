@@ -538,17 +538,21 @@ else:
         '(public HTTPS URL of this API service, no trailing slash).'
     )
 
-# Payme.io — keys from environment only (sandbox: PAYME_GENERATE_SALE_URL test host).
-PAYME_MERCHANT_ID = (os.environ.get('PAYME_MERCHANT_ID') or '').strip()
+# Payme.io — keys from environment only (sandbox: PAYME_API_URL test host).
+PAYME_SELLER_ID = (os.environ.get('PAYME_SELLER_ID') or '').strip()
+PAYME_API_URL = (
+    os.environ.get('PAYME_API_URL') or 'https://testpay.payme.io/api'
+).strip().rstrip('/')
+PAYME_MERCHANT_ID = (os.environ.get('PAYME_MERCHANT_ID') or PAYME_SELLER_ID).strip()
 PAYME_API_KEY = (os.environ.get('PAYME_API_KEY') or '').strip()
 PAYME_API_SECRET = (os.environ.get('PAYME_API_SECRET') or '').strip()
 PAYME_GENERATE_SALE_URL = (
-    os.environ.get('PAYME_GENERATE_SALE_URL') or 'https://testpay.payme.io/api/generate-sale'
+    os.environ.get('PAYME_GENERATE_SALE_URL') or f'{PAYME_API_URL}/generate-sale'
 ).strip()
 PAYME_WEBHOOK_SECRET = (os.environ.get('PAYME_WEBHOOK_SECRET') or '').strip()
 PAYME_SUB_SELLER_PAYEE_ID = (os.environ.get('PAYME_SUB_SELLER_PAYEE_ID') or '').strip()
 _VITE_USE_PAYME = (os.environ.get('VITE_USE_PAYME') or '').strip().lower() in ('1', 'true', 'yes')
-_PAYME_CONFIGURED = bool(PAYME_API_KEY or PAYME_MERCHANT_ID)
+_PAYME_CONFIGURED = bool(PAYME_SELLER_ID or PAYME_API_KEY or PAYME_MERCHANT_ID)
 # Production payment authority: when PayMe is enabled/configured, only a verified PayMe webhook may
 # finalize inventory. Local/dev can still use the mock confirm endpoint unless explicitly disabled.
 PAYME_REQUIRE_WEBHOOK_CONFIRMATION = (
