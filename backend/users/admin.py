@@ -18,7 +18,7 @@ from .models import (
     EventRequest,
     Offer,
     Order,
-    Payout,
+    SellerPayout,
     Ticket,
     User,
     Venue,
@@ -565,21 +565,26 @@ class OrderAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at', 'payment_confirm_token']
 
 
-@admin.register(Payout)
-class PayoutAdmin(admin.ModelAdmin):
+@admin.register(SellerPayout)
+class SellerPayoutAdmin(admin.ModelAdmin):
     list_display = [
         'id',
         'seller',
         'order',
-        'total_sale_amount',
-        'platform_commission',
+        'total_paid',
+        'platform_fee',
         'net_payout',
-        'status',
+        'payout_status',
         'seller_bank_summary',
-        'paid_at',
+        'transferred_at',
         'created_at',
     ]
-    list_filter = ['status', 'created_at', 'paid_at']
+    list_filter = [
+        'payout_status',
+        ('seller', admin.RelatedOnlyFieldListFilter),
+        'created_at',
+        'transferred_at',
+    ]
     search_fields = [
         'seller__username',
         'seller__email',
@@ -591,24 +596,30 @@ class PayoutAdmin(admin.ModelAdmin):
     readonly_fields = [
         'created_at',
         'seller_bank_details_panel',
+        'seller_pending_total_panel',
         'order',
         'seller',
+        'total_paid',
+        'platform_fee',
+        'net_payout',
     ]
     list_select_related = ['seller', 'order']
     ordering = ['-created_at']
+    actions = ['mark_transferred', 'mark_cancelled']
     fieldsets = (
         (
-            'Payout',
+            'Seller payout',
             {
                 'fields': (
                     'order',
                     'seller',
-                    'status',
-                    'total_sale_amount',
-                    'platform_commission',
+                    'payout_status',
+                    'total_paid',
+                    'platform_fee',
                     'net_payout',
-                    'paid_at',
+                    'transferred_at',
                     'created_at',
+                    'seller_pending_total_panel',
                 ),
             },
         ),
@@ -620,6 +631,38 @@ class PayoutAdmin(admin.ModelAdmin):
         ),
     )
 
+    def changelist_view(self, request, extra_context=None):
+        response = super().changelist_view(request, extra_context=extra_context)
+        try:
+            seller_id = request.GET.get('seller__id__exact')
+            if seller_id and hasattr(response, 'context_data') and response.context_data:
+                pending_total = SellerPayout.total_pending_for_seller_id(int(seller_id))
+                count = SellerPayout.objects.filter(
+                    seller_id=int(seller_id),
+                    payout_status=SellerPayout.PayoutStatus.PENDING,
+                ).count()
+                self.message_user(
+                    request,
+                    f'Pending owed to this seller: ₪{pending_total} ({count} payout(s) awaiting transfer).',
+                    level=messages.INFO,
+                )
+        except (TypeError, ValueError, KeyError):
+            pass
+        return response
+
+    @admin.action(description='Mark selected payouts as transferred')
+    def mark_transferred(self, request, queryset):
+        updated = queryset.update(
+            payout_status=SellerPayout.PayoutStatus.TRANSFERRED,
+            transferred_at=timezone.now(),
+        )
+        self.message_user(request, f'Marked {updated} payout(s) as transferred.', level=messages.SUCCESS)
+
+    @admin.action(description='Mark selected payouts as cancelled')
+    def mark_cancelled(self, request, queryset):
+        updated = queryset.update(payout_status=SellerPayout.PayoutStatus.CANCELLED)
+        self.message_user(request, f'Marked {updated} payout(s) as cancelled.', level=messages.WARNING)
+
     @admin.display(description='Bank (seller)')
     def seller_bank_summary(self, obj):
         if not obj or not obj.seller_id:
@@ -629,6 +672,19 @@ class PayoutAdmin(admin.ModelAdmin):
         acct = (s.account_number or '').strip()
         tail = f'…{acct[-4:]}' if len(acct) >= 4 else (acct or '—')
         return f'{bank} / {tail}'
+
+    @admin.display(description='Seller pending total')
+    def seller_pending_total_panel(self, obj):
+        if not obj or not obj.seller_id:
+            return format_html('<span style="color:#64748b;">No seller linked</span>')
+        total = SellerPayout.total_pending_for_seller(obj.seller)
+        count = SellerPayout.pending_for_seller(obj.seller).count()
+        return format_html(
+            '<p style="margin:0;font-size:1.05rem;"><strong>Total pending owed to this seller:</strong> '
+            '₪{} <span style="color:#64748b;">({} pending payout(s))</span></p>',
+            total,
+            count,
+        )
 
     @admin.display(description='Seller bank details')
     def seller_bank_details_panel(self, obj):
@@ -652,6 +708,10 @@ class PayoutAdmin(admin.ModelAdmin):
             '<table style="border-collapse:collapse;direction:rtl;">{}</table>',
             mark_safe(lines),
         )
+
+
+# Backward-compatible admin alias
+PayoutAdmin = SellerPayoutAdmin
 
 
 @admin.register(Offer)

@@ -729,15 +729,17 @@ class Order(models.Model):
         ordering = ['-created_at']
 
 
-class Payout(models.Model):
+class SellerPayout(models.Model):
     """
-    Admin clearinghouse ledger: one row per paid order owed to the ticket seller.
+    Financial ledger: one row per paid order — platform fee vs seller net payout.
     """
 
-    class Status(models.TextChoices):
-        PENDING = 'PENDING', 'Pending'
-        PROCESSING = 'PROCESSING', 'Processing'
-        PAID = 'PAID', 'Paid'
+    class PayoutStatus(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        TRANSFERRED = 'transferred', 'Transferred'
+        CANCELLED = 'cancelled', 'Cancelled'
+
+    PLATFORM_FEE_RATE = Decimal('0.15')
 
     order = models.OneToOneField(
         Order,
@@ -747,54 +749,103 @@ class Payout(models.Model):
     seller = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
-        related_name='payouts',
+        related_name='seller_payouts',
     )
-    total_sale_amount = models.DecimalField(
+    total_paid = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        help_text='Total amount paid by the buyer',
+        help_text='Total amount the buyer paid via PayMe',
     )
-    platform_commission = models.DecimalField(
+    platform_fee = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        help_text='TRADETIX platform fees (buyer + seller service fees)',
+        help_text='TradeTix platform fee (15% of total_paid)',
     )
     net_payout = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        help_text='Amount owed to the seller (total_sale_amount − platform_commission)',
+        help_text='Amount owed to the seller (total_paid − platform_fee)',
     )
-    status = models.CharField(
+    payout_status = models.CharField(
         max_length=20,
-        choices=Status.choices,
-        default=Status.PENDING,
+        choices=PayoutStatus.choices,
+        default=PayoutStatus.PENDING,
         db_index=True,
     )
     created_at = models.DateTimeField(auto_now_add=True)
-    paid_at = models.DateTimeField(null=True, blank=True)
+    transferred_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the net payout was transferred to the seller',
+    )
 
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['status', '-created_at']),
-            models.Index(fields=['seller', 'status']),
+            models.Index(fields=['payout_status', '-created_at']),
+            models.Index(fields=['seller', 'payout_status']),
         ]
+        verbose_name = 'Seller payout'
+        verbose_name_plural = 'Seller payouts'
 
     def __str__(self):
-        return f'Payout #{self.pk} order={self.order_id} seller={self.seller_id} {self.status}'
+        return (
+            f'SellerPayout #{self.pk} order={self.order_id} seller={self.seller_id} '
+            f'{self.payout_status} net={self.net_payout}'
+        )
+
+    @classmethod
+    def compute_amounts(cls, total_paid: Decimal) -> tuple[Decimal, Decimal, Decimal]:
+        """Return (total_paid, platform_fee, net_payout) using the 15% platform rate."""
+        total = Decimal(total_paid).quantize(Decimal('0.01'))
+        fee = (total * cls.PLATFORM_FEE_RATE).quantize(Decimal('0.01'))
+        net = (total - fee).quantize(Decimal('0.01'))
+        return total, fee, net
+
+    @classmethod
+    def total_pending_for_seller(cls, seller) -> Decimal:
+        """Sum of net_payout still owed to this seller (pending status only)."""
+        from django.db.models import Sum
+
+        total = (
+            cls.objects.filter(seller=seller, payout_status=cls.PayoutStatus.PENDING)
+            .aggregate(sum=Sum('net_payout'))
+            .get('sum')
+        )
+        return Decimal(total or 0).quantize(Decimal('0.01'))
+
+    @classmethod
+    def total_pending_for_seller_id(cls, seller_id: int) -> Decimal:
+        from django.db.models import Sum
+
+        total = (
+            cls.objects.filter(seller_id=seller_id, payout_status=cls.PayoutStatus.PENDING)
+            .aggregate(sum=Sum('net_payout'))
+            .get('sum')
+        )
+        return Decimal(total or 0).quantize(Decimal('0.01'))
+
+    @classmethod
+    def pending_for_seller(cls, seller):
+        """All pending payout rows for a seller (for admin / reporting)."""
+        return cls.objects.filter(seller=seller, payout_status=cls.PayoutStatus.PENDING)
 
     def save(self, *args, **kwargs):
-        if self.total_sale_amount is not None and self.platform_commission is not None:
-            self.net_payout = (
-                Decimal(self.total_sale_amount) - Decimal(self.platform_commission)
-            ).quantize(Decimal('0.01'))
-        if self.status == self.Status.PAID and not self.paid_at:
-            self.paid_at = timezone.now()
+        if self.total_paid is not None:
+            _, fee, net = self.compute_amounts(self.total_paid)
+            self.platform_fee = fee
+            self.net_payout = net
+        if self.payout_status == self.PayoutStatus.TRANSFERRED and not self.transferred_at:
+            self.transferred_at = timezone.now()
         super().save(*args, **kwargs)
 
     def clean(self):
         if self.net_payout is not None and self.net_payout < 0:
             raise ValidationError({'net_payout': 'Net payout cannot be negative.'})
+
+
+# Backward-compatible alias (deprecated — use SellerPayout)
+Payout = SellerPayout
 
 
 class TicketAlert(models.Model):

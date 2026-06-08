@@ -1,5 +1,5 @@
 """
-Seller payout ledger helpers — create Payout rows when orders are paid.
+Seller payout ledger — create SellerPayout rows when orders are paid.
 """
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from django.db import transaction
 
-from .models import Order, Payout, User
+from .models import Order, SellerPayout, User
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,8 @@ def resolve_order_seller(order: Order) -> User | None:
 
 def payout_amounts_from_order(order: Order) -> tuple[Decimal, Decimal, Decimal] | None:
     """
-    Derive (total_sale_amount, platform_commission, net_payout) from order pricing fields.
+    Derive (total_paid, platform_fee, net_payout) from order pricing fields.
+    Platform fee is 15% of total_paid (PayMe amount).
     Returns None when the order is not ready for a ledger row.
     """
     if order.status not in ('paid', 'completed'):
@@ -44,21 +45,12 @@ def payout_amounts_from_order(order: Order) -> tuple[Decimal, Decimal, Decimal] 
     if total is None:
         return None
 
-    buyer_fee = _decimal_or_zero(order.buyer_service_fee)
-    seller_fee = _decimal_or_zero(order.seller_service_fee)
-    commission = (buyer_fee + seller_fee).quantize(Decimal('0.01'))
-
-    if order.net_seller_revenue is not None:
-        net = _decimal_or_zero(order.net_seller_revenue)
-    else:
-        net = (_decimal_or_zero(total) - commission).quantize(Decimal('0.01'))
-
-    return _decimal_or_zero(total), commission, net
+    return SellerPayout.compute_amounts(_decimal_or_zero(total))
 
 
-def ensure_payout_for_order(order: Order) -> Payout | None:
+def ensure_seller_payout_for_order(order: Order) -> SellerPayout | None:
     """
-    Create a PENDING Payout for a paid order if one does not exist.
+    Create a pending SellerPayout for a paid order if one does not exist.
     Idempotent for the same order.
     """
     if order.pk is None:
@@ -70,34 +62,39 @@ def ensure_payout_for_order(order: Order) -> Payout | None:
 
     seller = resolve_order_seller(order)
     if seller is None:
-        logger.warning('ensure_payout_for_order: no seller for order_id=%s', order.pk)
+        logger.warning('ensure_seller_payout_for_order: no seller for order_id=%s', order.pk)
         return None
 
-    total_sale_amount, platform_commission, net_payout = amounts
+    total_paid, platform_fee, net_payout = amounts
 
     with transaction.atomic():
-        existing = Payout.objects.filter(order_id=order.pk).first()
+        existing = SellerPayout.objects.filter(order_id=order.pk).first()
         if existing:
             return existing
 
-        payout = Payout(
+        payout = SellerPayout(
             order=order,
             seller=seller,
-            total_sale_amount=total_sale_amount,
-            platform_commission=platform_commission,
+            total_paid=total_paid,
+            platform_fee=platform_fee,
             net_payout=net_payout,
-            status=Payout.Status.PENDING,
+            payout_status=SellerPayout.PayoutStatus.PENDING,
         )
         payout.full_clean()
         payout.save()
         logger.info(
-            'Created Payout id=%s order_id=%s seller_id=%s net=%s',
+            'Created SellerPayout id=%s order_id=%s seller_id=%s net=%s fee=%s',
             payout.pk,
             order.pk,
             seller.pk,
             net_payout,
+            platform_fee,
         )
         return payout
+
+
+# Backward-compatible alias
+ensure_payout_for_order = ensure_seller_payout_for_order
 
 
 def sync_user_bank_fields_from_payout_details(user: User) -> bool:

@@ -5,8 +5,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
-from users.models import Event, Order, Payout, Ticket
-from users.payout_ledger import ensure_payout_for_order, payout_amounts_from_order
+from users.models import Event, Order, SellerPayout, Ticket
+from users.payout_ledger import ensure_seller_payout_for_order, payout_amounts_from_order
 
 User = get_user_model()
 
@@ -66,40 +66,45 @@ class PayoutLedgerTest(TestCase):
 
     def test_payout_save_recomputes_net_payout(self):
         order = self._paid_order()
-        payout = Payout.objects.get(order=order)
-        payout.total_sale_amount = Decimal('115.00')
-        payout.platform_commission = Decimal('15.00')
-        payout.net_payout = Decimal('0.00')
+        payout = SellerPayout.objects.get(order=order)
+        payout.total_paid = Decimal('200.00')
         payout.save()
-        self.assertEqual(payout.net_payout, Decimal('100.00'))
+        self.assertEqual(payout.platform_fee, Decimal('30.00'))
+        self.assertEqual(payout.net_payout, Decimal('170.00'))
 
     def test_payout_amounts_from_order(self):
         order = self._paid_order()
         amounts = payout_amounts_from_order(order)
-        self.assertEqual(amounts, (Decimal('115.00'), Decimal('15.00'), Decimal('100.00')))
+        self.assertEqual(amounts, (Decimal('115.00'), Decimal('17.25'), Decimal('97.75')))
 
-    def test_ensure_payout_for_order_idempotent(self):
+    def test_ensure_seller_payout_for_order_idempotent(self):
         order = self._paid_order()
-        first = ensure_payout_for_order(order)
-        second = ensure_payout_for_order(order)
+        first = ensure_seller_payout_for_order(order)
+        second = ensure_seller_payout_for_order(order)
         self.assertIsNotNone(first)
         self.assertEqual(first.pk, second.pk)
-        self.assertEqual(Payout.objects.filter(order=order).count(), 1)
-        self.assertEqual(first.net_payout, Decimal('100.00'))
-        self.assertEqual(first.status, Payout.Status.PENDING)
+        self.assertEqual(SellerPayout.objects.filter(order=order).count(), 1)
+        self.assertEqual(first.net_payout, Decimal('97.75'))
+        self.assertEqual(first.payout_status, SellerPayout.PayoutStatus.PENDING)
 
     def test_signal_creates_payout_when_order_marked_paid(self):
         order = self._paid_order(status='pending_payment')
         order.status = 'paid'
         order.save()
-        payout = Payout.objects.get(order=order)
+        payout = SellerPayout.objects.get(order=order)
         self.assertEqual(payout.seller_id, self.seller.id)
-        self.assertEqual(payout.net_payout, Decimal('100.00'))
+        self.assertEqual(payout.net_payout, Decimal('97.75'))
 
-    def test_paid_status_sets_paid_at(self):
+    def test_transferred_status_sets_transferred_at(self):
         order = self._paid_order()
-        payout = Payout.objects.get(order=order)
-        payout.status = Payout.Status.PAID
-        payout.paid_at = None
+        payout = SellerPayout.objects.get(order=order)
+        payout.payout_status = SellerPayout.PayoutStatus.TRANSFERRED
+        payout.transferred_at = None
         payout.save()
-        self.assertIsNotNone(payout.paid_at)
+        self.assertIsNotNone(payout.transferred_at)
+
+    def test_total_pending_for_seller(self):
+        order = self._paid_order()
+        ensure_seller_payout_for_order(order)
+        total = SellerPayout.total_pending_for_seller(self.seller)
+        self.assertEqual(total, Decimal('97.75'))
