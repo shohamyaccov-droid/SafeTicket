@@ -11,22 +11,28 @@
   filter: drop-shadow(0 0 4px rgba(37, 99, 235, 0.3));
 }
 
+.bloomfield-map-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: 100%;
+}
+
 .bloomfield-map-legend {
-  position: absolute;
-  bottom: 10px;
-  right: 10px;
-  z-index: 6;
+  position: static;
   display: flex;
   gap: 0.45rem;
   flex-wrap: wrap;
-  padding: 0.45rem 0.55rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  background: #fff;
   border: 1px solid #e2e8f0;
-  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
   font-size: 0.74rem;
   font-weight: 700;
   color: #334155;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .bloomfield-map-legend__item {

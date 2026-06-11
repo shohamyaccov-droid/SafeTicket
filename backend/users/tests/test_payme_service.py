@@ -15,11 +15,35 @@ from services.payme_service import (
     extract_payme_sale_url,
     extract_transaction_id,
     generate_payme_sale,
+    get_payme_sandbox_account_email,
+    is_payme_sandbox,
     money_to_agorot,
+    resolve_payme_customer_email,
 )
 
 
 class PayMeServiceUnitTests(SimpleTestCase):
+    @override_settings(
+        PAYME_API_URL='https://testpay.payme.io/api',
+        PAYME_IS_SANDBOX=True,
+        PAYME_SANDBOX_ACCOUNT_EMAIL='tradetix.support+1@gmail.com',
+    )
+    def test_sandbox_customer_email_resolution(self):
+        self.assertTrue(is_payme_sandbox())
+        self.assertEqual(get_payme_sandbox_account_email(), 'tradetix.support+1@gmail.com')
+        self.assertEqual(
+            resolve_payme_customer_email('production@tradetix.com'),
+            'tradetix.support+1@gmail.com',
+        )
+
+    @override_settings(
+        PAYME_API_URL='https://live.payme.io/api',
+        PAYME_IS_SANDBOX=False,
+    )
+    def test_production_customer_email_unchanged(self):
+        self.assertFalse(is_payme_sandbox())
+        self.assertEqual(resolve_payme_customer_email('buyer@example.com'), 'buyer@example.com')
+
     def test_money_to_agorot(self):
         self.assertEqual(money_to_agorot('115.00'), 11500)
         self.assertEqual(money_to_agorot(Decimal('99.99')), 9999)
@@ -43,6 +67,8 @@ class PayMeServiceUnitTests(SimpleTestCase):
     @override_settings(
         PAYME_SELLER_ID='MPL-TEST-SELLER',
         PAYME_API_URL='https://testpay.payme.io/api',
+        PAYME_IS_SANDBOX=True,
+        PAYME_SANDBOX_ACCOUNT_EMAIL='tradetix.support+1@gmail.com',
         API_PUBLIC_ORIGIN='http://127.0.0.1:8000',
         FRONTEND_ORIGIN='http://localhost:5173',
     )
@@ -59,7 +85,7 @@ class PayMeServiceUnitTests(SimpleTestCase):
         self.assertEqual(body['sale_price'], 11500)
         self.assertEqual(body['currency'], 'ILS')
         self.assertEqual(body['product_name'], 'Section 5 Ticket')
-        self.assertEqual(body['buyer_email'], 'buyer@example.com')
+        self.assertEqual(body['buyer_email'], 'tradetix.support+1@gmail.com')
         self.assertEqual(body['merchant_order_id'], '42')
         self.assertEqual(body['sale_return_url'], 'http://localhost/success')
         self.assertEqual(body['sale_cancel_url'], 'http://localhost/failure')

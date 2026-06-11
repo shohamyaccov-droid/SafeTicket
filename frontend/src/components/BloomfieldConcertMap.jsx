@@ -209,6 +209,7 @@ export default function BloomfieldConcertMap({
   };
 
   return (
+    <div className="bloomfield-map-shell">
     <div className="bloomfield-map-root relative h-full w-full min-h-[300px] max-h-[min(85vh,920px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="absolute top-2 left-2 z-[5] flex flex-col overflow-hidden rounded-md shadow-md">
         <button
@@ -399,6 +400,7 @@ export default function BloomfieldConcertMap({
           </svg>
         </div>
       </div>
+    </div>
 
       <div className="bloomfield-map-legend bloomfield-concert-map-legend" aria-hidden="true">
         <span className="bloomfield-map-legend__item">

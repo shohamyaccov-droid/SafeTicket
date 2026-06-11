@@ -1273,17 +1273,59 @@ class ProfileListingSerializer(serializers.ModelSerializer):
         return iso4217_for_ticket_listing(obj)
 
 
+class TicketAlertSubscribeSerializer(serializers.Serializer):
+    """Payload for POST /api/alerts/subscribe/ (guest or authenticated)."""
+    event = serializers.PrimaryKeyRelatedField(
+        queryset=Event.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    artist = serializers.PrimaryKeyRelatedField(
+        queryset=Artist.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_blank=True, max_length=32, default='')
+
+    def validate(self, attrs):
+        event = attrs.get('event')
+        artist = attrs.get('artist')
+        if event and artist:
+            raise serializers.ValidationError('Provide either event or artist, not both.')
+        if not event and not artist:
+            raise serializers.ValidationError('event or artist is required.')
+        return attrs
+
+
 class TicketAlertSerializer(serializers.ModelSerializer):
     """Serializer for TicketAlert model"""
-    event_name = serializers.CharField(source='event.name', read_only=True)
+    event_name = serializers.CharField(source='event.name', read_only=True, allow_null=True)
+    artist_name = serializers.CharField(source='artist.name', read_only=True, allow_null=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
     phone = serializers.CharField(required=False, allow_blank=True, max_length=32, default='')
 
     class Meta:
         model = TicketAlert
         fields = (
-            'id', 'event', 'event_name', 'email', 'phone', 'created_at', 'notified', 'notified_at',
+            'id', 'user', 'event', 'event_name', 'artist', 'artist_name',
+            'email', 'phone', 'created_at', 'notified', 'notified_at',
         )
-        read_only_fields = ('id', 'created_at', 'notified', 'notified_at')
+        read_only_fields = ('id', 'user', 'created_at', 'notified', 'notified_at')
+        extra_kwargs = {
+            'event': {'required': False, 'allow_null': True},
+            'artist': {'required': False, 'allow_null': True},
+            'email': {'required': False, 'allow_blank': True},
+        }
+
+    def validate(self, attrs):
+        event = attrs.get('event')
+        artist = attrs.get('artist')
+        if event and artist:
+            raise serializers.ValidationError('Provide either event or artist, not both.')
+        if not event and not artist:
+            raise serializers.ValidationError('event or artist is required.')
+        return attrs
 
 
 class OfferSerializer(serializers.ModelSerializer):

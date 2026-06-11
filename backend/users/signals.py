@@ -18,26 +18,34 @@ logger = logging.getLogger(__name__)
 @receiver(post_save, sender=Ticket)
 def notify_ticket_alerts(sender, instance, created, **kwargs):
     """
-    When a new ticket is created for an event, notify all users who signed up for alerts
+    When a new ticket is created for an event, notify event-level and artist-level subscribers.
     """
     try:
-        # Only process if this is a new ticket (created=True) and it's active
         if created and instance.status == 'active' and instance.event:
-            # Find all alerts for this event that haven't been notified yet
+            event = instance.event
             alerts = TicketAlert.objects.filter(
-                event=instance.event,
-                notified=False
+                event=event,
+                notified=False,
             )
-
-            # Print alert message for each email
             for alert in alerts:
-                print(f'Alerting {alert.email}')
-
-                # Mark as notified (but don't send actual email yet - just console print as requested)
+                print(f'Alerting {alert.email} (event {event.pk})')
                 alert.notified = True
                 from django.utils import timezone
                 alert.notified_at = timezone.now()
-                alert.save()
+                alert.save(update_fields=['notified', 'notified_at'])
+
+            if event.artist_id:
+                artist_alerts = TicketAlert.objects.filter(
+                    artist_id=event.artist_id,
+                    event__isnull=True,
+                    notified=False,
+                )
+                for alert in artist_alerts:
+                    print(f'Alerting {alert.email} (artist {event.artist_id})')
+                    alert.notified = True
+                    from django.utils import timezone
+                    alert.notified_at = timezone.now()
+                    alert.save(update_fields=['notified', 'notified_at'])
     except Exception:
         logger.exception('notify_ticket_alerts: suppressed error (ticket save must not fail)')
 

@@ -539,10 +539,15 @@ else:
     )
 
 # Payme.io — keys from environment only (sandbox: PAYME_API_URL test host).
+# Sandbox dashboard login (NOT production): tradetix.support+1@gmail.com
+PAYME_SANDBOX_ACCOUNT_EMAIL = (
+    os.environ.get('PAYME_SANDBOX_ACCOUNT_EMAIL') or 'tradetix.support+1@gmail.com'
+).strip().lower()
 PAYME_SELLER_ID = (os.environ.get('PAYME_SELLER_ID') or '').strip()
 PAYME_API_URL = (
     os.environ.get('PAYME_API_URL') or 'https://testpay.payme.io/api'
 ).strip().rstrip('/')
+PAYME_IS_SANDBOX = 'testpay.payme.io' in PAYME_API_URL
 PAYME_MERCHANT_ID = (os.environ.get('PAYME_MERCHANT_ID') or PAYME_SELLER_ID).strip()
 PAYME_API_KEY = (os.environ.get('PAYME_API_KEY') or '').strip()
 PAYME_API_SECRET = (os.environ.get('PAYME_API_SECRET') or '').strip()

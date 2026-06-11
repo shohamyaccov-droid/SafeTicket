@@ -1057,9 +1057,9 @@ const EventDetailsPage = () => {
 
       {ticketGroups.length === 0 ? (
         <div className="event-waitlist-hero-banner" dir="rtl">
-          <p className="event-waitlist-hero-text">אין כרטיסים זמינים כרגע — נעדכן את הרשימה כשמוכרים יפרסמו.</p>
+          <p className="event-waitlist-hero-text">No tickets available right now</p>
           <button type="button" className="event-waitlist-cta" onClick={() => setWaitlistOpen(true)}>
-            קבל התראה כשמתפנה כרטיס
+            התראת כרטיסים
           </button>
         </div>
       ) : null}
@@ -1532,9 +1532,9 @@ const EventDetailsPage = () => {
               </>
             ) : (
               <div className="empty-state">
-                <p>אין כרטיסים זמינים לאירוע זה כרגע</p>
+                <p>No tickets available right now</p>
                 <button type="button" className="event-waitlist-cta event-waitlist-cta--block" onClick={() => setWaitlistOpen(true)}>
-                  קבל התראה כשמתפנה כרטיס
+                  התראת כרטיסים
                 </button>
                 {(filters.minPrice || filters.maxPrice || filters.minQuantity) && (
                   <button

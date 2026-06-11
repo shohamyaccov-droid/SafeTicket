@@ -4,33 +4,19 @@ import { getFullImageUrl } from '../utils/formatters';
 /**
  * Homepage performer tile — one card per artist/show (multiple dates grouped).
  */
-export default function PerformerCard({
-  performerName,
-  imageUrl,
-  eventCount,
-  hasTickets,
-  waitlistOnly,
-  onNavigate,
-  onNotify,
-}) {
+export default function PerformerCard({ performerName, imageUrl, eventCount, onNavigate }) {
   const img = getFullImageUrl(imageUrl) || '';
   const fallback = `https://via.placeholder.com/400x400/0f172a/e2e8f0?text=${encodeURIComponent(
     (performerName || 'אמן').slice(0, 18)
   )}`;
 
-  const handleNotifyClick = (e) => {
-    e.stopPropagation();
-    onNotify?.();
-  };
-
   return (
     <article
-      className={`home-performer-card${waitlistOnly ? ' home-performer-card--waitlist' : ''}`}
-      role={waitlistOnly ? 'group' : 'link'}
+      className="home-performer-card"
+      role="link"
       tabIndex={0}
-      onClick={waitlistOnly ? undefined : onNavigate}
+      onClick={onNavigate}
       onKeyDown={(e) => {
-        if (waitlistOnly) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onNavigate?.();
@@ -42,9 +28,6 @@ export default function PerformerCard({
           <span className="home-performer-card__badge home-performer-card__badge--dates">
             {eventCount} מועדים
           </span>
-        ) : null}
-        {waitlistOnly ? (
-          <span className="home-performer-card__badge home-performer-card__badge--demand">ביקוש גבוה</span>
         ) : null}
         <img
           src={img || fallback}
@@ -64,13 +47,7 @@ export default function PerformerCard({
         ) : (
           <p className="home-performer-card__meta">מועד אחד</p>
         )}
-        {waitlistOnly ? (
-          <button type="button" className="home-performer-card__notify-btn" onClick={handleNotifyClick}>
-            התראת כרטיסים
-          </button>
-        ) : (
-          <p className="home-performer-card__cta">צפו במועדים ←</p>
-        )}
+        <p className="home-performer-card__cta">צפו במועדים ←</p>
       </div>
     </article>
   );

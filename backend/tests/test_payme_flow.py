@@ -24,6 +24,8 @@ User = get_user_model()
 
 @override_settings(
     PAYME_SELLER_ID='MPL-TEST-SELLER',
+    PAYME_IS_SANDBOX=True,
+    PAYME_SANDBOX_ACCOUNT_EMAIL='tradetix.support+1@gmail.com',
     PAYME_API_URL='https://testpay.payme.io/api',
     PAYME_WEBHOOK_SECRET='whsec_test',
 )

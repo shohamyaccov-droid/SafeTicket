@@ -186,6 +186,7 @@ from .serializers import (
     ArtistSerializer,
     ArtistListSerializer,
     TicketAlertSerializer,
+    TicketAlertSubscribeSerializer,
     OfferSerializer,
     ContactMessageSerializer,
     EventRequestSerializer,
@@ -3405,9 +3406,9 @@ class EventViewSet(viewsets.ModelViewSet):
             )
             .order_by('date', 'name')
         )
-        # Marketplace list: show events with inventory, plus high_demand “coming soon” rows (waitlist / lead magnet).
+        # Marketplace list: show all upcoming events (abundance UX — inventory hidden on cards).
         if self.action == 'list':
-            queryset = queryset.filter(Q(_active_tickets_total__gt=0) | Q(high_demand=True))
+            queryset = queryset.filter(status='פעיל')
 
         artist_id = qp.get('artist')
         if artist_id not in (None, ''):
@@ -3666,7 +3667,7 @@ class ArtistViewSet(viewsets.ModelViewSet):
         artist = get_object_or_404(Artist, pk=pk)
         now = timezone.now()
         events = event_queryset_defer_rollout_columns(
-            Event.objects.filter(artist=artist, date__gte=now)
+            Event.objects.filter(artist=artist, date__gte=now, status='פעיל')
             .select_related('artist')
             .annotate(
                 _active_tickets_total=Coalesce(
@@ -3674,7 +3675,6 @@ class ArtistViewSet(viewsets.ModelViewSet):
                     Value(0),
                 )
             )
-            .filter(Q(_active_tickets_total__gt=0) | Q(high_demand=True))
             .order_by('date', 'name')
         )
         serializer = EventListSerializer(events, many=True, context={'request': request})
@@ -3684,53 +3684,79 @@ class ArtistViewSet(viewsets.ModelViewSet):
 @csrf_required
 @api_view(['POST'])
 @permission_classes([AllowAny])
-def create_ticket_alert(request):
+def subscribe_ticket_alert(request):
     """
-    Create a ticket alert (waitlist) for an event with no listable inventory.
+    Subscribe to ticket alerts for a specific event or all future shows by an artist.
+    POST /api/alerts/subscribe/ or legacy POST /api/users/alerts/
     """
-    serializer = TicketAlertSerializer(data=request.data)
+    serializer = TicketAlertSubscribeSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     event = serializer.validated_data.get('event')
-    email = serializer.validated_data.get('email')
+    artist = serializer.validated_data.get('artist')
+    email = (serializer.validated_data.get('email') or '').strip().lower()
     phone = (serializer.validated_data.get('phone') or '').strip()
 
-    if not event or not email:
+    user = getattr(request, 'user', None)
+    if user and user.is_authenticated:
+        if not email:
+            email = (user.email or '').strip().lower()
+        linked_user = user
+    else:
+        linked_user = None
+
+    if not email:
         return Response(
-            {'error': 'event and email are required'},
-            status=status.HTTP_400_BAD_REQUEST
+            {'error': 'email is required'},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     from django.db.models import Sum
 
-    listed = (
-        Ticket.objects.filter(event=event, status='active').aggregate(
-            s=Sum('available_quantity'),
-        )['s']
-        or 0
-    )
-    if listed > 0:
-        return Response(
-            {
-                'error': 'לאירוע זה יש כרטיסים זמינים — ניתן לרכוש ישירות מהמודעות.',
-            },
-            status=status.HTTP_400_BAD_REQUEST,
+    if event:
+        listed = (
+            Ticket.objects.filter(event=event, status='active').aggregate(
+                s=Sum('available_quantity'),
+            )['s']
+            or 0
+        )
+        if listed > 0:
+            return Response(
+                {
+                    'error': 'לאירוע זה יש כרטיסים זמינים — ניתן לרכוש ישירות מהמודעות.',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        alert, created = TicketAlert.objects.get_or_create(
+            event=event,
+            email=email,
+            defaults={'notified': False, 'phone': phone, 'user': linked_user},
+        )
+    else:
+        alert, created = TicketAlert.objects.get_or_create(
+            artist=artist,
+            event=None,
+            email=email,
+            defaults={'notified': False, 'phone': phone, 'user': linked_user},
         )
 
-    alert, created = TicketAlert.objects.get_or_create(
-        event=event,
-        email=email,
-        defaults={'notified': False, 'phone': phone},
-    )
-    if not created and phone and alert.phone != phone:
-        alert.phone = phone
-        alert.save(update_fields=['phone'])
+    update_fields = []
+    if not created:
+        if phone and alert.phone != phone:
+            alert.phone = phone
+            update_fields.append('phone')
+        if linked_user and alert.user_id != linked_user.pk:
+            alert.user = linked_user
+            update_fields.append('user')
+        if update_fields:
+            alert.save(update_fields=update_fields)
 
     if not created:
         return Response(
             {
-                'message': 'You are already on the waitlist for this event',
+                'message': 'You are already subscribed to this alert',
                 'alert': TicketAlertSerializer(alert).data,
             },
             status=status.HTTP_200_OK,
@@ -3738,9 +3764,13 @@ def create_ticket_alert(request):
 
     alert.refresh_from_db()
     return Response(
-        {'message': 'Successfully added to waitlist', 'alert': TicketAlertSerializer(alert).data},
+        {'message': 'Successfully subscribed to ticket alerts', 'alert': TicketAlertSerializer(alert).data},
         status=status.HTTP_201_CREATED,
     )
+
+
+# Backward-compatible alias
+create_ticket_alert = subscribe_ticket_alert
 
 
 def _admin_staff_or_superuser(request):

@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 import { useState } from 'react';
 import { alertAPI } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
@@ -17,15 +18,26 @@ function validatePhone(phone) {
 }
 
 /**
- * Modal: collect email + optional phone for POST /users/alerts/ (TicketAlert).
+ * Modal: collect email + optional phone for ticket alert subscription (event or artist).
  */
-export default function WaitlistSignupModal({ event, onClose }) {
+export default function WaitlistSignupModal({ event, artist, onClose }) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  if (!event?.id) return null;
+  const isArtistScope = Boolean(artist?.id) && !event?.id;
+  const isEventScope = Boolean(event?.id);
+
+  if (!isArtistScope && !isEventScope) return null;
+
+  const title = isArtistScope
+    ? `התראת כרטיסים — ${artist.name || 'אמן'}`
+    : `התראת כרטיסים — ${event.name || 'אירוע'}`;
+
+  const subtitle = isArtistScope
+    ? 'נעדכן אתכם כשיתפרסמו כרטיסים לכל ההופעות הקרובות של האמן.'
+    : 'נעדכן אתכם כשיתפרסמו כרטיסים לאירוע זה.';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -42,11 +54,14 @@ export default function WaitlistSignupModal({ event, onClose }) {
     }
     setBusy(true);
     try {
-      await alertAPI.createAlert({
-        event: event.id,
+      const payload = {
         email: String(email).trim(),
         phone: String(phone).trim(),
-      });
+      };
+      if (isEventScope) payload.event = event.id;
+      if (isArtistScope) payload.artist = artist.id;
+
+      await alertAPI.subscribeAlert(payload);
       toastSuccess('נרשמתם בהצלחה — נעדכן כשיתווספו כרטיסים');
       onClose?.();
     } catch (err) {
@@ -55,6 +70,7 @@ export default function WaitlistSignupModal({ event, onClose }) {
         (typeof d?.error === 'string' && d.error) ||
         (typeof d?.detail === 'string' && d.detail) ||
         (typeof d?.email?.[0] === 'string' && d.email[0]) ||
+        (Array.isArray(d?.non_field_errors) && d.non_field_errors[0]) ||
         err.message ||
         'לא ניתן להירשם כרגע';
       setError(msg);
@@ -77,9 +93,9 @@ export default function WaitlistSignupModal({ event, onClose }) {
           ×
         </button>
         <h2 id="waitlist-modal-title" className="waitlist-modal-title">
-          קבלו התראה כשמתפנה כרטיס
+          {title}
         </h2>
-        <p className="waitlist-modal-event-name">{event.name}</p>
+        <p className="waitlist-modal-event-name">{subtitle}</p>
         <form onSubmit={handleSubmit} className="waitlist-modal-form" dir="rtl">
           <label className="waitlist-modal-label">
             אימייל *
@@ -113,8 +129,8 @@ export default function WaitlistSignupModal({ event, onClose }) {
               {error}
             </p>
           ) : null}
-          <button type="submit" className="waitlist-modal-submit" disabled={busy}>
-            {busy ? 'שולח...' : 'שמור הרשמה'}
+          <button type="submit" className="waitlist-modal-submit waitlist-modal-submit--prominent" disabled={busy}>
+            {busy ? 'שולח...' : 'התראת כרטיסים'}
           </button>
         </form>
       </div>

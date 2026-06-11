@@ -7,7 +7,6 @@ import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import EmptyState from '../components/EmptyState';
 import EventCard from '../components/EventCard';
 import PerformerCard from '../components/PerformerCard';
-import EmailAlertModal from '../components/EmailAlertModal';
 import BuyerGuarantee from '../components/BuyerGuarantee';
 import { toastError } from '../utils/toast';
 import {
@@ -46,7 +45,6 @@ const Home = () => {
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') ?? '');
   const resultsRef = useRef(null);
   const [datePickGroup, setDatePickGroup] = useState(null);
-  const [waitlistEvent, setWaitlistEvent] = useState(null);
   const qFromUrl = searchParams.get('q') ?? '';
 
   useEffect(() => {
@@ -119,11 +117,7 @@ const Home = () => {
     let list = [...(events || [])].filter((event) => {
       if (!event?.date) return false;
       if (new Date(event.date) < todayStart) return false;
-      const tc = event?.tickets_count ?? 0;
-      const hd = Boolean(event?.high_demand);
-      if (tc > 0) return true;
-      if (tc === 0 && hd) return true;
-      return false;
+      return true;
     });
 
     if (searchQuery.trim()) {
@@ -195,10 +189,6 @@ const Home = () => {
     [navigate]
   );
 
-  const openWaitlist = useCallback((event) => {
-    if (!event?.id) return;
-    setWaitlistEvent(event);
-  }, []);
 
   useEffect(() => {
     if (!datePickGroup) return undefined;
@@ -344,10 +334,7 @@ const Home = () => {
                       performerName={group.performerName}
                       imageUrl={group.imageUrl}
                       eventCount={group.eventCount}
-                      hasTickets={group.hasTickets}
-                      waitlistOnly={group.waitlistOnly}
                       onNavigate={() => handlePerformerNavigate(group)}
-                      onNotify={() => openWaitlist(group.events[0])}
                     />
                   </div>
                 ))
@@ -362,7 +349,6 @@ const Home = () => {
                       formatEventDateHe={formatEventDateHe}
                       variant={kind === 'lastMinute' ? 'lastMinute' : 'default'}
                       onNavigate={() => navigate(`/event/${ev.id}`)}
-                      onNotify={() => openWaitlist(ev)}
                     />
                   </div>
                 ))}
@@ -553,10 +539,6 @@ const Home = () => {
             </button>
           </div>
         </div>
-      ) : null}
-
-      {waitlistEvent ? (
-        <EmailAlertModal event={waitlistEvent} onClose={() => setWaitlistEvent(null)} />
       ) : null}
     </div>
   );

@@ -32,6 +32,7 @@ WEBHOOK_URL = '/api/payments/webhook/payme/'
 INIT_URL = '/api/users/payments/payme/init/'
 ORDERS_URL = '/api/users/orders/'
 RESERVE_URL = '/api/users/tickets/{ticket_id}/reserve/'
+PAYME_SANDBOX_BUYER_EMAIL = 'tradetix.support+1@gmail.com'
 
 PLATFORM_FEE_RATE = Decimal('0.15')
 MINOR_PDF = SimpleUploadedFile(
@@ -71,6 +72,8 @@ def assert_ledger_math(test_case, total_paid: Decimal, payout: SellerPayout) -> 
 @override_settings(
     PAYME_SELLER_ID='MPL-E2E-TEST-SELLER',
     PAYME_API_URL='https://testpay.payme.io/api',
+    PAYME_IS_SANDBOX=True,
+    PAYME_SANDBOX_ACCOUNT_EMAIL=PAYME_SANDBOX_BUYER_EMAIL,
     PAYME_WEBHOOK_SECRET='whsec_test',
 )
 class PayMeMarketplaceE2EBase(TestCase):
@@ -94,7 +97,7 @@ class PayMeMarketplaceE2EBase(TestCase):
         )
         self.buyer = User.objects.create_user(
             username='e2e_buyer',
-            email='e2e_buyer@test.invalid',
+            email=PAYME_SANDBOX_BUYER_EMAIL,
             password='test-pass-123',
             role='buyer',
         )

@@ -56,6 +56,30 @@
   margin-bottom: 1.5rem;
 }
 
+.compact-artist-header__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.85rem;
+  flex: 1;
+}
+
+.artist-notify-cta {
+  padding: 0.85rem 1.35rem;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.05rem;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(234, 88, 12, 0.35);
+}
+
+.artist-notify-cta:hover {
+  filter: brightness(1.05);
+}
+
 .compact-artist-image {
   width: 80px;
   height: 80px;

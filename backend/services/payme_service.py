@@ -74,6 +74,30 @@ def money_to_agorot(amount: Decimal | str | float | int) -> int:
     return int(value * 100)
 
 
+def is_payme_sandbox() -> bool:
+    """True when PAYME_API_URL points at PayMe test/sandbox host."""
+    return bool(getattr(settings, 'PAYME_IS_SANDBOX', False))
+
+
+def get_payme_sandbox_account_email() -> str:
+    """PayMe sandbox merchant dashboard account (distinct from production)."""
+    return (getattr(settings, 'PAYME_SANDBOX_ACCOUNT_EMAIL', '') or 'tradetix.support+1@gmail.com').strip().lower()
+
+
+def resolve_payme_customer_email(customer_email: str) -> str:
+    """
+    Map buyer email for PayMe generate-sale.
+
+    In sandbox, always use PAYME_SANDBOX_ACCOUNT_EMAIL so dev/test checkouts never
+    collide with the production PayMe merchant identity.
+    """
+    if is_payme_sandbox():
+        sandbox_email = get_payme_sandbox_account_email()
+        if sandbox_email:
+            return sandbox_email
+    return (customer_email or '').strip()
+
+
 def extract_payme_sale_url(response_data: Any) -> str | None:
     """Extract hosted checkout URL from PayMe generate-sale response."""
     if not isinstance(response_data, dict):
@@ -134,12 +158,14 @@ def build_standard_generate_sale_body(
     frontend = getattr(settings, 'FRONTEND_ORIGIN', 'http://localhost:5173').rstrip('/')
     order_id_str = str(order_id)
 
+    payme_buyer_email = resolve_payme_customer_email(customer_email)
+
     body: dict[str, Any] = {
         'seller_payme_id': cfg.seller_id,
         'sale_price': money_to_agorot(amount),
         'currency': currency.upper(),
         'product_name': ticket_name[:255],
-        'buyer_email': customer_email,
+        'buyer_email': payme_buyer_email,
         'merchant_order_id': order_id_str,
         'sale_return_url': success_url or f'{frontend}/checkout/success?order_id={order_id_str}',
         'sale_cancel_url': failure_url or f'{frontend}/checkout/failure?order_id={order_id_str}',

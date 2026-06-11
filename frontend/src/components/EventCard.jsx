@@ -3,14 +3,13 @@ import { getFullImageUrl } from '../utils/formatters';
 
 /**
  * Homepage event tile.
- * @param {'default'|'lastMinute'|'waitlist'} [variant]
+ * @param {'default'|'lastMinute'} [variant]
  * @param {number} [dateVariantCount] — multi-date badge when grouped (legacy)
  */
 export default function EventCard({
   event,
   formatEventDateHe,
   onNavigate,
-  onNotify,
   dateVariantCount,
   variant = 'default',
 }) {
@@ -29,23 +28,14 @@ export default function EventCard({
     typeof dateVariantCount === 'number' && Number.isFinite(dateVariantCount) && dateVariantCount > 1;
 
   const isLastMinute = variant === 'lastMinute';
-  const isWaitlist = variant === 'waitlist';
-
-  const handleNotify = (e) => {
-    e.stopPropagation();
-    onNotify?.();
-  };
 
   return (
     <article
-      className={`home-carousel-card${isLastMinute ? ' home-carousel-card--last-minute' : ''}${
-        isWaitlist ? ' home-carousel-card--waitlist' : ''
-      }`}
-      role={isWaitlist ? 'group' : 'link'}
+      className={`home-carousel-card${isLastMinute ? ' home-carousel-card--last-minute' : ''}`}
+      role="link"
       tabIndex={0}
-      onClick={isWaitlist ? undefined : onNavigate}
+      onClick={onNavigate}
       onKeyDown={(e) => {
-        if (isWaitlist) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onNavigate?.();
@@ -89,13 +79,7 @@ export default function EventCard({
           {multiDates ? `${dateVariantCount} תאריכים זמינים` : formatEventDateHe(event.date)}
         </p>
         {venueLine ? <p className="home-carousel-card__venue">{venueLine}</p> : null}
-        {isWaitlist ? (
-          <button type="button" className="home-carousel-card__notify-btn" onClick={handleNotify}>
-            התראת כרטיסים
-          </button>
-        ) : (
-          <p className="home-carousel-card__tickets">לרכישת כרטיסים</p>
-        )}
+        <p className="home-carousel-card__tickets">לרכישת כרטיסים</p>
       </div>
     </article>
   );

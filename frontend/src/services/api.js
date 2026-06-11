@@ -665,10 +665,12 @@ export const artistAPI = {
 };
 
 export const alertAPI = {
-  createAlert: async (data) => {
+  subscribeAlert: async (data) => {
     await ensureCsrfToken();
-    return api.post('/users/alerts/', data);
+    return api.post('/alerts/subscribe/', data);
   },
+  /** @deprecated use subscribeAlert */
+  createAlert: async (data) => alertAPI.subscribeAlert(data),
 };
 
 export const offerAPI = {

@@ -182,6 +182,7 @@ export default function BloomfieldStadiumMap({
     (pinHoverId != null && String(stableId) === String(pinHoverId));
 
   return (
+    <div className="bloomfield-map-shell">
     <div className="bloomfield-map-root relative w-full aspect-[1000/640] max-h-[min(540px,74vh)] min-h-[260px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="absolute top-2 left-2 z-[5] flex flex-col overflow-hidden rounded-md shadow-md">
         <button
@@ -475,6 +476,7 @@ export default function BloomfieldStadiumMap({
           </svg>
         </div>
       </div>
+    </div>
       <div className="bloomfield-map-legend" aria-hidden="true">
         <span className="bloomfield-map-legend__item">
           <i className="swatch swatch--available" /> זמין

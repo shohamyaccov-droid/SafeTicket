@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { artistAPI } from '../services/api';
-import EmailAlertModal from '../components/EmailAlertModal';
+import WaitlistSignupModal from '../components/WaitlistSignupModal';
 import { getFullImageUrl } from '../utils/formatters';
 import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
@@ -17,7 +17,6 @@ const ArtistEventsPage = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
-  const [selectedEvent, setSelectedEvent] = useState(null);
   const [showAlertModal, setShowAlertModal] = useState(false);
 
   useEffect(() => {
@@ -91,21 +90,9 @@ const ArtistEventsPage = () => {
     };
   }, [artistId, retryKey]);
 
-  const handleSeeTickets = (eventId) => {
-    navigate(`/event/${eventId}`);
-  };
-
-  const handleGetNotified = (event) => {
-    setSelectedEvent(event);
-    setShowAlertModal(true);
-  };
-
-  const handleAlertSuccess = () => {
-    // Optionally refresh events to update ticket counts
-    // For now, just close the modal
-    setShowAlertModal(false);
-    setSelectedEvent(null);
-  };
+  const upcomingEvents = events.filter(
+    (event) => event?.date && new Date(event.date) >= new Date(new Date().setHours(0, 0, 0, 0))
+  );
 
   if (loading) {
     return (
@@ -130,12 +117,10 @@ const ArtistEventsPage = () => {
 
   return (
     <div className="artist-events-container">
-      {/* Back Button */}
       <button onClick={() => navigate(-1)} className="back-button">
         ← חזרה
       </button>
 
-      {/* Compact Artist Header */}
       <div className="compact-artist-header">
         <img
           src={
@@ -151,66 +136,43 @@ const ArtistEventsPage = () => {
             e.currentTarget.src = `https://via.placeholder.com/400x300/0045af/ffffff?text=${encodeURIComponent(artist.name || 'Artist')}`;
           }}
         />
-        <h1 className="compact-artist-name">{artist.name}</h1>
+        <div className="compact-artist-header__text">
+          <h1 className="compact-artist-name">{artist.name}</h1>
+          <button type="button" className="artist-notify-cta" onClick={() => setShowAlertModal(true)}>
+            התראת כרטיסים
+          </button>
+        </div>
       </div>
 
-      {/* Events List */}
       <section className="events-list-section">
-        <h2 className="section-title">אירועים זמינים</h2>
-        {events.length === 0 ? (
+        <h2 className="section-title">מועדים קרובים</h2>
+        {upcomingEvents.length === 0 ? (
           <div className="empty-state">
-            <p>אין אירועים זמינים עבור {artist.name}</p>
+            <p>אין מועדים קרובים עבור {artist.name}</p>
           </div>
         ) : (
           <div className="events-table">
-            {events
-              .filter(event => event?.date && new Date(event.date) >= new Date(new Date().setHours(0, 0, 0, 0)))
-              .map((event) => {
-              const hasTickets = (event.tickets_count || 0) > 0;
-              return (
-                <div key={event.id} className="event-row">
-                  <div className="event-date">{formatEventDateTimeWithLocality(event.date, event)}</div>
-                  <div className="event-venue">{event.venue || 'מיקום לא צוין'}</div>
-                  <div className="event-city">{event.city || ''}</div>
-                  <div className="event-action">
-                    {hasTickets ? (
-                      <button 
-                        onClick={() => handleSeeTickets(event.id)}
-                        className="see-tickets-button"
-                      >
-                        צפה בכרטיסים
-                      </button>
-                    ) : (
-                      <button 
-                        onClick={() => handleGetNotified(event)}
-                        className="get-notified-button"
-                      >
-                        קבל התראה
-                      </button>
-                    )}
-                  </div>
+            {upcomingEvents.map((event) => (
+              <div key={event.id} className="event-row">
+                <div className="event-date">{formatEventDateTimeWithLocality(event.date, event)}</div>
+                <div className="event-venue">{event.venue || 'מיקום לא צוין'}</div>
+                <div className="event-city">{event.city || ''}</div>
+                <div className="event-action">
+                  <button onClick={() => navigate(`/event/${event.id}`)} className="see-tickets-button">
+                    צפה באירוע
+                  </button>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
       </section>
 
-      {/* Email Alert Modal */}
-      {showAlertModal && selectedEvent && (
-        <EmailAlertModal
-          event={selectedEvent}
-          onClose={() => {
-            setShowAlertModal(false);
-            setSelectedEvent(null);
-          }}
-          onSuccess={handleAlertSuccess}
-        />
-      )}
+      {showAlertModal ? (
+        <WaitlistSignupModal artist={artist} onClose={() => setShowAlertModal(false)} />
+      ) : null}
     </div>
   );
 };
 
 export default ArtistEventsPage;
-
-

@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -850,13 +851,31 @@ Payout = SellerPayout
 
 class TicketAlert(models.Model):
     """
-    Waitlist/Alert model for users to get notified when tickets become available for an event
+    Waitlist/Alert: notify when tickets become available for an event or any future show by an artist.
     """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='ticket_alerts',
+        null=True,
+        blank=True,
+        help_text='Registered user (optional — guests use email only)',
+    )
+    artist = models.ForeignKey(
+        'Artist',
+        on_delete=models.CASCADE,
+        related_name='ticket_alerts',
+        null=True,
+        blank=True,
+        help_text='Subscribe to all future shows for this artist',
+    )
     event = models.ForeignKey(
         'Event',
         on_delete=models.CASCADE,
         related_name='alerts',
-        help_text="The event to be notified about"
+        null=True,
+        blank=True,
+        help_text='Subscribe to a specific event',
     )
     email = models.EmailField(help_text="Email address to notify when tickets become available")
     phone = models.CharField(
@@ -868,16 +887,38 @@ class TicketAlert(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     notified = models.BooleanField(default=False, help_text="Whether this alert has been sent")
     notified_at = models.DateTimeField(null=True, blank=True, help_text="When the notification was sent")
-    
+
     class Meta:
         ordering = ['-created_at']
-        unique_together = [['event', 'email']]  # Prevent duplicate alerts for same event+email
+        constraints = [
+            models.UniqueConstraint(
+                fields=['event', 'email'],
+                condition=models.Q(event__isnull=False),
+                name='unique_ticket_alert_event_email',
+            ),
+            models.UniqueConstraint(
+                fields=['artist', 'email'],
+                condition=models.Q(artist__isnull=False, event__isnull=True),
+                name='unique_ticket_alert_artist_email',
+            ),
+        ]
         indexes = [
             models.Index(fields=['event', 'notified']),
+            models.Index(fields=['artist', 'notified']),
         ]
-    
+
+    def clean(self):
+        if not self.event_id and not self.artist_id:
+            raise ValidationError('TicketAlert requires event or artist.')
+        if self.event_id and self.artist_id:
+            raise ValidationError('TicketAlert cannot target both event and artist.')
+
     def __str__(self):
-        return f"Alert for {self.event.name} - {self.email}"
+        if self.event_id:
+            return f"Alert for {self.event.name} - {self.email}"
+        if self.artist_id:
+            return f"Alert for artist {self.artist.name} - {self.email}"
+        return f"Alert - {self.email}"
 
 
 class Offer(models.Model):
