@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from .payme_views import payme_init_checkout
+from .payout_views import admin_payout_mark_paid, admin_payouts_list, user_wallet
 from .views import (
     RegisterView,
     verify_email,
@@ -25,6 +26,7 @@ from .views import (
     ContactMessageViewSet,
     EventRequestViewSet,
     create_ticket_alert,
+    subscribe_ticket_alert,
     admin_pending_tickets,
     admin_approve_ticket,
     admin_reject_ticket,
@@ -54,6 +56,7 @@ urlpatterns = [
     path('token/refresh/', CookieTokenRefreshView.as_view(), name='token_refresh'),
     path('profile/', user_profile, name='profile'),
     path('me/upgrade-to-seller/', upgrade_to_seller, name='upgrade_to_seller'),
+    path('me/wallet/', user_wallet, name='user_wallet'),
     path('dashboard/', user_activity, name='user_activity'),
     path('orders/<int:order_id>/receipt/', order_receipt, name='order_receipt'),
     path('tickets/<int:ticket_id>/update-price/', update_ticket_price, name='update_ticket_price'),
@@ -66,6 +69,8 @@ urlpatterns = [
     path('admin/pending-tickets/', admin_pending_tickets, name='admin_pending_tickets'),
     path('admin/dashboard/stats/', admin_dashboard_stats, name='admin_dashboard_stats'),
     path('admin/transactions/', admin_transactions, name='admin_transactions'),
+    path('admin/payouts/', admin_payouts_list, name='admin_payouts_list'),
+    path('admin/payouts/<int:payout_id>/mark-paid/', admin_payout_mark_paid, name='admin_payout_mark_paid'),
     path('admin/orders/<int:order_id>/cancel/', admin_cancel_order, name='admin_cancel_order'),
     path('admin/tickets/<int:ticket_id>/approve/', admin_approve_ticket, name='admin_approve_ticket'),
     path('admin/tickets/<int:ticket_id>/reject/', admin_reject_ticket, name='admin_reject_ticket'),

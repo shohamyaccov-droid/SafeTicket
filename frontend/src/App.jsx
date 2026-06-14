@@ -13,9 +13,11 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Sell from './pages/Sell';
 import Profile from './pages/Profile';
+import ProfileWallet from './pages/ProfileWallet';
 import Dashboard from './pages/Dashboard';
 import AdminVerificationPage from './pages/AdminVerificationPage';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminPayoutsPage from './pages/AdminPayoutsPage';
 import AdminRoute from './components/AdminRoute';
 import FAQ from './pages/FAQ';
 import Contact from './pages/Contact';
@@ -117,7 +119,16 @@ function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/sell" element={<Sell />} />
               <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+              <Route path="/profile/wallet" element={<ProtectedRoute><ProfileWallet /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route
+                path="/admin-panel/payouts"
+                element={
+                  <AdminRoute>
+                    <AdminPayoutsPage />
+                  </AdminRoute>
+                }
+              />
               <Route
                 path="/admin-panel"
                 element={

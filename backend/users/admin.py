@@ -5,6 +5,7 @@ from datetime import timedelta
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import Sum
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -632,7 +633,29 @@ class SellerPayoutAdmin(admin.ModelAdmin):
     )
 
     def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        pending_qs = SellerPayout.objects.filter(payout_status=SellerPayout.PayoutStatus.PENDING)
+        all_qs = SellerPayout.objects.exclude(payout_status=SellerPayout.PayoutStatus.CANCELLED)
+        owed = pending_qs.aggregate(s=Sum('net_payout'))['s'] or Decimal('0')
+        revenue = all_qs.aggregate(s=Sum('platform_fee'))['s'] or Decimal('0')
+        extra_context['ledger_total_owed'] = Decimal(owed).quantize(Decimal('0.01'))
+        extra_context['ledger_platform_revenue'] = Decimal(revenue).quantize(Decimal('0.01'))
+        extra_context['ledger_pending_count'] = pending_qs.count()
         response = super().changelist_view(request, extra_context=extra_context)
+        try:
+            if hasattr(response, 'context_data') and response.context_data is not None:
+                response.context_data.update(extra_context)
+            self.message_user(
+                request,
+                (
+                    f'Ledger summary — Total owed to sellers: ₪{extra_context["ledger_total_owed"]} '
+                    f'({extra_context["ledger_pending_count"]} pending) · '
+                    f'Platform revenue (15% fees): ₪{extra_context["ledger_platform_revenue"]}'
+                ),
+                level=messages.INFO,
+            )
+        except (TypeError, ValueError, KeyError, AttributeError):
+            pass
         try:
             seller_id = request.GET.get('seller__id__exact')
             if seller_id and hasattr(response, 'context_data') and response.context_data:

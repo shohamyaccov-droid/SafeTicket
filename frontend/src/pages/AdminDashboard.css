@@ -431,6 +431,44 @@
   font-family: inherit;
 }
 
+.admin-muted {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.admin-bank-cell {
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.admin-bank-meta {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.admin-action-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 0.45rem 0.85rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.admin-action-btn--success {
+  background: #16a34a;
+  color: #fff;
+}
+
+.admin-action-btn--success:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.admin-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .admin-receipt-link-btn:hover:not(:disabled) {
   color: #003285;
 }

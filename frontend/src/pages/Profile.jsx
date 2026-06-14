@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authAPI, ticketAPI } from '../services/api';
 import {
@@ -235,6 +235,9 @@ const Profile = () => {
             הכרטיסים שלי למכירה ({listings.length})
           </button>
         )}
+        <Link to="/profile/wallet" className="tab-button tab-button--link">
+          הארנק שלי
+        </Link>
       </div>
 
       <div className="profile-content">

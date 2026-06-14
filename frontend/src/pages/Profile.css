@@ -93,6 +93,12 @@
   font-weight: 600;
 }
 
+.tab-button--link {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
 .profile-content {
   margin-top: 2rem;
 }

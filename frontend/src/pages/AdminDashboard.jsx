@@ -225,6 +225,9 @@ export default function AdminDashboard() {
             >
               ממתין לאימות ({pendingTickets.length})
             </button>
+            <Link to="/admin-panel/payouts" className="admin-dash-link-secondary">
+              תשלומים למוכרים
+            </Link>
             <Link to="/admin/verification" className="admin-dash-link-secondary">
               אימות (דף מלא)
             </Link>

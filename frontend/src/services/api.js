@@ -714,6 +714,11 @@ export const adminAPI = {
   getPendingTickets: () => api.get('/users/admin/pending-tickets/'),
   getDashboardStats: () => api.get('/users/admin/dashboard/stats/'),
   getTransactions: (params) => api.get('/users/admin/transactions/', { params }),
+  getPayouts: (params) => api.get('/users/admin/payouts/', { params }),
+  markPayoutPaid: async (payoutId) => {
+    await ensureCsrfToken();
+    return api.post(`/users/admin/payouts/${payoutId}/mark-paid/`, {});
+  },
   cancelOrder: async (orderId, data = {}) => {
     await ensureCsrfToken();
     return api.post(`/users/admin/orders/${orderId}/cancel/`, data);
@@ -726,6 +731,10 @@ export const adminAPI = {
     await ensureCsrfToken();
     return api.post(`/users/admin/tickets/${ticketId}/reject/`);
   },
+};
+
+export const walletAPI = {
+  getWallet: () => api.get('/users/me/wallet/'),
 };
 
 export const contactAPI = {
