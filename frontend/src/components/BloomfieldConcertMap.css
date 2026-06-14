@@ -29,10 +29,6 @@
   user-select: none;
 }
 
-.bloomfield-concert-map__seat-label--listed {
-  paint-order: stroke fill;
-}
-
 .bloomfield-concert-map-legend {
   flex-wrap: wrap;
   gap: 0.5rem 1rem;

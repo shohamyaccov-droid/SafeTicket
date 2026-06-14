@@ -13,6 +13,7 @@ import {
 } from '../utils/bloomfieldConcertGeometry';
 import './BloomfieldStadiumMap.css';
 import './BloomfieldConcertMap.css';
+import BloomfieldMapPriceTag from './BloomfieldMapPriceTag';
 
 const FILL_EMPTY = '#dbe4f3';
 const FILL_EMPTY_HOVER = '#a5b4fc';
@@ -71,28 +72,6 @@ function fillForPriceTier(minP, maxP, price) {
   const S = 36 + t * 34;
   const H = 142 + t * 12;
   return { fill: `hsl(${H}, ${S}%, ${L}%)`, tier: t };
-}
-
-function textColorsForTier(tier, has) {
-  if (!has) return { price: '#475569', label: '#64748b' };
-  if (tier >= 0.58) return { price: '#f8fafc', label: 'rgba(248,250,252,0.92)' };
-  return { price: '#0f172a', label: '#334155' };
-}
-
-/** Stack price + section label inside block bounds (viewBox units). */
-function inBlockTextLayout(b, priceLine) {
-  const { cx, cy } = blockCenter(b);
-  const minDim = Math.min(b.w, b.h);
-  let priceSize = Math.round(Math.min(44, Math.max(28, minDim * 0.44)));
-  let labelSize = Math.round(Math.min(30, Math.max(18, minDim * 0.28)));
-  const priceLen = String(priceLine || '').length;
-  if (priceLen > 8) priceSize = Math.round(priceSize * 0.8);
-  else if (priceLen > 6) priceSize = Math.round(priceSize * 0.9);
-  const lineGap = Math.max(6, Math.round(minDim * 0.07));
-  const stackH = priceSize + labelSize + lineGap;
-  const priceY = cy - stackH / 2 + priceSize * 0.42;
-  const labelY = priceY + priceSize * 0.52 + lineGap;
-  return { cx, priceY, labelY, priceSize, labelSize };
 }
 
 const VIEWBOX_PADDING = 40;
@@ -246,15 +225,6 @@ export default function BloomfieldConcertMap({
                 <stop offset="0%" stopColor="#4f46e5" />
                 <stop offset="100%" stopColor="#1e293b" />
               </linearGradient>
-              {CONCERT_BLOCKS.map((b) => {
-                const clipId = `bfc-clip-${b.id}`;
-                const clipPts = concertBlockPolygonPoints(b);
-                return (
-                  <clipPath key={clipId} id={clipId}>
-                    <polygon points={clipPts} />
-                  </clipPath>
-                );
-              })}
             </defs>
 
             <rect x={vbX} y={vbY} width={vbW} height={vbH} fill="#ffffff" />
@@ -319,7 +289,7 @@ export default function BloomfieldConcertMap({
               const isHover = hoverBlockId === sid;
               const rep = has ? firstRowInBlock(sid) : undefined;
               const raw = rep ? parseFloat(getTicketPrice(rep.firstTicket)) : NaN;
-              const { fill, tier } = has
+              const { fill } = has
                 ? fillForPriceTier(minP, maxP, raw)
                 : { fill: isHover ? FILL_EMPTY_HOVER : FILL_EMPTY, tier: 0 };
               const cur = rep ? resolveTicketCurrency(rep.firstTicket) : 'ILS';
@@ -327,8 +297,6 @@ export default function BloomfieldConcertMap({
                 has && Number.isFinite(raw) ? formatMoney(raw, cur) : '';
               const pts = concertBlockPolygonPoints(b);
               const { cx, cy } = blockCenter(b);
-              const colors = textColorsForTier(tier, has);
-              const labelLayout = has ? inBlockTextLayout(b, priceLine) : null;
 
               return (
                 <g key={sid}>
@@ -357,41 +325,21 @@ export default function BloomfieldConcertMap({
                     }}
                     aria-label={has ? `${b.label}, ${priceLine}` : b.label}
                   />
-                  {has && labelLayout ? (
-                    <g clipPath={`url(#bfc-clip-${sid})`}>
-                      <text
-                        className="bloomfield-concert-map__seat-label bloomfield-concert-map__seat-label--listed"
-                        textAnchor="middle"
-                        fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-                        style={{ direction: 'ltr', unicodeBidi: 'isolate', pointerEvents: 'none' }}
-                      >
-                        <tspan
-                          x={labelLayout.cx}
-                          y={labelLayout.priceY}
-                          fill={colors.price}
-                          fontSize={labelLayout.priceSize}
-                          fontWeight="800"
-                        >
-                          {priceLine}
-                        </tspan>
-                        <tspan
-                          x={labelLayout.cx}
-                          y={labelLayout.labelY}
-                          fill={colors.label}
-                          fontSize={labelLayout.labelSize}
-                          fontWeight="700"
-                        >
-                          {b.label}
-                        </tspan>
-                      </text>
-                    </g>
+                  {has && priceLine ? (
+                    <BloomfieldMapPriceTag
+                      cx={cx}
+                      cy={cy}
+                      priceLine={priceLine}
+                      width={b.w}
+                      height={b.h}
+                    />
                   ) : (
                     <text
                       className="bloomfield-concert-map__seat-label"
                       x={cx}
                       y={cy}
                       textAnchor="middle"
-                      dominantBaseline="central"
+                      dominantBaseline="middle"
                       fill="#475569"
                       fontSize={sid.length > 3 ? 28 : 32}
                       fontWeight="700"

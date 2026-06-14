@@ -18,6 +18,7 @@ import {
   PITCH_RY,
 } from '../utils/bloomfieldSectionGeometry';
 import './BloomfieldStadiumMap.css';
+import BloomfieldMapPriceTag, { menoraPriceTagMetrics } from './BloomfieldMapPriceTag';
 
 const FILL_DEFAULT = '#dbe4f3';
 const FILL_HOVER = '#a5b4fc';
@@ -27,7 +28,6 @@ const PITCH_GRASS = '#2f855a';
 const LINE_WHITE = '#ffffff';
 /** Muted labels (Viagogo reference); active listings on green use dark text for contrast */
 const TEXT_SECTION_MUTED = '#64748b';
-const TEXT_ON_GREEN = '#0f172a';
 
 const STROKE_INACTIVE_W = 1.5;
 const STROKE_HIGHLIGHT_W = 2.75;
@@ -225,13 +225,6 @@ export default function BloomfieldStadiumMap({
                 <stop offset="0%" stopColor="#1e3a8a" />
                 <stop offset="100%" stopColor="#312e81" />
               </linearGradient>
-              {safeSectionWedges
-                .filter((sec) => blocksWithListings.has(String(sec.id)))
-                .map((sec) => (
-                  <clipPath key={`clip-${sec.id}`} id={`bf-clip-${sec.id}`}>
-                    <path d={sec.d} />
-                  </clipPath>
-                ))}
             </defs>
 
             <rect width={VIEW_W} height={VIEW_H} fill="#f8fafc" />
@@ -274,46 +267,15 @@ export default function BloomfieldStadiumMap({
               const pin = pinsByBlock[sid];
               const priceLine = pin?.priceLine ?? '';
 
-              if (has && pin) {
-                const priceSize = priceLine.length > 7 ? 9.5 : 11;
-                const labelSize = 7.5;
-                const lineGap = 3;
-                const stackH = priceSize + labelSize + lineGap;
-                const priceY = sec.cy - stackH / 2 + priceSize * 0.42;
-                const labelY = priceY + priceSize * 0.52 + lineGap;
-
+              if (has && pin && priceLine) {
                 return (
-                  <g key={`lbl-${sid}`} clipPath={`url(#bf-clip-${sid})`}>
-                    <text
-                      textAnchor="middle"
-                      fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-                      style={{
-                        pointerEvents: 'none',
-                        userSelect: 'none',
-                        direction: 'ltr',
-                        unicodeBidi: 'isolate',
-                      }}
-                    >
-                      <tspan
-                        x={sec.cx}
-                        y={priceY}
-                        fill={TEXT_ON_GREEN}
-                        fontSize={priceSize}
-                        fontWeight="800"
-                      >
-                        {priceLine}
-                      </tspan>
-                      <tspan
-                        x={sec.cx}
-                        y={labelY}
-                        fill={TEXT_SECTION_MUTED}
-                        fontSize={labelSize}
-                        fontWeight="700"
-                      >
-                        {sec.faceLabel}
-                      </tspan>
-                    </text>
-                  </g>
+                  <BloomfieldMapPriceTag
+                    key={`lbl-${sid}`}
+                    cx={sec.cx}
+                    cy={sec.cy}
+                    priceLine={priceLine}
+                    metrics={menoraPriceTagMetrics(72, 28, priceLine)}
+                  />
                 );
               }
 
@@ -323,7 +285,7 @@ export default function BloomfieldStadiumMap({
                   x={sec.cx}
                   y={sec.cy}
                   textAnchor="middle"
-                  dominantBaseline="central"
+                  dominantBaseline="middle"
                   fill={TEXT_SECTION_MUTED}
                   fontSize="8.5"
                   fontWeight="600"

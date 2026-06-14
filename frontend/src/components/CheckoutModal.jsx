@@ -176,9 +176,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const navigate = useNavigate();
   /** Set `VITE_USE_PAYME=true` in frontend env to send buyers to Payme hosted checkout (test/sandbox). */
   const usePayme = import.meta.env.VITE_USE_PAYME === 'true';
-  /** Dev bypass while PayMe sandbox credentials are pending — requires backend DEBUG=True. */
-  const enableMockPayment =
-    import.meta.env.DEV || import.meta.env.VITE_ENABLE_MOCK_PAYMENT === 'true';
+  /** Always on in local dev (Vite dev server or localhost) — bypasses PayMe for E2E testing. */
+  const isLocalDev =
+    import.meta.env.DEV ||
+    (typeof window !== 'undefined' &&
+      /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname));
   const stepRef = useRef(step);
   stepRef.current = step;
   const guestEmailRef = useRef('');
@@ -1216,6 +1218,24 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             </div>
           </div>
 
+          {isLocalDev ? (
+            <button
+              type="button"
+              className="checkout-mock-payment-btn checkout-mock-payment-btn--prominent"
+              onClick={handleMockPayment}
+              disabled={loading || checkoutSucceeded || timeRemaining === 0}
+            >
+              {loading
+                ? (
+                  <>
+                    {paymentPhase === 'confirming_payment' ? 'מדמה תשלום…' : 'יוצר הזמנה…'}{' '}
+                    <span className="button-spinner" aria-hidden />
+                  </>
+                )
+                : 'סימולציית תשלום - עוקף PayMe'}
+            </button>
+          ) : null}
+
           <div className="ticket-summary">
             <h3>{ticket.event_name}</h3>
             <p>מיקום: {ticket.event_venue || ticket.venue}</p>
@@ -1451,29 +1471,6 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 {error || 'שגיאה לא ידועה'}
               </div>
             )}
-
-            {enableMockPayment ? (
-              <button
-                type="button"
-                className="checkout-mock-payment-btn"
-                onClick={handleMockPayment}
-                disabled={loading || checkoutSucceeded || timeRemaining === 0}
-              >
-                {loading && paymentPhase === 'confirming_payment'
-                  ? (
-                    <>
-                      מדמה תשלום… <span className="button-spinner" aria-hidden />
-                    </>
-                  )
-                  : loading
-                    ? (
-                      <>
-                        יוצר הזמנה… <span className="button-spinner" aria-hidden />
-                      </>
-                    )
-                    : 'Simulate Successful Payment (Dev Only)'}
-              </button>
-            ) : null}
             
             <div className="button-group checkout-buttons-row modal-actions">
               <button
