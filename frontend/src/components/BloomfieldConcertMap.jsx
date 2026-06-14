@@ -73,27 +73,26 @@ function fillForPriceTier(minP, maxP, price) {
   return { fill: `hsl(${H}, ${S}%, ${L}%)`, tier: t };
 }
 
-function availabilityLine(rep, floorPrice) {
-  const avail = rep.group?.available_count ?? 0;
-  const raw = parseFloat(getTicketPrice(rep.firstTicket));
-  const bf = rep.bloomfield;
-  if (bf?.isTopChoice) {
-    return 'Amazing';
-  }
-  if (avail > 0 && avail < 5) {
-    return `${avail} left`;
-  }
-  if (
-    Number.isFinite(raw) &&
-    Number.isFinite(floorPrice) &&
-    Math.abs(raw - floorPrice) < 0.02
-  ) {
-    return 'Best value';
-  }
-  if (avail >= 12) {
-    return `${avail} avail`;
-  }
-  return null;
+function textColorsForTier(tier, has) {
+  if (!has) return { price: '#475569', label: '#64748b' };
+  if (tier >= 0.58) return { price: '#f8fafc', label: 'rgba(248,250,252,0.92)' };
+  return { price: '#0f172a', label: '#334155' };
+}
+
+/** Stack price + section label inside block bounds (viewBox units). */
+function inBlockTextLayout(b, priceLine) {
+  const { cx, cy } = blockCenter(b);
+  const minDim = Math.min(b.w, b.h);
+  let priceSize = Math.round(Math.min(44, Math.max(28, minDim * 0.44)));
+  let labelSize = Math.round(Math.min(30, Math.max(18, minDim * 0.28)));
+  const priceLen = String(priceLine || '').length;
+  if (priceLen > 8) priceSize = Math.round(priceSize * 0.8);
+  else if (priceLen > 6) priceSize = Math.round(priceSize * 0.9);
+  const lineGap = Math.max(6, Math.round(minDim * 0.07));
+  const stackH = priceSize + labelSize + lineGap;
+  const priceY = cy - stackH / 2 + priceSize * 0.42;
+  const labelY = priceY + priceSize * 0.52 + lineGap;
+  return { cx, priceY, labelY, priceSize, labelSize };
 }
 
 const VIEWBOX_PADDING = 40;
@@ -172,8 +171,6 @@ export default function BloomfieldConcertMap({
     return m;
   }, [rows]);
 
-  const floorPrice = Number.isFinite(minP) ? minP : null;
-
   const firstRowInBlock = useCallback(
     (blockId) => {
       const list = blockRowsById[String(blockId)] ?? [];
@@ -249,6 +246,15 @@ export default function BloomfieldConcertMap({
                 <stop offset="0%" stopColor="#4f46e5" />
                 <stop offset="100%" stopColor="#1e293b" />
               </linearGradient>
+              {CONCERT_BLOCKS.map((b) => {
+                const clipId = `bfc-clip-${b.id}`;
+                const clipPts = concertBlockPolygonPoints(b);
+                return (
+                  <clipPath key={clipId} id={clipId}>
+                    <polygon points={clipPts} />
+                  </clipPath>
+                );
+              })}
             </defs>
 
             <rect x={vbX} y={vbY} width={vbW} height={vbH} fill="#ffffff" />
@@ -313,7 +319,7 @@ export default function BloomfieldConcertMap({
               const isHover = hoverBlockId === sid;
               const rep = has ? firstRowInBlock(sid) : undefined;
               const raw = rep ? parseFloat(getTicketPrice(rep.firstTicket)) : NaN;
-              const { fill } = has
+              const { fill, tier } = has
                 ? fillForPriceTier(minP, maxP, raw)
                 : { fill: isHover ? FILL_EMPTY_HOVER : FILL_EMPTY, tier: 0 };
               const cur = rep ? resolveTicketCurrency(rep.firstTicket) : 'ILS';
@@ -321,6 +327,8 @@ export default function BloomfieldConcertMap({
                 has && Number.isFinite(raw) ? formatMoney(raw, cur) : '';
               const pts = concertBlockPolygonPoints(b);
               const { cx, cy } = blockCenter(b);
+              const colors = textColorsForTier(tier, has);
+              const labelLayout = has ? inBlockTextLayout(b, priceLine) : null;
 
               return (
                 <g key={sid}>
@@ -349,59 +357,50 @@ export default function BloomfieldConcertMap({
                     }}
                     aria-label={has ? `${b.label}, ${priceLine}` : b.label}
                   />
-                  <text
-                    className="bloomfield-concert-map__seat-label"
-                    x={cx}
-                    y={cy}
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    fill={has ? '#1e293b' : '#475569'}
-                    fontSize={has ? (sid.length > 3 ? 26 : 30) : sid.length > 3 ? 28 : 32}
-                    fontWeight="700"
-                    fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-                  >
-                    {b.label}
-                  </text>
+                  {has && labelLayout ? (
+                    <g clipPath={`url(#bfc-clip-${sid})`}>
+                      <text
+                        className="bloomfield-concert-map__seat-label bloomfield-concert-map__seat-label--listed"
+                        textAnchor="middle"
+                        fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+                        style={{ direction: 'ltr', unicodeBidi: 'isolate', pointerEvents: 'none' }}
+                      >
+                        <tspan
+                          x={labelLayout.cx}
+                          y={labelLayout.priceY}
+                          fill={colors.price}
+                          fontSize={labelLayout.priceSize}
+                          fontWeight="800"
+                        >
+                          {priceLine}
+                        </tspan>
+                        <tspan
+                          x={labelLayout.cx}
+                          y={labelLayout.labelY}
+                          fill={colors.label}
+                          fontSize={labelLayout.labelSize}
+                          fontWeight="700"
+                        >
+                          {b.label}
+                        </tspan>
+                      </text>
+                    </g>
+                  ) : (
+                    <text
+                      className="bloomfield-concert-map__seat-label"
+                      x={cx}
+                      y={cy}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fill="#475569"
+                      fontSize={sid.length > 3 ? 28 : 32}
+                      fontWeight="700"
+                      fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+                    >
+                      {b.label}
+                    </text>
+                  )}
                 </g>
-              );
-            })}
-
-            {CONCERT_BLOCKS.map((b) => {
-              const sid = String(b.id);
-              if (!blocksWithListings.has(sid)) return null;
-              const rep = firstRowInBlock(sid);
-              if (!rep) return null;
-              const raw = parseFloat(getTicketPrice(rep.firstTicket));
-              const cur = resolveTicketCurrency(rep.firstTicket);
-              const priceLine = Number.isFinite(raw) ? formatMoney(raw, cur) : '';
-              const status = availabilityLine(rep, floorPrice);
-              const { cx } = blockCenter(b);
-              const tooltipW = 112;
-              const tooltipH = status ? 54 : 38;
-              const tooltipX = cx - tooltipW / 2;
-              const tooltipY = Math.max(2, b.y - tooltipH - 8);
-
-              return (
-                <foreignObject
-                  key={`tooltip-${sid}`}
-                  x={tooltipX}
-                  y={tooltipY}
-                  width={tooltipW}
-                  height={tooltipH}
-                  className="bloomfield-map-price-tooltip-fo"
-                >
-                  <div
-                    xmlns="http://www.w3.org/1999/xhtml"
-                    className="bloomfield-map-price-tooltip"
-                    aria-hidden="true"
-                  >
-                    <div className="bloomfield-map-price-tooltip__price">{priceLine}</div>
-                    {status ? (
-                      <div className="bloomfield-map-price-tooltip__label">{status}</div>
-                    ) : null}
-                    <div className="bloomfield-map-price-tooltip__section">{b.label}</div>
-                  </div>
-                </foreignObject>
               );
             })}
           </svg>

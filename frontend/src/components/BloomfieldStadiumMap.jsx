@@ -118,7 +118,6 @@ export default function BloomfieldStadiumMap({
   onSelectGroup,
   onHoverGroup,
 }) {
-  const [pinHoverId, setPinHoverId] = useState(null);
   const [hoverBlockId, setHoverBlockId] = useState(null);
   const panZoom = useVenueMapPanZoom({ minScale: 0.65, maxScale: 2.8, zoomStep: 0.14 });
 
@@ -143,7 +142,13 @@ export default function BloomfieldStadiumMap({
     return raw != null && raw !== '' ? String(raw) : null;
   }, [rows, highlightStableId]);
 
-  const pins = useMemo(() => layoutPins(rows), [rows]);
+  const pinsByBlock = useMemo(() => {
+    const m = {};
+    for (const p of layoutPins(rows)) {
+      m[p.blockId] = p;
+    }
+    return m;
+  }, [rows]);
 
   const firstRowInBlock = useCallback((blockId) => {
     const b = String(blockId);
@@ -173,10 +178,6 @@ export default function BloomfieldStadiumMap({
   const penW = PITCH_W * 0.42;
   const penD = PITCH_H * 0.2;
   const centerCircleR = Math.min(PITCH_W, PITCH_H) * 0.12;
-
-  const pinInverted = (stableId) =>
-    (highlightStableId != null && String(stableId) === String(highlightStableId)) ||
-    (pinHoverId != null && String(stableId) === String(pinHoverId));
 
   return (
     <div className="bloomfield-map-shell">
@@ -220,14 +221,17 @@ export default function BloomfieldStadiumMap({
             aria-label="Bloomfield stadium seating map"
           >
             <defs>
-              {/* ~Tailwind shadow-md for price pins */}
-              <filter id="bf-pin-shadow" x="-40%" y="-40%" width="180%" height="180%">
-                <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000000" floodOpacity="0.12" />
-              </filter>
               <linearGradient id="bf-stage-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="#1e3a8a" />
                 <stop offset="100%" stopColor="#312e81" />
               </linearGradient>
+              {safeSectionWedges
+                .filter((sec) => blocksWithListings.has(String(sec.id)))
+                .map((sec) => (
+                  <clipPath key={`clip-${sec.id}`} id={`bf-clip-${sec.id}`}>
+                    <path d={sec.d} />
+                  </clipPath>
+                ))}
             </defs>
 
             <rect width={VIEW_W} height={VIEW_H} fill="#f8fafc" />
@@ -267,6 +271,52 @@ export default function BloomfieldStadiumMap({
               if (!isRenderableWedge(sec)) return null;
               const sid = String(sec.id);
               const has = blocksWithListings.has(sid);
+              const pin = pinsByBlock[sid];
+              const priceLine = pin?.priceLine ?? '';
+
+              if (has && pin) {
+                const priceSize = priceLine.length > 7 ? 9.5 : 11;
+                const labelSize = 7.5;
+                const lineGap = 3;
+                const stackH = priceSize + labelSize + lineGap;
+                const priceY = sec.cy - stackH / 2 + priceSize * 0.42;
+                const labelY = priceY + priceSize * 0.52 + lineGap;
+
+                return (
+                  <g key={`lbl-${sid}`} clipPath={`url(#bf-clip-${sid})`}>
+                    <text
+                      textAnchor="middle"
+                      fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+                      style={{
+                        pointerEvents: 'none',
+                        userSelect: 'none',
+                        direction: 'ltr',
+                        unicodeBidi: 'isolate',
+                      }}
+                    >
+                      <tspan
+                        x={sec.cx}
+                        y={priceY}
+                        fill={TEXT_ON_GREEN}
+                        fontSize={priceSize}
+                        fontWeight="800"
+                      >
+                        {priceLine}
+                      </tspan>
+                      <tspan
+                        x={sec.cx}
+                        y={labelY}
+                        fill={TEXT_SECTION_MUTED}
+                        fontSize={labelSize}
+                        fontWeight="700"
+                      >
+                        {sec.faceLabel}
+                      </tspan>
+                    </text>
+                  </g>
+                );
+              }
+
               return (
                 <text
                   key={`lbl-${sid}`}
@@ -274,9 +324,9 @@ export default function BloomfieldStadiumMap({
                   y={sec.cy}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fill={has ? TEXT_ON_GREEN : TEXT_SECTION_MUTED}
+                  fill={TEXT_SECTION_MUTED}
                   fontSize="8.5"
-                  fontWeight={has ? '800' : '600'}
+                  fontWeight="600"
                   fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
                   style={{
                     pointerEvents: 'none',
@@ -364,56 +414,6 @@ export default function BloomfieldStadiumMap({
               strokeWidth="1.25"
             />
 
-            {pins.map((p) => {
-              const hasUrgency = Boolean(p.urgency);
-              const inverted = pinInverted(p.stableId);
-              const tooltipW = 112;
-              const tooltipH = hasUrgency ? (p.isBestPrice ? 62 : 54) : p.isBestPrice ? 50 : 38;
-              const tooltipX = -tooltipW / 2;
-              const tooltipY = -tooltipH - 10;
-
-              return (
-                <g
-                  key={p.blockId}
-                  transform={`translate(${p.x}, ${p.y})`}
-                  style={{ cursor: 'pointer' }}
-                  onMouseEnter={() => {
-                    setPinHoverId(p.stableId);
-                    onHoverGroup?.(p.stableId);
-                  }}
-                  onMouseLeave={() => {
-                    setPinHoverId(null);
-                    onHoverGroup?.(null);
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectGroup?.(p.stableId);
-                  }}
-                >
-                  <foreignObject
-                    x={tooltipX}
-                    y={tooltipY}
-                    width={tooltipW}
-                    height={tooltipH}
-                    className="bloomfield-map-price-tooltip-fo"
-                  >
-                    <div
-                      xmlns="http://www.w3.org/1999/xhtml"
-                      className={`bloomfield-map-price-tooltip${inverted ? ' bloomfield-map-price-tooltip--inverted' : ''}`}
-                      aria-hidden="true"
-                    >
-                      {p.isBestPrice ? (
-                        <div className="bloomfield-map-price-tooltip__best">Best value</div>
-                      ) : null}
-                      <div className="bloomfield-map-price-tooltip__price">{p.priceLine}</div>
-                      {hasUrgency ? (
-                        <div className="bloomfield-map-price-tooltip__urgency">{p.urgency}</div>
-                      ) : null}
-                    </div>
-                  </foreignObject>
-                </g>
-              );
-            })}
           </svg>
         </div>
       </div>
