@@ -2,9 +2,11 @@
 from django.urls import path
 
 from .grow_views import grow_payment_webhook
+from .mock_payment_views import mock_payment_success
 from .payme_views import payme_webhook
 
 urlpatterns = [
     path('webhook/', grow_payment_webhook, name='grow_payment_webhook'),
     path('webhook/payme/', payme_webhook, name='payme_webhook'),
+    path('mock-success/', mock_payment_success, name='mock_payment_success'),
 ]

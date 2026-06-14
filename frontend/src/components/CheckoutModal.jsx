@@ -12,7 +12,7 @@ import {
   formatAmountForCurrency,
   getTicketBaseNumeric,
 } from '../utils/priceFormat';
-import { toastError } from '../utils/toast';
+import { toastError, toastSuccess } from '../utils/toast';
 import { Analytics } from '../utils/analytics';
 import { downloadTicketFromAxiosBlob, ticketFileMimeFromAxiosHeaders } from '../utils/ticketDownload';
 import { BUYER_SERVICE_FEE_PERCENT } from '../constants/pricing';
@@ -176,6 +176,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const navigate = useNavigate();
   /** Set `VITE_USE_PAYME=true` in frontend env to send buyers to Payme hosted checkout (test/sandbox). */
   const usePayme = import.meta.env.VITE_USE_PAYME === 'true';
+  /** Dev bypass while PayMe sandbox credentials are pending — requires backend DEBUG=True. */
+  const enableMockPayment =
+    import.meta.env.DEV || import.meta.env.VITE_ENABLE_MOCK_PAYMENT === 'true';
   const stepRef = useRef(step);
   stepRef.current = step;
   const guestEmailRef = useRef('');
@@ -430,9 +433,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     setInfoStepBusy(false);
   };
 
-  const handlePaymentSubmit = async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const executeCheckout = async (mockBypass = false) => {
     if (checkoutSucceeded || transactionCompleteRef.current) {
       return;
     }
@@ -440,7 +441,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       return;
     }
     setError('');
-    if (!usePayme) {
+    if (!mockBypass && !usePayme) {
       const payErr = validateMockPaymentFields(paymentForm);
       if (payErr) {
         setError(payErr);
@@ -498,7 +499,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
       const finalTotal = totalAmount;
 
-      if (!usePayme) {
+      if (!mockBypass && !usePayme) {
         const paymentData = {
           ticket_id: ticket.id,
           amount: finalTotal,
@@ -600,6 +601,26 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       const pendingId = pendingOrder?.id;
       if (pendingId == null) {
         throw new Error('יצירת ההזמנה נכשלה — לא התקבל מזהה הזמנה');
+      }
+
+      if (mockBypass) {
+        setPaymentPhase('confirming_payment');
+        await ensureCsrfToken();
+        const mockPayload = { order_id: pendingId };
+        if (!user && guestForm?.email?.trim()) {
+          mockPayload.guest_email = guestForm.email.trim();
+        }
+        const mockRes = await paymentAPI.mockPaymentSuccess(mockPayload);
+        if (!mockRes.data?.finalized) {
+          throw new Error(mockRes.data?.error || 'סימולציית התשלום נכשלה');
+        }
+        transactionCompleteRef.current = true;
+        reservationRef.current = false;
+        Analytics.checkoutStart(ticket?.id);
+        toastSuccess('התשלום הושלם בהצלחה! הכרטיס נוסף לרכישות שלך.');
+        onClose?.();
+        navigate('/dashboard');
+        return;
       }
 
       if (usePayme) {
@@ -718,6 +739,18 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       setLoading(false);
       setPaymentPhase('idle');
     }
+  };
+
+  const handlePaymentSubmit = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    await executeCheckout(false);
+  };
+
+  const handleMockPayment = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    await executeCheckout(true);
   };
 
   const handleDownloadPDF = async (ticketId, index = null) => {
@@ -1418,6 +1451,29 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 {error || 'שגיאה לא ידועה'}
               </div>
             )}
+
+            {enableMockPayment ? (
+              <button
+                type="button"
+                className="checkout-mock-payment-btn"
+                onClick={handleMockPayment}
+                disabled={loading || checkoutSucceeded || timeRemaining === 0}
+              >
+                {loading && paymentPhase === 'confirming_payment'
+                  ? (
+                    <>
+                      מדמה תשלום… <span className="button-spinner" aria-hidden />
+                    </>
+                  )
+                  : loading
+                    ? (
+                      <>
+                        יוצר הזמנה… <span className="button-spinner" aria-hidden />
+                      </>
+                    )
+                    : 'Simulate Successful Payment (Dev Only)'}
+              </button>
+            ) : null}
             
             <div className="button-group checkout-buttons-row modal-actions">
               <button

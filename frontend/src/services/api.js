@@ -468,6 +468,10 @@ export const paymentAPI = {
     await ensureCsrfToken();
     return api.post('/users/payments/payme/init/', data);
   },
+  mockPaymentSuccess: async (data) => {
+    await ensureCsrfToken();
+    return api.post('/payments/mock-success/', data);
+  },
 };
 
 export const orderAPI = {
