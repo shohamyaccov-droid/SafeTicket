@@ -27,12 +27,17 @@
 
 /* Thumb-sized targets + iOS 16px inputs (prevents focus zoom) */
 .negotiation-action-btn,
-.negotiation-footer-actions .accept-button,
-.negotiation-footer-actions .reject-button,
 .negotiation-footer-counter .primary-button {
   min-height: 48px;
   padding-top: 0.65rem;
   padding-bottom: 0.65rem;
+  touch-action: manipulation;
+}
+
+.negotiation-footer-actions .accept-button,
+.negotiation-footer-actions .reject-button {
+  min-height: 40px;
+  padding: 0.45rem 0.75rem;
   touch-action: manipulation;
 }
 
@@ -68,9 +73,9 @@
   }
 
   .negotiation-modal-footer {
-    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
     flex-shrink: 0;
-    max-height: 48vh;
+    max-height: 34vh;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     box-sizing: border-box;
@@ -156,7 +161,7 @@
 /* Body - Chat Bubbles (min-height: 0 so flex child can shrink inside max-height modal) */
 .negotiation-modal-body {
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: 220px;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 1rem;
@@ -252,15 +257,16 @@
 
 .negotiation-footer-actions {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   width: 100%;
-  gap: 12px;
+  gap: 8px;
   box-sizing: border-box;
 }
 
 .negotiation-footer-actions .accept-button,
 .negotiation-footer-actions .reject-button {
-  width: 100%;
+  flex: 1 1 0;
+  min-width: 0;
   box-sizing: border-box;
 }
 

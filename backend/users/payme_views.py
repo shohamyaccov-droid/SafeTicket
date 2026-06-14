@@ -19,6 +19,7 @@ from .models import Order
 from .payments import (
     finalize_pending_order_to_paid,
     log_payme,
+    log_payme_dev,
     normalize_payme_webhook_status,
     verify_payme_webhook_request,
 )
@@ -58,6 +59,13 @@ def payme_webhook(request):
             'merchant_order_id': payload.get('merchant_order_id') or payload.get('merchantOrderId'),
             'status': payload.get('status') or payload.get('payment_status'),
         },
+    )
+    log_payme_dev(
+        'webhook_raw_payload',
+        order_id=None,
+        content_type=request.content_type,
+        byte_length=len(raw_body),
+        payload=payload,
     )
 
     oid_raw = (
@@ -106,13 +114,35 @@ def payme_webhook(request):
     order.save(update_fields=list(dict.fromkeys(update_fields)))
 
     log_payme('webhook_received', order_id=order_id, payload={'normalized': norm, 'transaction_id': tid})
+    log_payme_dev(
+        'webhook_verified',
+        order_id=order_id,
+        normalized_status=norm,
+        transaction_id=tid,
+        order_status_before=order.status,
+        payme_status_saved=order.payme_status,
+        verified=verified,
+    )
 
     if norm in ('success', 'authorized') and order.status == 'pending_payment':
         ok, err = finalize_pending_order_to_paid(order_id, source='payme_webhook')
+        log_payme_dev(
+            'webhook_finalize',
+            order_id=order_id,
+            finalized=ok,
+            error=err,
+            normalized_status=norm,
+        )
         if not ok:
             logger.warning('payme_webhook finalize failed order_id=%s err=%s', order_id, err)
             return Response({'received': True, 'finalized': False, 'reason': err}, status=status.HTTP_200_OK)
         order.refresh_from_db()
+        log_payme_dev(
+            'webhook_finalize_success',
+            order_id=order_id,
+            order_status_after=order.status,
+            ticket_status=getattr(order.ticket, 'status', None) if order.ticket_id else None,
+        )
         return Response({'received': True, 'finalized': True, 'order_status': order.status})
 
     if norm == 'failed':
@@ -202,6 +232,14 @@ def payme_init_checkout(request):
     order.payme_transaction_id = p_tid
     order.payme_status = 'initialized'
     order.save(update_fields=['payme_transaction_id', 'payme_status', 'updated_at'])
+
+    log_payme_dev(
+        'init_checkout_ready',
+        order_id=oid,
+        transaction_id=p_tid,
+        redirect_host=(payme_sale_url or '').split('/')[2] if payme_sale_url else None,
+        sandbox=PayMeSettings.from_django().api_url,
+    )
 
     return Response(
         {

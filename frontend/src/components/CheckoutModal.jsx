@@ -1164,7 +1164,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               </svg>
               <span className="checkout-reservation-banner-label">
                 {skipCartReserveForNegotiatedOffer
-                  ? 'הצעה מאושרת — יש לך עד 24 שעות להשלים את התשלום. זמן נותר:'
+                  ? 'הצעה מאושרת — יש לך עד 24 שעות להשלים את התשלום, או שרוכש אחר יקנה את הכרטיס (המוקדם מביניהם). זמן נותר:'
                   : 'רכישה ישירה: הכרטיס שמור ל-10 דקות · זמן נותר:'}
               </span>
               <span

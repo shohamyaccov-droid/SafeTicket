@@ -25,12 +25,9 @@ const STROKE_SECTION = '#ffffff';
 const FILL_ACTIVE = '#60a5fa';
 const PITCH_GRASS = '#2f855a';
 const LINE_WHITE = '#ffffff';
-const PIN_INVERTED = '#222222';
 /** Muted labels (Viagogo reference); active listings on green use dark text for contrast */
 const TEXT_SECTION_MUTED = '#64748b';
 const TEXT_ON_GREEN = '#0f172a';
-const ROSE_600 = '#e11d48';
-const BEST_BADGE_FILL = '#14532d';
 
 const STROKE_INACTIVE_W = 1.5;
 const STROKE_HIGHLIGHT_W = 2.75;
@@ -369,18 +366,11 @@ export default function BloomfieldStadiumMap({
 
             {pins.map((p) => {
               const hasUrgency = Boolean(p.urgency);
-              const bodyH = hasUrgency ? 34 : 26;
-              const bodyW = p.isBestPrice ? 118 : 100;
-              const pillR = bodyH / 2;
-              const bodyTop = -bodyH - 4;
               const inverted = pinInverted(p.stableId);
-              const bg = inverted ? PIN_INVERTED : '#ffffff';
-              const stroke = inverted ? '#404040' : '#f3f4f6';
-              const lineFill = inverted ? '#ffffff' : '#000000';
-              const urgentFill = inverted ? '#fda4af' : ROSE_600;
-
-              const priceY = hasUrgency ? bodyTop + 12 : bodyTop + bodyH / 2;
-              const urgentY = bodyTop + 24;
+              const tooltipW = 112;
+              const tooltipH = hasUrgency ? (p.isBestPrice ? 62 : 54) : p.isBestPrice ? 50 : 38;
+              const tooltipX = -tooltipW / 2;
+              const tooltipY = -tooltipH - 10;
 
               return (
                 <g
@@ -400,76 +390,27 @@ export default function BloomfieldStadiumMap({
                     onSelectGroup?.(p.stableId);
                   }}
                 >
-                  <g filter="url(#bf-pin-shadow)">
-                    <rect
-                      x={-bodyW / 2}
-                      y={bodyTop}
-                      width={bodyW}
-                      height={bodyH}
-                      rx={pillR}
-                      ry={pillR}
-                      fill={bg}
-                      stroke={stroke}
-                      strokeWidth={1}
-                    />
-                  </g>
-                  {p.isBestPrice ? (
-                    <g pointerEvents="none">
-                      <rect
-                        x={-bodyW / 2 + 7}
-                        y={bodyTop + (bodyH - 18) / 2}
-                        width={18}
-                        height={18}
-                        rx={4}
-                        ry={4}
-                        fill={BEST_BADGE_FILL}
-                      />
-                      <text
-                        x={-bodyW / 2 + 16}
-                        y={bodyTop + bodyH / 2}
-                        textAnchor="middle"
-                        dominantBaseline="central"
-                        fill="#ffffff"
-                        fontSize="10"
-                        fontWeight="800"
-                        style={{ direction: 'ltr' }}
-                      >
-                        $
-                      </text>
-                    </g>
-                  ) : null}
-                  <text
-                    x={p.isBestPrice ? 7 : 0}
-                    y={priceY}
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    fill={lineFill}
-                    fontSize="11.5"
-                    fontWeight="800"
-                    fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-                    style={{
-                      pointerEvents: 'none',
-                      direction: 'ltr',
-                      unicodeBidi: 'isolate',
-                    }}
+                  <foreignObject
+                    x={tooltipX}
+                    y={tooltipY}
+                    width={tooltipW}
+                    height={tooltipH}
+                    className="bloomfield-map-price-tooltip-fo"
                   >
-                    {p.priceLine}
-                  </text>
-                  {hasUrgency ? (
-                    <text
-                      x={p.isBestPrice ? 7 : 0}
-                      y={urgentY}
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      fill={urgentFill}
-                      fontSize="9.5"
-                      fontWeight="600"
-                      fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-                      style={{ pointerEvents: 'none', lineHeight: 1 }}
+                    <div
+                      xmlns="http://www.w3.org/1999/xhtml"
+                      className={`bloomfield-map-price-tooltip${inverted ? ' bloomfield-map-price-tooltip--inverted' : ''}`}
+                      aria-hidden="true"
                     >
-                      {p.urgency}
-                    </text>
-                  ) : null}
+                      {p.isBestPrice ? (
+                        <div className="bloomfield-map-price-tooltip__best">Best value</div>
+                      ) : null}
+                      <div className="bloomfield-map-price-tooltip__price">{p.priceLine}</div>
+                      {hasUrgency ? (
+                        <div className="bloomfield-map-price-tooltip__urgency">{p.urgency}</div>
+                      ) : null}
+                    </div>
+                  </foreignObject>
                 </g>
               );
             })}

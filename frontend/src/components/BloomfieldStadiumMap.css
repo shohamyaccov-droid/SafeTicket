@@ -59,3 +59,101 @@
 .bloomfield-map-legend .swatch--unavailable {
   background: #dbe4f3;
 }
+
+/* Floating price tooltips (concert + stadium maps) */
+.bloomfield-map-price-tooltip-fo {
+  overflow: visible;
+  pointer-events: none;
+}
+
+.bloomfield-map-price-tooltip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  min-height: 100%;
+  padding: 6px 10px;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow:
+    0 4px 14px rgba(15, 23, 42, 0.14),
+    0 1px 3px rgba(15, 23, 42, 0.08);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  text-align: center;
+  line-height: 1.2;
+  direction: ltr;
+}
+
+.bloomfield-map-price-tooltip--inverted {
+  background: #111827;
+  border-color: #374151;
+  color: #f9fafb;
+}
+
+.bloomfield-map-price-tooltip__price {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.bloomfield-map-price-tooltip--inverted .bloomfield-map-price-tooltip__price {
+  color: #f9fafb;
+}
+
+.bloomfield-map-price-tooltip__label,
+.bloomfield-map-price-tooltip__best {
+  font-size: 10px;
+  font-weight: 700;
+  color: #0ea5e9;
+  white-space: nowrap;
+}
+
+.bloomfield-map-price-tooltip__best {
+  color: #059669;
+}
+
+.bloomfield-map-price-tooltip--inverted .bloomfield-map-price-tooltip__label,
+.bloomfield-map-price-tooltip--inverted .bloomfield-map-price-tooltip__best {
+  color: #6ee7b7;
+}
+
+.bloomfield-map-price-tooltip__urgency {
+  font-size: 10px;
+  font-weight: 600;
+  color: #e11d48;
+  white-space: nowrap;
+}
+
+.bloomfield-map-price-tooltip--inverted .bloomfield-map-price-tooltip__urgency {
+  color: #fda4af;
+}
+
+.bloomfield-map-price-tooltip__section {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .bloomfield-map-price-tooltip {
+    padding: 5px 8px;
+    border-radius: 8px;
+  }
+
+  .bloomfield-map-price-tooltip__price {
+    font-size: 12px;
+  }
+
+  .bloomfield-map-price-tooltip__label,
+  .bloomfield-map-price-tooltip__best,
+  .bloomfield-map-price-tooltip__urgency,
+  .bloomfield-map-price-tooltip__section {
+    font-size: 9px;
+  }
+}

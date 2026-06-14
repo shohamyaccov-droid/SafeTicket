@@ -1236,7 +1236,9 @@
 }
 
 .checkout-reservation-banner-label {
-  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.35;
 }
 
 @media (max-width: 640px) {

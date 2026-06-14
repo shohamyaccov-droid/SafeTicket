@@ -68,6 +68,39 @@ def _money_to_agorot(amount: Decimal | str | float | int) -> int:
     return int(d * 100)
 
 
+def _dev_payme_payload(payload: Any) -> Any:
+    """Sandbox-friendly payload view: keep status/ids, mask secrets and PII."""
+    if isinstance(payload, dict):
+        out: dict[str, Any] = {}
+        for k, v in payload.items():
+            kl = str(k).lower()
+            if any(part in kl for part in ('secret', 'signature', 'api_key', 'authorization', 'password')):
+                out[str(k)] = '***'
+            elif any(part in kl for part in ('email', 'phone', 'buyer_name')):
+                out[str(k)] = '***'
+            elif isinstance(v, dict):
+                out[str(k)] = _dev_payme_payload(v)
+            elif isinstance(v, list):
+                out[str(k)] = [_dev_payme_payload(x) if isinstance(x, dict) else x for x in v[:20]]
+            else:
+                out[str(k)] = v
+        return out
+    return payload
+
+
+def log_payme_dev(stage: str, *, order_id: int | None = None, **fields: Any) -> None:
+    """
+    Verbose Payme trace when DEBUG=True (logger + stdout) for sandbox E2E QA.
+    Never logs API secrets; emails are masked.
+    """
+    if not getattr(settings, 'DEBUG', False):
+        return
+    safe = {k: _dev_payme_payload(v) for k, v in fields.items()}
+    msg = f'[PayMe SANDBOX DEBUG] {stage} order_id={order_id} fields={safe}'
+    logger.info(msg)
+    print(msg, flush=True)
+
+
 def log_payme(stage: str, *, order_id: int | None = None, payload: Any = None, response: Any = None, exc: BaseException | None = None) -> None:
     """Structured Payme logging (never log raw API secrets)."""
     extra = {'payme_stage': stage, 'order_id': order_id}

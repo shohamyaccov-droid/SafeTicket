@@ -73,13 +73,6 @@ function fillForPriceTier(minP, maxP, price) {
   return { fill: `hsl(${H}, ${S}%, ${L}%)`, tier: t };
 }
 
-function labelColorsForTier(tier) {
-  if (tier >= 0.58) {
-    return { main: '#f8fafc', sub: 'rgba(248,250,252,0.88)', sec: 'rgba(248,250,252,0.78)' };
-  }
-  return { main: '#0f172a', sub: '#334155', sec: '#1e293b' };
-}
-
 function availabilityLine(rep, floorPrice) {
   const avail = rep.group?.available_count ?? 0;
   const raw = parseFloat(getTicketPrice(rep.firstTicket));
@@ -320,18 +313,14 @@ export default function BloomfieldConcertMap({
               const isHover = hoverBlockId === sid;
               const rep = has ? firstRowInBlock(sid) : undefined;
               const raw = rep ? parseFloat(getTicketPrice(rep.firstTicket)) : NaN;
-              const { fill, tier } = has
+              const { fill } = has
                 ? fillForPriceTier(minP, maxP, raw)
                 : { fill: isHover ? FILL_EMPTY_HOVER : FILL_EMPTY, tier: 0 };
               const cur = rep ? resolveTicketCurrency(rep.firstTicket) : 'ILS';
               const priceLine =
                 has && Number.isFinite(raw) ? formatMoney(raw, cur) : '';
-              const status = rep ? availabilityLine(rep, floorPrice) : null;
-              const { main, sub, sec } = has ? labelColorsForTier(tier) : { main: '#64748b', sub: '#94a3b8', sec: '#64748b' };
               const pts = concertBlockPolygonPoints(b);
               const { cx, cy } = blockCenter(b);
-              const lineCount = 1 + (status ? 1 : 0) + 1;
-              const startY = cy - (lineCount === 2 ? 22 : lineCount === 3 ? 44 : 16);
 
               return (
                 <g key={sid}>
@@ -360,41 +349,59 @@ export default function BloomfieldConcertMap({
                     }}
                     aria-label={has ? `${b.label}, ${priceLine}` : b.label}
                   />
-                  {has ? (
-                    <text
-                      className="bloomfield-concert-map__seat-label"
-                      textAnchor="middle"
-                      fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-                      style={{ direction: 'ltr', unicodeBidi: 'isolate' }}
-                    >
-                      <tspan x={cx} y={startY} fill={main} fontSize="34" fontWeight="800">
-                        {priceLine}
-                      </tspan>
-                      {status ? (
-                        <tspan x={cx} dy="30" fill={sub} fontSize="24" fontWeight="700">
-                          {status}
-                        </tspan>
-                      ) : null}
-                      <tspan x={cx} dy={status ? '28' : '30'} fill={sec} fontSize="30" fontWeight="800">
-                        {b.label}
-                      </tspan>
-                    </text>
-                  ) : (
-                    <text
-                      className="bloomfield-concert-map__seat-label"
-                      x={cx}
-                      y={cy}
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      fill="#475569"
-                      fontSize={sid.length > 3 ? 28 : 32}
-                      fontWeight="700"
-                      fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-                    >
-                      {b.label}
-                    </text>
-                  )}
+                  <text
+                    className="bloomfield-concert-map__seat-label"
+                    x={cx}
+                    y={cy}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fill={has ? '#1e293b' : '#475569'}
+                    fontSize={has ? (sid.length > 3 ? 26 : 30) : sid.length > 3 ? 28 : 32}
+                    fontWeight="700"
+                    fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+                  >
+                    {b.label}
+                  </text>
                 </g>
+              );
+            })}
+
+            {CONCERT_BLOCKS.map((b) => {
+              const sid = String(b.id);
+              if (!blocksWithListings.has(sid)) return null;
+              const rep = firstRowInBlock(sid);
+              if (!rep) return null;
+              const raw = parseFloat(getTicketPrice(rep.firstTicket));
+              const cur = resolveTicketCurrency(rep.firstTicket);
+              const priceLine = Number.isFinite(raw) ? formatMoney(raw, cur) : '';
+              const status = availabilityLine(rep, floorPrice);
+              const { cx } = blockCenter(b);
+              const tooltipW = 112;
+              const tooltipH = status ? 54 : 38;
+              const tooltipX = cx - tooltipW / 2;
+              const tooltipY = Math.max(2, b.y - tooltipH - 8);
+
+              return (
+                <foreignObject
+                  key={`tooltip-${sid}`}
+                  x={tooltipX}
+                  y={tooltipY}
+                  width={tooltipW}
+                  height={tooltipH}
+                  className="bloomfield-map-price-tooltip-fo"
+                >
+                  <div
+                    xmlns="http://www.w3.org/1999/xhtml"
+                    className="bloomfield-map-price-tooltip"
+                    aria-hidden="true"
+                  >
+                    <div className="bloomfield-map-price-tooltip__price">{priceLine}</div>
+                    {status ? (
+                      <div className="bloomfield-map-price-tooltip__label">{status}</div>
+                    ) : null}
+                    <div className="bloomfield-map-price-tooltip__section">{b.label}</div>
+                  </div>
+                </foreignObject>
               );
             })}
           </svg>
