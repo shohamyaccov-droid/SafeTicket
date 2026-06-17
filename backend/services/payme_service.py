@@ -325,3 +325,7 @@ def generate_payme_sale_for_order(
         success_url=success_url,
         failure_url=failure_url,
     )
+
+
+# Alias for docs / external integrations
+create_payme_sale = generate_payme_sale

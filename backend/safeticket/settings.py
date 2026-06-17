@@ -547,7 +547,8 @@ PAYME_SELLER_ID = (os.environ.get('PAYME_SELLER_ID') or '').strip()
 PAYME_API_URL = (
     os.environ.get('PAYME_API_URL') or 'https://testpay.payme.io/api'
 ).strip().rstrip('/')
-PAYME_IS_SANDBOX = 'testpay.payme.io' in PAYME_API_URL
+_PAYME_SANDBOX_HOSTS = ('testpay.payme.io', 'preprod.paymeservice.com', 'sandbox.payme.io')
+PAYME_IS_SANDBOX = any(host in PAYME_API_URL for host in _PAYME_SANDBOX_HOSTS)
 PAYME_MERCHANT_ID = (os.environ.get('PAYME_MERCHANT_ID') or PAYME_SELLER_ID).strip()
 PAYME_API_KEY = (os.environ.get('PAYME_API_KEY') or '').strip()
 PAYME_API_SECRET = (os.environ.get('PAYME_API_SECRET') or '').strip()
