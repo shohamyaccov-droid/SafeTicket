@@ -169,11 +169,12 @@ class PaymeWebhookFlowTests(TestCase):
         self.assertEqual(self.order.status, 'paid')
 
     def test_webhook_marks_paid_form_urlencoded_with_payme_sale_code_fallback(self):
-        """Live PayMe callbacks may send our order reference as payme_sale_code."""
+        """Live PayMe callbacks send PayMe's sale code, which is stored as payme_transaction_id."""
+        self.order.payme_transaction_id = '15959553'
+        self.order.save(update_fields=['payme_transaction_id'])
         payload = {
-            'payme_sale_code': str(self.order.id),
+            'payme_sale_code': '15959553',
             'status': 'success',
-            'transaction_id': 'webhook_txn_1',
             'sale_price': '11500',
             'currency': 'ILS',
         }
@@ -196,7 +197,7 @@ class PaymeWebhookFlowTests(TestCase):
         )
         self.assertEqual(res.status_code, 400)
 
-    def test_webhook_rejects_missing_merchant_order_id(self):
+    def test_webhook_rejects_unknown_payme_transaction_id(self):
         payload = {'status': 'success', 'transaction_id': 'x'}
         body = json.dumps(payload).encode('utf-8')
         sig = hmac.new(b'whsec_test', body, hashlib.sha256).hexdigest()
@@ -206,7 +207,7 @@ class PaymeWebhookFlowTests(TestCase):
             content_type='application/json',
             HTTP_X_PAYME_SIGNATURE=sig,
         )
-        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.status_code, 404)
 
     def test_webhook_idempotent_when_already_paid(self):
         self.order.status = 'paid'

@@ -278,7 +278,7 @@ class PayMeFraudFailureE2ETests(PayMeMarketplaceE2EBase):
         self.assertEqual(res.status_code, 400)
         self._assert_checkout_still_pending()
 
-    def test_webhook_missing_merchant_order_id_does_not_finalize(self):
+    def test_webhook_missing_merchant_order_id_with_valid_transaction_finalizes(self):
         payload = {
             'status': 'success',
             'transaction_id': 'txn_fraud_guard',
@@ -286,8 +286,11 @@ class PayMeFraudFailureE2ETests(PayMeMarketplaceE2EBase):
             'currency': 'ILS',
         }
         res = self._post_signed_webhook(payload)
-        self.assertEqual(res.status_code, 400)
-        self._assert_checkout_still_pending()
+        self.assertEqual(res.status_code, 200)
+        self.order.refresh_from_db()
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.order.status, 'paid')
+        self.assertEqual(self.ticket.status, 'sold')
 
     def test_webhook_unknown_order_does_not_finalize(self):
         payload = {
@@ -298,7 +301,7 @@ class PayMeFraudFailureE2ETests(PayMeMarketplaceE2EBase):
             'currency': 'ILS',
         }
         res = self._post_signed_webhook(payload)
-        self.assertEqual(res.status_code, 404)
+        self.assertEqual(res.status_code, 403)
         self._assert_checkout_still_pending()
 
     @override_settings(PAYME_IS_SANDBOX=False)
@@ -311,7 +314,7 @@ class PayMeFraudFailureE2ETests(PayMeMarketplaceE2EBase):
     def test_webhook_transaction_id_mismatch_does_not_finalize(self):
         payload = self._success_webhook_payload(self.order, transaction_id='txn_attacker')
         res = self._post_signed_webhook(payload)
-        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.status_code, 404)
         self._assert_checkout_still_pending()
 
     def test_webhook_amount_mismatch_does_not_finalize(self):
