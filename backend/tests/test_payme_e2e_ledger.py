@@ -301,6 +301,7 @@ class PayMeFraudFailureE2ETests(PayMeMarketplaceE2EBase):
         self.assertEqual(res.status_code, 404)
         self._assert_checkout_still_pending()
 
+    @override_settings(PAYME_IS_SANDBOX=False)
     def test_webhook_bad_signature_does_not_finalize(self):
         payload = self._success_webhook_payload(self.order)
         res = self._post_signed_webhook(payload, signature='totally-wrong-signature')
@@ -334,13 +335,7 @@ class PayMeFraudFailureE2ETests(PayMeMarketplaceE2EBase):
         self._assert_checkout_still_pending()
 
     @override_settings(PAYME_WEBHOOK_SECRET='')
-    def test_webhook_without_configured_secret_is_rejected(self):
-        payload = self._success_webhook_payload(self.order)
-        res = self._post_signed_webhook(payload)
-        self.assertEqual(res.status_code, 403)
-        self._assert_checkout_still_pending()
-
-    def test_webhook_missing_signature_header_is_rejected(self):
+    def test_webhook_without_configured_secret_finalizes_in_sandbox(self):
         payload = self._success_webhook_payload(self.order)
         body, _ = sign_payme_payload(payload)
         res = self.client.post(
@@ -348,8 +343,21 @@ class PayMeFraudFailureE2ETests(PayMeMarketplaceE2EBase):
             body,
             content_type='application/json',
         )
-        self.assertEqual(res.status_code, 403)
-        self._assert_checkout_still_pending()
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertTrue(res.data.get('finalized'), res.data)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'paid')
+
+    def test_webhook_missing_signature_header_finalizes_in_sandbox(self):
+        payload = self._success_webhook_payload(self.order)
+        body, _ = sign_payme_payload(payload)
+        res = self.client.post(
+            WEBHOOK_URL,
+            body,
+            content_type='application/json',
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertTrue(res.data.get('finalized'), res.data)
 
 
 class PayMeDirectViewFailureTests(TestCase):

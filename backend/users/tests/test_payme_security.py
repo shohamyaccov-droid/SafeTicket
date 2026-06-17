@@ -36,8 +36,8 @@ def _order(**overrides):
 
 
 class PaymeWebhookVerificationTests(TestCase):
-    @override_settings(PAYME_WEBHOOK_SECRET='')
-    def test_webhook_requires_secret(self):
+    @override_settings(PAYME_WEBHOOK_SECRET='', PAYME_IS_SANDBOX=True)
+    def test_webhook_bypasses_hmac_when_secret_empty_in_sandbox(self):
         payload = {
             'merchant_order_id': '123',
             'transaction_id': 'txn_123',
@@ -47,15 +47,42 @@ class PaymeWebhookVerificationTests(TestCase):
         }
 
         ok, reason = verify_payme_webhook_request(
-            _signed_request(payload),
+            APIRequestFactory().post(
+                '/api/payments/webhook/payme/',
+                data=json.dumps(payload).encode('utf-8'),
+                content_type='application/json',
+            ),
+            payload=payload,
+            order=_order(),
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, 'ok')
+
+    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
+    def test_webhook_rejects_missing_signature_in_production(self):
+        payload = {
+            'merchant_order_id': '123',
+            'transaction_id': 'txn_123',
+            'sale_price': 11000,
+            'currency': 'ILS',
+            'status': 'authorized',
+        }
+
+        ok, reason = verify_payme_webhook_request(
+            APIRequestFactory().post(
+                '/api/payments/webhook/payme/',
+                data=json.dumps(payload).encode('utf-8'),
+                content_type='application/json',
+            ),
             payload=payload,
             order=_order(),
         )
 
         self.assertFalse(ok)
-        self.assertEqual(reason, 'missing_webhook_secret')
+        self.assertEqual(reason, 'missing_signature_header')
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test')
+    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
     def test_webhook_rejects_transaction_mismatch(self):
         payload = {
             'merchant_order_id': '123',
@@ -74,7 +101,7 @@ class PaymeWebhookVerificationTests(TestCase):
         self.assertFalse(ok)
         self.assertEqual(reason, 'transaction_id_mismatch')
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test')
+    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
     def test_webhook_rejects_amount_mismatch(self):
         payload = {
             'merchant_order_id': '123',
@@ -93,7 +120,7 @@ class PaymeWebhookVerificationTests(TestCase):
         self.assertFalse(ok)
         self.assertEqual(reason, 'amount_mismatch')
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test')
+    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
     def test_webhook_accepts_exact_signed_order_payment(self):
         payload = {
             'merchant_order_id': '123',

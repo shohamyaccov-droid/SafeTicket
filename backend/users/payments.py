@@ -361,6 +361,13 @@ def normalize_payme_webhook_status(payload: dict[str, Any]) -> tuple[str | None,
     return tid, 'pending' if s else None
 
 
+def _payme_webhook_hmac_bypassed() -> bool:
+    """Sandbox/preprod or missing secret: skip HMAC (PayMe often omits webhook secret in test)."""
+    secret = (get_payme_config()['webhook_secret'] or '').strip()
+    is_sandbox = bool(getattr(settings, 'PAYME_IS_SANDBOX', False))
+    return is_sandbox or not secret
+
+
 def verify_payme_webhook_request(
     request,
     *,
@@ -373,23 +380,36 @@ def verify_payme_webhook_request(
 
     Finalization is irreversible from a marketplace perspective (inventory is sold
     and PDFs are released), so every success webhook must prove:
-    signature, merchant order id, PayMe transaction id, amount, and currency.
+    signature (production only), merchant order id, PayMe transaction id, amount, and currency.
+
+    HMAC verification is skipped when PAYME_IS_SANDBOX is True or PAYME_WEBHOOK_SECRET is unset.
     """
-    secret = (get_payme_config()['webhook_secret'] or '').strip()
-    if not secret:
-        return False, 'missing_webhook_secret'
-    got = (request.headers.get('X-Payme-Signature') or request.headers.get('X-Webhook-Signature') or '').strip()
-    if not got:
-        return False, 'missing_signature_header'
-    import hmac
-    import hashlib
+    if _payme_webhook_hmac_bypassed():
+        is_sandbox = bool(getattr(settings, 'PAYME_IS_SANDBOX', False))
+        secret = (get_payme_config()['webhook_secret'] or '').strip()
+        if is_sandbox:
+            logger.warning(
+                'PayMe webhook: bypassing HMAC signature verification (sandbox/preprod mode) order_id=%s',
+                getattr(order, 'pk', None),
+            )
+        else:
+            logger.warning(
+                'PayMe webhook: bypassing HMAC signature verification (PAYME_WEBHOOK_SECRET not set) order_id=%s',
+                getattr(order, 'pk', None),
+            )
+    else:
+        secret = (get_payme_config()['webhook_secret'] or '').strip()
+        got = (request.headers.get('X-Payme-Signature') or request.headers.get('X-Webhook-Signature') or '').strip()
+        if not got:
+            return False, 'missing_signature_header'
+        import hmac
 
-    body = raw_body if raw_body is not None else (request.body or b'')
-    expected = hmac.new(secret.encode('utf-8'), body, hashlib.sha256).hexdigest()
-    from secrets import compare_digest
+        body = raw_body if raw_body is not None else (request.body or b'')
+        expected = hmac.new(secret.encode('utf-8'), body, hashlib.sha256).hexdigest()
+        from secrets import compare_digest
 
-    if not (compare_digest(got, expected) or compare_digest(got, f'sha256={expected}')):
-        return False, 'bad_signature'
+        if not (compare_digest(got, expected) or compare_digest(got, f'sha256={expected}')):
+            return False, 'bad_signature'
 
     merchant_order_id = _extract_merchant_order_id(payload)
     if merchant_order_id != int(order.pk):

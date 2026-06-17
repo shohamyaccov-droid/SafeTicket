@@ -188,6 +188,7 @@ class PaymeWebhookFlowTests(TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertTrue(res.data.get('finalized'))
 
+    @override_settings(PAYME_IS_SANDBOX=False)
     def test_webhook_rejects_bad_signature(self):
         payload = {
             'merchant_order_id': str(self.order.id),
