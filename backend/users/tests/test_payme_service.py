@@ -37,6 +37,18 @@ class PayMeServiceUnitTests(SimpleTestCase):
         )
 
     @override_settings(
+        PAYME_API_URL='https://preprod.paymeservice.com/api',
+        PAYME_IS_SANDBOX=False,
+        PAYME_SANDBOX_ACCOUNT_EMAIL='tradetix.support+1@gmail.com',
+    )
+    def test_preprod_url_detected_as_sandbox(self):
+        self.assertTrue(is_payme_sandbox())
+        self.assertEqual(
+            resolve_payme_customer_email('buyer@example.com'),
+            'tradetix.support+1@gmail.com',
+        )
+
+    @override_settings(
         PAYME_API_URL='https://live.payme.io/api',
         PAYME_IS_SANDBOX=False,
     )

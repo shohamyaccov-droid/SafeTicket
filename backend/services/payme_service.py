@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 QUANT = Decimal('0.01')
 DEFAULT_TIMEOUT_SECONDS = 45
+_PAYME_SANDBOX_HOSTS = ('testpay.payme.io', 'preprod.paymeservice.com', 'sandbox.payme.io')
 
 
 class PayMeError(Exception):
@@ -75,8 +76,11 @@ def money_to_agorot(amount: Decimal | str | float | int) -> int:
 
 
 def is_payme_sandbox() -> bool:
-    """True when PAYME_API_URL points at PayMe test/sandbox host."""
-    return bool(getattr(settings, 'PAYME_IS_SANDBOX', False))
+    """True when PayMe is in sandbox/preprod mode (settings flag or API host)."""
+    if getattr(settings, 'PAYME_IS_SANDBOX', False):
+        return True
+    api_url = (getattr(settings, 'PAYME_API_URL', '') or '').lower()
+    return any(host in api_url for host in _PAYME_SANDBOX_HOSTS)
 
 
 def get_payme_sandbox_account_email() -> str:
