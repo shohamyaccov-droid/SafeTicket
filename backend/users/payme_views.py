@@ -4,14 +4,13 @@ Payme webhook lives at /api/payments/webhook/payme/ (see safeticket.urls).
 """
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from rest_framework.decorators import api_view, parser_classes, permission_classes
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
@@ -28,8 +27,7 @@ from .payments import (
 
 logger = logging.getLogger(__name__)
 
-# Skip DRF JSONParser — JSON is parsed manually so malformed bodies never 500.
-_PAYME_WEBHOOK_PARSERS = (FormParser, MultiPartParser)
+_PAYME_WEBHOOK_PARSERS = (FormParser, MultiPartParser, JSONParser)
 
 
 def _coerce_payme_payload_dict(data: Any) -> dict[str, Any]:
@@ -49,49 +47,15 @@ def _coerce_payme_payload_dict(data: Any) -> dict[str, Any]:
 
 
 def _parse_payme_webhook_payload(request) -> dict[str, Any]:
-    """
-    PayMe callbacks arrive as JSON or application/x-www-form-urlencoded.
-    Mirrors grow webhook parsing: form fields via POST, JSON via raw body.
-    """
-    raw = request.body if request.body is not None else b''
-    if isinstance(raw, memoryview):
-        raw = raw.tobytes()
-
-    content_type = (getattr(request, 'content_type', None) or '').lower()
-
-    if 'application/json' in content_type or (raw.strip() and raw[:1] in (b'{', b'[')):
-        try:
-            text = raw.decode('utf-8')
-        except UnicodeDecodeError:
-            return {}
-        try:
-            parsed = json.loads(text)
-        except json.JSONDecodeError:
-            return {}
-        if isinstance(parsed, dict):
-            return parsed
+    """Use Django/DRF parsed request data for PayMe callbacks."""
+    try:
+        if hasattr(request, 'POST') and request.POST:
+            return _coerce_payme_payload_dict(request.POST)
+        if hasattr(request, 'data') and request.data:
+            return _coerce_payme_payload_dict(request.data)
+    except Exception as exc:
+        logger.warning('payme_webhook payload parse failed: %s', exc)
         return {}
-
-    if 'multipart/form-data' in content_type or 'application/x-www-form-urlencoded' in content_type:
-        try:
-            if hasattr(request, 'POST') and request.POST:
-                return _coerce_payme_payload_dict(request.POST)
-            if hasattr(request, 'data') and request.data:
-                return _coerce_payme_payload_dict(request.data)
-        except Exception as exc:
-            logger.warning('payme_webhook form parse failed: %s', exc)
-            return {}
-
-    if raw.strip():
-        try:
-            from urllib.parse import parse_qs
-
-            parsed = parse_qs(raw.decode('utf-8'), keep_blank_values=True)
-            if parsed:
-                return {k: (v[0] if len(v) == 1 else v) for k, v in parsed.items()}
-        except (UnicodeDecodeError, ValueError):
-            pass
-
     return {}
 
 
@@ -103,10 +67,17 @@ def payme_webhook(request):
     """
     Payme → TradeTix status updates. Configure Payme dashboard to POST here.
     """
-    raw_body = request.body or b''
+    try:
+        incoming_for_log = request.POST if getattr(request, 'POST', None) else getattr(request, 'data', {})
+    except Exception as exc:
+        logger.warning('PayMe webhook incoming payload parse error: %s', exc)
+        print(f'PayMe webhook incoming payload parse error: {exc}')
+        return Response({'error': 'empty payload'}, status=status.HTTP_400_BAD_REQUEST)
+
+    logger.info('PayMe webhook incoming payload=%s content_type=%s', incoming_for_log, request.content_type)
+    print(f'PayMe webhook incoming payload={incoming_for_log} content_type={request.content_type}')
     logger.info(
-        'PayMe webhook incoming bytes=%s content_type=%s remote_addr=%s',
-        len(raw_body),
+        'PayMe webhook incoming content_type=%s remote_addr=%s',
         request.content_type,
         request.META.get('REMOTE_ADDR'),
     )
@@ -115,7 +86,7 @@ def payme_webhook(request):
     if not payload:
         log_payme(
             'webhook_empty_payload',
-            payload={'content_type': request.content_type, 'byte_length': len(raw_body)},
+            payload={'content_type': request.content_type},
         )
         return Response({'error': 'empty payload'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -135,7 +106,6 @@ def payme_webhook(request):
         'webhook_raw_payload',
         order_id=None,
         content_type=request.content_type,
-        byte_length=len(raw_body),
         payload=payload,
     )
 
@@ -160,7 +130,6 @@ def payme_webhook(request):
         request,
         payload=payload,
         order=order,
-        raw_body=raw_body,
     )
     if not verified:
         log_payme(

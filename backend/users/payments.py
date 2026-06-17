@@ -404,7 +404,15 @@ def verify_payme_webhook_request(
             return False, 'missing_signature_header'
         import hmac
 
-        body = raw_body if raw_body is not None else (request.body or b'')
+        try:
+            body = raw_body if raw_body is not None else (request.body or b'')
+        except Exception as exc:
+            logger.warning(
+                'PayMe webhook: unable to read request body for HMAC verification order_id=%s error=%s',
+                getattr(order, 'pk', None),
+                exc,
+            )
+            return False, 'body_unavailable_for_signature'
         expected = hmac.new(secret.encode('utf-8'), body, hashlib.sha256).hexdigest()
         from secrets import compare_digest
 
