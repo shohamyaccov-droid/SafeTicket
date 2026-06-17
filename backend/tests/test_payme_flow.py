@@ -10,6 +10,7 @@ import json
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
+from urllib.parse import urlencode
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -146,6 +147,26 @@ class PaymeWebhookFlowTests(TestCase):
         self.ticket.refresh_from_db()
         self.assertEqual(self.ticket.status, 'sold')
         self.assertTrue(SellerPayout.objects.filter(order=self.order).exists())
+
+    def test_webhook_marks_paid_form_urlencoded(self):
+        """PayMe preprod/live sends application/x-www-form-urlencoded callbacks."""
+        payload = {
+            'merchant_order_id': str(self.order.id),
+            'status': 'success',
+            'transaction_id': 'webhook_txn_1',
+            'sale_price': '11500',
+            'currency': 'ILS',
+        }
+        body = urlencode(payload)
+        res = self.client.post(
+            '/api/payments/webhook/payme/',
+            body,
+            content_type='application/x-www-form-urlencoded',
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertTrue(res.data.get('finalized'), res.data)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'paid')
 
     def test_webhook_rejects_invalid_json(self):
         res = self.client.post(

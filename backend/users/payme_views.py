@@ -6,10 +6,12 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
@@ -26,9 +28,76 @@ from .payments import (
 
 logger = logging.getLogger(__name__)
 
+# Skip DRF JSONParser — JSON is parsed manually so malformed bodies never 500.
+_PAYME_WEBHOOK_PARSERS = (FormParser, MultiPartParser)
+
+
+def _coerce_payme_payload_dict(data: Any) -> dict[str, Any]:
+    """Normalize DRF request.data / Django POST into a flat string-keyed dict."""
+    if data is None:
+        return {}
+    if isinstance(data, dict):
+        return data
+    if hasattr(data, 'dict'):
+        try:
+            return data.dict()
+        except Exception:
+            pass
+    if hasattr(data, 'keys'):
+        return {str(k): data.get(k) for k in data.keys()}
+    return {}
+
+
+def _parse_payme_webhook_payload(request) -> dict[str, Any]:
+    """
+    PayMe callbacks arrive as JSON or application/x-www-form-urlencoded.
+    Mirrors grow webhook parsing: form fields via POST, JSON via raw body.
+    """
+    raw = request.body if request.body is not None else b''
+    if isinstance(raw, memoryview):
+        raw = raw.tobytes()
+
+    content_type = (getattr(request, 'content_type', None) or '').lower()
+
+    if 'application/json' in content_type or (raw.strip() and raw[:1] in (b'{', b'[')):
+        try:
+            text = raw.decode('utf-8')
+        except UnicodeDecodeError:
+            return {}
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+        return {}
+
+    if 'multipart/form-data' in content_type or 'application/x-www-form-urlencoded' in content_type:
+        try:
+            if hasattr(request, 'POST') and request.POST:
+                return _coerce_payme_payload_dict(request.POST)
+            if hasattr(request, 'data') and request.data:
+                return _coerce_payme_payload_dict(request.data)
+        except Exception as exc:
+            logger.warning('payme_webhook form parse failed: %s', exc)
+            return {}
+
+    if raw.strip():
+        try:
+            from urllib.parse import parse_qs
+
+            parsed = parse_qs(raw.decode('utf-8'), keep_blank_values=True)
+            if parsed:
+                return {k: (v[0] if len(v) == 1 else v) for k, v in parsed.items()}
+        except (UnicodeDecodeError, ValueError):
+            pass
+
+    return {}
+
 
 @csrf_exempt
 @api_view(['POST'])
+@parser_classes(_PAYME_WEBHOOK_PARSERS)
 @permission_classes([AllowAny])
 def payme_webhook(request):
     """
@@ -42,11 +111,13 @@ def payme_webhook(request):
         request.META.get('REMOTE_ADDR'),
     )
 
-    try:
-        payload = json.loads(raw_body or b'{}')
-    except Exception as e:
-        log_payme('webhook_bad_json', exc=e)
-        return Response({'error': 'invalid json'}, status=status.HTTP_400_BAD_REQUEST)
+    payload = _parse_payme_webhook_payload(request)
+    if not payload:
+        log_payme(
+            'webhook_empty_payload',
+            payload={'content_type': request.content_type, 'byte_length': len(raw_body)},
+        )
+        return Response({'error': 'empty payload'}, status=status.HTTP_400_BAD_REQUEST)
 
     if not isinstance(payload, dict):
         log_payme('webhook_invalid_payload_type', payload={'type': type(payload).__name__})
