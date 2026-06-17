@@ -59,6 +59,30 @@ def _parse_payme_webhook_payload(request) -> dict[str, Any]:
     return {}
 
 
+def _extract_payme_merchant_order_id(payload: dict[str, Any]) -> Any:
+    """PayMe should send our Order.id in merchant_order_id; log the raw value."""
+    for source in (
+        payload,
+        payload.get('metadata') if isinstance(payload.get('metadata'), dict) else {},
+        payload.get('data') if isinstance(payload.get('data'), dict) else {},
+        payload.get('result') if isinstance(payload.get('result'), dict) else {},
+        payload.get('payment') if isinstance(payload.get('payment'), dict) else {},
+        payload.get('transaction') if isinstance(payload.get('transaction'), dict) else {},
+        payload.get('sale') if isinstance(payload.get('sale'), dict) else {},
+    ):
+        for key in ('merchant_order_id', 'merchantOrderId', 'order_id', 'orderId'):
+            value = source.get(key)
+            if value not in (None, ''):
+                return value
+    return None
+
+
+def _log_payme_webhook_rejection(reason: str, *, order_id: int | None = None, payload: dict[str, Any] | None = None):
+    logger.warning('PayMe webhook rejection reason: %s order_id=%s payload=%s', reason, order_id, payload)
+    print(f'PayMe webhook rejection reason: {reason} order_id={order_id} payload={payload}')
+    log_payme('webhook_rejected', order_id=order_id, payload={'reason': reason, 'payload': payload or {}})
+
+
 @csrf_exempt
 @api_view(['POST'])
 @parser_classes(_PAYME_WEBHOOK_PARSERS)
@@ -68,127 +92,142 @@ def payme_webhook(request):
     Payme → TradeTix status updates. Configure Payme dashboard to POST here.
     """
     try:
-        incoming_for_log = request.POST if getattr(request, 'POST', None) else getattr(request, 'data', {})
-    except Exception as exc:
-        logger.warning('PayMe webhook incoming payload parse error: %s', exc)
-        print(f'PayMe webhook incoming payload parse error: {exc}')
-        return Response({'error': 'empty payload'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            incoming_for_log = request.POST if getattr(request, 'POST', None) else getattr(request, 'data', {})
+        except Exception as exc:
+            logger.warning('PayMe webhook incoming payload parse error: %s', exc)
+            print(f'PayMe webhook incoming payload parse error: {exc}')
+            _log_payme_webhook_rejection('payload_parse_error', payload={'error': str(exc)})
+            return Response({'error': 'empty payload', 'reason': 'payload_parse_error'}, status=status.HTTP_400_BAD_REQUEST)
 
-    logger.info('PayMe webhook incoming payload=%s content_type=%s', incoming_for_log, request.content_type)
-    print(f'PayMe webhook incoming payload={incoming_for_log} content_type={request.content_type}')
-    logger.info(
-        'PayMe webhook incoming content_type=%s remote_addr=%s',
-        request.content_type,
-        request.META.get('REMOTE_ADDR'),
-    )
-
-    payload = _parse_payme_webhook_payload(request)
-    if not payload:
-        log_payme(
-            'webhook_empty_payload',
-            payload={'content_type': request.content_type},
+        logger.info('PayMe webhook incoming payload=%s content_type=%s', incoming_for_log, request.content_type)
+        print(f'PayMe webhook incoming payload={incoming_for_log} content_type={request.content_type}')
+        logger.info(
+            'PayMe webhook incoming content_type=%s remote_addr=%s',
+            request.content_type,
+            request.META.get('REMOTE_ADDR'),
         )
-        return Response({'error': 'empty payload'}, status=status.HTTP_400_BAD_REQUEST)
 
-    if not isinstance(payload, dict):
-        log_payme('webhook_invalid_payload_type', payload={'type': type(payload).__name__})
-        return Response({'error': 'expected object'}, status=status.HTTP_400_BAD_REQUEST)
+        payload = _parse_payme_webhook_payload(request)
+        if not payload:
+            _log_payme_webhook_rejection('empty_payload', payload={'content_type': request.content_type})
+            return Response({'error': 'empty payload', 'reason': 'empty_payload'}, status=status.HTTP_400_BAD_REQUEST)
 
-    log_payme(
-        'webhook_incoming',
-        payload={
-            'keys': list(payload.keys()),
-            'merchant_order_id': payload.get('merchant_order_id') or payload.get('merchantOrderId'),
-            'status': payload.get('status') or payload.get('payment_status'),
-        },
-    )
-    log_payme_dev(
-        'webhook_raw_payload',
-        order_id=None,
-        content_type=request.content_type,
-        payload=payload,
-    )
+        if not isinstance(payload, dict):
+            reason = f'invalid_payload_type:{type(payload).__name__}'
+            _log_payme_webhook_rejection(reason)
+            return Response({'error': 'expected object', 'reason': reason}, status=status.HTTP_400_BAD_REQUEST)
 
-    oid_raw = (
-        payload.get('merchant_order_id')
-        or payload.get('merchantOrderId')
-        or (payload.get('metadata') or {}).get('order_id')
-    )
-    try:
-        order_id = int(oid_raw)
-    except (TypeError, ValueError):
-        log_payme('webhook_missing_order', payload=payload)
-        return Response({'error': 'merchant_order_id required'}, status=status.HTTP_400_BAD_REQUEST)
+        oid_raw = _extract_payme_merchant_order_id(payload)
+        logger.warning('PayMe webhook extracted merchant_order_id=%s payload_keys=%s', oid_raw, list(payload.keys()))
+        print(f'PayMe webhook extracted merchant_order_id={oid_raw} payload_keys={list(payload.keys())}')
 
-    tid, norm = normalize_payme_webhook_status(payload)
-    order = Order.objects.filter(pk=order_id).first()
-    if not order:
-        log_payme('webhook_order_not_found', order_id=order_id, payload={'merchant_order_id': oid_raw})
-        return Response({'error': 'order not found'}, status=status.HTTP_404_NOT_FOUND)
-
-    verified, verify_reason = verify_payme_webhook_request(
-        request,
-        payload=payload,
-        order=order,
-    )
-    if not verified:
         log_payme(
-            'webhook_rejected_validation',
-            order_id=order_id,
+            'webhook_incoming',
             payload={
-                'reason': verify_reason,
-                'stored_transaction_id': order.payme_transaction_id,
-                'order_currency': order.currency,
+                'keys': list(payload.keys()),
+                'merchant_order_id': oid_raw,
+                'status': payload.get('status') or payload.get('payment_status'),
             },
         )
-        return Response({'error': 'invalid webhook'}, status=status.HTTP_403_FORBIDDEN)
-
-    if order.status == 'paid':
-        return Response({'received': True, 'finalized': True, 'order_status': 'paid'})
-
-    update_fields = ['payme_status', 'updated_at']
-    order.payme_status = norm or payload.get('status') or 'unknown'
-    if tid:
-        order.payme_transaction_id = tid
-        update_fields.insert(0, 'payme_transaction_id')
-    order.save(update_fields=list(dict.fromkeys(update_fields)))
-
-    log_payme('webhook_received', order_id=order_id, payload={'normalized': norm, 'transaction_id': tid})
-    log_payme_dev(
-        'webhook_verified',
-        order_id=order_id,
-        normalized_status=norm,
-        transaction_id=tid,
-        order_status_before=order.status,
-        payme_status_saved=order.payme_status,
-        verified=verified,
-    )
-
-    if norm in ('success', 'authorized') and order.status == 'pending_payment':
-        ok, err = finalize_pending_order_to_paid(order_id, source='payme_webhook')
         log_payme_dev(
-            'webhook_finalize',
+            'webhook_raw_payload',
+            order_id=None,
+            content_type=request.content_type,
+            merchant_order_id=oid_raw,
+            payload=payload,
+        )
+
+        try:
+            order_id = int(oid_raw)
+        except (TypeError, ValueError):
+            _log_payme_webhook_rejection('merchant_order_id_required_or_invalid', payload=payload)
+            return Response(
+                {'error': 'merchant_order_id required', 'reason': 'merchant_order_id_required_or_invalid'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        logger.warning('PayMe webhook looking up Order by merchant_order_id=%s', order_id)
+        print(f'PayMe webhook looking up Order by merchant_order_id={order_id}')
+        order = Order.objects.filter(pk=order_id).first()
+        if not order:
+            _log_payme_webhook_rejection('order_not_found', order_id=order_id, payload={'merchant_order_id': oid_raw})
+            return Response({'error': 'order not found', 'reason': 'order_not_found'}, status=status.HTTP_404_NOT_FOUND)
+
+        tid, norm = normalize_payme_webhook_status(payload)
+        verified, verify_reason = verify_payme_webhook_request(
+            request,
+            payload=payload,
+            order=order,
+        )
+        if not verified:
+            _log_payme_webhook_rejection(
+                verify_reason,
+                order_id=order_id,
+                payload={
+                    'merchant_order_id': oid_raw,
+                    'transaction_id': tid,
+                    'normalized_status': norm,
+                    'stored_transaction_id': order.payme_transaction_id,
+                    'order_currency': order.currency,
+                    'order_total_paid_by_buyer': str(order.total_paid_by_buyer),
+                    'order_total_amount': str(order.total_amount),
+                },
+            )
+            return Response({'error': 'invalid webhook', 'reason': verify_reason}, status=status.HTTP_403_FORBIDDEN)
+
+        if order.status == 'paid':
+            return Response({'received': True, 'finalized': True, 'order_status': 'paid'})
+
+        update_fields = ['payme_status', 'updated_at']
+        order.payme_status = norm or payload.get('status') or 'unknown'
+        if tid:
+            order.payme_transaction_id = tid
+            update_fields.insert(0, 'payme_transaction_id')
+        order.save(update_fields=list(dict.fromkeys(update_fields)))
+
+        log_payme('webhook_received', order_id=order_id, payload={'normalized': norm, 'transaction_id': tid})
+        log_payme_dev(
+            'webhook_verified',
             order_id=order_id,
-            finalized=ok,
-            error=err,
             normalized_status=norm,
+            transaction_id=tid,
+            order_status_before=order.status,
+            payme_status_saved=order.payme_status,
+            verified=verified,
         )
-        if not ok:
-            logger.warning('payme_webhook finalize failed order_id=%s err=%s', order_id, err)
-            return Response({'received': True, 'finalized': False, 'reason': err}, status=status.HTTP_200_OK)
-        order.refresh_from_db()
-        log_payme_dev(
-            'webhook_finalize_success',
-            order_id=order_id,
-            order_status_after=order.status,
-            ticket_status=getattr(order.ticket, 'status', None) if order.ticket_id else None,
-        )
-        return Response({'received': True, 'finalized': True, 'order_status': order.status})
 
-    if norm == 'failed':
+        if norm in ('success', 'authorized') and order.status == 'pending_payment':
+            ok, err = finalize_pending_order_to_paid(order_id, source='payme_webhook')
+            log_payme_dev(
+                'webhook_finalize',
+                order_id=order_id,
+                finalized=ok,
+                error=err,
+                normalized_status=norm,
+            )
+            if not ok:
+                logger.warning('PayMe webhook rejection reason: finalize_failed:%s order_id=%s', err, order_id)
+                print(f'PayMe webhook rejection reason: finalize_failed:{err} order_id={order_id}')
+                return Response({'received': True, 'finalized': False, 'reason': err}, status=status.HTTP_200_OK)
+            order.refresh_from_db()
+            log_payme_dev(
+                'webhook_finalize_success',
+                order_id=order_id,
+                order_status_after=order.status,
+                ticket_status=getattr(order.ticket, 'status', None) if order.ticket_id else None,
+            )
+            return Response({'received': True, 'finalized': True, 'order_status': order.status})
+
+        if norm == 'failed':
+            return Response({'received': True, 'finalized': False, 'order_status': order.status})
+
         return Response({'received': True, 'finalized': False, 'order_status': order.status})
-
-    return Response({'received': True, 'finalized': False, 'order_status': order.status})
+    except Exception as exc:
+        logger.exception('PayMe webhook failed unexpectedly: %s', exc)
+        print(f'PayMe webhook failed unexpectedly: {exc}')
+        _log_payme_webhook_rejection('unexpected_exception', payload={'error': str(exc)})
+        return Response({'error': 'webhook failed', 'reason': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @csrf_exempt
