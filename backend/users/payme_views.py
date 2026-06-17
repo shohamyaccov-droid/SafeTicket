@@ -34,13 +34,13 @@ def _coerce_payme_payload_dict(data: Any) -> dict[str, Any]:
     """Normalize DRF request.data / Django POST into a flat string-keyed dict."""
     if data is None:
         return {}
-    if isinstance(data, dict):
-        return data
     if hasattr(data, 'dict'):
         try:
             return data.dict()
         except Exception:
             pass
+    if isinstance(data, dict):
+        return data
     if hasattr(data, 'keys'):
         return {str(k): data.get(k) for k in data.keys()}
     return {}
@@ -59,8 +59,8 @@ def _parse_payme_webhook_payload(request) -> dict[str, Any]:
     return {}
 
 
-def _extract_payme_merchant_order_id(payload: dict[str, Any]) -> Any:
-    """PayMe should send our Order.id in merchant_order_id; log the raw value."""
+def _extract_payme_order_reference(payload: dict[str, Any]) -> tuple[Any, str | None]:
+    """PayMe should send our Order.id; live callbacks may call it payme_sale_code."""
     for source in (
         payload,
         payload.get('metadata') if isinstance(payload.get('metadata'), dict) else {},
@@ -70,11 +70,11 @@ def _extract_payme_merchant_order_id(payload: dict[str, Any]) -> Any:
         payload.get('transaction') if isinstance(payload.get('transaction'), dict) else {},
         payload.get('sale') if isinstance(payload.get('sale'), dict) else {},
     ):
-        for key in ('merchant_order_id', 'merchantOrderId', 'order_id', 'orderId'):
+        for key in ('merchant_order_id', 'merchantOrderId', 'order_id', 'orderId', 'payme_sale_code'):
             value = source.get(key)
             if value not in (None, ''):
-                return value
-    return None
+                return value, key
+    return None, None
 
 
 def _log_payme_webhook_rejection(reason: str, *, order_id: int | None = None, payload: dict[str, Any] | None = None):
@@ -118,15 +118,24 @@ def payme_webhook(request):
             _log_payme_webhook_rejection(reason)
             return Response({'error': 'expected object', 'reason': reason}, status=status.HTTP_400_BAD_REQUEST)
 
-        oid_raw = _extract_payme_merchant_order_id(payload)
-        logger.warning('PayMe webhook extracted merchant_order_id=%s payload_keys=%s', oid_raw, list(payload.keys()))
-        print(f'PayMe webhook extracted merchant_order_id={oid_raw} payload_keys={list(payload.keys())}')
+        oid_raw, oid_source = _extract_payme_order_reference(payload)
+        logger.warning(
+            'PayMe webhook extracted order reference=%s source=%s payload_keys=%s',
+            oid_raw,
+            oid_source,
+            list(payload.keys()),
+        )
+        print(
+            f'PayMe webhook extracted order reference={oid_raw} source={oid_source} '
+            f'payload_keys={list(payload.keys())}'
+        )
 
         log_payme(
             'webhook_incoming',
             payload={
                 'keys': list(payload.keys()),
                 'merchant_order_id': oid_raw,
+                'merchant_order_id_source': oid_source,
                 'status': payload.get('status') or payload.get('payment_status'),
             },
         )
@@ -135,6 +144,7 @@ def payme_webhook(request):
             order_id=None,
             content_type=request.content_type,
             merchant_order_id=oid_raw,
+            merchant_order_id_source=oid_source,
             payload=payload,
         )
 
@@ -151,8 +161,17 @@ def payme_webhook(request):
         print(f'PayMe webhook looking up Order by merchant_order_id={order_id}')
         order = Order.objects.filter(pk=order_id).first()
         if not order:
-            _log_payme_webhook_rejection('order_not_found', order_id=order_id, payload={'merchant_order_id': oid_raw})
+            _log_payme_webhook_rejection(
+                'order_not_found',
+                order_id=order_id,
+                payload={'merchant_order_id': oid_raw, 'merchant_order_id_source': oid_source},
+            )
             return Response({'error': 'order not found', 'reason': 'order_not_found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if oid_source == 'payme_sale_code' and not payload.get('merchant_order_id'):
+            logger.warning('PayMe webhook using payme_sale_code fallback as merchant_order_id=%s', order_id)
+            print(f'PayMe webhook using payme_sale_code fallback as merchant_order_id={order_id}')
+            payload['merchant_order_id'] = str(order_id)
 
         tid, norm = normalize_payme_webhook_status(payload)
         verified, verify_reason = verify_payme_webhook_request(
@@ -166,6 +185,7 @@ def payme_webhook(request):
                 order_id=order_id,
                 payload={
                     'merchant_order_id': oid_raw,
+                    'merchant_order_id_source': oid_source,
                     'transaction_id': tid,
                     'normalized_status': norm,
                     'stored_transaction_id': order.payme_transaction_id,

@@ -168,6 +168,26 @@ class PaymeWebhookFlowTests(TestCase):
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, 'paid')
 
+    def test_webhook_marks_paid_form_urlencoded_with_payme_sale_code_fallback(self):
+        """Live PayMe callbacks may send our order reference as payme_sale_code."""
+        payload = {
+            'payme_sale_code': str(self.order.id),
+            'status': 'success',
+            'transaction_id': 'webhook_txn_1',
+            'sale_price': '11500',
+            'currency': 'ILS',
+        }
+        body = urlencode(payload)
+        res = self.client.post(
+            '/api/payments/webhook/payme/',
+            body,
+            content_type='application/x-www-form-urlencoded',
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertTrue(res.data.get('finalized'), res.data)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'paid')
+
     def test_webhook_rejects_invalid_json(self):
         res = self.client.post(
             '/api/payments/webhook/payme/',
