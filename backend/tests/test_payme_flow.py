@@ -177,7 +177,7 @@ class PaymeWebhookFlowTests(TestCase):
             'payme_sale_id': 'SALE1781-test',
             'payme_transaction_id': 'TRAN1781-test',
             'status': 'success',
-            'sale_price': '11500',
+            'price': '11500',
             'currency': 'ILS',
         }
         body = urlencode(payload)

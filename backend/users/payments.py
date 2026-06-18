@@ -288,9 +288,9 @@ def _payload_amount_candidates_agorot(payload: dict[str, Any]) -> set[int]:
     """
     Return possible webhook amount interpretations in agorot/cents.
 
-    PayMe docs/responses can use `sale_price` in minor units, while some gateway
-    payloads use decimal major units. We accept only values that exactly match the
-    order total after converting either plausible representation.
+    PayMe docs/responses can use `sale_price` or `price` in minor units, while
+    some gateway payloads use decimal major units. We accept only values that
+    exactly match the order total after converting either plausible interpretation.
     """
     candidates: set[int] = set()
     minor_keys = {
@@ -299,6 +299,7 @@ def _payload_amount_candidates_agorot(payload: dict[str, Any]) -> set[int]:
         'amount_agorot',
         'amount_cents',
         'amount_minor',
+        'price',
     }
     all_keys = minor_keys | {
         'amount',
@@ -307,7 +308,6 @@ def _payload_amount_candidates_agorot(payload: dict[str, Any]) -> set[int]:
         'totalamount',
         'transaction_amount',
         'transactionamount',
-        'price',
     }
     for source in _nested_dicts(payload):
         for key, value in source.items():

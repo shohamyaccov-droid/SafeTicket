@@ -51,7 +51,7 @@ class PayMeFormWebhookCustomerJourneyTests(PayMeMarketplaceE2EBase):
             'payme_sale_id': order.payme_transaction_id,
             'payme_transaction_id': 'TRAN1781-form-journey',
             'status': 'success',
-            'sale_price': str(sale_price_minor),
+            'price': str(sale_price_minor),
             'currency': order.currency or 'ILS',
         }
         form_body = urlencode(form_payload)
