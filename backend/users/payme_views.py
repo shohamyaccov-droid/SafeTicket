@@ -94,6 +94,24 @@ def _extract_payme_transaction_reference(payload: dict[str, Any]) -> tuple[Any, 
     )
 
 
+def _extract_payme_transaction_references(payload: dict[str, Any]) -> tuple[list[str], dict[str, str]]:
+    """Collect all PayMe sale/transaction identifiers sent in the callback."""
+    keys = ('payme_sale_code', 'payme_sale_id', 'sale_id', 'payme_transaction_id', 'transaction_id', 'transactionId')
+    refs: list[str] = []
+    sources: dict[str, str] = {}
+    for source in _payload_sources(payload):
+        for key in keys:
+            value = source.get(key)
+            if value in (None, ''):
+                continue
+            ref = str(value).strip()
+            if not ref or ref in sources:
+                continue
+            refs.append(ref)
+            sources[ref] = key
+    return refs, sources
+
+
 def _log_payme_webhook_rejection(reason: str, *, order_id: int | None = None, payload: dict[str, Any] | None = None):
     logger.warning('PayMe webhook rejection reason: %s order_id=%s payload=%s', reason, order_id, payload)
     print(f'PayMe webhook rejection reason: {reason} order_id={order_id} payload={payload}')
@@ -136,17 +154,20 @@ def payme_webhook(request):
             return Response({'error': 'expected object', 'reason': reason}, status=status.HTTP_400_BAD_REQUEST)
 
         payme_ref_raw, payme_ref_source = _extract_payme_transaction_reference(payload)
+        possible_payme_refs, payme_ref_sources = _extract_payme_transaction_references(payload)
         oid_raw, oid_source = _extract_payme_order_reference(payload)
         logger.warning(
-            'PayMe webhook extracted payme reference=%s source=%s merchant_order_reference=%s merchant_source=%s payload_keys=%s',
+            'PayMe webhook extracted payme reference=%s source=%s possible_payme_refs=%s merchant_order_reference=%s merchant_source=%s payload_keys=%s',
             payme_ref_raw,
             payme_ref_source,
+            possible_payme_refs,
             oid_raw,
             oid_source,
             list(payload.keys()),
         )
         print(
             f'PayMe webhook extracted payme reference={payme_ref_raw} source={payme_ref_source} '
+            f'possible_payme_refs={possible_payme_refs} '
             f'merchant_order_reference={oid_raw} merchant_source={oid_source} '
             f'payload_keys={list(payload.keys())}'
         )
@@ -159,6 +180,7 @@ def payme_webhook(request):
                 'merchant_order_id_source': oid_source,
                 'payme_reference': payme_ref_raw,
                 'payme_reference_source': payme_ref_source,
+                'possible_payme_references': possible_payme_refs,
                 'status': payload.get('status') or payload.get('payment_status'),
             },
         )
@@ -170,11 +192,11 @@ def payme_webhook(request):
             merchant_order_id_source=oid_source,
             payme_reference=payme_ref_raw,
             payme_reference_source=payme_ref_source,
+            possible_payme_references=possible_payme_refs,
             payload=payload,
         )
 
-        payme_ref = str(payme_ref_raw or '').strip()
-        if not payme_ref:
+        if not possible_payme_refs:
             _log_payme_webhook_rejection('payme_transaction_reference_required', payload=payload)
             return Response(
                 {'error': 'payme transaction reference required', 'reason': 'payme_transaction_reference_required'},
@@ -182,18 +204,21 @@ def payme_webhook(request):
             )
 
         logger.warning(
-            'PayMe webhook looking up Order by payme_transaction_id=%s source=%s',
-            payme_ref,
-            payme_ref_source,
+            'PayMe webhook looking up Order by payme_transaction_id__in=%s sources=%s',
+            possible_payme_refs,
+            payme_ref_sources,
         )
-        print(f'PayMe webhook looking up Order by payme_transaction_id={payme_ref} source={payme_ref_source}')
-        order = Order.objects.filter(payme_transaction_id=payme_ref).first()
+        print(
+            f'PayMe webhook looking up Order by payme_transaction_id__in={possible_payme_refs} '
+            f'sources={payme_ref_sources}'
+        )
+        order = Order.objects.filter(payme_transaction_id__in=possible_payme_refs).first()
         if not order:
             _log_payme_webhook_rejection(
                 'order_not_found_for_payme_transaction_id',
                 payload={
-                    'payme_transaction_id': payme_ref,
-                    'payme_reference_source': payme_ref_source,
+                    'possible_payme_transaction_ids': possible_payme_refs,
+                    'payme_reference_sources': payme_ref_sources,
                     'merchant_order_id': oid_raw,
                     'merchant_order_id_source': oid_source,
                 },
@@ -204,6 +229,8 @@ def payme_webhook(request):
             )
 
         order_id = int(order.pk)
+        payme_ref = str(order.payme_transaction_id or '').strip()
+        payme_ref_source = payme_ref_sources.get(payme_ref) or payme_ref_source
         if not payload.get('merchant_order_id'):
             logger.warning(
                 'PayMe webhook normalized merchant_order_id=%s after payme_transaction_id lookup=%s',
@@ -233,6 +260,7 @@ def payme_webhook(request):
                     'merchant_order_id_source': oid_source,
                     'payme_reference': payme_ref,
                     'payme_reference_source': payme_ref_source,
+                    'possible_payme_references': possible_payme_refs,
                     'transaction_id': tid,
                     'normalized_status': norm,
                     'stored_transaction_id': order.payme_transaction_id,

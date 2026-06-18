@@ -169,11 +169,13 @@ class PaymeWebhookFlowTests(TestCase):
         self.assertEqual(self.order.status, 'paid')
 
     def test_webhook_marks_paid_form_urlencoded_with_payme_sale_code_fallback(self):
-        """Live PayMe callbacks send PayMe's sale code, which is stored as payme_transaction_id."""
-        self.order.payme_transaction_id = '15959553'
+        """Live PayMe callbacks include multiple IDs; match whichever was stored during init."""
+        self.order.payme_transaction_id = 'SALE1781-test'
         self.order.save(update_fields=['payme_transaction_id'])
         payload = {
             'payme_sale_code': '15959553',
+            'payme_sale_id': 'SALE1781-test',
+            'payme_transaction_id': 'TRAN1781-test',
             'status': 'success',
             'sale_price': '11500',
             'currency': 'ILS',
