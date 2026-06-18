@@ -40,15 +40,17 @@ class PayMeFormWebhookCustomerJourneyTests(PayMeMarketplaceE2EBase):
         order = self._buyer_creates_pending_order()
 
         # 3. PayMe init checkout
-        self._init_payme_checkout(order, mock_generate, transaction_id='txn_form_journey_001')
+        self._init_payme_checkout(order, mock_generate, transaction_id='SALE1781-form-journey')
         order.refresh_from_db()
 
-        # 4. Simulate PayMe success callback as form-urlencoded (NOT JSON)
+        # 4. Simulate PayMe success callback as form-urlencoded (NOT JSON).
+        # Live PayMe sends several IDs; any one may be the value saved during init.
         sale_price_minor = int(Decimal(order.total_paid_by_buyer or order.total_amount) * 100)
         form_payload = {
-            'merchant_order_id': str(order.id),
+            'payme_sale_code': '15974993',
+            'payme_sale_id': order.payme_transaction_id,
+            'payme_transaction_id': 'TRAN1781-form-journey',
             'status': 'success',
-            'transaction_id': order.payme_transaction_id,
             'sale_price': str(sale_price_minor),
             'currency': order.currency or 'ILS',
         }

@@ -46,6 +46,9 @@ python manage.py seed_ramat_gan_sections || true
 echo "[start_render] Verify Omer Adam catalog (fail loudly if seed/API contract broken)..."
 python manage.py verify_omer_adam_catalog --api-base "${PUBLIC_API_BASE:-https://safeticket-api.onrender.com/api}" || true
 
+echo "[start_render] Checkout test tickets for manual PayMe QA..."
+python manage.py seed_checkout_test_tickets || true
+
 echo "[start_render] Admin promotion hook..."
 python fix_admin.py
 
