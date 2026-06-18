@@ -51,6 +51,15 @@ def csrf_required(view):
     return view
 
 
+def _purchase_orders_for_user(user):
+    """Paid purchases owned by account or by a guest checkout using the same email."""
+    email = (getattr(user, 'email', None) or '').strip().lower()
+    scope = Q(user=user)
+    if email:
+        scope |= Q(user__isnull=True, guest_email__iexact=email)
+    return Order.objects.filter(scope, status__in=['paid', 'completed'])
+
+
 def _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity):
     """Persist breakdown after order row exists (create_order / guest_checkout)."""
     from users.currency import iso4217_for_ticket_listing
@@ -1133,7 +1142,7 @@ def user_profile(request):
         try:
             po_ctx, orders_list = build_profile_orders_serialization_context(
                 request,
-                Order.objects.filter(user=user, status__in=['paid', 'completed']).order_by('-created_at'),
+                _purchase_orders_for_user(user).order_by('-created_at'),
             )
             orders_serializer = ProfileOrderSerializer(orders_list, many=True, context=po_ctx)
             orders_data = orders_serializer.data if orders_serializer.data else []
@@ -1235,7 +1244,7 @@ def user_activity(request):
         # Get purchases (orders)
         po_ctx, purchases_list = build_profile_orders_serialization_context(
             request,
-            Order.objects.filter(user=user, status__in=['paid', 'completed']).order_by('-created_at'),
+            _purchase_orders_for_user(user).order_by('-created_at'),
         )
         purchases_serializer = ProfileOrderSerializer(purchases_list, many=True, context=po_ctx)
         
