@@ -124,3 +124,28 @@ class PayMeFormWebhookCustomerJourneyTests(PayMeMarketplaceE2EBase):
         self.assertIsNotNone(mine, f'Guest order {guest_order.id} missing from buyer dashboard purchases')
         self.assertEqual(mine['status'], 'paid')
         self.assertEqual(mine.get('ticket'), self.ticket.id)
+
+    def test_dashboard_includes_paid_order_matching_guest_email_even_with_user_id(self):
+        """Dashboard ownership must match PDF access: paid guest_email orders belong to that email."""
+        other_user = self.seller
+        self._buyer_reserves_ticket()
+        order = self._buyer_creates_pending_order()
+        order.user = other_user
+        order.guest_email = self.buyer.email
+        order.status = 'paid'
+        order.save(update_fields=['user', 'guest_email', 'status', 'updated_at'])
+        self.ticket.status = 'sold'
+        self.ticket.available_quantity = 0
+        self.ticket.reserved_by = None
+        self.ticket.reserved_at = None
+        self.ticket.save(update_fields=['status', 'available_quantity', 'reserved_by', 'reserved_at', 'updated_at'])
+
+        self.client.force_authenticate(self.buyer)
+        dash_res = self.client.get(DASHBOARD_URL)
+        self.assertEqual(dash_res.status_code, 200, dash_res.content)
+
+        purchases = dash_res.data.get('purchases') or []
+        mine = next((p for p in purchases if p.get('id') == order.id), None)
+        self.assertIsNotNone(mine, f'Email-owned order {order.id} missing from buyer dashboard purchases')
+        self.assertEqual(mine['status'], 'paid')
+        self.assertEqual(mine.get('ticket'), self.ticket.id)

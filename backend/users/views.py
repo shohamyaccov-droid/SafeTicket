@@ -52,11 +52,15 @@ def csrf_required(view):
 
 
 def _purchase_orders_for_user(user):
-    """Paid purchases owned by account or by a guest checkout using the same email."""
+    """Paid purchases owned by account or purchased with the same email.
+
+    Keep this aligned with user_can_access_ticket_pdf so the dashboard shows
+    every ticket the signed-in buyer is allowed to download.
+    """
     email = (getattr(user, 'email', None) or '').strip().lower()
     scope = Q(user=user)
     if email:
-        scope |= Q(user__isnull=True, guest_email__iexact=email)
+        scope |= Q(guest_email__iexact=email)
     return Order.objects.filter(scope, status__in=['paid', 'completed'])
 
 
