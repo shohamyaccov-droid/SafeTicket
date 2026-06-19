@@ -191,6 +191,49 @@ class PaymeWebhookFlowTests(TestCase):
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, 'paid')
 
+    def test_webhook_marks_paid_with_payme_status_code_zero(self):
+        """PayMe may send numeric status_code=0 instead of a textual success status."""
+        payload = {
+            'merchant_order_id': str(self.order.id),
+            'status_code': '0',
+            'transaction_id': 'webhook_txn_1',
+            'sale_price': '11500',
+            'currency': 'ILS',
+        }
+        body = urlencode(payload)
+        res = self.client.post(
+            '/api/payments/webhook/payme/',
+            body,
+            content_type='application/x-www-form-urlencoded',
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertTrue(res.data.get('finalized'), res.data)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'paid')
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.status, 'sold')
+
+    def test_webhook_unknown_status_does_not_silently_return_200(self):
+        payload = {
+            'merchant_order_id': str(self.order.id),
+            'status': 'processing',
+            'transaction_id': 'webhook_txn_1',
+            'sale_price': 11500,
+            'currency': 'ILS',
+        }
+        body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+        sig = hmac.new(b'whsec_test', body, hashlib.sha256).hexdigest()
+        res = self.client.post(
+            '/api/payments/webhook/payme/',
+            body,
+            content_type='application/json',
+            HTTP_X_PAYME_SIGNATURE=sig,
+        )
+        self.assertEqual(res.status_code, 409, res.content)
+        self.assertFalse(res.data.get('finalized'))
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'pending_payment')
+
     def test_webhook_rejects_invalid_json(self):
         res = self.client.post(
             '/api/payments/webhook/payme/',

@@ -344,9 +344,18 @@ def normalize_payme_webhook_status(payload: dict[str, Any]) -> tuple[str | None,
         or payload.get('payment_status')
         or payload.get('state')
         or payload.get('transaction_status')
+        or payload.get('sale_status')
+        or payload.get('payme_status')
+        or payload.get('status_code')
+        or payload.get('payme_status_code')
         or ''
     )
     s = str(raw).strip().lower()
+
+    if s in ('0', '00'):
+        return tid, 'success'
+    if s in ('1', '01'):
+        return tid, 'pending'
 
     success_tokens = ('success', 'succeeded', 'completed', 'paid', 'captured', 'ok', 'approved')
     auth_tokens = ('authorized', 'authorised', 'auth', 'pre_auth', 'preauth', 'hold')

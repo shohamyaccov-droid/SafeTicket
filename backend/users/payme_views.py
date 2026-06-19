@@ -328,7 +328,33 @@ def payme_webhook(request):
         if norm == 'failed':
             return Response({'received': True, 'finalized': False, 'order_status': order.status})
 
-        return Response({'received': True, 'finalized': False, 'order_status': order.status})
+        _log_payme_webhook_rejection(
+            'webhook_status_not_finalizable',
+            order_id=order_id,
+            payload={
+                'transaction_id': tid,
+                'normalized_status': norm,
+                'raw_status': payload.get('status')
+                or payload.get('payment_status')
+                or payload.get('state')
+                or payload.get('transaction_status')
+                or payload.get('sale_status')
+                or payload.get('payme_status')
+                or payload.get('status_code')
+                or payload.get('payme_status_code'),
+                'order_status': order.status,
+            },
+        )
+        return Response(
+            {
+                'received': True,
+                'finalized': False,
+                'reason': 'webhook_status_not_finalizable',
+                'order_status': order.status,
+                'normalized_status': norm,
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
     except Exception as exc:
         logger.exception('PayMe webhook failed unexpectedly: %s', exc)
         print(f'PayMe webhook failed unexpectedly: {exc}')
