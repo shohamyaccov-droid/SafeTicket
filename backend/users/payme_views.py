@@ -272,6 +272,14 @@ def payme_webhook(request):
             return Response({'error': 'invalid webhook', 'reason': verify_reason}, status=status.HTTP_403_FORBIDDEN)
 
         if order.status == 'paid':
+            ok, err = finalize_pending_order_to_paid(order_id, source='payme_webhook_idempotent_reconcile')
+            if not ok:
+                logger.warning('PayMe webhook rejection reason: paid_reconcile_failed:%s order_id=%s', err, order_id)
+                print(f'PayMe webhook rejection reason: paid_reconcile_failed:{err} order_id={order_id}')
+                return Response(
+                    {'received': True, 'finalized': False, 'reason': err or 'paid_reconcile_failed'},
+                    status=status.HTTP_409_CONFLICT,
+                )
             return Response({'received': True, 'finalized': True, 'order_status': 'paid'})
 
         update_fields = ['payme_status', 'updated_at']
@@ -304,7 +312,10 @@ def payme_webhook(request):
             if not ok:
                 logger.warning('PayMe webhook rejection reason: finalize_failed:%s order_id=%s', err, order_id)
                 print(f'PayMe webhook rejection reason: finalize_failed:{err} order_id={order_id}')
-                return Response({'received': True, 'finalized': False, 'reason': err}, status=status.HTTP_200_OK)
+                return Response(
+                    {'received': True, 'finalized': False, 'reason': err or 'finalize_failed'},
+                    status=status.HTTP_409_CONFLICT,
+                )
             order.refresh_from_db()
             log_payme_dev(
                 'webhook_finalize_success',

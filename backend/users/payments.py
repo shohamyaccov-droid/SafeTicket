@@ -445,6 +445,54 @@ def verify_payme_webhook_request(
     return True, 'ok'
 
 
+def _fulfill_paid_order_ticket_rows(order) -> None:
+    """Ensure paid/completed orders leave fully purchased ticket rows unavailable."""
+    from users.models import Ticket
+
+    if order.held_ticket_id and order.held_quantity:
+        t = Ticket.objects.select_for_update().get(pk=order.held_ticket_id)
+        if (t.available_quantity or 0) <= 0:
+            t.status = 'sold'
+        t.reserved_at = None
+        t.reserved_by = None
+        t.reservation_email = None
+        t.save(
+            update_fields=[
+                'status',
+                'available_quantity',
+                'reserved_at',
+                'reserved_by',
+                'reservation_email',
+                'updated_at',
+            ]
+        )
+        return
+
+    ticket_ids = list(order.ticket_ids or [])
+    if not ticket_ids and order.ticket_id:
+        ticket_ids = [order.ticket_id]
+
+    if ticket_ids:
+        for tid in ticket_ids:
+            t = Ticket.objects.select_for_update().get(pk=tid)
+            t.status = 'sold'
+            t.available_quantity = 0
+            t.reserved_at = None
+            t.reserved_by = None
+            t.reservation_email = None
+            t.save(
+                update_fields=[
+                    'status',
+                    'available_quantity',
+                    'reserved_at',
+                    'reserved_by',
+                    'reservation_email',
+                    'updated_at',
+                ]
+            )
+        return
+
+
 def finalize_pending_order_to_paid(order_id: int, source: str = 'payme') -> tuple[bool, str | None]:
     """
     Run the same inventory + status transition as confirm_order_payment (without user session checks).
@@ -470,6 +518,7 @@ def finalize_pending_order_to_paid(order_id: int, source: str = 'payme') -> tupl
             if not order:
                 return False, 'order_missing'
             if order.status == 'paid':
+                _fulfill_paid_order_ticket_rows(order)
                 return True, None
             if order.status != 'pending_payment':
                 return False, 'order_not_pending'

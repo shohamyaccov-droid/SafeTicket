@@ -108,6 +108,65 @@ class PaymentScaryCaseTests(TestCase):
         self.assertEqual(ticket.status, 'sold')
         self.assertEqual(Order.objects.filter(pk=order.pk).count(), 1)
 
+    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test')
+    def test_paid_order_webhook_reconciles_unsold_ticket(self):
+        ticket = self._ticket(status='active', reserved_by=None, reserved_at=None, available_quantity=1)
+        order = Order.objects.create(
+            user=self.buyer,
+            ticket=ticket,
+            ticket_ids=[ticket.id],
+            status='paid',
+            total_amount=Decimal('115.00'),
+            currency='ILS',
+            quantity=1,
+            payme_transaction_id='txn_paid_reconcile',
+            payme_status='success',
+        )
+        payload = {
+            'merchant_order_id': str(order.id),
+            'transaction_id': 'txn_paid_reconcile',
+            'sale_price': 11500,
+            'currency': 'ILS',
+            'status': 'authorized',
+        }
+
+        response = payme_webhook(_signed_payme_request(payload))
+
+        self.assertEqual(response.status_code, 200)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'sold')
+        self.assertEqual(ticket.available_quantity, 0)
+
+    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test')
+    def test_payme_finalize_failure_is_not_silent_success(self):
+        ticket = self._ticket(reserved_at=timezone.now() - timedelta(hours=2))
+        order = Order.objects.create(
+            user=self.buyer,
+            ticket=ticket,
+            ticket_ids=[ticket.id],
+            status='pending_payment',
+            total_amount=Decimal('115.00'),
+            currency='ILS',
+            quantity=1,
+            payme_transaction_id='txn_expired_reservation',
+            payme_status='initialized',
+            payment_confirm_token='token',
+        )
+        payload = {
+            'merchant_order_id': str(order.id),
+            'transaction_id': 'txn_expired_reservation',
+            'sale_price': 11500,
+            'currency': 'ILS',
+            'status': 'authorized',
+        }
+
+        response = payme_webhook(_signed_payme_request(payload))
+
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(response.data.get('finalized'))
+        order.refresh_from_db()
+        self.assertEqual(order.status, 'pending_payment')
+
     def test_guest_release_attack_does_not_release_reservation(self):
         ticket = self._ticket(
             reserved_by=None,
