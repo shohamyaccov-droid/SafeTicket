@@ -5,8 +5,9 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.utils import timezone
 
-from users.models import Artist, Event, Order, Ticket
+from users.models import Artist, Event, Order, SellerPayout, Ticket
 from users.reset_test_data_core import run_reset_test_data
+from wallets.models import WalletTransaction
 
 User = get_user_model()
 
@@ -53,11 +54,22 @@ class ResetTestDataCoreTests(TestCase):
             quantity=1,
         )
         self.assertEqual(Order.objects.count(), 1)
+        self.assertEqual(SellerPayout.objects.count(), 1)
+        self.assertEqual(WalletTransaction.objects.count(), 1)
+        seller.wallet.refresh_from_db()
+        self.assertGreater(seller.wallet.locked_balance + seller.wallet.available_balance, Decimal('0.00'))
 
         result = run_reset_test_data()
 
         self.assertEqual(Order.objects.count(), 0)
+        self.assertEqual(SellerPayout.objects.count(), 0)
+        self.assertEqual(WalletTransaction.objects.count(), 0)
         self.assertGreaterEqual(result['orders_deleted'], 1)
+        self.assertEqual(result['seller_payouts_deleted'], 1)
+        self.assertEqual(result['wallet_transactions_deleted'], 1)
+        seller.wallet.refresh_from_db()
+        self.assertEqual(seller.wallet.locked_balance, Decimal('0.00'))
+        self.assertEqual(seller.wallet.available_balance, Decimal('0.00'))
         ticket.refresh_from_db()
         self.assertEqual(ticket.status, 'active')
         self.assertEqual(ticket.available_quantity, 1)
