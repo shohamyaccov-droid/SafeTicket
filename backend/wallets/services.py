@@ -53,6 +53,18 @@ def _event_for_payout(payout):
     return getattr(ticket, 'event', None) if ticket else None
 
 
+def _payout_is_past_escrow_release_threshold(payout) -> bool:
+    order = getattr(payout, 'order', None)
+    ticket = getattr(order, 'ticket', None) if order else None
+    if ticket is None:
+        return False
+
+    from users.pricing import compute_payout_eligible_date
+
+    eligible_at = compute_payout_eligible_date(ticket)
+    return bool(eligible_at and timezone.now() >= eligible_at)
+
+
 def credit_wallet_for_seller_payout(payout) -> WalletTransaction | None:
     """
     Idempotently credit the seller wallet when a paid order creates a SellerPayout.
@@ -79,7 +91,7 @@ def credit_wallet_for_seller_payout(payout) -> WalletTransaction | None:
 
         wallet, _created = UserWallet.objects.select_for_update().get_or_create(user_id=payout.seller_id)
         escrow_status = (getattr(payout.order, 'payout_status', '') or 'locked').strip()
-        is_available = escrow_status in ('eligible', 'paid')
+        is_available = escrow_status in ('eligible', 'paid') and _payout_is_past_escrow_release_threshold(payout)
 
         if is_available:
             wallet.available_balance += amount
@@ -130,6 +142,8 @@ def release_eligible_wallet_payouts(*, seller=None) -> int:
             if tx is None:
                 tx = credit_wallet_for_seller_payout(payout)
             if tx is None or tx.status == WalletTransaction.Status.COMPLETED:
+                continue
+            if not _payout_is_past_escrow_release_threshold(payout):
                 continue
 
             amount = Decimal(tx.amount or 0).quantize(Decimal('0.01'))

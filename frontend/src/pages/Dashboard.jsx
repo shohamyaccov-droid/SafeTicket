@@ -1457,7 +1457,7 @@ const Dashboard = () => {
                               )}
                             </div>
                           </div>
-                          <p className="payout-note">הכספים נשמרים בנאמנות (Escrow) ואינם משוחררים למוכר מיד עם המכירה. שחרור תמלוגים — בדרך כלל 24 שעות לאחר מועד תחילת האירוע, בכפוף לסטטוס העסקה.</p>
+                          <p className="payout-note">הכספים נשמרים בנאמנות (Escrow) ואינם משוחררים למוכר מיד עם המכירה. שחרור תמלוגים מתבצע 36 שעות לאחר קיום האירוע, בכפוף לתקינות הכרטיסים וסטטוס העסקה.</p>
                         </div>
                       </div>
                     )}
@@ -1505,7 +1505,7 @@ const Dashboard = () => {
                                     {listing.escrow_payout_status === 'paid' && 'התשלום שוחרר למוכר.'}
                                     {listing.escrow_payout_status === 'eligible' && 'הכסף בנאמנות — זכאי לשחרור תשלום (לאחר האירוע).'}
                                     {listing.escrow_payout_status === 'locked' && listing.escrow_payout_eligible_date &&
-                                      `הכסף בנאמנות. ישוחרר ב-${formatDate(listing.escrow_payout_eligible_date)} (24 שעות לאחר האירוע)`}
+                                      `הכסף בנאמנות. ישוחרר ב-${formatDate(listing.escrow_payout_eligible_date)} (36 שעות לאחר האירוע)`}
                                     {listing.escrow_payout_status === 'locked' && !listing.escrow_payout_eligible_date &&
                                       'הכסף בנאמנות עד לאחר האירוע ולפי תנאי הפלטפורמה.'}
                                   </div>

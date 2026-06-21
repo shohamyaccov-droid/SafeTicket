@@ -1238,12 +1238,25 @@ def user_activity(request):
     try:
         user = request.user
 
-        # Escrow: promote locked → eligible when payout window opens
-        Order.objects.filter(
-            payout_status='locked',
-            payout_eligible_date__isnull=False,
-            payout_eligible_date__lte=timezone.now(),
-        ).update(payout_status='eligible')
+        # Escrow: promote locked -> eligible only after the recomputed 36-hour release threshold.
+        now = timezone.now()
+        eligible_order_ids = []
+        candidate_orders = (
+            Order.objects.select_related('ticket__event')
+            .filter(
+                payout_status='locked',
+                payout_eligible_date__isnull=False,
+                payout_eligible_date__lte=now,
+            )
+        )
+        for candidate in candidate_orders.iterator():
+            if candidate.ticket_id is None:
+                continue
+            eligible_at = compute_payout_eligible_date(candidate.ticket)
+            if eligible_at and now >= eligible_at:
+                eligible_order_ids.append(candidate.pk)
+        if eligible_order_ids:
+            Order.objects.filter(pk__in=eligible_order_ids, payout_status='locked').update(payout_status='eligible')
         
         # Get purchases (orders)
         po_ctx, purchases_list = build_profile_orders_serialization_context(

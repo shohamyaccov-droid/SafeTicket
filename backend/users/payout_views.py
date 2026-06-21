@@ -14,6 +14,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import Order, SellerPayout
+from .pricing import compute_payout_eligible_date
 from .views import _admin_staff_or_superuser, csrf_required
 from wallets.services import mark_seller_payout_paid, release_eligible_wallet_payouts
 
@@ -37,6 +38,32 @@ def _order_escrow_status(order: Order | None) -> str:
     if order is None:
         return 'unknown'
     return (order.payout_status or 'locked').strip()
+
+
+def _promote_orders_past_escrow_threshold(*, seller=None) -> int:
+    qs = (
+        Order.objects.select_related('ticket__event')
+        .filter(
+            payout_status='locked',
+            payout_eligible_date__isnull=False,
+            payout_eligible_date__lte=timezone.now(),
+        )
+    )
+    if seller is not None:
+        qs = qs.filter(seller_payout__seller=seller)
+
+    promoted_ids = []
+    now = timezone.now()
+    for order in qs.iterator():
+        if order.ticket_id is None:
+            continue
+        eligible_at = compute_payout_eligible_date(order.ticket)
+        if eligible_at and now >= eligible_at:
+            promoted_ids.append(order.pk)
+
+    if not promoted_ids:
+        return 0
+    return Order.objects.filter(pk__in=promoted_ids, payout_status='locked').update(payout_status='eligible')
 
 
 def _admin_payout_summary() -> dict:
@@ -106,16 +133,28 @@ def _wallet_summary_for_seller(user) -> dict:
 
 
 def _serialize_wallet_transaction(payout: SellerPayout) -> dict:
+    from wallets.models import WalletTransaction
+
     order = payout.order
     escrow = _order_escrow_status(order)
     if payout.payout_status == SellerPayout.PayoutStatus.TRANSFERRED:
         display_status = 'paid'
     elif payout.payout_status == SellerPayout.PayoutStatus.CANCELLED:
         display_status = 'cancelled'
-    elif escrow == 'locked':
-        display_status = 'pending_event'
     else:
-        display_status = 'available'
+        credit_tx = (
+            WalletTransaction.objects.filter(
+                seller_payout=payout,
+                transaction_type=WalletTransaction.TransactionType.SALE_CREDIT,
+            )
+            .only('status')
+            .first()
+        )
+        credit_is_available = bool(credit_tx and credit_tx.status == WalletTransaction.Status.COMPLETED)
+        if credit_is_available:
+            display_status = 'available'
+        else:
+            display_status = 'pending_event'
 
     return {
         'id': payout.pk,
@@ -139,11 +178,7 @@ def admin_payouts_list(request):
     if not _admin_staff_or_superuser(request):
         return Response({'error': 'Permission denied. Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
 
-    Order.objects.filter(
-        payout_status='locked',
-        payout_eligible_date__isnull=False,
-        payout_eligible_date__lte=timezone.now(),
-    ).update(payout_status='eligible')
+    _promote_orders_past_escrow_threshold()
     release_eligible_wallet_payouts()
 
     status_filter = (request.query_params.get('status') or 'pending').strip().lower()
@@ -205,11 +240,7 @@ def user_wallet(request):
     """Authenticated seller wallet: earnings summary + transaction history."""
     user = request.user
 
-    Order.objects.filter(
-        payout_status='locked',
-        payout_eligible_date__isnull=False,
-        payout_eligible_date__lte=timezone.now(),
-    ).update(payout_status='eligible')
+    _promote_orders_past_escrow_threshold(seller=user)
     release_eligible_wallet_payouts(seller=user)
 
     payouts = (

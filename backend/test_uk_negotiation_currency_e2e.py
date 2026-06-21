@@ -163,11 +163,11 @@ class UkNegotiationCurrencyE2ETest(TestCase):
             f'seller_fee={order.seller_service_fee} net_to_seller={order.net_seller_revenue} total={order.total_paid_by_buyer}'
         )
 
-        # Step E — Escrow: 24h after ends_at
-        expected_eligible = self.ends + timedelta(hours=24)
+        # Step E — Escrow: 36h after ends_at
+        expected_eligible = self.ends + timedelta(hours=36)
         self.assertIsNotNone(order.payout_eligible_date)
         self.assertEqual(order.payout_eligible_date, expected_eligible)
-        line(f'[E] payout_eligible_date={order.payout_eligible_date.isoformat()} (ends_at+24h)')
+        line(f'[E] payout_eligible_date={order.payout_eligible_date.isoformat()} (ends_at+36h)')
 
         line('=== UK E2E PASS ===')
         for ln in log:

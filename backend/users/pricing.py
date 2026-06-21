@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from .models import Offer, Ticket
 
 QUANT = Decimal('0.01')
+ESCROW_RELEASE_DELAY_HOURS = 36
 
 
 def _buyer_fee_rate() -> Decimal:
@@ -131,8 +132,8 @@ def compute_order_price_breakdown(
 
 def compute_payout_eligible_date(ticket: 'Ticket'):
     """
-    Escrow: seller funds unlock 24 hours after event ends when `event.ends_at` is set;
-    otherwise 24 hours after `event.date` (legacy / start time).
+    Escrow: seller funds unlock 36 hours after event ends when `event.ends_at` is set;
+    otherwise 36 hours after `event.date` (legacy / start time).
     """
     ref_dt = None
     try:
@@ -147,4 +148,4 @@ def compute_payout_eligible_date(ticket: 'Ticket'):
         return None
     if timezone.is_naive(ref_dt):
         ref_dt = timezone.make_aware(ref_dt, timezone.get_current_timezone())
-    return ref_dt + timedelta(hours=24)
+    return ref_dt + timedelta(hours=ESCROW_RELEASE_DELAY_HOURS)

@@ -60,15 +60,38 @@ class PayoutApiTestBase(TestCase):
             available_quantity=0,
         )
 
+    def _ticket_for_event_offset(self, *, hours_from_now):
+        event = Event.objects.create(
+            name=f'Wallet Event {hours_from_now}',
+            date=timezone.now() + timedelta(hours=hours_from_now),
+            venue='היכל מנורה מבטחים',
+            city='Tel Aviv',
+            country='IL',
+        )
+        return Ticket.objects.create(
+            seller=self.seller,
+            event=event,
+            event_name=event.name,
+            event_date=event.date,
+            venue=event.venue,
+            original_price=Decimal('100.00'),
+            asking_price=Decimal('100.00'),
+            status='sold',
+            available_quantity=0,
+        )
+
     def _create_paid_order(self, *, escrow='locked'):
+        ticket = self.ticket
+        if escrow == 'eligible':
+            ticket = self._ticket_for_event_offset(hours_from_now=-37)
         order = Order.objects.create(
             user=self.buyer,
-            ticket=self.ticket,
+            ticket=ticket,
             status='paid',
             total_amount=Decimal('115.00'),
             total_paid_by_buyer=Decimal('115.00'),
             quantity=1,
-            event_name=self.event.name,
+            event_name=ticket.event_name,
             payout_status=escrow,
             payout_eligible_date=timezone.now() + timedelta(days=5) if escrow == 'locked' else timezone.now() - timedelta(hours=1),
         )
@@ -141,14 +164,15 @@ class UserWalletApiTests(PayoutApiTestBase):
 
     def test_wallet_summary_splits_pending_and_available(self):
         locked_payout = self._create_paid_order(escrow='locked')
+        eligible_ticket = self._ticket_for_event_offset(hours_from_now=-37)
         eligible_order = Order.objects.create(
             user=self.buyer,
-            ticket=self.ticket,
+            ticket=eligible_ticket,
             status='paid',
             total_amount=Decimal('230.00'),
             total_paid_by_buyer=Decimal('230.00'),
             quantity=1,
-            event_name=self.event.name,
+            event_name=eligible_ticket.event_name,
             payout_status='eligible',
         )
         eligible_payout = ensure_seller_payout_for_order(eligible_order)
@@ -192,3 +216,38 @@ class UserWalletApiTests(PayoutApiTestBase):
         net = Decimal(tx['net_earnings'])
         self.assertEqual(fee, (total * Decimal('0.15')).quantize(Decimal('0.01')))
         self.assertEqual(net, (total - fee).quantize(Decimal('0.01')))
+
+    def test_wallet_does_not_release_before_36_hours_even_with_stale_24h_date(self):
+        ticket = self._ticket_for_event_offset(hours_from_now=-35)
+        order = Order.objects.create(
+            user=self.buyer,
+            ticket=ticket,
+            status='paid',
+            total_amount=Decimal('115.00'),
+            total_paid_by_buyer=Decimal('115.00'),
+            quantity=1,
+            event_name=ticket.event_name,
+            payout_status='eligible',
+            payout_eligible_date=timezone.now() - timedelta(hours=11),
+        )
+        payout = ensure_seller_payout_for_order(order)
+
+        self.client.force_authenticate(user=self.seller)
+        res = self.client.get('/api/users/me/wallet/')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data['summary']['pending_funds'], '97.75')
+        self.assertEqual(res.data['summary']['available_funds'], '0.00')
+        self.assertEqual(res.data['transactions'][0]['display_status'], 'pending_event')
+
+        ticket.event.date = timezone.now() - timedelta(hours=37)
+        ticket.event.save(update_fields=['date', 'updated_at'])
+        order.payout_status = 'locked'
+        order.payout_eligible_date = timezone.now() - timedelta(hours=1)
+        order.save(update_fields=['payout_status', 'payout_eligible_date', 'updated_at'])
+
+        res = self.client.get('/api/users/me/wallet/')
+        self.assertEqual(res.data['summary']['pending_funds'], '0.00')
+        self.assertEqual(res.data['summary']['available_funds'], '97.75')
+        self.assertEqual(res.data['transactions'][0]['display_status'], 'available')
+        payout.refresh_from_db()
+        self.assertEqual(payout.payout_status, SellerPayout.PayoutStatus.PENDING)

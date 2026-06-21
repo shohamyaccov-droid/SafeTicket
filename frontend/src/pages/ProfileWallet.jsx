@@ -77,27 +77,30 @@ export default function ProfileWalletPage({ embedded = false }) {
       ) : (
         <>
           {summary ? (
-            <div className="wallet-summary-grid">
-              <div className="wallet-summary-card">
-                <span className="wallet-summary-label">סה״כ הרווחת</span>
-                <span className="wallet-summary-value" dir="ltr">
-                  ₪{formatAmountForCurrency(summary.total_earned, 'ILS')}
-                </span>
-                <span className="wallet-summary-hint">כספים שכבר שולמו אליך</span>
-              </div>
+            <div className="wallet-balance-grid" aria-label="סיכום יתרות בארנק">
               <div className="wallet-summary-card wallet-summary-card--pending">
-                <span className="wallet-summary-label">כספים ממתינים</span>
+                <div className="wallet-summary-topline">
+                  <span className="wallet-summary-label">יתרה בהמתנה</span>
+                  <span className="wallet-summary-pill wallet-summary-pill--pending">Escrow</span>
+                </div>
                 <span className="wallet-summary-value" dir="ltr">
                   ₪{formatAmountForCurrency(summary.pending_funds, 'ILS')}
                 </span>
-                <span className="wallet-summary-hint">ממתין לסיום האירוע</span>
+                <span className="wallet-summary-hint">
+                  כספים מוחזקים בנאמנות (Escrow) וישוחררו אוטומטית 36 שעות לאחר קיום האירוע, בכפוף לתקינות הכרטיסים.
+                </span>
               </div>
               <div className="wallet-summary-card wallet-summary-card--available">
-                <span className="wallet-summary-label">כספים זמינים</span>
+                <div className="wallet-summary-topline">
+                  <span className="wallet-summary-label">זמין למשיכה</span>
+                  <span className="wallet-summary-pill wallet-summary-pill--available">מאושר</span>
+                </div>
                 <span className="wallet-summary-value" dir="ltr">
                   ₪{formatAmountForCurrency(summary.available_funds, 'ILS')}
                 </span>
-                <span className="wallet-summary-hint">מוכן להעברה בנקאית</span>
+                <span className="wallet-summary-hint">
+                  כספים שאושרו ומוכנים להעברה יזומה לחשבון הבנק/הביט שלך על ידי הנהלת האתר.
+                </span>
               </div>
             </div>
           ) : null}

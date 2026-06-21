@@ -252,7 +252,7 @@ class Event(models.Model):
     ends_at = models.DateTimeField(
         blank=True,
         null=True,
-        help_text='When the show ends (optional). Escrow payout uses ends_at + 24h when set; else date + 24h.',
+        help_text='When the show ends (optional). Escrow payout uses ends_at + 36h when set; else date + 36h.',
     )
 
     high_demand = models.BooleanField(
@@ -644,7 +644,7 @@ class Order(models.Model):
         help_text='Amount seller receives after seller_service_fee (currently 0%) on final_negotiated_price',
     )
 
-    # Escrow / seller payout (funds held until after event + 24h)
+    # Escrow / seller payout (funds held until after event + 36h)
     PAYOUT_STATUS_CHOICES = [
         ('locked', 'Locked'),
         ('eligible', 'Eligible'),
@@ -654,12 +654,12 @@ class Order(models.Model):
         max_length=20,
         choices=PAYOUT_STATUS_CHOICES,
         default='locked',
-        help_text='Escrow lifecycle: locked → eligible (after event+24h) → paid',
+        help_text='Escrow lifecycle: locked -> eligible (after event+36h) -> paid',
     )
     payout_eligible_date = models.DateTimeField(
         null=True,
         blank=True,
-        help_text='When seller payout becomes eligible (24 hours after event start)',
+        help_text='When seller payout becomes eligible (36 hours after event)',
     )
 
     # Single-row multi-qty: inventory held on the ticket row until payment confirms or order expires
