@@ -70,6 +70,12 @@ def ensure_seller_payout_for_order(order: Order) -> SellerPayout | None:
     with transaction.atomic():
         existing = SellerPayout.objects.filter(order_id=order.pk).first()
         if existing:
+            try:
+                from wallets.services import credit_wallet_for_seller_payout
+
+                credit_wallet_for_seller_payout(existing)
+            except Exception:
+                logger.exception('Failed to reconcile seller wallet for payout_id=%s order_id=%s', existing.pk, order.pk)
             return existing
 
         payout = SellerPayout(
@@ -90,6 +96,12 @@ def ensure_seller_payout_for_order(order: Order) -> SellerPayout | None:
             net_payout,
             platform_fee,
         )
+        try:
+            from wallets.services import credit_wallet_for_seller_payout
+
+            credit_wallet_for_seller_payout(payout)
+        except Exception:
+            logger.exception('Failed to credit seller wallet for payout_id=%s order_id=%s', payout.pk, order.pk)
         return payout
 
 

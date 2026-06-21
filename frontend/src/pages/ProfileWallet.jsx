@@ -13,7 +13,8 @@ const STATUS_LABELS = {
   cancelled: 'בוטל',
 };
 
-export default function ProfileWalletPage() {
+// eslint-disable-next-line react/prop-types
+export default function ProfileWalletPage({ embedded = false }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
@@ -60,11 +61,13 @@ export default function ProfileWalletPage() {
   };
 
   return (
-    <div className="wallet-page" dir="rtl">
+    <div className={`wallet-page${embedded ? ' wallet-page--embedded' : ''}`} dir="rtl">
       <div className="wallet-header">
-        <button type="button" className="wallet-back" onClick={() => navigate('/profile')}>
-          ← חזרה לפרופיל
-        </button>
+        {!embedded && (
+          <button type="button" className="wallet-back" onClick={() => navigate('/profile')}>
+            ← חזרה לפרופיל
+          </button>
+        )}
         <h1>הארנק שלי</h1>
         <p className="wallet-subtitle">מעקב שקוף אחר מכירות, עמלות TradeTix (15%) ויתרות</p>
       </div>

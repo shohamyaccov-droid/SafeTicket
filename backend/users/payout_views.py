@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db.models import Sum
 from django.utils import timezone
 from rest_framework import status
@@ -14,6 +15,7 @@ from rest_framework.response import Response
 
 from .models import Order, SellerPayout
 from .views import _admin_staff_or_superuser, csrf_required
+from wallets.services import mark_seller_payout_paid, release_eligible_wallet_payouts
 
 
 def _quantize(value) -> Decimal:
@@ -40,15 +42,18 @@ def _order_escrow_status(order: Order | None) -> str:
 def _admin_payout_summary() -> dict:
     base = SellerPayout.objects.exclude(payout_status=SellerPayout.PayoutStatus.CANCELLED)
     pending_qs = base.filter(payout_status=SellerPayout.PayoutStatus.PENDING)
+    available_qs = pending_qs.filter(order__payout_status='eligible')
     transferred_qs = base.filter(payout_status=SellerPayout.PayoutStatus.TRANSFERRED)
 
     pending_net = _quantize(pending_qs.aggregate(s=Sum('net_payout'))['s'])
+    available_net = _quantize(available_qs.aggregate(s=Sum('net_payout'))['s'])
     pending_fees = _quantize(pending_qs.aggregate(s=Sum('platform_fee'))['s'])
     total_revenue = _quantize(base.aggregate(s=Sum('platform_fee'))['s'])
     total_transferred = _quantize(transferred_qs.aggregate(s=Sum('net_payout'))['s'])
 
     return {
         'total_pending_owed': str(pending_net),
+        'total_available_owed': str(available_net),
         'total_pending_platform_fees': str(pending_fees),
         'total_platform_revenue': str(total_revenue),
         'total_transferred_to_sellers': str(total_transferred),
@@ -80,27 +85,22 @@ def _serialize_admin_payout(payout: SellerPayout) -> dict:
 
 
 def _wallet_summary_for_seller(user) -> dict:
+    from wallets.models import UserWallet
+
+    wallet = UserWallet.objects.filter(user=user).first()
     base = SellerPayout.objects.filter(seller=user).exclude(
         payout_status=SellerPayout.PayoutStatus.CANCELLED
     )
     transferred = base.filter(payout_status=SellerPayout.PayoutStatus.TRANSFERRED)
-    pending_rows = base.filter(payout_status=SellerPayout.PayoutStatus.PENDING).select_related('order')
 
     total_earned = _quantize(transferred.aggregate(s=Sum('net_payout'))['s'])
-    pending_funds = Decimal('0.00')
-    available_funds = Decimal('0.00')
-
-    for row in pending_rows:
-        escrow = _order_escrow_status(row.order)
-        if escrow == 'locked':
-            pending_funds += _quantize(row.net_payout)
-        else:
-            available_funds += _quantize(row.net_payout)
+    pending_funds = _quantize(getattr(wallet, 'locked_balance', Decimal('0.00')))
+    available_funds = _quantize(getattr(wallet, 'available_balance', Decimal('0.00')))
 
     return {
         'total_earned': str(total_earned),
-        'pending_funds': str(pending_funds.quantize(Decimal('0.01'))),
-        'available_funds': str(available_funds.quantize(Decimal('0.01'))),
+        'pending_funds': str(pending_funds),
+        'available_funds': str(available_funds),
         'currency': 'ILS',
     }
 
@@ -138,6 +138,13 @@ def admin_payouts_list(request):
     """List seller payouts for admin financial dashboard."""
     if not _admin_staff_or_superuser(request):
         return Response({'error': 'Permission denied. Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
+
+    Order.objects.filter(
+        payout_status='locked',
+        payout_eligible_date__isnull=False,
+        payout_eligible_date__lte=timezone.now(),
+    ).update(payout_status='eligible')
+    release_eligible_wallet_payouts()
 
     status_filter = (request.query_params.get('status') or 'pending').strip().lower()
     qs = (
@@ -179,14 +186,10 @@ def admin_payout_mark_paid(request, payout_id: int):
     if payout.payout_status == SellerPayout.PayoutStatus.CANCELLED:
         return Response({'error': 'Cannot mark a cancelled payout as paid.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    payout.payout_status = SellerPayout.PayoutStatus.TRANSFERRED
-    payout.transferred_at = timezone.now()
-    payout.save(update_fields=['payout_status', 'transferred_at'])
-
-    if payout.order_id:
-        Order.objects.filter(pk=payout.order_id, payout_status__in=('locked', 'eligible')).update(
-            payout_status='paid'
-        )
+    try:
+        payout = mark_seller_payout_paid(payout)
+    except ValidationError as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
     payout.refresh_from_db()
     return Response({
@@ -207,6 +210,7 @@ def user_wallet(request):
         payout_eligible_date__isnull=False,
         payout_eligible_date__lte=timezone.now(),
     ).update(payout_status='eligible')
+    release_eligible_wallet_payouts(seller=user)
 
     payouts = (
         SellerPayout.objects.filter(seller=user)

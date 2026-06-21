@@ -236,6 +236,9 @@ class PayMeHappyPathE2ETests(PayMeMarketplaceE2EBase):
         self.assertEqual(total_paid, self.checkout_total)
         self.assertEqual(payout.platform_fee, Decimal('17.25'))
         self.assertEqual(payout.net_payout, Decimal('97.75'))
+        self.seller.wallet.refresh_from_db()
+        self.assertEqual(self.seller.wallet.locked_balance, Decimal('97.75'))
+        self.assertEqual(self.seller.wallet.available_balance, Decimal('0.00'))
 
     @patch('users.payme_views.generate_payme_sale_for_order')
     def test_duplicate_success_webhook_does_not_duplicate_ledger(self, mock_generate):

@@ -49,6 +49,10 @@ class WalletTransaction(models.Model):
         COMPLETED = 'COMPLETED', 'Successfully transferred'
         FAILED = 'FAILED', 'Transfer error'
 
+    class TransactionType(models.TextChoices):
+        SALE_CREDIT = 'SALE_CREDIT', 'Seller sale credit'
+        WITHDRAWAL = 'WITHDRAWAL', 'Manual seller payout withdrawal'
+
     sender_wallet = models.ForeignKey(
         UserWallet,
         on_delete=models.PROTECT,
@@ -63,6 +67,12 @@ class WalletTransaction(models.Model):
         related_name='incoming_transactions',
     )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    transaction_type = models.CharField(
+        max_length=30,
+        choices=TransactionType.choices,
+        default=TransactionType.SALE_CREDIT,
+        db_index=True,
+    )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
@@ -78,6 +88,15 @@ class WalletTransaction(models.Model):
         blank=True,
         related_name='wallet_transactions',
     )
+    seller_payout = models.ForeignKey(
+        'users.SellerPayout',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='wallet_transactions',
+        help_text='Seller payout row this wallet ledger entry belongs to.',
+    )
+    note = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -88,10 +107,15 @@ class WalletTransaction(models.Model):
         ]
 
     def __str__(self):
-        return f'WT#{self.pk} {self.amount} {self.status}'
+        return f'WT#{self.pk} {self.transaction_type} {self.amount} {self.status}'
 
     def clean(self):
-        if self.amount is not None and self.amount <= 0:
+        if self.amount is None:
+            raise ValidationError({'amount': 'Amount is required.'})
+        if self.transaction_type == self.TransactionType.WITHDRAWAL:
+            if self.amount >= 0:
+                raise ValidationError({'amount': 'Withdrawal amount must be negative.'})
+        elif self.amount <= 0:
             raise ValidationError({'amount': 'Amount must be positive.'})
 
     def apply_balance_move_for_completed(self):

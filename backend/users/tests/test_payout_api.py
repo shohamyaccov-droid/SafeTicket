@@ -11,6 +11,7 @@ from rest_framework.test import APIClient
 
 from users.models import Event, Order, SellerPayout, Ticket
 from users.payout_ledger import ensure_seller_payout_for_order
+from wallets.models import WalletTransaction
 
 User = get_user_model()
 
@@ -100,6 +101,8 @@ class AdminPayoutApiTests(PayoutApiTestBase):
 
     def test_admin_mark_paid_updates_status(self):
         payout = self._create_paid_order(escrow='eligible')
+        self.seller.wallet.refresh_from_db()
+        self.assertEqual(self.seller.wallet.available_balance, Decimal('97.75'))
         self.client.force_authenticate(user=self.admin)
         res = self.client.post(f'/api/users/admin/payouts/{payout.pk}/mark-paid/', {}, format='json')
         self.assertEqual(res.status_code, 200)
@@ -108,6 +111,15 @@ class AdminPayoutApiTests(PayoutApiTestBase):
         self.assertIsNotNone(payout.transferred_at)
         payout.order.refresh_from_db()
         self.assertEqual(payout.order.payout_status, 'paid')
+        self.seller.wallet.refresh_from_db()
+        self.assertEqual(self.seller.wallet.available_balance, Decimal('0.00'))
+        self.assertTrue(
+            WalletTransaction.objects.filter(
+                seller_payout=payout,
+                transaction_type=WalletTransaction.TransactionType.WITHDRAWAL,
+                amount=Decimal('-97.75'),
+            ).exists()
+        )
         self.assertEqual(res.data['summary']['pending_count'], 0)
 
     def test_admin_mark_paid_idempotent_message(self):
@@ -155,6 +167,9 @@ class UserWalletApiTests(PayoutApiTestBase):
         self.assertEqual(tx_by_id[eligible_payout.pk]['display_status'], 'available')
         self.assertEqual(tx_by_id[locked_payout.pk]['platform_fee'], '17.25')
         self.assertEqual(tx_by_id[locked_payout.pk]['net_earnings'], '97.75')
+        self.seller.wallet.refresh_from_db()
+        self.assertEqual(self.seller.wallet.locked_balance, Decimal('97.75'))
+        self.assertEqual(self.seller.wallet.available_balance, Decimal('195.50'))
 
     def test_wallet_shows_transferred_as_earned(self):
         payout = self._create_paid_order()

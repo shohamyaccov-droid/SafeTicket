@@ -19,6 +19,7 @@ import CheckoutModal from '../components/CheckoutModal';
 import NegotiationModal from '../components/NegotiationModal';
 import Toast from '../components/Toast';
 import DashboardSkeleton from '../components/skeletons/DashboardSkeleton';
+import ProfileWalletPage from './ProfileWallet';
 import { toastError, toastSuccess } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
 import { downloadTicketFromAxiosBlob } from '../utils/ticketDownload';
@@ -907,6 +908,18 @@ const Dashboard = () => {
           מכירות שלי ({summary.active_listings_count || listings.active?.length || 0})
         </button>
         <button
+          className={`dashboard-tab ${activeTab === 'wallet' ? 'active' : ''}`}
+          onClick={() => setActiveTab('wallet')}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20 7H5C3.89543 7 3 7.89543 3 9V18C3 19.1046 3.89543 20 5 20H20C21.1046 20 22 19.1046 22 18V9C22 7.89543 21.1046 7 20 7Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M16 12H22V16H16C14.8954 16 14 15.1046 14 14C14 12.8954 14.8954 12 16 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M18 14H18.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            <path d="M6 7V6C6 4.89543 6.89543 4 8 4H18C19.1046 4 20 4.89543 20 6V7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          הארנק שלי
+        </button>
+        <button
           className={`dashboard-tab ${activeTab === 'offers' ? 'active' : ''} ${totalActionRequired > 0 ? 'has-notification' : ''}`}
           onClick={() => setActiveTab('offers')}
         >
@@ -1746,6 +1759,12 @@ const Dashboard = () => {
                     </div>
                   </>
                 )}
+          </div>
+        )}
+
+        {activeTab === 'wallet' && (
+          <div className="wallet-tab" style={{ width: '100%', maxWidth: '100%', display: 'block' }}>
+            <ProfileWalletPage embedded />
           </div>
         )}
 

@@ -5,6 +5,11 @@
   direction: rtl;
 }
 
+.wallet-page--embedded {
+  max-width: none;
+  padding: 0;
+}
+
 .wallet-header {
   margin-bottom: 1.75rem;
 }

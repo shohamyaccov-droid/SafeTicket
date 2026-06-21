@@ -675,11 +675,22 @@ class SellerPayoutAdmin(admin.ModelAdmin):
 
     @admin.action(description='Mark selected payouts as transferred')
     def mark_transferred(self, request, queryset):
-        updated = queryset.update(
-            payout_status=SellerPayout.PayoutStatus.TRANSFERRED,
-            transferred_at=timezone.now(),
-        )
-        self.message_user(request, f'Marked {updated} payout(s) as transferred.', level=messages.SUCCESS)
+        from django.core.exceptions import ValidationError
+
+        from wallets.services import mark_seller_payout_paid
+
+        updated = 0
+        failed = 0
+        for payout in queryset.select_related('seller', 'order'):
+            try:
+                mark_seller_payout_paid(payout)
+                updated += 1
+            except ValidationError:
+                failed += 1
+        if updated:
+            self.message_user(request, f'Marked {updated} payout(s) as transferred.', level=messages.SUCCESS)
+        if failed:
+            self.message_user(request, f'{failed} payout(s) could not be transferred.', level=messages.WARNING)
 
     @admin.action(description='Mark selected payouts as cancelled')
     def mark_cancelled(self, request, queryset):
