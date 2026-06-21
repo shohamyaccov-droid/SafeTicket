@@ -1,25 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { orderAPI } from '../services/api';
 import { Analytics } from '../utils/analytics';
+import './PaymeCheckoutSuccess.css';
 
-const POLL_MS = 2000;
-const MAX_POLLS = 45;
-const RETRY_POLLS = 12;
+const POLL_MS = 2500;
+const TIMEOUT_MS = 40000;
+const DASHBOARD_REDIRECT_MS = 3000;
 
 export default function PaymeCheckoutSuccess() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const orderIdRaw = searchParams.get('order_id');
-  const { user } = useAuth();
-  const [phase, setPhase] = useState('checking'); // checking | paid | timeout | invalid
+  const { user, loading: authLoading } = useAuth();
+  const [phase, setPhase] = useState('processing'); // processing | success | timeout | invalid
   const [orderStatus, setOrderStatus] = useState(null);
   const [paymeStatus, setPaymeStatus] = useState(null);
   const [lastCheckedAt, setLastCheckedAt] = useState(null);
-  const [retrying, setRetrying] = useState(false);
   const [checkError, setCheckError] = useState('');
-  const polls = useRef(0);
-  const timerRef = useRef(null);
+  const pollTimerRef = useRef(null);
+  const timeoutTimerRef = useRef(null);
+  const redirectTimerRef = useRef(null);
+  const completedRef = useRef(false);
 
   const orderId = orderIdRaw ? parseInt(orderIdRaw, 10) : NaN;
   const isValidOrderId = Number.isFinite(orderId) && orderId > 0;
@@ -32,12 +35,18 @@ export default function PaymeCheckoutSuccess() {
     }
   })();
 
-  const clearPollTimer = () => {
-    if (timerRef.current != null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
+  const clearTimer = useCallback((ref) => {
+    if (ref.current != null) {
+      window.clearTimeout(ref.current);
+      ref.current = null;
     }
-  };
+  }, []);
+
+  const clearAllTimers = useCallback(() => {
+    clearTimer(pollTimerRef);
+    clearTimer(timeoutTimerRef);
+    clearTimer(redirectTimerRef);
+  }, [clearTimer]);
 
   const checkStatusOnce = useCallback(async () => {
     if (!isValidOrderId) {
@@ -52,7 +61,9 @@ export default function PaymeCheckoutSuccess() {
       setPaymeStatus(res.data?.payme_status ?? null);
       setLastCheckedAt(new Date());
       if (s === 'paid' || s === 'completed') {
-        setPhase('paid');
+        completedRef.current = true;
+        setPhase('success');
+        clearAllTimers();
         Analytics.checkoutComplete(orderId);
         try {
           sessionStorage.removeItem('payme_checkout_guest_email');
@@ -71,137 +82,136 @@ export default function PaymeCheckoutSuccess() {
       );
       return false;
     }
-  }, [guestEmail, isValidOrderId, orderId, user]);
-
-  const startPolling = useCallback((maxPolls = MAX_POLLS) => {
-    clearPollTimer();
-    polls.current = 0;
-    setPhase('checking');
-    setRetrying(maxPolls !== MAX_POLLS);
-
-    let cancelled = false;
-
-    const poll = async () => {
-      if (cancelled) return;
-      polls.current += 1;
-      const paid = await checkStatusOnce();
-      if (cancelled || paid) {
-        setRetrying(false);
-        return;
-      }
-      if (polls.current >= maxPolls) {
-        setPhase('timeout');
-        setRetrying(false);
-        return;
-      }
-      timerRef.current = window.setTimeout(poll, POLL_MS);
-    };
-
-    void poll();
-    return () => {
-      cancelled = true;
-      clearPollTimer();
-      setRetrying(false);
-    };
-  }, [checkStatusOnce]);
+  }, [clearAllTimers, guestEmail, isValidOrderId, orderId, user]);
 
   useEffect(() => {
     if (!isValidOrderId) {
       setPhase('invalid');
-      return;
+      return undefined;
     }
 
-    return startPolling(MAX_POLLS);
-  }, [isValidOrderId, startPolling]);
+    let cancelled = false;
+    const startedAt = Date.now();
+    setPhase('processing');
 
-  const handleRetry = () => {
-    startPolling(RETRY_POLLS);
-  };
+    const poll = async () => {
+      if (cancelled || completedRef.current) return;
+      const paid = await checkStatusOnce();
+      if (cancelled || paid || completedRef.current) {
+        return;
+      }
+      if (Date.now() - startedAt < TIMEOUT_MS) {
+        pollTimerRef.current = window.setTimeout(poll, POLL_MS);
+      }
+    };
 
-  const supportHref = orderIdRaw
-    ? `/contact?subject=${encodeURIComponent(`PayMe order stuck: ${orderIdRaw}`)}`
-    : '/contact';
+    timeoutTimerRef.current = window.setTimeout(() => {
+      if (completedRef.current || cancelled) return;
+      clearTimer(pollTimerRef);
+      setPhase('timeout');
+    }, TIMEOUT_MS);
+
+    void poll();
+
+    return () => {
+      cancelled = true;
+      clearAllTimers();
+    };
+  }, [checkStatusOnce, clearAllTimers, clearTimer, isValidOrderId]);
+
+  useEffect(() => {
+    if (phase !== 'success' || authLoading || !user) {
+      return undefined;
+    }
+    redirectTimerRef.current = window.setTimeout(() => {
+      navigate('/dashboard', { replace: true });
+    }, DASHBOARD_REDIRECT_MS);
+    return () => clearTimer(redirectTimerRef);
+  }, [authLoading, clearTimer, navigate, phase, user]);
 
   if (phase === 'invalid') {
     return (
-      <div className="page-shell" style={{ maxWidth: 560, margin: '3rem auto', padding: '0 1rem', direction: 'rtl', textAlign: 'center' }}>
-        <h1>קישור לא תקין</h1>
-        <p>חסר מזהה הזמנה. חזרו לאתר ונסו שוב.</p>
-        <Link to="/">לדף הבית</Link>
+      <div className="payme-return-page" dir="rtl">
+        <section className="payme-return-card payme-return-card--compact">
+          <h1>קישור לא תקין</h1>
+          <p>חסר מזהה הזמנה. חזרו לאתר ונסו שוב.</p>
+          <Link to="/" className="payme-return-button">לדף הבית</Link>
+        </section>
       </div>
     );
   }
 
+  const isLoggedIn = Boolean(user);
+  const lastStatusText = [
+    orderStatus ? `סטטוס הזמנה: ${orderStatus}` : null,
+    paymeStatus ? `PayMe: ${paymeStatus}` : null,
+    lastCheckedAt ? `נבדק לאחרונה: ${lastCheckedAt.toLocaleTimeString('he-IL')}` : null,
+  ].filter(Boolean).join(' · ');
+
   return (
-    <div className="page-shell" style={{ maxWidth: 560, margin: '3rem auto', padding: '0 1rem', direction: 'rtl', textAlign: 'center' }}>
-      <h1 style={{ marginBottom: '1rem' }}>
-        {phase === 'paid' ? 'התשלום הושלם' : phase === 'timeout' ? 'ממתינים לאישור' : 'מעבדים את התשלום'}
-      </h1>
-      {orderIdRaw && (
-        <p style={{ color: '#64748b', marginBottom: '1rem' }}>
-          מספר הזמנה: <strong>{orderIdRaw}</strong>
-        </p>
-      )}
-      {phase === 'checking' && (
-        <p>
-          אנחנו בודקים את סטטוס העסקה מול PayMe. זה עשוי לקחת כמה שניות.
-          {retrying ? ' מבצעים בדיקה חוזרת...' : ''}
-        </p>
-      )}
-      {phase === 'paid' && (
-        <p>
-          ההזמנה עודכנה במערכת. כרטיסים וקבלה זמינים באזור האישי או במייל {user ? '' : '(אם הוזן)'}.
-        </p>
-      )}
-      {phase === 'timeout' && (
-        <div style={{ lineHeight: 1.7 }}>
-          <p>
-            עדיין לא התקבל אישור סופי מ-PayMe. אם חויבתם, אל תבצעו רכישה נוספת לפני בדיקה חוזרת.
-          </p>
-          <p>
-            שמרו את מספר ההזמנה: <strong>{orderIdRaw}</strong>. אם הסטטוס לא מתעדכן, פנו לתמיכה ונבדוק את העסקה מול PayMe.
-          </p>
-          {(orderStatus || paymeStatus || lastCheckedAt || checkError) && (
-            <p style={{ color: '#64748b', fontSize: '0.95rem' }}>
-              {orderStatus ? `סטטוס אחרון: ${orderStatus}` : 'סטטוס הזמנה טרם זמין'}
-              {paymeStatus ? ` · PayMe: ${paymeStatus}` : ''}
-              {lastCheckedAt ? ` · נבדק לאחרונה: ${lastCheckedAt.toLocaleTimeString('he-IL')}` : ''}
-              {checkError ? ` · ${checkError}` : ''}
+    <div className="payme-return-page" dir="rtl">
+      <section className={`payme-return-card payme-return-card--${phase}`}>
+        {phase === 'processing' && (
+          <>
+            <div className="payme-spinner" role="status" aria-label="מעבד תשלום" />
+            <p className="payme-return-eyebrow">תשלום מאובטח</p>
+            <h1>מעבדים את התשלום...</h1>
+            <p className="payme-return-message">
+              מעבדים את התשלום... נא לא לצאת או לרענן את העמוד.
             </p>
-          )}
-        </div>
-      )}
-      <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-        {phase === 'timeout' && (
-          <button
-            type="button"
-            onClick={handleRetry}
-            disabled={retrying}
-            style={{
-              border: 'none',
-              borderRadius: 8,
-              padding: '0.65rem 1rem',
-              background: '#2563eb',
-              color: '#fff',
-              fontWeight: 700,
-              cursor: retrying ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {retrying ? 'בודק שוב...' : 'בדיקה חוזרת'}
-          </button>
+            <p className="payme-return-subtext">
+              אנחנו ממתינים לאישור הסופי מ-PayMe. זה בדרך כלל לוקח כמה שניות.
+            </p>
+          </>
         )}
-        {phase === 'timeout' && (
-          <Link to={supportHref} style={{ fontWeight: 600 }}>
-            פנייה לתמיכה עם מספר ההזמנה
-          </Link>
+
+        {phase === 'success' && (
+          <>
+            <div className="payme-success-icon" aria-hidden>✓</div>
+            <h1>התשלום הושלם בהצלחה!</h1>
+            {authLoading ? (
+              <p className="payme-return-message">
+                התשלום הושלם בהצלחה! בודקים את פרטי החשבון...
+              </p>
+            ) : isLoggedIn ? (
+              <p className="payme-return-message">
+                התשלום הושלם בהצלחה! הכרטיס נשלח אליך למייל. מעביר אותך כעת לאזור האישי...
+              </p>
+            ) : (
+              <>
+                <p className="payme-return-message">
+                  התשלום הושלם בהצלחה! הכרטיס והקבלה נשלחו לכתובת המייל שהזנת. תודה!
+                </p>
+                <Link to="/" className="payme-return-button">חזרה לדף הבית</Link>
+              </>
+            )}
+          </>
         )}
-        <Link to="/dashboard" style={{ fontWeight: 600 }}>
-          לאזור האישי
-        </Link>
-        <Link to="/" style={{ fontWeight: 600 }}>
-          לדף הבית
-        </Link>
-      </div>
+
+        {phase === 'timeout' && (
+          <>
+            <div className="payme-pending-icon" aria-hidden>⌛</div>
+            <h1>התשלום בבדיקה</h1>
+            <p className="payme-return-message">
+              התשלום נמצא בבדיקה מול חברת האשראי. זה לוקח מעט יותר זמן מהרגיל.
+              אין צורך להמתין פה – ברגע שהעסקה תאושר, נשלח לך את הכרטיסים והקבלה ישירות למייל.
+            </p>
+            <Link to="/" className="payme-return-button">חזרה לדף הבית</Link>
+          </>
+        )}
+
+        {orderIdRaw && (
+          <p className="payme-order-reference">
+            מספר הזמנה: <strong>{orderIdRaw}</strong>
+          </p>
+        )}
+        {(lastStatusText || checkError) && phase !== 'success' && (
+          <p className="payme-last-status">
+            {lastStatusText || 'סטטוס הזמנה טרם זמין'}
+            {checkError ? ` · ${checkError}` : ''}
+          </p>
+        )}
+      </section>
     </div>
   );
 }
