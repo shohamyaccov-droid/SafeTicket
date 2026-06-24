@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { adminAPI, ticketAPI, ensureCsrfToken } from '../services/api';
 import { currencySymbol, formatAmountForCurrency, resolveTicketCurrency } from '../utils/priceFormat';
 import { toastError, toastSuccess } from '../utils/toast';
+import { openAxiosBlobForMobile } from '../utils/ticketDownload';
 import './AdminDashboard.css';
 
 /** Platform totals split by order currency (no FX conversion). */
@@ -175,19 +176,7 @@ export default function AdminDashboard() {
     setReceiptLoadingId(id);
     try {
       const response = await ticketAPI.downloadReceipt(id);
-      const ctype = response.headers?.['content-type'] || '';
-      const blob = new Blob([response.data], {
-        type: ctype.includes('/') ? ctype : 'application/octet-stream',
-      });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `receipt_ticket_${id}`;
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => window.URL.revokeObjectURL(url), 500);
+      openAxiosBlobForMobile(response, { fallbackName: `receipt_ticket_${id}` });
     } catch (err) {
       toastError('הורדת הקבלה נכשלה. נסו שוב או פתחו דרך אימות כרטיסים.');
     } finally {

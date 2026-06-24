@@ -1614,7 +1614,7 @@ const EventDetailsPage = () => {
                     ) : null}
                     <p className="current-price">מחיר נוכחי: {offerModalSym}{getTicketPrice(selectedOfferTicket)}</p>
                     <p className="offer-fee-clarification" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem', lineHeight: 1.5 }}>
-                      ההצעה היא לפני עמלת שירות ({BUYER_SERVICE_FEE_PERCENT}% יתווספו בקופה).
+                      ההצעה היא לפני עמלת ביטחון ({BUYER_SERVICE_FEE_PERCENT}% יתווספו בקופה).
                     </p>
                   </div>
                 </div>

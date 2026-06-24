@@ -135,6 +135,8 @@
 .ticket-summary p {
   color: var(--text-secondary);
   text-align: right;
+  line-height: 1.55;
+  margin: 0.45rem 0;
 }
 
 .pdf-verified-badge {
@@ -753,6 +755,7 @@
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 0.75rem 0;
+  line-height: 1.45;
   animation: fadeInUp 0.5s ease 0.5s both;
 }
 
@@ -772,6 +775,7 @@
   color: var(--text-secondary);
   margin: 0 0 0.75rem 0;
   font-weight: 500;
+  line-height: 1.45;
   animation: fadeInUp 0.5s ease 0.6s both;
 }
 
@@ -806,6 +810,7 @@
   margin: 0;
   color: var(--text-secondary);
   font-size: 0.95rem;
+  line-height: 1.55;
 }
 
 .success-ticket-details strong {
@@ -1387,9 +1392,10 @@
   }
   
   .success-celebration-content {
-    padding: var(--spacing-xl) var(--spacing-md);
+    padding: var(--spacing-xl) var(--spacing-md) calc(var(--spacing-xl) + env(safe-area-inset-bottom, 0px));
     overflow-y: auto;
     flex: 1;
+    line-height: 1.55;
   }
   
   .success-checkmark-large {
@@ -1400,15 +1406,18 @@
   
   .success-title-large {
     font-size: 2rem;
+    line-height: 1.25;
   }
   
   .success-subtitle {
     font-size: 1.5rem;
+    line-height: 1.35;
   }
   
   .success-ticket-summary {
     padding: var(--spacing-md);
     margin: var(--spacing-md) 0;
+    text-align: right;
   }
 
   .success-ticket-details {
@@ -1420,6 +1429,7 @@
     word-wrap: break-word;
     overflow-wrap: break-word;
     font-size: 0.95rem;
+    line-height: 1.6;
   }
   
   .success-actions {

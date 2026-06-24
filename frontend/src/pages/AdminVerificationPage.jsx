@@ -5,7 +5,7 @@ import { adminAPI, ticketAPI } from '../services/api';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { currencySymbol, formatAmountForCurrency, resolveTicketCurrency } from '../utils/priceFormat';
 import { toastError, toastSuccess } from '../utils/toast';
-import { ticketFileMimeFromAxiosHeaders } from '../utils/ticketDownload';
+import { openAxiosBlobForMobile, ticketFileMimeFromAxiosHeaders } from '../utils/ticketDownload';
 import './AdminVerificationPage.css';
 
 const AdminVerificationPage = () => {
@@ -109,20 +109,7 @@ const AdminVerificationPage = () => {
   const handleDownloadReceipt = async (ticketId) => {
     try {
       const response = await ticketAPI.downloadReceipt(ticketId);
-      const ctype = response.headers?.['content-type'] || '';
-      const blob = new Blob([response.data], {
-        type: ctype.includes('/') ? ctype : 'application/octet-stream',
-      });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `receipt_ticket_${ticketId}`;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => window.URL.revokeObjectURL(url), 500);
+      openAxiosBlobForMobile(response, { fallbackName: `receipt_ticket_${ticketId}` });
     } catch (err) {
       toastError('שגיאה בהורדת הוכחת הקנייה. אנא נסה שוב.');
     }

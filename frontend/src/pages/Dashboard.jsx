@@ -22,7 +22,7 @@ import DashboardSkeleton from '../components/skeletons/DashboardSkeleton';
 import ProfileWalletPage from './ProfileWallet';
 import { toastError, toastSuccess } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
-import { downloadTicketFromAxiosBlob } from '../utils/ticketDownload';
+import { downloadTicketFromAxiosBlob, openBlobForMobile } from '../utils/ticketDownload';
 import './Dashboard.css';
 
 function offerBuyerId(offer) {
@@ -606,7 +606,7 @@ const Dashboard = () => {
   <p><strong>סטטוס:</strong> ${escapeHtml(d.status)}</p>
   <p><strong>${lblTotalPaid}:</strong> ${escapeHtml(fmt(d.total_paid_by_buyer ?? d.total_amount))}</p>
   <p><strong>מחיר מוסכם (בסיס):</strong> ${escapeHtml(d.final_negotiated_price != null ? fmt(d.final_negotiated_price) : '—')}</p>
-  <p><strong>עמלת שירות (לקוח):</strong> ${escapeHtml(d.buyer_service_fee != null ? fmt(d.buyer_service_fee) : '—')}</p>
+  <p><strong>עמלת ביטחון (לקוח):</strong> ${escapeHtml(d.buyer_service_fee != null ? fmt(d.buyer_service_fee) : '—')}</p>
   <p><strong>עמלת פלטפורמה (מוכר, 0%):</strong> ${escapeHtml(d.seller_service_fee != null ? fmt(d.seller_service_fee) : '—')}</p>
   <p><strong>נטו למוכר:</strong> ${escapeHtml(d.net_seller_revenue != null ? fmt(d.net_seller_revenue) : '—')}</p>
   <p><strong>כמות:</strong> ${escapeHtml(d.quantity)}</p>
@@ -615,15 +615,9 @@ const Dashboard = () => {
 </body>
 </html>`;
       const blob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8' });
-      const blobUrl = URL.createObjectURL(blob);
-      const w = window.open(blobUrl, '_blank', 'noopener,noreferrer');
-      if (!w) {
-        URL.revokeObjectURL(blobUrl);
-        toastError('הדפדפן חסם חלון קופץ. אפשרו חלונות קופצים לאתר ונסו שוב.');
-        return;
-      }
-      w.addEventListener('beforeunload', () => URL.revokeObjectURL(blobUrl), { once: true });
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000);
+      openBlobForMobile(blob, {
+        downloadName: `receipt-order-${orderId}.html`,
+      });
     } catch (err) {
       toastError('טעינת הקבלה נכשלה. אנא נסה שוב מאוחר יותר.');
     }
@@ -1055,7 +1049,7 @@ const Dashboard = () => {
                                 )}
                                 {purchase.buyer_service_fee != null && Number(purchase.buyer_service_fee) > 0 && (
                                   <div className="detail-row">
-                                    <span className="detail-label">עמלת שירות:</span>
+                                    <span className="detail-label">עמלת ביטחון:</span>
                                     <span className="detail-value">{paySym}{formatAmountForCurrency(purchase.buyer_service_fee, payCur)}</span>
                                   </div>
                                 )}

@@ -140,6 +140,7 @@
   color: var(--text-secondary);
   font-size: 0.95rem;
   margin: 0;
+  line-height: 1.55;
 }
 
 .listing-card h2 {
@@ -171,6 +172,7 @@
   margin-bottom: 0.5rem;
   color: var(--text-primary);
   font-weight: 500;
+  line-height: 1.45;
 }
 
 .form-group input[type="text"],
@@ -296,6 +298,7 @@
   color: var(--text-primary);
   font-size: max(16px, 1rem);
   transition: border-color 0.2s ease;
+  line-height: 1.45;
 }
 
 .form-group input:focus {
@@ -358,6 +361,7 @@
   margin-top: 0.25rem;
   color: var(--text-tertiary);
   font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 /* Merged seating + auto seat block */
@@ -529,6 +533,12 @@
 .dropzone-placeholder {
   color: var(--text-secondary);
   font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.sell-validation-summary {
+  margin-bottom: 0.9rem;
+  line-height: 1.55;
 }
 
 .auto-fill-btn {

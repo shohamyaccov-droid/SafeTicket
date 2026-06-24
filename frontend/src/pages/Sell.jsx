@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ticketAPI, eventAPI, artistAPI, eventRequestAPI } from '../services/api';
@@ -17,7 +17,7 @@ const SELL_PAGE_BUILD_TAG = import.meta.env.VITE_BUILD_ID || 'local-dev';
 
 /** PDF or image (JPEG/PNG) — matches backend ticket upload */
 const TICKET_FILE_INPUT_ACCEPT =
-  '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
+  'image/*,application/pdf,.pdf,.jpg,.jpeg,.png';
 const MAX_TICKET_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const TICKET_FILE_CONSTRAINTS_HE = 'פורמטים נתמכים: PDF, JPG, PNG · גודל מקסימלי: 5MB לקובץ';
 
@@ -276,8 +276,21 @@ const Sell = () => {
   const [eventRequestDetails, setEventRequestDetails] = useState('');
   const [eventRequestSubmitting, setEventRequestSubmitting] = useState(false);
   const [eventRequestFeedback, setEventRequestFeedback] = useState(null);
+  const submitAttemptedRef = useRef(false);
   /** Full event from GET /events/:id/ — includes venue_detail.sections for seating UI. */
   const [eventDetail, setEventDetail] = useState(null);
+
+  useEffect(() => {
+    if (!submitAttemptedRef.current) return;
+    if (!error && Object.keys(fieldErrors).length === 0) return;
+
+    window.setTimeout(() => {
+      const firstError = document.querySelector(
+        '#sell-listing-form .sell-field-error, .sell-listing-card--mobile-cta .error-message'
+      );
+      firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 60);
+  }, [error, fieldErrors]);
 
   /**
    * IL rules (receipt + price cap + pending approval) use ONLY the event venue country code,
@@ -741,6 +754,7 @@ const Sell = () => {
         const fileError = validateTicketFiles(fileArray);
         if (fileError) {
           setFieldErrors((prev) => ({ ...prev, upload_packages: fileError }));
+          toastError(fileError);
           return;
         }
 
@@ -751,6 +765,7 @@ const Sell = () => {
             ...prev,
             upload_packages: `נדרשים בדיוק ${requiredCount} קבצים (אחד לכל כרטיס). העלית ${fileArray.length} קבצים.`,
           }));
+          toastError(`נדרשים בדיוק ${requiredCount} קבצים (אחד לכל כרטיס).`);
           return;
         }
 
@@ -774,6 +789,7 @@ const Sell = () => {
         const fileError = ticketFileValidationError(file, { requirePdf: qty > 1 });
         if (fileError) {
           setFieldErrors((prev) => ({ ...prev, upload_single: fileError }));
+          toastError(fileError);
           return;
         }
         setFormData((prev) => ({
@@ -797,6 +813,7 @@ const Sell = () => {
         const fileError = ticketFileValidationError(file);
         if (fileError) {
           setFieldErrors((prev) => ({ ...prev, upload_packages: fileError }));
+          toastError(fileError);
           return;
         }
         // Always use functional updates so ticket_packages is never copied from a stale closure.
@@ -872,6 +889,7 @@ const Sell = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    submitAttemptedRef.current = true;
     setError('');
     setFieldErrors({});
     setSuccess(false);
@@ -1101,6 +1119,7 @@ const Sell = () => {
       await ticketAPI.createTicket(submitData);
       setUploadProgress(100);
       setUploadPhase('הכרטיסים נשמרו בהצלחה.');
+      submitAttemptedRef.current = false;
       setSuccessWasIsrael(ilEvent);
       setSuccess(true);
       // Show success message for 3 seconds before redirect
@@ -1185,6 +1204,11 @@ const Sell = () => {
           </p>
         </div>
         {error && <div className="error-message">{error}</div>}
+        {Object.keys(fieldErrors).length > 0 && (
+          <div className="error-message sell-validation-summary" role="alert">
+            יש שדות שדורשים תיקון לפני פרסום הכרטיס. גללו לשדה המסומן ונסו שוב.
+          </div>
+        )}
         
         <form id="sell-listing-form" onSubmit={handleSubmit} noValidate>
           {catalogError && (

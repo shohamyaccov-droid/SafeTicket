@@ -24,7 +24,7 @@ const BuyerListingPrice = ({ ticket, compact = false }) => {
       <div className="buyer-listing-price-main">{sym}{getTicketPrice(ticket)}</div>
       {fee > 0 && (
         <div className="buyer-listing-price-fee">
-          + {sym}{formatAmountForCurrency(fee, cur)} עמלת שירות (15%)
+          + {sym}{formatAmountForCurrency(fee, cur)} עמלת ביטחון (15%)
         </div>
       )}
     </div>

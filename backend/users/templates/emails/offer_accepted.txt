@@ -4,7 +4,7 @@
 
 ההצעה שלכם עבור {{ event_name }} התקבלה.
 
-מחיר שסוכם לפני עמלת שירות: {{ amount_display }} ({{ currency_code }})
+מחיר שסוכם לפני עמלת ביטחון: {{ amount_display }} ({{ currency_code }})
 
 {% if checkout_expires_at %}יש להשלים את התשלום עד: {{ checkout_expires_at }}
 {% endif %}
