@@ -39,7 +39,7 @@ const Footer = () => {
                 <Link to="/privacy">מדיניות פרטיות</Link>
               </li>
               <li>
-                <Link to="/refunds">אחריות והחזרים</Link>
+                <Link to="/refunds">ביטולים, אחריות והחזרים</Link>
               </li>
             </ul>
           </div>

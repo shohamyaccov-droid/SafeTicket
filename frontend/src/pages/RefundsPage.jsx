@@ -2,15 +2,15 @@ import { Link } from 'react-router-dom';
 import './Terms.css';
 
 /**
- * אחריות והחזרים — Legal & trust (Hebrew).
+ * ביטולים, אחריות והחזרים — Legal & trust (Hebrew).
  */
 const RefundsPage = () => {
   return (
     <div className="terms-container">
       <div className="terms-card">
-        <h1 className="terms-title">אחריות והחזרים</h1>
+        <h1 className="terms-title">ביטולים, אחריות והחזרים</h1>
         <p className="terms-lead" style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-          מסמך זה משלים את <Link to="/terms">תקנון השימוש</Link> ומתמקד בהתחייבות כלפי קונים, בנאמנות כספית, ובמקרי מחלוקת.
+          מסמך זה משלים את <Link to="/terms">תקנון השימוש</Link> ומתמקד בהתחייבות כלפי קונים, בנאמנות כספית, בביטולי אירועים ובמקרי מחלוקת.
         </p>
 
         <section className="terms-section">
@@ -29,7 +29,7 @@ const RefundsPage = () => {
         </section>
 
         <section className="terms-section">
-          <h2>2. מחלוקת בכניסה לvenue — דרישת הוכחה מיידית</h2>
+          <h2>2. מחלוקת בכניסה לאירוע — דרישת הוכחה מיידית</h2>
           <ul>
             <li>
               אם <strong>נדחיתם בכניסה לאירוע</strong> (הכרטיס נדחה בבקרה, אינו תקף, או אינו תואם לרישום), עליכם <strong>ליצור קשר עם תמיכת TradeTix מיד מהמקום</strong>, בזמן אמת, טרם עזיבת שער הכניסה ככל הניתן.
@@ -38,7 +38,7 @@ const RefundsPage = () => {
               <strong>חובה להמציא הוכחה:</strong> צילום או סרטון קצר המתעד את הדחייה, את פרטי האירוע/הכרטיס כפי שמוצגים אצלכם, ואת ניסיון הכניסה. ללא הוכחה עיתית וברורה, ייתכן שלא נוכל לאמת את התביעה במלואה.
             </li>
             <li>
-              פנייה דרך <a href="https://wa.me/972500000000" target="_blank" rel="noopener noreferrer">WhatsApp</a> או ערוצי התמיכה הרשמיים מומלצת כדי לייצר תיעוד מסודר.
+              פנייה דרך עמוד <Link to="/contact">צור קשר</Link> או דרך ערוצי התמיכה הרשמיים באתר מומלצת כדי לייצר תיעוד מסודר.
             </li>
           </ul>
         </section>
