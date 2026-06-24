@@ -186,6 +186,17 @@ class E2EEmailOTPTest(TransactionTestCase):
         )
         self.assertEqual(conf.status_code, 200, conf.content.decode())
 
+        seller_payloads = [
+            call.args[0]
+            for call in mock_resend_send.call_args_list
+            if seller.email in (call.args[0].get('to') or [])
+            and 'הכרטיסים נמכרו' in (call.args[0].get('subject') or '')
+        ]
+        self.assertGreater(len(seller_payloads), 0, 'Seller escrow wallet update email should be sent')
+        last_seller_notice = seller_payloads[-1]
+        self.assertEqual(last_seller_notice['from'], 'TradeTix <onboarding@resend.dev>')
+        self.assertIn('html', last_seller_notice)
+
         receipt_payloads = []
         for _ in range(20):
             receipt_payloads = [
