@@ -69,7 +69,7 @@ export default function ProfileWalletPage({ embedded = false }) {
           </button>
         )}
         <h1>הארנק שלי</h1>
-        <p className="wallet-subtitle">מעקב שקוף אחר מכירות, עמלות TradeTix (15%) ויתרות</p>
+        <p className="wallet-subtitle">מעקב אחר הכנסות ממכירות ויתרות בארנק</p>
       </div>
 
       {loading ? (
@@ -121,9 +121,7 @@ export default function ProfileWalletPage({ embedded = false }) {
                     <tr>
                       <th>תאריך</th>
                       <th>אירוע</th>
-                      <th>מחיר כרטיס</th>
-                      <th>עמלת TradeTix</th>
-                      <th>נטו לך</th>
+                      <th>סכום</th>
                       <th>סטטוס</th>
                     </tr>
                   </thead>
@@ -132,13 +130,7 @@ export default function ProfileWalletPage({ embedded = false }) {
                       <tr key={tx.id}>
                         <td data-label="תאריך">{formatDate(tx.created_at)}</td>
                         <td data-label="אירוע">{tx.event_name || `הזמנה #${tx.order_id}`}</td>
-                        <td data-label="מחיר" dir="ltr">
-                          ₪{formatAmountForCurrency(tx.ticket_price, 'ILS')}
-                        </td>
-                        <td data-label="עמלה" dir="ltr" className="wallet-fee">
-                          −₪{formatAmountForCurrency(tx.platform_fee, 'ILS')}
-                        </td>
-                        <td data-label="נטו" dir="ltr" className="wallet-net">
+                        <td data-label="סכום" dir="ltr" className="wallet-net">
                           ₪{formatAmountForCurrency(tx.net_earnings, 'ILS')}
                         </td>
                         <td data-label="סטטוס">
