@@ -326,6 +326,19 @@ export default function BloomfieldConcertMap({
                     }}
                     aria-label={has ? `${b.label}, ${priceLine}` : b.label}
                   />
+                  <text
+                    className="bloomfield-concert-map__seat-label"
+                    x={cx}
+                    y={cy}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill={has ? '#0f172a' : '#475569'}
+                    fontSize={sid.length > 3 ? 28 : 32}
+                    fontWeight="800"
+                    fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+                  >
+                    {b.label}
+                  </text>
                   {has && priceLine ? (
                     <BloomfieldMapPriceTag
                       cx={cx}
@@ -333,22 +346,10 @@ export default function BloomfieldConcertMap({
                       priceLine={priceLine}
                       width={b.w}
                       height={b.h}
+                      offsetX={Math.min(34, b.w * 0.28)}
+                      offsetY={-Math.min(30, b.h * 0.34)}
                     />
-                  ) : (
-                    <text
-                      className="bloomfield-concert-map__seat-label"
-                      x={cx}
-                      y={cy}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fill="#475569"
-                      fontSize={sid.length > 3 ? 28 : 32}
-                      fontWeight="700"
-                      fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-                    >
-                      {b.label}
-                    </text>
-                  )}
+                  ) : null}
                 </g>
               );
             })}

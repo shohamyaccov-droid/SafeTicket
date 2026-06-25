@@ -275,7 +275,9 @@ export default function BloomfieldStadiumMap({
                     cx={sec.cx}
                     cy={sec.cy}
                     priceLine={priceLine}
-                    metrics={menoraPriceTagMetrics(72, 28, priceLine)}
+                    metrics={menoraPriceTagMetrics(90, 34, priceLine)}
+                    offsetX={12}
+                    offsetY={-12}
                   />
                 );
               }
