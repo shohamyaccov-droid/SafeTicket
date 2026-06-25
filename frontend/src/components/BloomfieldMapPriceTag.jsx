@@ -7,16 +7,16 @@ export function menoraPriceTagMetrics(width, height, priceLine) {
   const h = Math.max(1, Number(height) || 1);
   const minDim = Math.min(w, h);
   const len = String(priceLine || '').length;
-  let fontSize = Math.min(22, Math.max(13, Math.round(minDim * 0.24)));
+  let fontSize = Math.min(24, Math.max(15, Math.round(minDim * 0.27)));
   if (len > 8) fontSize -= 3;
   else if (len > 6) fontSize -= 2;
-  fontSize = Math.max(12, fontSize);
+  fontSize = Math.max(14, fontSize);
 
-  const maxTagW = Math.max(48, w * 0.9);
-  const tagH = Math.min(Math.max(26, fontSize + 12), Math.max(26, h * 0.72));
-  let tagW = Math.min(Math.max(54, len * fontSize * 0.7 + 18), maxTagW);
+  const maxTagW = Math.max(58, w * 0.98);
+  const tagH = Math.min(Math.max(30, fontSize + 13), Math.max(30, h * 0.78));
+  let tagW = Math.min(Math.max(62, len * fontSize * 0.72 + 20), maxTagW);
   if (tagW >= maxTagW && len > 0) {
-    fontSize = Math.max(12, Math.floor((tagW - 18) / (len * 0.7)));
+    fontSize = Math.max(14, Math.floor((tagW - 20) / (len * 0.72)));
   }
   return { fontSize, tagW, tagH };
 }

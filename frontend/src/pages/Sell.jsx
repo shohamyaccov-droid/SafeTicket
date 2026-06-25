@@ -1752,7 +1752,7 @@ const Sell = () => {
           )}
 
           <div className="form-group sell-pricing-block">
-            <label htmlFor="listing_price">מחיר מכירה *</label>
+            <label htmlFor="listing_price">מחיר מכירה לכרטיס בודד *</label>
             <input
               type="number"
               id="listing_price"
@@ -1767,7 +1767,7 @@ const Sell = () => {
             />
             <SellFieldError message={fieldErrors.listing_price} />
             <small className="sell-il-pricing-hint">
-              זה המחיר שיוצג לקונים לפני עמלת השירות. אין צורך להזין מחיר מקורי או להעלות קבלה.
+              זה המחיר עבור כרטיס אחד שיוצג לקונים לפני עמלת ביטחון. (אם העלית מספר כרטיסים, המערכת תכפיל את הסכום אוטומטית). אין צורך להזין מחיר מקורי או להעלות קבלה.
             </small>
 
             {feeBasis > 0 ? (

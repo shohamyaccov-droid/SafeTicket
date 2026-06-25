@@ -346,8 +346,8 @@ export default function BloomfieldConcertMap({
                       priceLine={priceLine}
                       width={b.w}
                       height={b.h}
-                      offsetX={Math.min(34, b.w * 0.28)}
-                      offsetY={-Math.min(30, b.h * 0.34)}
+                      offsetX={Math.min(40, b.w * 0.34)}
+                      offsetY={-Math.min(36, b.h * 0.42)}
                     />
                   ) : null}
                 </g>
