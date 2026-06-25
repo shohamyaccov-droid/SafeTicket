@@ -34,7 +34,6 @@ ORDERS_URL = '/api/users/orders/'
 RESERVE_URL = '/api/users/tickets/{ticket_id}/reserve/'
 PAYME_SANDBOX_BUYER_EMAIL = 'tradetix.support+1@gmail.com'
 
-PLATFORM_FEE_RATE = Decimal('0.15')
 MINOR_PDF = SimpleUploadedFile(
     'ticket.pdf',
     b'%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n',
@@ -49,10 +48,10 @@ def sign_payme_payload(payload: dict, secret: str = 'whsec_test') -> tuple[bytes
 
 
 def assert_ledger_math(test_case, total_paid: Decimal, payout: SellerPayout) -> None:
-    """Assert 15% platform fee and 85% net payout (quantized to agorot)."""
+    """Assert platform fee is the buyer Security Fee and seller receives listing price."""
     total = Decimal(total_paid).quantize(Decimal('0.01'))
-    expected_fee = (total * PLATFORM_FEE_RATE).quantize(Decimal('0.01'))
-    expected_net = (total - expected_fee).quantize(Decimal('0.01'))
+    expected_net = payout.order.net_seller_revenue.quantize(Decimal('0.01'))
+    expected_fee = (total - expected_net).quantize(Decimal('0.01'))
 
     test_case.assertEqual(payout.total_paid, total)
     test_case.assertEqual(payout.platform_fee, expected_fee)
@@ -62,11 +61,7 @@ def assert_ledger_math(test_case, total_paid: Decimal, payout: SellerPayout) -> 
         total,
         'platform_fee + net_payout must equal total_paid',
     )
-    test_case.assertEqual(
-        payout.net_payout / total,
-        Decimal('0.85'),
-        msg='net payout should be 85% of total_paid after quantization',
-    )
+    test_case.assertEqual(payout.net_payout, payout.order.final_negotiated_price)
 
 
 @override_settings(
@@ -234,10 +229,10 @@ class PayMeHappyPathE2ETests(PayMeMarketplaceE2EBase):
 
         total_paid = Decimal(order.total_paid_by_buyer or order.total_amount)
         self.assertEqual(total_paid, self.checkout_total)
-        self.assertEqual(payout.platform_fee, Decimal('17.25'))
-        self.assertEqual(payout.net_payout, Decimal('97.75'))
+        self.assertEqual(payout.platform_fee, Decimal('15.00'))
+        self.assertEqual(payout.net_payout, Decimal('100.00'))
         self.seller.wallet.refresh_from_db()
-        self.assertEqual(self.seller.wallet.locked_balance, Decimal('97.75'))
+        self.assertEqual(self.seller.wallet.locked_balance, Decimal('100.00'))
         self.assertEqual(self.seller.wallet.available_balance, Decimal('0.00'))
 
     @patch('users.payme_views.generate_payme_sale_for_order')

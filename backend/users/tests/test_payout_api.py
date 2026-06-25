@@ -90,6 +90,10 @@ class PayoutApiTestBase(TestCase):
             status='paid',
             total_amount=Decimal('115.00'),
             total_paid_by_buyer=Decimal('115.00'),
+            final_negotiated_price=Decimal('100.00'),
+            buyer_service_fee=Decimal('15.00'),
+            seller_service_fee=Decimal('0.00'),
+            net_seller_revenue=Decimal('100.00'),
             quantity=1,
             event_name=ticket.event_name,
             payout_status=escrow,
@@ -118,14 +122,14 @@ class AdminPayoutApiTests(PayoutApiTestBase):
         self.client.force_authenticate(user=self.admin)
         res = self.client.get('/api/users/admin/payouts/')
         summary = res.data['summary']
-        self.assertEqual(summary['total_pending_owed'], '97.75')
-        self.assertEqual(summary['total_pending_platform_fees'], '17.25')
-        self.assertEqual(summary['total_platform_revenue'], '17.25')
+        self.assertEqual(summary['total_pending_owed'], '100.00')
+        self.assertEqual(summary['total_pending_platform_fees'], '15.00')
+        self.assertEqual(summary['total_platform_revenue'], '15.00')
 
     def test_admin_mark_paid_updates_status(self):
         payout = self._create_paid_order(escrow='eligible')
         self.seller.wallet.refresh_from_db()
-        self.assertEqual(self.seller.wallet.available_balance, Decimal('97.75'))
+        self.assertEqual(self.seller.wallet.available_balance, Decimal('100.00'))
         self.client.force_authenticate(user=self.admin)
         res = self.client.post(f'/api/users/admin/payouts/{payout.pk}/mark-paid/', {}, format='json')
         self.assertEqual(res.status_code, 200)
@@ -140,7 +144,7 @@ class AdminPayoutApiTests(PayoutApiTestBase):
             WalletTransaction.objects.filter(
                 seller_payout=payout,
                 transaction_type=WalletTransaction.TransactionType.WITHDRAWAL,
-                amount=Decimal('-97.75'),
+                amount=Decimal('-100.00'),
             ).exists()
         )
         self.assertEqual(res.data['summary']['pending_count'], 0)
@@ -154,6 +158,40 @@ class AdminPayoutApiTests(PayoutApiTestBase):
         res = self.client.post(f'/api/users/admin/payouts/{payout.pk}/mark-paid/', {}, format='json')
         self.assertEqual(res.status_code, 200)
         self.assertIn('already', res.data['message'].lower())
+
+    def test_admin_mark_paid_requires_this_payout_past_36_hour_threshold(self):
+        ticket = self._ticket_for_event_offset(hours_from_now=-35)
+        order = Order.objects.create(
+            user=self.buyer,
+            ticket=ticket,
+            status='paid',
+            total_amount=Decimal('115.00'),
+            total_paid_by_buyer=Decimal('115.00'),
+            final_negotiated_price=Decimal('100.00'),
+            buyer_service_fee=Decimal('15.00'),
+            seller_service_fee=Decimal('0.00'),
+            net_seller_revenue=Decimal('100.00'),
+            quantity=1,
+            event_name=ticket.event_name,
+            payout_status='eligible',
+            payout_eligible_date=timezone.now() - timedelta(hours=1),
+        )
+        payout = ensure_seller_payout_for_order(order)
+        self.seller.wallet.available_balance = Decimal('1000.00')
+        self.seller.wallet.save(update_fields=['available_balance', 'updated_at'])
+
+        self.client.force_authenticate(user=self.admin)
+        res = self.client.post(f'/api/users/admin/payouts/{payout.pk}/mark-paid/', {}, format='json')
+
+        self.assertEqual(res.status_code, 400)
+        payout.refresh_from_db()
+        self.assertEqual(payout.payout_status, SellerPayout.PayoutStatus.PENDING)
+        self.assertFalse(
+            WalletTransaction.objects.filter(
+                seller_payout=payout,
+                transaction_type=WalletTransaction.TransactionType.WITHDRAWAL,
+            ).exists()
+        )
 
 
 @override_settings(DEBUG=True, SECRET_KEY='test-secret-key-for-local')
@@ -171,6 +209,10 @@ class UserWalletApiTests(PayoutApiTestBase):
             status='paid',
             total_amount=Decimal('230.00'),
             total_paid_by_buyer=Decimal('230.00'),
+            final_negotiated_price=Decimal('200.00'),
+            buyer_service_fee=Decimal('30.00'),
+            seller_service_fee=Decimal('0.00'),
+            net_seller_revenue=Decimal('200.00'),
             quantity=1,
             event_name=eligible_ticket.event_name,
             payout_status='eligible',
@@ -181,19 +223,19 @@ class UserWalletApiTests(PayoutApiTestBase):
         res = self.client.get('/api/users/me/wallet/')
         self.assertEqual(res.status_code, 200)
         summary = res.data['summary']
-        self.assertEqual(summary['pending_funds'], '97.75')
-        self.assertEqual(summary['available_funds'], '195.50')
+        self.assertEqual(summary['pending_funds'], '100.00')
+        self.assertEqual(summary['available_funds'], '200.00')
         self.assertEqual(summary['total_earned'], '0.00')
         self.assertEqual(len(res.data['transactions']), 2)
 
         tx_by_id = {t['id']: t for t in res.data['transactions']}
         self.assertEqual(tx_by_id[locked_payout.pk]['display_status'], 'pending_event')
         self.assertEqual(tx_by_id[eligible_payout.pk]['display_status'], 'available')
-        self.assertEqual(tx_by_id[locked_payout.pk]['platform_fee'], '17.25')
-        self.assertEqual(tx_by_id[locked_payout.pk]['net_earnings'], '97.75')
+        self.assertEqual(tx_by_id[locked_payout.pk]['platform_fee'], '15.00')
+        self.assertEqual(tx_by_id[locked_payout.pk]['net_earnings'], '100.00')
         self.seller.wallet.refresh_from_db()
-        self.assertEqual(self.seller.wallet.locked_balance, Decimal('97.75'))
-        self.assertEqual(self.seller.wallet.available_balance, Decimal('195.50'))
+        self.assertEqual(self.seller.wallet.locked_balance, Decimal('100.00'))
+        self.assertEqual(self.seller.wallet.available_balance, Decimal('200.00'))
 
     def test_wallet_shows_transferred_as_earned(self):
         payout = self._create_paid_order()
@@ -203,7 +245,7 @@ class UserWalletApiTests(PayoutApiTestBase):
 
         self.client.force_authenticate(user=self.seller)
         res = self.client.get('/api/users/me/wallet/')
-        self.assertEqual(res.data['summary']['total_earned'], '97.75')
+        self.assertEqual(res.data['summary']['total_earned'], '100.00')
         self.assertEqual(res.data['transactions'][0]['display_status'], 'paid')
 
     def test_wallet_15_percent_fee_on_transaction(self):
@@ -214,8 +256,8 @@ class UserWalletApiTests(PayoutApiTestBase):
         total = Decimal(tx['ticket_price'])
         fee = Decimal(tx['platform_fee'])
         net = Decimal(tx['net_earnings'])
-        self.assertEqual(fee, (total * Decimal('0.15')).quantize(Decimal('0.01')))
-        self.assertEqual(net, (total - fee).quantize(Decimal('0.01')))
+        self.assertEqual(total, fee + net)
+        self.assertEqual(fee, (net * Decimal('0.15')).quantize(Decimal('0.01')))
 
     def test_wallet_does_not_release_before_36_hours_even_with_stale_24h_date(self):
         ticket = self._ticket_for_event_offset(hours_from_now=-35)
@@ -225,6 +267,10 @@ class UserWalletApiTests(PayoutApiTestBase):
             status='paid',
             total_amount=Decimal('115.00'),
             total_paid_by_buyer=Decimal('115.00'),
+            final_negotiated_price=Decimal('100.00'),
+            buyer_service_fee=Decimal('15.00'),
+            seller_service_fee=Decimal('0.00'),
+            net_seller_revenue=Decimal('100.00'),
             quantity=1,
             event_name=ticket.event_name,
             payout_status='eligible',
@@ -235,7 +281,7 @@ class UserWalletApiTests(PayoutApiTestBase):
         self.client.force_authenticate(user=self.seller)
         res = self.client.get('/api/users/me/wallet/')
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.data['summary']['pending_funds'], '97.75')
+        self.assertEqual(res.data['summary']['pending_funds'], '100.00')
         self.assertEqual(res.data['summary']['available_funds'], '0.00')
         self.assertEqual(res.data['transactions'][0]['display_status'], 'pending_event')
 
@@ -247,7 +293,7 @@ class UserWalletApiTests(PayoutApiTestBase):
 
         res = self.client.get('/api/users/me/wallet/')
         self.assertEqual(res.data['summary']['pending_funds'], '0.00')
-        self.assertEqual(res.data['summary']['available_funds'], '97.75')
+        self.assertEqual(res.data['summary']['available_funds'], '100.00')
         self.assertEqual(res.data['transactions'][0]['display_status'], 'available')
         payout.refresh_from_db()
         self.assertEqual(payout.payout_status, SellerPayout.PayoutStatus.PENDING)

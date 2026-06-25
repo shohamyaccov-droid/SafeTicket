@@ -35,17 +35,33 @@ def resolve_order_seller(order: Order) -> User | None:
 def payout_amounts_from_order(order: Order) -> tuple[Decimal, Decimal, Decimal] | None:
     """
     Derive (total_paid, platform_fee, net_payout) from order pricing fields.
-    Platform fee is 15% of total_paid (PayMe amount).
+    The buyer pays seller price + buyer Security Fee. Seller payout must therefore
+    preserve the seller net amount, not re-charge 15% against the gross PayMe amount.
     Returns None when the order is not ready for a ledger row.
     """
     if order.status not in ('paid', 'completed'):
         return None
 
-    total = order.total_paid_by_buyer or order.total_amount
-    if total is None:
+    total_paid = order.total_paid_by_buyer or order.total_amount
+    if total_paid is None:
         return None
 
-    return SellerPayout.compute_amounts(_decimal_or_zero(total))
+    total_paid = _decimal_or_zero(total_paid)
+    seller_net = order.net_seller_revenue
+    if seller_net is None:
+        seller_net = order.final_negotiated_price
+    if seller_net is None:
+        # Legacy fallback for old paid orders without populated pricing fields.
+        _total, _fee, seller_net = SellerPayout.compute_amounts(total_paid)
+    seller_net = _decimal_or_zero(seller_net)
+
+    explicit_fee = order.buyer_service_fee or Decimal('0.00')
+    explicit_fee += order.seller_service_fee or Decimal('0.00')
+    platform_fee = _decimal_or_zero(explicit_fee)
+    if platform_fee == Decimal('0.00'):
+        platform_fee = _decimal_or_zero(total_paid - seller_net)
+
+    return total_paid, platform_fee, seller_net
 
 
 def ensure_seller_payout_for_order(order: Order) -> SellerPayout | None:
@@ -68,8 +84,30 @@ def ensure_seller_payout_for_order(order: Order) -> SellerPayout | None:
     total_paid, platform_fee, net_payout = amounts
 
     with transaction.atomic():
-        existing = SellerPayout.objects.filter(order_id=order.pk).first()
+        existing = SellerPayout.objects.select_for_update().filter(order_id=order.pk).first()
         if existing:
+            amount_fields_changed = (
+                existing.total_paid != total_paid
+                or existing.platform_fee != platform_fee
+                or existing.net_payout != net_payout
+            )
+            if amount_fields_changed and existing.payout_status == SellerPayout.PayoutStatus.PENDING:
+                previous_net = existing.net_payout
+                existing.total_paid = total_paid
+                existing.platform_fee = platform_fee
+                existing.net_payout = net_payout
+                existing.full_clean()
+                existing.save(update_fields=['total_paid', 'platform_fee', 'net_payout'])
+                try:
+                    from wallets.services import reconcile_wallet_credit_for_seller_payout
+
+                    reconcile_wallet_credit_for_seller_payout(existing, previous_net)
+                except Exception:
+                    logger.exception(
+                        'Failed to reconcile seller wallet amount for payout_id=%s order_id=%s',
+                        existing.pk,
+                        order.pk,
+                    )
             try:
                 from wallets.services import credit_wallet_for_seller_payout
 

@@ -27,7 +27,7 @@ def mock_payment_success(request):
     POST /api/payments/mock-success/ — finalize a pending_payment order (DEBUG only).
 
     Runs the same path as the PayMe webhook: order → paid, tickets → sold,
-    SellerPayout ledger (15% platform fee / 85% net).
+    SellerPayout ledger (buyer Security Fee / seller net).
     """
     if not settings.DEBUG:
         logger.warning('mock_payment_success rejected: DEBUG is False')

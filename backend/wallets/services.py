@@ -62,7 +62,7 @@ def _payout_is_past_escrow_release_threshold(payout) -> bool:
     from users.pricing import compute_payout_eligible_date
 
     eligible_at = compute_payout_eligible_date(ticket)
-    return bool(eligible_at and timezone.now() >= eligible_at)
+    return bool(eligible_at and timezone.now() > eligible_at)
 
 
 def credit_wallet_for_seller_payout(payout) -> WalletTransaction | None:
@@ -111,6 +111,47 @@ def credit_wallet_for_seller_payout(payout) -> WalletTransaction | None:
             seller_payout=payout,
             note=f'Order #{payout.order_id} seller net payout',
         )
+        return tx
+
+
+def reconcile_wallet_credit_for_seller_payout(payout, previous_amount) -> WalletTransaction | None:
+    """
+    Adjust the existing idempotent SALE_CREDIT when payout math is corrected before transfer.
+    This handles the signal path where a payout may be created before order pricing fields are saved.
+    """
+    if payout is None or payout.pk is None or payout.seller_id is None:
+        return None
+
+    new_amount = Decimal(payout.net_payout or 0).quantize(Decimal('0.01'))
+    old_amount = Decimal(previous_amount or 0).quantize(Decimal('0.01'))
+    if new_amount <= 0:
+        return None
+
+    with transaction.atomic():
+        wallet, _created = UserWallet.objects.select_for_update().get_or_create(user_id=payout.seller_id)
+        tx = (
+            WalletTransaction.objects.select_for_update()
+            .filter(
+                seller_payout=payout,
+                transaction_type=WalletTransaction.TransactionType.SALE_CREDIT,
+            )
+            .first()
+        )
+        if tx is None:
+            return credit_wallet_for_seller_payout(payout)
+
+        if tx.status == WalletTransaction.Status.COMPLETED:
+            if wallet.available_balance < old_amount:
+                raise ValidationError('Wallet available balance is insufficient to reconcile payout credit.')
+            wallet.available_balance = wallet.available_balance - old_amount + new_amount
+        else:
+            if wallet.locked_balance < old_amount:
+                raise ValidationError('Wallet locked balance is insufficient to reconcile payout credit.')
+            wallet.locked_balance = wallet.locked_balance - old_amount + new_amount
+        wallet.save(update_fields=['available_balance', 'locked_balance', 'updated_at'])
+        tx.amount = new_amount
+        tx.note = f'Order #{payout.order_id} seller net payout'
+        tx.save(update_fields=['amount', 'note', 'updated_at'])
         return tx
 
 
@@ -182,8 +223,20 @@ def mark_seller_payout_paid(payout):
             raise ValidationError('Cannot mark a cancelled payout as paid.')
         if (payout.order.payout_status if payout.order_id else 'eligible') == 'locked':
             raise ValidationError('Payout is still locked in escrow.')
+        if not _payout_is_past_escrow_release_threshold(payout):
+            raise ValidationError('Payout has not passed the 36-hour escrow release threshold.')
 
         wallet, _created = UserWallet.objects.select_for_update().get_or_create(user_id=payout.seller_id)
+        credit_tx = (
+            WalletTransaction.objects.select_for_update()
+            .filter(
+                seller_payout=payout,
+                transaction_type=WalletTransaction.TransactionType.SALE_CREDIT,
+            )
+            .first()
+        )
+        if credit_tx is None or credit_tx.status != WalletTransaction.Status.COMPLETED:
+            raise ValidationError('Payout wallet credit is not available for withdrawal.')
         if wallet.available_balance < amount:
             raise ValidationError('Seller wallet available balance is insufficient for payout.')
         wallet.available_balance -= amount

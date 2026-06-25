@@ -12,7 +12,7 @@ import logging
 import random
 import time
 from datetime import timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -259,10 +259,8 @@ class ProductionPurchaseLifecycleStressTests(TestCase):
                 self.assertEqual(Decimal(receipt_res.data['buyer_service_fee']), security_fee)
 
                 payout = SellerPayout.objects.get(order=order)
-                expected_payout_fee = (expected_total * Decimal('0.15')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                expected_net = (expected_total - expected_payout_fee).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                self.assertEqual(payout.platform_fee, expected_payout_fee)
-                self.assertEqual(payout.net_payout, expected_net)
+                self.assertEqual(payout.platform_fee, security_fee)
+                self.assertEqual(payout.net_payout, base)
                 self.assertEqual(SellerPayout.objects.filter(order=order).count(), 1)
                 self.assertEqual(
                     WalletTransaction.objects.filter(
@@ -272,7 +270,7 @@ class ProductionPurchaseLifecycleStressTests(TestCase):
                     1,
                 )
                 seller.wallet.refresh_from_db()
-                self.assertEqual(seller.wallet.locked_balance, expected_net)
+                self.assertEqual(seller.wallet.locked_balance, base)
                 self.assertEqual(seller.wallet.available_balance, Decimal('0.00'))
 
                 receipt_payload = self._wait_for_receipt_email(mock_resend_send, buyer.email)

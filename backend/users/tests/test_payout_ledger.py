@@ -64,18 +64,18 @@ class PayoutLedgerTest(TestCase):
         defaults.update(kwargs)
         return Order.objects.create(**defaults)
 
-    def test_payout_save_recomputes_net_payout(self):
+    def test_payout_save_preserves_explicit_order_fee_and_net(self):
         order = self._paid_order()
         payout = SellerPayout.objects.get(order=order)
         payout.total_paid = Decimal('200.00')
         payout.save()
-        self.assertEqual(payout.platform_fee, Decimal('30.00'))
-        self.assertEqual(payout.net_payout, Decimal('170.00'))
+        self.assertEqual(payout.platform_fee, Decimal('15.00'))
+        self.assertEqual(payout.net_payout, Decimal('100.00'))
 
     def test_payout_amounts_from_order(self):
         order = self._paid_order()
         amounts = payout_amounts_from_order(order)
-        self.assertEqual(amounts, (Decimal('115.00'), Decimal('17.25'), Decimal('97.75')))
+        self.assertEqual(amounts, (Decimal('115.00'), Decimal('15.00'), Decimal('100.00')))
 
     def test_ensure_seller_payout_for_order_idempotent(self):
         order = self._paid_order()
@@ -84,7 +84,8 @@ class PayoutLedgerTest(TestCase):
         self.assertIsNotNone(first)
         self.assertEqual(first.pk, second.pk)
         self.assertEqual(SellerPayout.objects.filter(order=order).count(), 1)
-        self.assertEqual(first.net_payout, Decimal('97.75'))
+        self.assertEqual(first.platform_fee, Decimal('15.00'))
+        self.assertEqual(first.net_payout, Decimal('100.00'))
         self.assertEqual(first.payout_status, SellerPayout.PayoutStatus.PENDING)
 
     def test_signal_creates_payout_when_order_marked_paid(self):
@@ -93,7 +94,8 @@ class PayoutLedgerTest(TestCase):
         order.save()
         payout = SellerPayout.objects.get(order=order)
         self.assertEqual(payout.seller_id, self.seller.id)
-        self.assertEqual(payout.net_payout, Decimal('97.75'))
+        self.assertEqual(payout.platform_fee, Decimal('15.00'))
+        self.assertEqual(payout.net_payout, Decimal('100.00'))
 
     def test_transferred_status_sets_transferred_at(self):
         order = self._paid_order()
@@ -107,4 +109,4 @@ class PayoutLedgerTest(TestCase):
         order = self._paid_order()
         ensure_seller_payout_for_order(order)
         total = SellerPayout.total_pending_for_seller(self.seller)
-        self.assertEqual(total, Decimal('97.75'))
+        self.assertEqual(total, Decimal('100.00'))

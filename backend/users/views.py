@@ -86,7 +86,7 @@ def _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity)
     ped = compute_payout_eligible_date(ticket)
     order.payout_eligible_date = ped
     order.payout_status = 'locked'
-    if ped is not None and timezone.now() >= ped:
+    if ped is not None and timezone.now() > ped:
         order.payout_status = 'eligible'
     order.save(
         update_fields=[
@@ -1253,7 +1253,7 @@ def user_activity(request):
             if candidate.ticket_id is None:
                 continue
             eligible_at = compute_payout_eligible_date(candidate.ticket)
-            if eligible_at and now >= eligible_at:
+            if eligible_at and now > eligible_at:
                 eligible_order_ids.append(candidate.pk)
         if eligible_order_ids:
             Order.objects.filter(pk__in=eligible_order_ids, payout_status='locked').update(payout_status='eligible')

@@ -11,7 +11,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from users.models import Order, SellerPayout, Ticket
-from users.pricing import expected_buy_now_total
+from users.pricing import buyer_charge_from_base_amount, expected_buy_now_total
 
 User = get_user_model()
 
@@ -23,9 +23,6 @@ MINOR_PDF = SimpleUploadedFile(
     b'%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n',
     content_type='application/pdf',
 )
-
-PLATFORM_FEE_RATE = Decimal('0.15')
-
 
 @override_settings(DEBUG=True)
 class MockPaymentSuccessTests(TestCase):
@@ -91,8 +88,7 @@ class MockPaymentSuccessTests(TestCase):
 
         payout = SellerPayout.objects.get(order=order)
         total = Decimal(str(self.checkout_total)).quantize(Decimal('0.01'))
-        expected_fee = (total * PLATFORM_FEE_RATE).quantize(Decimal('0.01'))
-        expected_net = (total - expected_fee).quantize(Decimal('0.01'))
+        expected_net, expected_fee, _expected_total = buyer_charge_from_base_amount(self.ticket.asking_price)
         self.assertEqual(payout.total_paid, total)
         self.assertEqual(payout.platform_fee, expected_fee)
         self.assertEqual(payout.net_payout, expected_net)

@@ -760,12 +760,12 @@ class SellerPayout(models.Model):
     platform_fee = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        help_text='TradeTix platform fee (15% of total_paid)',
+        help_text='TradeTix platform fee (buyer Security Fee plus any seller-side fee)',
     )
     net_payout = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        help_text='Amount owed to the seller (total_paid − platform_fee)',
+        help_text='Amount owed to the seller after seller-side fees',
     )
     payout_status = models.CharField(
         max_length=20,
@@ -797,7 +797,7 @@ class SellerPayout(models.Model):
 
     @classmethod
     def compute_amounts(cls, total_paid: Decimal) -> tuple[Decimal, Decimal, Decimal]:
-        """Return (total_paid, platform_fee, net_payout) using the 15% platform rate."""
+        """Legacy fallback: return (total_paid, platform_fee, net_payout) from gross amount."""
         total = Decimal(total_paid).quantize(Decimal('0.01'))
         fee = (total * cls.PLATFORM_FEE_RATE).quantize(Decimal('0.01'))
         net = (total - fee).quantize(Decimal('0.01'))
@@ -832,7 +832,7 @@ class SellerPayout(models.Model):
         return cls.objects.filter(seller=seller, payout_status=cls.PayoutStatus.PENDING)
 
     def save(self, *args, **kwargs):
-        if self.total_paid is not None:
+        if self.total_paid is not None and (self.platform_fee is None or self.net_payout is None):
             _, fee, net = self.compute_amounts(self.total_paid)
             self.platform_fee = fee
             self.net_payout = net

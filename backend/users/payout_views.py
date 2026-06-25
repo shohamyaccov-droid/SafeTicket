@@ -58,7 +58,7 @@ def _promote_orders_past_escrow_threshold(*, seller=None) -> int:
         if order.ticket_id is None:
             continue
         eligible_at = compute_payout_eligible_date(order.ticket)
-        if eligible_at and now >= eligible_at:
+        if eligible_at and now > eligible_at:
             promoted_ids.append(order.pk)
 
     if not promoted_ids:
