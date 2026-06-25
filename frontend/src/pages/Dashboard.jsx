@@ -714,14 +714,22 @@ const Dashboard = () => {
   };
 
   const getSeatDisplay = (ticket) => {
-    if (ticket.section && ticket.row) {
-      return `גוש ${translateSectionDisplay(ticket.section)}, שורה ${ticket.row}`;
+    const section = ticket.section || ticket.section_legacy || ticket.custom_section_text || '';
+    const row = ticket.row || ticket.row_number || '';
+    const seat = ticket.seat_number || ticket.seat_numbers || ticket.seat || '';
+    const parts = [];
+
+    if (section) {
+      parts.push(`גוש ${translateSectionDisplay(section)}`);
     }
-    if (ticket.section) {
-      return `גוש ${translateSectionDisplay(ticket.section)}`;
+    if (row) {
+      parts.push(`שורה ${row}`);
     }
-    if (ticket.row) {
-      return `שורה ${ticket.row}`;
+    if (seat) {
+      parts.push(`מושב ${seat}`);
+    }
+    if (parts.length > 0) {
+      return parts.join(', ');
     }
     if (ticket.seat_row) {
       return ticket.seat_row;

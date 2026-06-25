@@ -1587,7 +1587,6 @@ const Sell = () => {
           {uploadMethod === 'single_file' && (
             <div className="form-group single-pdf-dropzone">
               <label htmlFor="single_multi_page_pdf">קובץ כרטיס (PDF או תמונה) *</label>
-              <small className="upload-field-hint">{TICKET_FILE_CONSTRAINTS_HE}</small>
               <div className="file-dropzone-box">
                 <input
                   type="file"
@@ -1652,7 +1651,6 @@ const Sell = () => {
                     {uploadMethod === 'separate_files' && (
                       <div className="form-group">
                         <label htmlFor={`pdf_file_package_${index}`}>קובץ כרטיס (PDF או תמונה) *</label>
-                        <small className="upload-field-hint">{TICKET_FILE_CONSTRAINTS_HE}</small>
                         <input
                           type="file"
                           id={`pdf_file_package_${index}`}
