@@ -147,6 +147,26 @@ function notifySessionExpired() {
   );
 }
 
+function isPublicGuestEndpoint(url = '') {
+  const path = String(url || '');
+  return (
+    path.includes('/users/csrf/') ||
+    path.includes('/users/orders/guest/')
+  );
+}
+
+function stripAuthorizationHeader(config) {
+  if (!config?.headers) return;
+  const h = config.headers;
+  if (typeof h.delete === 'function') {
+    h.delete('Authorization');
+    h.delete('authorization');
+    return;
+  }
+  delete h.Authorization;
+  delete h.authorization;
+}
+
 /** Production API when VITE_API_URL is missing at build time (never fall back to localhost in prod). */
 const PRODUCTION_API_BASE_URL = 'https://safeticket-api.onrender.com/api';
 
@@ -293,7 +313,9 @@ api.interceptors.request.use(
     const method = (config.method || 'get').toLowerCase();
     stripContentTypeForMultipart(config);
     const bearer = getEffectiveBearerAccess();
-    if (bearer) {
+    if (config.skipAuth || isPublicGuestEndpoint(config.url)) {
+      stripAuthorizationHeader(config);
+    } else if (bearer) {
       config.headers.Authorization = `Bearer ${bearer}`;
     }
     if (method !== 'get' && method !== 'head' && method !== 'options') {
@@ -350,8 +372,9 @@ api.interceptors.response.use(
       originalRequest.url?.includes('/token/refresh/') ||
       originalRequest.url?.includes('/logout/');
     const isGetProfile = originalRequest.url?.includes('/profile/');
+    const isPublicGuestRequest = originalRequest.skipAuth || isPublicGuestEndpoint(originalRequest.url);
 
-    if (is401 && noRetryYet && !isAuthEndpoint) {
+    if (is401 && noRetryYet && !isAuthEndpoint && !isPublicGuestRequest) {
       originalRequest._retry = true;
       try {
         const rTok = getRefreshForBearerFallback();
@@ -466,7 +489,7 @@ export const paymentAPI = {
   },
   paymeInitCheckout: async (data) => {
     await ensureCsrfToken();
-    return api.post('/users/payments/payme/init/', data);
+    return api.post('/users/payments/payme/init/', data, data?.guest_email ? { skipAuth: true } : undefined);
   },
   mockPaymentSuccess: async (data) => {
     await ensureCsrfToken();
@@ -481,15 +504,20 @@ export const orderAPI = {
   },
   guestCheckout: async (data) => {
     await ensureCsrfToken();
-    return api.post('/users/orders/guest/', data);
+    return api.post('/users/orders/guest/', data, { skipAuth: true });
   },
   confirmPayment: async (orderId, data) => {
     await ensureCsrfToken();
-    return api.post(`/users/orders/${orderId}/confirm-payment/`, data);
+    return api.post(
+      `/users/orders/${orderId}/confirm-payment/`,
+      data,
+      data?.guest_email ? { skipAuth: true } : undefined,
+    );
   },
   getReceipt: (orderId, guestEmail) =>
     api.get(`/users/orders/${orderId}/receipt/`, {
       params: guestEmail ? { email: guestEmail } : {},
+      skipAuth: Boolean(guestEmail),
     }),
 };
 
@@ -631,6 +659,7 @@ export const ticketAPI = {
     };
     if (email) {
       config.params = { email };
+      config.skipAuth = true;
     }
     return api.get(`/users/tickets/${id}/download_pdf/`, config);
   },
@@ -640,12 +669,12 @@ export const ticketAPI = {
   reserveTicket: async (id, email = null) => {
     await ensureCsrfToken();
     const data = email ? { email } : {};
-    return api.post(`/users/tickets/${id}/reserve/`, data);
+    return api.post(`/users/tickets/${id}/reserve/`, data, email ? { skipAuth: true } : undefined);
   },
   releaseReservation: async (id, email = null) => {
     await ensureCsrfToken();
     const data = email ? { email } : {};
-    return api.post(`/users/tickets/${id}/release_reservation/`, data);
+    return api.post(`/users/tickets/${id}/release_reservation/`, data, email ? { skipAuth: true } : undefined);
   },
 };
 

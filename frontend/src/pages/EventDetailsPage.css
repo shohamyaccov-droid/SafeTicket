@@ -642,13 +642,14 @@
 }
 
 .ramat-gan-map-scroll-wrapper {
-  touch-action: pan-x pan-y;
+  touch-action: pan-y pinch-zoom;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   width: 100%;
-  overflow: hidden;
+  overflow: visible;
+  background: #ffffff;
 }
 
 .ramat-gan-map-scroll-wrapper .interactive-stadium-map {
@@ -2038,7 +2039,7 @@
     max-width: 100%;
   }
 
-  /* Ramat Gan mobile — same fill-the-frame sizing as Menora (width/height 100%, viewBox meet) */
+  /* Ramat Gan mobile — square SVG frame so the full stadium is visible without vertical cropping. */
   .tickets-split-container.tickets-split-container--ramat-gan .venue-map-sticky-container {
     margin-bottom: 0.35rem;
   }
@@ -2046,39 +2047,55 @@
   .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card {
     min-height: 0;
     max-height: none;
+    overflow: visible;
+    background: #ffffff;
   }
 
   .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card-content {
-    flex: 1;
-    min-height: max(260px, 34vh);
-    height: clamp(260px, 46vh, 420px);
-    max-height: min(52vh, 430px);
+    flex: 0 0 auto;
+    min-height: 0;
+    height: auto;
+    max-height: none;
     padding: 0;
     display: flex;
     flex-direction: column;
+    background: #ffffff;
   }
 
   .tickets-split-container.tickets-split-container--ramat-gan .ramat-gan-map-scroll-wrapper {
-    flex: 1;
+    flex: 0 0 auto;
     min-height: 0;
-    max-height: 100%;
+    max-height: none;
+    height: auto;
     width: 100%;
     display: flex;
     flex-direction: column;
+    background: #ffffff;
   }
 
   .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map {
     border-radius: 0;
-    flex: 1;
+    flex: 0 0 auto;
     min-height: 0;
-    height: 100%;
-    max-height: 100%;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    background: #ffffff;
   }
 
-  .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__canvas-wrap,
+  .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__canvas-wrap {
+    flex: 0 0 auto;
+    height: min(92vw, 520px);
+    min-height: 340px;
+    max-height: min(62vh, 560px);
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: #ffffff;
+    overflow: hidden;
+  }
+
   .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__viewport,
   .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__transform {
-    flex: 1;
     min-height: 0;
     max-height: 100%;
     height: 100%;
@@ -2086,8 +2103,8 @@
   }
 
   .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__transform {
-    align-items: stretch;
-    justify-content: stretch;
+    align-items: center;
+    justify-content: center;
   }
 
   .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__svg {
@@ -2096,7 +2113,7 @@
     min-height: 0 !important;
     max-width: 100%;
     max-height: 100%;
-    aspect-ratio: unset;
+    aspect-ratio: 1 / 1;
     object-fit: contain;
   }
 

@@ -322,6 +322,19 @@
 }
 
 @media (max-width: 768px) {
+  .interactive-stadium-map__canvas-wrap {
+    background: #ffffff;
+  }
+
+  .interactive-stadium-map__viewport {
+    touch-action: pan-y pinch-zoom;
+  }
+
+  .interactive-stadium-map__transform {
+    align-items: center;
+    justify-content: center;
+  }
+
   .interactive-stadium-map__svg {
     width: 100%;
     height: 100%;
