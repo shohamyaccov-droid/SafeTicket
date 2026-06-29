@@ -203,7 +203,7 @@ export default function BloomfieldStadiumMap({
 
       <div
         className="absolute inset-0 cursor-grab active:cursor-grabbing"
-        style={{ touchAction: 'pan-x pan-y' }}
+        style={{ touchAction: 'pan-y pinch-zoom' }}
         onPointerDown={panZoom.onPointerDown}
         onPointerMove={panZoom.onPointerMove}
         onPointerUp={panZoom.onPointerUp}

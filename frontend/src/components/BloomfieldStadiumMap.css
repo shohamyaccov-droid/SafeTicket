@@ -16,6 +16,11 @@
   flex-direction: column;
   gap: 0.55rem;
   width: 100%;
+  background: #ffffff;
+}
+
+.bloomfield-map-root {
+  background: #ffffff !important;
 }
 
 .bloomfield-map-legend {
@@ -62,4 +67,36 @@
 
 .bloomfield-map-price-tag {
   pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .bloomfield-map-shell {
+    gap: 0.35rem;
+    margin-inline: -0.25rem;
+  }
+
+  .bloomfield-map-root {
+    min-height: 330px !important;
+    max-height: min(62vh, 520px) !important;
+    border-radius: 0.85rem !important;
+    border-color: #eef2f7 !important;
+    box-shadow: none !important;
+    touch-action: pan-y pinch-zoom;
+  }
+
+  .bloomfield-map-root svg {
+    width: 100% !important;
+    height: 100% !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .bloomfield-map-shell {
+    margin-inline: -0.5rem;
+  }
+
+  .bloomfield-map-root {
+    min-height: 360px !important;
+    max-height: min(66vh, 560px) !important;
+  }
 }

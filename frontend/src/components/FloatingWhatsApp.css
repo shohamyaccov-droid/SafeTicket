@@ -28,6 +28,12 @@
   white-space: nowrap;
 }
 
+@media (max-width: 768px) {
+  .App > main {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 @media (max-width: 480px) {
   .floating-whatsapp-label {
     display: none;

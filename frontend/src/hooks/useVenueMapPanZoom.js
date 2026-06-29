@@ -39,7 +39,8 @@ export function useVenueMapPanZoom(options = {}) {
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (pointersRef.current.size === 1) {
-      dragRef.current = { lastX: e.clientX, lastY: e.clientY };
+      const shouldLetPageScroll = e.pointerType === 'touch' && scaleRef.current <= 1.01;
+      dragRef.current = shouldLetPageScroll ? null : { lastX: e.clientX, lastY: e.clientY };
       pinchRef.current = null;
     } else if (pointersRef.current.size === 2) {
       dragRef.current = null;
@@ -50,10 +51,12 @@ export function useVenueMapPanZoom(options = {}) {
       };
     }
 
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      /* ignore */
+    if (!(e.pointerType === 'touch' && pointersRef.current.size === 1 && scaleRef.current <= 1.01)) {
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
     }
   }, []);
 

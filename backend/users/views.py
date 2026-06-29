@@ -3662,7 +3662,8 @@ class ArtistViewSet(viewsets.ModelViewSet):
                     events__status='פעיל',
                 ).distinct()
             else:
-                # Marketplace browse: artists with active ticket inventory only.
+                # Marketplace browse/homepage: return all artists so the discovery UI stays full
+                # even before inventory is listed. `total_tickets_count` still reflects live stock.
                 queryset = (
                     queryset.annotate(
                         _artist_tickets_total=Coalesce(
@@ -3673,7 +3674,6 @@ class ArtistViewSet(viewsets.ModelViewSet):
                             Value(0),
                         )
                     )
-                    .filter(_artist_tickets_total__gt=0)
                 )
         search = self.request.query_params.get('search', None)
         if search:

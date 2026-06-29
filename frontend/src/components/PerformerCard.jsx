@@ -44,10 +44,12 @@ export default function PerformerCard({ performerName, imageUrl, eventCount, onN
         <h3 className="home-performer-card__title">{performerName}</h3>
         {eventCount > 1 ? (
           <p className="home-performer-card__meta">{eventCount} תאריכים קרובים</p>
+        ) : eventCount === 0 ? (
+          <p className="home-performer-card__meta">אין מועדים פעילים כרגע</p>
         ) : (
           <p className="home-performer-card__meta">מועד אחד</p>
         )}
-        <p className="home-performer-card__cta">צפו במועדים ←</p>
+        <p className="home-performer-card__cta">{eventCount === 0 ? 'קבלו עדכון כשיפורסם ←' : 'צפו במועדים ←'}</p>
       </div>
     </article>
   );

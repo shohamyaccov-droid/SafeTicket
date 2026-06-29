@@ -2143,6 +2143,7 @@
   .venue-map-sticky-container .venue-map-card {
     overflow: visible;
     box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    background: #ffffff;
   }
 
   .venue-map-sticky-container .venue-map-card-content {
@@ -2174,13 +2175,23 @@
 
   .venue-map-card-content {
     flex: 1;
-    padding: 0.65rem;
+    padding: 0.25rem;
     box-sizing: border-box;
-    min-height: max(260px, 34vh);
-    height: clamp(260px, 46vh, 420px);
-    max-height: min(52vh, 430px);
+    min-height: max(330px, 42vh);
+    height: clamp(330px, 56vh, 520px);
+    max-height: min(64vh, 560px);
     display: flex;
     flex-direction: column;
+    background: #ffffff;
+    touch-action: pan-y pinch-zoom;
+  }
+
+  .venue-map-sticky-container .bloomfield-concert-map-scroll-wrapper {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+    width: 100%;
+    background: #ffffff;
   }
 
   .venue-map-sticky-container .interactive-map-container {
@@ -2246,7 +2257,7 @@
   }
 
   .tickets-list-container {
-    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
     min-width: 0;
     max-width: 100%;
   }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { eventAPI } from '../services/api';
+import { artistAPI, eventAPI } from '../services/api';
 import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import EmptyState from '../components/EmptyState';
@@ -39,6 +39,7 @@ const Home = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [events, setEvents] = useState([]);
+  const [artists, setArtists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
@@ -68,7 +69,10 @@ const Home = () => {
       setLoadError(null);
       setLoading(true);
       try {
-        const eventsResponse = await eventAPI.getEvents({ signal });
+        const [eventsResponse, artistsResponse] = await Promise.all([
+          eventAPI.getEvents({ signal }),
+          artistAPI.getArtists({ signal }),
+        ]);
         if (cancelled) return;
 
         let eventsData = [];
@@ -80,6 +84,13 @@ const Home = () => {
           }
         }
         setEvents(eventsData);
+        const artistsPayload = artistsResponse?.data;
+        const artistsData = Array.isArray(artistsPayload)
+          ? artistsPayload
+          : Array.isArray(artistsPayload?.results)
+            ? artistsPayload.results
+            : [];
+        setArtists(artistsData);
       } catch (error) {
         if (cancelled) return;
         const msg = error?.message || '';
@@ -90,6 +101,7 @@ const Home = () => {
           msg.toLowerCase().includes('canceled');
         setLoadError(aborted ? 'timeout' : 'error');
         setEvents([]);
+        setArtists([]);
         if (!aborted) {
           toastError('לא ניתן לטעון את דף הבית. נסו לרענן או לבדוק את החיבור.');
         }
@@ -140,9 +152,51 @@ const Home = () => {
     return list;
   }, [events, searchQuery, todayStart]);
 
+  const artistPerformerPlaceholders = useMemo(
+    () => {
+      const q = searchQuery.toLowerCase().trim();
+      return (artists || [])
+        .filter((artist) => {
+          if (!q) return true;
+          return String(artist.name || '').toLowerCase().includes(q);
+        })
+        .map((artist) => ({
+          key: `artist:${artist.id}`,
+          artistId: artist.id,
+          performerName: artist.name || 'אמן',
+          imageUrl: artist.image_url || '',
+          events: [],
+          eventCount: 0,
+          totalTickets: Number(artist.total_tickets_count) || 0,
+          nextDate: null,
+          hasTickets: (Number(artist.total_tickets_count) || 0) > 0,
+          waitlistOnly: true,
+        }));
+    },
+    [artists, searchQuery]
+  );
+
+  const mergePerformerGroupsWithArtists = useCallback(
+    (groups) => {
+      const merged = [...groups];
+      const seenArtistIds = new Set(
+        groups
+          .map((group) => (group.artistId != null ? String(group.artistId) : null))
+          .filter(Boolean)
+      );
+
+      for (const artistGroup of artistPerformerPlaceholders) {
+        if (artistGroup.artistId != null && seenArtistIds.has(String(artistGroup.artistId))) continue;
+        merged.push(artistGroup);
+      }
+      return sortPerformersByDemand(merged);
+    },
+    [artistPerformerPlaceholders]
+  );
+
   const allPerformers = useMemo(
-    () => sortPerformersByDemand(groupEventsByPerformer(inventoryEvents)),
-    [inventoryEvents]
+    () => mergePerformerGroupsWithArtists(groupEventsByPerformer(inventoryEvents)),
+    [inventoryEvents, mergePerformerGroupsWithArtists]
   );
 
   const lastMinuteEvents = useMemo(
@@ -159,9 +213,11 @@ const Home = () => {
         if (cat === 'concert') return c === 'concert' || c === 'festival';
         return c === cat;
       });
-      return sortPerformersByDemand(groupEventsByPerformer(filtered));
+      const groups = groupEventsByPerformer(filtered);
+      if (cat === 'concert') return mergePerformerGroupsWithArtists(groups);
+      return sortPerformersByDemand(groups);
     },
-    [inventoryEvents]
+    [inventoryEvents, mergePerformerGroupsWithArtists]
   );
 
   const concertPerformers = useMemo(() => performersByCategory('concert'), [performersByCategory]);
@@ -171,11 +227,11 @@ const Home = () => {
 
   const handlePerformerNavigate = useCallback(
     (group) => {
-      if (!group?.events?.length) return;
       if (group.artistId != null && group.artistId !== '') {
         navigate(`/artist/${group.artistId}`);
         return;
       }
+      if (!group?.events?.length) return;
       if (group.eventCount <= 1) {
         navigate(`/event/${group.events[0].id}`);
         return;
@@ -462,7 +518,7 @@ const Home = () => {
       </section>
 
       <div ref={resultsRef} className="home-layout">
-        {inventoryEvents.length === 0 ? (
+        {inventoryEvents.length === 0 && recommendedPerformers.length === 0 ? (
           <div className="home-empty-wrap home-layout__rows">
             <EmptyState
               icon="🎫"
