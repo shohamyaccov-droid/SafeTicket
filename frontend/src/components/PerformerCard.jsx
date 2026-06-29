@@ -4,15 +4,17 @@ import { getFullImageUrl } from '../utils/formatters';
 /**
  * Homepage performer tile — one card per artist/show (multiple dates grouped).
  */
-export default function PerformerCard({ performerName, imageUrl, eventCount, onNavigate }) {
+export default function PerformerCard({ performerName, imageUrl, eventCount, totalTickets = 0, onNavigate }) {
   const img = getFullImageUrl(imageUrl) || '';
+  const hasActiveTickets = Number(totalTickets) > 0;
+  const isNotifyOnly = !hasActiveTickets;
   const fallback = `https://via.placeholder.com/400x400/0f172a/e2e8f0?text=${encodeURIComponent(
     (performerName || 'אמן').slice(0, 18)
   )}`;
 
   return (
     <article
-      className="home-performer-card"
+      className={`home-performer-card${isNotifyOnly ? ' home-performer-card--waitlist' : ''}`}
       role="link"
       tabIndex={0}
       onClick={onNavigate}
@@ -44,12 +46,12 @@ export default function PerformerCard({ performerName, imageUrl, eventCount, onN
         <h3 className="home-performer-card__title">{performerName}</h3>
         {eventCount > 1 ? (
           <p className="home-performer-card__meta">{eventCount} תאריכים קרובים</p>
-        ) : eventCount === 0 ? (
-          <p className="home-performer-card__meta">אין מועדים פעילים כרגע</p>
+        ) : isNotifyOnly ? (
+          <span className="home-performer-card__notify-btn">🔔 קבלו עדכון כשמתפנה כרטיס</span>
         ) : (
           <p className="home-performer-card__meta">מועד אחד</p>
         )}
-        <p className="home-performer-card__cta">{eventCount === 0 ? 'קבלו עדכון כשיפורסם ←' : 'צפו במועדים ←'}</p>
+        {isNotifyOnly ? null : <p className="home-performer-card__cta">צפו במועדים ←</p>}
       </div>
     </article>
   );

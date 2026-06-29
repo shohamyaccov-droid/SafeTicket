@@ -204,7 +204,10 @@ const Home = () => {
     [inventoryEvents, todayStart]
   );
 
-  const recommendedPerformers = useMemo(() => allPerformers.slice(0, 8), [allPerformers]);
+  const recommendedPerformers = useMemo(
+    () => allPerformers.filter((group) => (Number(group.totalTickets) || 0) > 0).slice(0, 8),
+    [allPerformers]
+  );
 
   const performersByCategory = useCallback(
     (cat) => {
@@ -222,8 +225,6 @@ const Home = () => {
 
   const concertPerformers = useMemo(() => performersByCategory('concert'), [performersByCategory]);
   const sportsPerformers = useMemo(() => performersByCategory('sport'), [performersByCategory]);
-  const standupPerformers = useMemo(() => performersByCategory('standup'), [performersByCategory]);
-  const theaterPerformers = useMemo(() => performersByCategory('theater'), [performersByCategory]);
 
   const handlePerformerNavigate = useCallback(
     (group) => {
@@ -390,6 +391,7 @@ const Home = () => {
                       performerName={group.performerName}
                       imageUrl={group.imageUrl}
                       eventCount={group.eventCount}
+                      totalTickets={group.totalTickets}
                       onNavigate={() => handlePerformerNavigate(group)}
                     />
                   </div>
@@ -518,7 +520,7 @@ const Home = () => {
       </section>
 
       <div ref={resultsRef} className="home-layout">
-        {inventoryEvents.length === 0 && recommendedPerformers.length === 0 ? (
+        {inventoryEvents.length === 0 && allPerformers.length === 0 ? (
           <div className="home-empty-wrap home-layout__rows">
             <EmptyState
               icon="🎫"
@@ -531,21 +533,20 @@ const Home = () => {
         ) : (
           <div className="home-viagogo-rows viagogo-home-discover home-layout__rows">
             <CarouselSection
+              slug="recommended"
+              title="מומלצים"
+              kind="performer"
+              performers={recommendedPerformers}
+            />
+            <CarouselSection
               slug="last-minute"
               title="כרטיסים של הדקה ה-90"
               kind="lastMinute"
               events={lastMinuteEvents}
             />
-            <CarouselSection
-              slug="recommended"
-              title="הופעות מומלצות"
-              kind="performer"
-              performers={recommendedPerformers}
-            />
             <CarouselSection slug="concerts" title="הופעות" kind="performer" performers={concertPerformers} />
-            <CarouselSection slug="sports" title="ספורט" kind="performer" performers={sportsPerformers} />
-            <CarouselSection slug="standup" title="סטנדאפ" kind="performer" performers={standupPerformers} />
-            <CarouselSection slug="theater" title="תיאטרון" kind="performer" performers={theaterPerformers} />
+            <CarouselSection slug="sports" title="כדורגל וספורט" kind="performer" performers={sportsPerformers} />
+            <CarouselSection slug="all-artists" title="כל האמנים" kind="performer" performers={allPerformers} />
           </div>
         )}
       </div>

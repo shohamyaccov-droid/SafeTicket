@@ -114,7 +114,15 @@ export function filterLastMinuteEvents(list, todayStart, days = 4) {
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 
-/** Sort performer groups by total ticket inventory (desc). */
+/** Sort performer groups by live inventory first, then demand, then name. */
 export function sortPerformersByDemand(groups) {
-  return [...groups].sort((a, b) => b.totalTickets - a.totalTickets);
+  return [...groups].sort((a, b) => {
+    const aTickets = Number(a?.totalTickets) || 0;
+    const bTickets = Number(b?.totalTickets) || 0;
+    const aHas = aTickets > 0 ? 1 : 0;
+    const bHas = bTickets > 0 ? 1 : 0;
+    if (aHas !== bHas) return bHas - aHas;
+    if (aTickets !== bTickets) return bTickets - aTickets;
+    return String(a?.performerName || '').localeCompare(String(b?.performerName || ''), 'he');
+  });
 }

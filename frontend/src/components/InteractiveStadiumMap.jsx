@@ -720,14 +720,11 @@ export default function InteractiveStadiumMap({
         </div>
       </div>
 
-      <div
-        className={`interactive-stadium-map__bar${
-          selectedSection?.status === 'available' ? ' interactive-stadium-map__bar--visible' : ''
-        }`}
-        aria-live="polite"
-      >
-        {selectedSection?.status === 'available' ? (
-          <>
+      {selectedSection?.status === 'available' ? (
+        <div
+          className="interactive-stadium-map__bar interactive-stadium-map__bar--visible"
+          aria-live="polite"
+        >
             <div className="interactive-stadium-map__bar-info">
               <span className="interactive-stadium-map__bar-section">
                 Section {getDisplayName(selectedSection.id)}
@@ -746,13 +743,8 @@ export default function InteractiveStadiumMap({
             >
               View Tickets →
             </button>
-          </>
-        ) : (
-          <p className="interactive-stadium-map__bar-hint">
-            Select an available section on the map to see listings.
-          </p>
-        )}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

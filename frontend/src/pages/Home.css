@@ -1338,6 +1338,17 @@
   transition: filter 0.15s ease, transform 0.15s ease;
 }
 
+.home-performer-card__notify-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  cursor: inherit;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
 .home-performer-card__notify-btn:hover,
 .home-carousel-card__notify-btn:hover {
   filter: brightness(1.06);

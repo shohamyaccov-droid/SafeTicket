@@ -3430,7 +3430,7 @@ class EventViewSet(viewsets.ModelViewSet):
                     Value(0),
                 )
             )
-            .order_by('date', 'name')
+            .order_by('-_active_tickets_total', 'date', 'name')
         )
         # Marketplace list: show all upcoming events (abundance UX — inventory hidden on cards).
         if self.action == 'list':
@@ -3649,7 +3649,7 @@ class ArtistViewSet(viewsets.ModelViewSet):
         return ArtistSerializer
     
     def get_queryset(self):
-        queryset = Artist.objects.all().order_by('name')
+        queryset = Artist.objects.all()
         if self.action == 'list':
             for_sell_raw = str(self.request.query_params.get('for_sell', '')).lower()
             for_sell = for_sell_raw in ('1', 'true', 'yes', 'on')
@@ -3660,7 +3660,7 @@ class ArtistViewSet(viewsets.ModelViewSet):
                     events__date__gte=now,
                     events__category='concert',
                     events__status='פעיל',
-                ).distinct()
+                ).distinct().order_by('name')
             else:
                 # Marketplace browse/homepage: return all artists so the discovery UI stays full
                 # even before inventory is listed. `total_tickets_count` still reflects live stock.
@@ -3674,7 +3674,10 @@ class ArtistViewSet(viewsets.ModelViewSet):
                             Value(0),
                         )
                     )
+                    .order_by('-_artist_tickets_total', 'name')
                 )
+        else:
+            queryset = queryset.order_by('name')
         search = self.request.query_params.get('search', None)
         if search:
             queryset = queryset.filter(name__icontains=search)
