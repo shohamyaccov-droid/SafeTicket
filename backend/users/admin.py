@@ -471,13 +471,13 @@ class TicketAdmin(admin.ModelAdmin):
 
 @admin.register(Artist)
 class ArtistAdmin(admin.ModelAdmin):
-    list_display = ['name', 'genre', 'created_at']
-    list_filter = ['genre', 'created_at']
+    list_display = ['name', 'category', 'genre', 'is_international', 'created_at']
+    list_filter = ['category', 'is_international', 'genre', 'created_at']
     search_fields = ['name', 'description', 'genre']
     readonly_fields = ['created_at', 'updated_at', 'image_delivery_preview', 'cover_image_delivery_preview']
     fieldsets = (
         ('Basic Information', {
-            'fields': ('name', 'genre', 'description')
+            'fields': ('name', 'category', 'is_international', 'genre', 'description')
         }),
         ('Media & Images', {
             'fields': ('image', 'cover_image', 'image_delivery_preview', 'cover_image_delivery_preview')

@@ -66,10 +66,27 @@ class Artist(models.Model):
     """
     Artist model for grouping events by artist/performer
     """
+    CATEGORY_CHOICES = [
+        ('music', 'Music'),
+        ('standup', 'Standup'),
+        ('sports', 'Sports'),
+        ('theater', 'Theater'),
+    ]
+
     name = models.CharField(max_length=255, help_text="Artist name")
     image = models.ImageField(upload_to='artists/images/', blank=True, null=True, help_text="Artist image/photo")
     description = models.TextField(blank=True, null=True, help_text="Artist description")
     genre = models.CharField(max_length=100, blank=True, null=True, help_text="Genre (e.g., Pop, Rock, Sports)")
+    category = models.CharField(
+        max_length=20,
+        choices=CATEGORY_CHOICES,
+        default='music',
+        help_text='Homepage category for marketplace discovery rows',
+    )
+    is_international = models.BooleanField(
+        default=False,
+        help_text='Hide from local-market homepage discovery when enabled',
+    )
     cover_image = models.ImageField(upload_to='artist_covers/', blank=True, null=True, help_text="Artist cover/banner image")
     youtube_link = models.URLField(blank=True, null=True, help_text="YouTube channel or video link")
     spotify_link = models.URLField(blank=True, null=True, help_text="Spotify artist page link")

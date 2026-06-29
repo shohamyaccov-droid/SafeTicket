@@ -10,7 +10,6 @@ import PerformerCard from '../components/PerformerCard';
 import BuyerGuarantee from '../components/BuyerGuarantee';
 import { toastError } from '../utils/toast';
 import {
-  eventCategoryKey,
   groupEventsByPerformer,
   filterLastMinuteEvents,
   sortPerformersByDemand,
@@ -165,6 +164,7 @@ const Home = () => {
           artistId: artist.id,
           performerName: artist.name || 'אמן',
           imageUrl: artist.image_url || '',
+          category: artist.category || 'music',
           events: [],
           eventCount: 0,
           totalTickets: Number(artist.total_tickets_count) || 0,
@@ -209,22 +209,14 @@ const Home = () => {
     [allPerformers]
   );
 
-  const performersByCategory = useCallback(
-    (cat) => {
-      const filtered = inventoryEvents.filter((e) => {
-        const c = eventCategoryKey(e);
-        if (cat === 'concert') return c === 'concert' || c === 'festival';
-        return c === cat;
-      });
-      const groups = groupEventsByPerformer(filtered);
-      if (cat === 'concert') return mergePerformerGroupsWithArtists(groups);
-      return sortPerformersByDemand(groups);
-    },
-    [inventoryEvents, mergePerformerGroupsWithArtists]
+  const performersByArtistCategory = useCallback(
+    (category) => sortPerformersByDemand(allPerformers.filter((group) => group.category === category)),
+    [allPerformers]
   );
 
-  const concertPerformers = useMemo(() => performersByCategory('concert'), [performersByCategory]);
-  const sportsPerformers = useMemo(() => performersByCategory('sport'), [performersByCategory]);
+  const musicPerformers = useMemo(() => performersByArtistCategory('music'), [performersByArtistCategory]);
+  const standupPerformers = useMemo(() => performersByArtistCategory('standup'), [performersByArtistCategory]);
+  const sportsPerformers = useMemo(() => performersByArtistCategory('sports'), [performersByArtistCategory]);
 
   const handlePerformerNavigate = useCallback(
     (group) => {
@@ -544,8 +536,9 @@ const Home = () => {
               kind="lastMinute"
               events={lastMinuteEvents}
             />
-            <CarouselSection slug="concerts" title="הופעות" kind="performer" performers={concertPerformers} />
-            <CarouselSection slug="sports" title="כדורגל וספורט" kind="performer" performers={sportsPerformers} />
+            <CarouselSection slug="music" title="הופעות חיות" kind="performer" performers={musicPerformers} />
+            <CarouselSection slug="standup" title="סטנדאפ" kind="performer" performers={standupPerformers} />
+            <CarouselSection slug="sports" title="ספורט" kind="performer" performers={sportsPerformers} />
             <CarouselSection slug="all-artists" title="כל האמנים" kind="performer" performers={allPerformers} />
           </div>
         )}

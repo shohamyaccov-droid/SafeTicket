@@ -2,6 +2,7 @@ import json
 
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
+from django.utils import timezone
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.db.models import Sum, Q
 from .models import (
@@ -514,7 +515,7 @@ class ArtistSerializer(serializers.ModelSerializer):
     class Meta:
         model = Artist
         fields = (
-            'id', 'name', 'image', 'image_url', 'description',
+            'id', 'name', 'image', 'image_url', 'description', 'category', 'is_international',
             'total_tickets_count', 'created_at', 'updated_at'
         )
         read_only_fields = ('id', 'created_at', 'updated_at', 'total_tickets_count')
@@ -528,7 +529,10 @@ class ArtistSerializer(serializers.ModelSerializer):
             return int(ann) if ann else 0
         total = Ticket.objects.filter(
             event__artist=obj,
-            status='active'
+            event__date__gte=timezone.now(),
+            event__status='פעיל',
+            status='active',
+            available_quantity__gt=0,
         ).aggregate(total=Sum('available_quantity'))['total']
         return total or 0
 
@@ -541,7 +545,7 @@ class ArtistListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Artist
         fields = (
-            'id', 'name', 'image_url', 'total_tickets_count'
+            'id', 'name', 'image_url', 'category', 'is_international', 'total_tickets_count'
         )
         read_only_fields = fields
     
@@ -554,7 +558,10 @@ class ArtistListSerializer(serializers.ModelSerializer):
             return int(ann) if ann else 0
         total = Ticket.objects.filter(
             event__artist=obj,
-            status='active'
+            event__date__gte=timezone.now(),
+            event__status='פעיל',
+            status='active',
+            available_quantity__gt=0,
         ).aggregate(total=Sum('available_quantity'))['total']
         return total or 0
 
@@ -566,7 +573,7 @@ class ArtistCardSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Artist
-        fields = ('id', 'name', 'image_url')
+        fields = ('id', 'name', 'image_url', 'category')
         read_only_fields = fields
 
     def get_image_url(self, obj):

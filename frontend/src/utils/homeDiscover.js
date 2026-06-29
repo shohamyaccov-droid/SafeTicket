@@ -42,6 +42,17 @@ export function performerImageUrl(ev) {
   return ev?.artist_detail?.image_url || ev?.image_url || '';
 }
 
+/** @param {object} ev */
+export function performerCategory(ev) {
+  const artistCategory = ev?.artist_detail?.category;
+  if (artistCategory) return String(artistCategory).trim();
+  const eventCategory = eventCategoryKey(ev);
+  if (eventCategory === 'sport') return 'sports';
+  if (eventCategory === 'standup') return 'standup';
+  if (eventCategory === 'theater') return 'theater';
+  return 'music';
+}
+
 /**
  * @param {object[]} list — upcoming marketplace events (already filtered)
  * @returns {Array<{
@@ -53,6 +64,7 @@ export function performerImageUrl(ev) {
  *   eventCount: number,
  *   totalTickets: number,
  *   nextDate: string|null,
+ *   category: string,
  *   hasTickets: boolean,
  *   waitlistOnly: boolean,
  * }>}
@@ -80,6 +92,7 @@ export function groupEventsByPerformer(list) {
       artistId: artistId != null ? artistId : null,
       performerName: performerDisplayName(display),
       imageUrl: performerImageUrl(display),
+      category: performerCategory(display),
       events,
       eventCount: events.length,
       totalTickets,

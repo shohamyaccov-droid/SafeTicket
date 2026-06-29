@@ -3426,7 +3426,10 @@ class EventViewSet(viewsets.ModelViewSet):
             )
             .annotate(
                 _active_tickets_total=Coalesce(
-                    Sum('tickets__available_quantity', filter=Q(tickets__status='active')),
+                    Sum(
+                        'tickets__available_quantity',
+                        filter=Q(tickets__status='active', tickets__available_quantity__gt=0),
+                    ),
                     Value(0),
                 )
             )
@@ -3434,7 +3437,7 @@ class EventViewSet(viewsets.ModelViewSet):
         )
         # Marketplace list: show all upcoming events (abundance UX — inventory hidden on cards).
         if self.action == 'list':
-            queryset = queryset.filter(status='פעיל')
+            queryset = queryset.filter(status='פעיל').exclude(artist__is_international=True)
 
         artist_id = qp.get('artist')
         if artist_id not in (None, ''):
@@ -3664,12 +3667,19 @@ class ArtistViewSet(viewsets.ModelViewSet):
             else:
                 # Marketplace browse/homepage: return all artists so the discovery UI stays full
                 # even before inventory is listed. `total_tickets_count` still reflects live stock.
+                now = timezone.now()
                 queryset = (
-                    queryset.annotate(
+                    queryset.exclude(is_international=True)
+                    .annotate(
                         _artist_tickets_total=Coalesce(
                             Sum(
                                 'events__tickets__available_quantity',
-                                filter=Q(events__tickets__status='active'),
+                                filter=Q(
+                                    events__date__gte=now,
+                                    events__status='פעיל',
+                                    events__tickets__status='active',
+                                    events__tickets__available_quantity__gt=0,
+                                ),
                             ),
                             Value(0),
                         )

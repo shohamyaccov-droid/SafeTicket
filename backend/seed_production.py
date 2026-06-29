@@ -99,6 +99,33 @@ def _user_model():
     return User
 
 
+def _seed_model(name: str, live_model):
+    """Live model during normal seed; historical model during data migrations."""
+    if _seed_historical_apps is not None:
+        return _seed_historical_apps.get_model('users', name)
+    return live_model
+
+
+def _artist_model():
+    return _seed_model('Artist', Artist)
+
+
+def _event_model():
+    return _seed_model('Event', Event)
+
+
+def _ticket_model():
+    return _seed_model('Ticket', Ticket)
+
+
+def _venue_model():
+    return _seed_model('Venue', Venue)
+
+
+def _venue_section_model():
+    return _seed_model('VenueSection', VenueSection)
+
+
 ADMIN_EMAIL = 'shohamyaccov@gmail.com'
 # Temporary login for /admin after seed — rotate after first sign-in.
 ADMIN_TEMP_PASSWORD = 'Shoham2026!'
@@ -432,9 +459,10 @@ def seed_qa_user() -> None:
 
 
 def seed_artists() -> None:
+    ArtistModel = _artist_model()
     for row in SEED_ARTISTS:
         name = row['name']
-        artist, created = Artist.objects.get_or_create(
+        artist, created = ArtistModel.objects.get_or_create(
             name=name,
             defaults={
                 'description': row.get('description') or '',
@@ -459,13 +487,18 @@ def seed_launch_events_and_tickets() -> None:
         _seed_log('[seed] launch inventory skipped — QA user missing')
         return
 
-    artists_by_name = {a.name: a for a in Artist.objects.all()}
+    ArtistModel = _artist_model()
+    EventModel = _event_model()
+    TicketModel = _ticket_model()
+    VenueModel = _venue_model()
+    VenueSectionModel = _venue_section_model()
+    artists_by_name = {a.name: a for a in ArtistModel.objects.all()}
 
     for row in SEED_LAUNCH_EVENTS:
         vname, vcity = row['venue_struct']
-        venue_obj, _ = Venue.objects.get_or_create(name=vname, city=vcity)
+        venue_obj, _ = VenueModel.objects.get_or_create(name=vname, city=vcity)
         for section_name in VENUE_SECTIONS.get((vname, vcity), []):
-            VenueSection.objects.get_or_create(venue=venue_obj, name=section_name)
+            VenueSectionModel.objects.get_or_create(venue=venue_obj, name=section_name)
         artist = artists_by_name.get(row['artist_name'])
         if not artist:
             _seed_log(f'[seed] launch event skipped (no artist): {row["name"]}')
@@ -483,7 +516,7 @@ def seed_launch_events_and_tickets() -> None:
             'venue_place': venue_obj,
             'high_demand': True,
         }
-        ev, created = Event.objects.update_or_create(
+        ev, created = EventModel.objects.update_or_create(
             name=row['name'],
             date=row['date'],
             defaults=defaults,
@@ -495,14 +528,14 @@ def seed_launch_events_and_tickets() -> None:
         for price in row['prices']:
             dec_price = Decimal(price)
             row_key = f'launch-tier-{price}'
-            existing = Ticket.objects.filter(event=ev, seller_id=seller.pk, seat_row=row_key).first()
+            existing = TicketModel.objects.filter(event=ev, seller_id=seller.pk, seat_row=row_key).first()
             if existing:
                 if existing.original_price != dec_price:
                     existing.original_price = dec_price
                     existing.asking_price = dec_price
                     existing.save(update_fields=['original_price', 'asking_price', 'updated_at'])
                 continue
-            t = Ticket(
+            t = TicketModel(
                 seller_id=seller.pk,
                 event=ev,
                 event_name=ev.name,
@@ -523,12 +556,15 @@ def seed_launch_events_and_tickets() -> None:
 
 def seed_waitlist_events() -> None:
     """High-demand upcoming events with intentionally no listings — waitlist / lead capture."""
-    artists_by_name = {a.name: a for a in Artist.objects.all()}
+    ArtistModel = _artist_model()
+    EventModel = _event_model()
+    VenueModel = _venue_model()
+    artists_by_name = {a.name: a for a in ArtistModel.objects.all()}
     for row in SEED_WAITLIST_EVENTS:
         an = row.get('artist_name')
         artist = artists_by_name.get(an) if an else None
         vname, vcity = row['venue_struct']
-        venue_obj, _ = Venue.objects.get_or_create(name=vname, city=vcity)
+        venue_obj, _ = VenueModel.objects.get_or_create(name=vname, city=vcity)
         defaults = {
             'venue': row['venue'],
             'city': row['city'],
@@ -542,7 +578,7 @@ def seed_waitlist_events() -> None:
             'venue_place': venue_obj,
             'high_demand': True,
         }
-        ev, created = Event.objects.update_or_create(
+        ev, created = EventModel.objects.update_or_create(
             name=row['name'],
             date=row['date'],
             defaults=defaults,
@@ -564,34 +600,36 @@ def assert_catalog_event_inventory() -> None:
     """
     from django.db.models import Sum
 
+    EventModel = _event_model()
+    TicketModel = _ticket_model()
     expected = _expected_catalog_event_names()
     n_expected = len(expected)
-    n_ev = Event.objects.count()
+    n_ev = EventModel.objects.count()
     if n_ev != n_expected:
         raise RuntimeError(f'Catalog seed: expected exactly {n_expected} events, found {n_ev}')
-    got_names = frozenset(Event.objects.values_list('name', flat=True))
+    got_names = frozenset(EventModel.objects.values_list('name', flat=True))
     if got_names != expected:
         raise RuntimeError(
             f'Catalog seed: event name set mismatch.\nExpected: {sorted(expected)}\nGot: {sorted(got_names)}'
         )
 
     for row in SEED_LAUNCH_EVENTS:
-        ev = Event.objects.filter(name=row['name'], date=row['date']).first()
+        ev = EventModel.objects.filter(name=row['name'], date=row['date']).first()
         if not ev:
             raise RuntimeError(f'Catalog seed: missing launch event {row["name"]!r}')
         listed = (
-            Ticket.objects.filter(event=ev, status='active').aggregate(s=Sum('available_quantity'))['s'] or 0
+            TicketModel.objects.filter(event=ev, status='active').aggregate(s=Sum('available_quantity'))['s'] or 0
         )
         if listed < 1:
             raise RuntimeError(f'Catalog seed: launch event {row["name"]!r} has no active ticket quantity')
 
     for row in SEED_WAITLIST_EVENTS:
-        ev = Event.objects.filter(name=row['name'], date=row['date']).first()
+        ev = EventModel.objects.filter(name=row['name'], date=row['date']).first()
         if not ev:
             raise RuntimeError(f'Catalog seed: missing waitlist event {row["name"]!r}')
         if not ev.high_demand:
             raise RuntimeError(f'Catalog seed: waitlist event {row["name"]!r} must have high_demand=True')
-        if Ticket.objects.filter(event=ev).exists():
+        if TicketModel.objects.filter(event=ev).exists():
             raise RuntimeError(f'Catalog seed: waitlist event {row["name"]!r} must have zero tickets')
 
 
@@ -604,7 +642,7 @@ def _seed_all(*, skip_prune: bool = False) -> None:
     seed_artists()
     seed_launch_events_and_tickets()
     seed_waitlist_events()
-    _seed_log(f'[seed] done: {Artist.objects.count()} artists, {Event.objects.count()} events total in DB')
+    _seed_log(f'[seed] done: {_artist_model().objects.count()} artists, {_event_model().objects.count()} events total in DB')
 
 
 def run_after_total_wipe(historical_apps=None) -> None:
