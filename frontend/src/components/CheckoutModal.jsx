@@ -165,6 +165,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const timerBudgetRef = useRef(CART_RESERVE_SECONDS);
   /** Buy Now: true only after /reserve succeeds so the 10m clock runs on info + payment. */
   const [reservationActive, setReservationActive] = useState(false);
+  const [reservationInitializing, setReservationInitializing] = useState(false);
   const [paidAmounts, setPaidAmounts] = useState(null); // Store actual paid amounts: { baseAmount, serviceFee, totalAmount }
   const [checkoutSucceeded, setCheckoutSucceeded] = useState(false); // Completed purchase — never return to payment for this session
   const timerRef = useRef(null);
@@ -354,6 +355,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   };
 
   const handleGuestChange = (e) => {
+    if (e.target.name === 'email') {
+      guestEmailRef.current = (e.target.value || '').trim();
+    }
     setGuestForm({
       ...guestForm,
       [e.target.name]: e.target.value,
@@ -429,6 +433,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         setInfoStepBusy(false);
         return;
       }
+      guestEmailRef.current = guestForm.email.trim();
+      try {
+        await ensureCsrfToken();
+      } catch {
+        /* reserve/order calls will surface a concrete API error if CSRF is unavailable */
+      }
     }
     setError('');
     setStep('payment');
@@ -440,6 +450,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       return;
     }
     if (loading) {
+      return;
+    }
+    if (!skipCartReserveForNegotiatedOffer && !reservationActive) {
+      setError(reservationInitializing ? 'שומרים את הכרטיס עבורך… נסה שוב בעוד רגע.' : 'הכרטיס עדיין לא נשמר. נסה שוב בעוד רגע.');
       return;
     }
     setError('');
@@ -794,6 +808,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       if (reservationRef.current) return;
 
       try {
+        setReservationInitializing(true);
         if (skipCartReserveForNegotiatedOffer) {
           const cr = acceptedOffer?.checkout_time_remaining;
           const budget =
@@ -859,6 +874,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           setError(errorMsg);
           toastError(errorMsg);
         }
+      } finally {
+        setReservationInitializing(false);
       }
     };
 
@@ -889,7 +906,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     const negotiated = skipCartReserveForNegotiatedOffer;
     const shouldTick =
       (negotiated && (step === 'info' || step === 'payment')) ||
-      (!negotiated && reservationActive && (step === 'info' || step === 'payment'));
+      (!negotiated && (reservationActive || step === 'payment') && (step === 'info' || step === 'payment'));
 
     if (!shouldTick) {
       if (timerRef.current) {
@@ -951,12 +968,15 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     guestForm.email,
   ]);
 
-  /** Always H:MM:SS so multi-hour windows never show confusing mm:ss (e.g. 239:53 for ~4h). */
+  /** MM:SS for cart holds; H:MM:SS only for multi-hour negotiated checkout windows. */
   const formatTime = (rawSeconds) => {
     const seconds = Math.max(0, Math.floor(Number(rawSeconds) || 0));
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
+    if (h === 0) {
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
     return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
@@ -967,6 +987,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     timerBudgetRef.current > 0 ? timerBudgetRef.current : defaultTimerBudget;
   const progressPercentage =
     budget > 0 ? Math.min(100, Math.max(0, ((budget - timeRemaining) / budget) * 100)) : 0;
+  const waitingForReservation =
+    !skipCartReserveForNegotiatedOffer && !reservationActive && step === 'payment';
+  const paymentSubmitDisabled =
+    loading || checkoutSucceeded || timeRemaining === 0 || waitingForReservation || reservationInitializing;
 
   const handleClose = async () => {
     if (pdfUrl) {
@@ -1223,7 +1247,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               type="button"
               className="checkout-mock-payment-btn checkout-mock-payment-btn--prominent"
               onClick={handleMockPayment}
-              disabled={loading || checkoutSucceeded || timeRemaining === 0}
+              disabled={paymentSubmitDisabled}
             >
               {loading
                 ? (
@@ -1477,13 +1501,13 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 type="button"
                 onClick={() => setStep('info')}
                 className="back-button checkout-row-btn modal-action-secondary"
-                disabled={loading || timeRemaining === 0}
+                disabled={loading || reservationInitializing || timeRemaining === 0}
               >
                 חזרה
               </button>
               <button
                 type="submit"
-                disabled={loading || checkoutSucceeded || timeRemaining === 0}
+                disabled={paymentSubmitDisabled}
                 className="checkout-button checkout-row-btn modal-action-primary"
               >
                 {loading
@@ -1510,7 +1534,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                             מעבד… <span className="button-spinner" aria-hidden />
                           </>
                         )
-                  : timeRemaining === 0
+                  : reservationInitializing || waitingForReservation
+                    ? 'שומר כרטיס…'
+                    : timeRemaining === 0
                     ? 'זמן פג'
                     : usePayme
                       ? 'המשך לתשלום מאובטח'
