@@ -39,6 +39,7 @@ const Home = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [events, setEvents] = useState([]);
   const [artists, setArtists] = useState([]);
+  const [recommendedArtists, setRecommendedArtists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
@@ -68,9 +69,10 @@ const Home = () => {
       setLoadError(null);
       setLoading(true);
       try {
-        const [eventsResponse, artistsResponse] = await Promise.all([
+        const [eventsResponse, artistsResponse, recommendedArtistsResponse] = await Promise.all([
           eventAPI.getEvents({ signal }),
           artistAPI.getArtists({ signal }),
+          artistAPI.getArtists({ signal, params: { recommended: '1' } }),
         ]);
         if (cancelled) return;
 
@@ -90,6 +92,13 @@ const Home = () => {
             ? artistsPayload.results
             : [];
         setArtists(artistsData);
+        const recommendedPayload = recommendedArtistsResponse?.data;
+        const recommendedData = Array.isArray(recommendedPayload)
+          ? recommendedPayload
+          : Array.isArray(recommendedPayload?.results)
+            ? recommendedPayload.results
+            : [];
+        setRecommendedArtists(recommendedData);
       } catch (error) {
         if (cancelled) return;
         const msg = error?.message || '';
@@ -101,6 +110,7 @@ const Home = () => {
         setLoadError(aborted ? 'timeout' : 'error');
         setEvents([]);
         setArtists([]);
+        setRecommendedArtists([]);
         if (!aborted) {
           toastError('לא ניתן לטעון את דף הבית. נסו לרענן או לבדוק את החיבור.');
         }
@@ -204,9 +214,22 @@ const Home = () => {
     [inventoryEvents, todayStart]
   );
 
+  const recommendedArtistIds = useMemo(
+    () =>
+      new Set(
+        (recommendedArtists || [])
+          .map((artist) => (artist?.id != null ? String(artist.id) : null))
+          .filter(Boolean)
+      ),
+    [recommendedArtists]
+  );
+
   const recommendedPerformers = useMemo(
-    () => allPerformers.filter((group) => (Number(group.totalTickets) || 0) > 0).slice(0, 8),
-    [allPerformers]
+    () =>
+      allPerformers
+        .filter((group) => group.artistId != null && recommendedArtistIds.has(String(group.artistId)))
+        .slice(0, 8),
+    [allPerformers, recommendedArtistIds]
   );
 
   const performersByArtistCategory = useCallback(
@@ -536,9 +559,9 @@ const Home = () => {
               kind="lastMinute"
               events={lastMinuteEvents}
             />
-            <CarouselSection slug="music" title="הופעות חיות" kind="performer" performers={musicPerformers} />
+            <CarouselSection slug="music" title="הופעות" kind="performer" performers={musicPerformers} />
             <CarouselSection slug="standup" title="סטנדאפ" kind="performer" performers={standupPerformers} />
-            <CarouselSection slug="sports" title="ספורט" kind="performer" performers={sportsPerformers} />
+            <CarouselSection slug="sports" title="כדורגל וספורט" kind="performer" performers={sportsPerformers} />
             <CarouselSection slug="all-artists" title="כל האמנים" kind="performer" performers={allPerformers} />
           </div>
         )}

@@ -108,6 +108,72 @@ class ArtistListApiTests(TestCase):
         self.assertIn('Local Artist', names)
         self.assertNotIn('Taylor Swift', names)
 
+    def test_recommended_artist_list_excludes_empty_and_past_only_artists(self):
+        seller = User.objects.create_user(
+            username='recommended_seller',
+            email='recommended-seller@example.test',
+            password='pass-12345',
+            role='seller',
+        )
+        empty_artist = Artist.objects.create(name='Empty Recommended Artist')
+        past_artist = Artist.objects.create(name='Past Recommended Artist')
+        future_artist = Artist.objects.create(name='Future Recommended Artist')
+        ticket_artist = Artist.objects.create(name='Ticket Recommended Artist')
+        past_event = Event.objects.create(
+            name='Past Recommended Show',
+            artist=past_artist,
+            date=timezone.now() - timezone.timedelta(days=3),
+            venue='היכל מנורה מבטחים',
+            city='Tel Aviv',
+            country='IL',
+            category='concert',
+        )
+        future_event = Event.objects.create(
+            name='Future Recommended Show',
+            artist=future_artist,
+            date=timezone.now() + timezone.timedelta(days=12),
+            venue='היכל מנורה מבטחים',
+            city='Tel Aviv',
+            country='IL',
+            category='concert',
+        )
+        ticket_event = Event.objects.create(
+            name='Ticket Recommended Show',
+            artist=ticket_artist,
+            date=timezone.now() + timezone.timedelta(days=20),
+            venue='היכל מנורה מבטחים',
+            city='Tel Aviv',
+            country='IL',
+            category='concert',
+        )
+        for event, pdf_name in (
+            (past_event, 'past-recommended.pdf'),
+            (ticket_event, 'ticket-recommended.pdf'),
+        ):
+            Ticket.objects.create(
+                seller=seller,
+                event=event,
+                event_name=event.name,
+                event_date=event.date,
+                venue=event.venue,
+                original_price='100.00',
+                asking_price='100.00',
+                available_quantity=1,
+                status='active',
+                verification_status='מאומת',
+                pdf_file=f'tickets/{pdf_name}',
+            )
+
+        res = APIClient().get('/api/users/artists/?recommended=1')
+
+        self.assertEqual(res.status_code, 200, res.content)
+        payload = res.data if isinstance(res.data, list) else res.data.get('results', [])
+        names = [item['name'] for item in payload]
+        self.assertNotIn(empty_artist.name, names)
+        self.assertNotIn(past_artist.name, names)
+        self.assertIn(future_artist.name, names)
+        self.assertIn(ticket_artist.name, names)
+
 
 class EventListApiTests(TestCase):
     def test_event_list_orders_active_inventory_before_empty_events(self):

@@ -3656,6 +3656,8 @@ class ArtistViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             for_sell_raw = str(self.request.query_params.get('for_sell', '')).lower()
             for_sell = for_sell_raw in ('1', 'true', 'yes', 'on')
+            recommended_raw = str(self.request.query_params.get('recommended', '')).lower()
+            recommended = recommended_raw in ('1', 'true', 'yes', 'on')
             if for_sell:
                 # Sell form: any artist with an upcoming active concert (inventory not required).
                 now = timezone.now()
@@ -3682,10 +3684,19 @@ class ArtistViewSet(viewsets.ModelViewSet):
                                 ),
                             ),
                             Value(0),
-                        )
+                        ),
+                        _artist_upcoming_events_total=Count(
+                            'events',
+                            filter=Q(events__date__gte=now, events__status='פעיל'),
+                            distinct=True,
+                        ),
                     )
                     .order_by('-_artist_tickets_total', 'name')
                 )
+                if recommended:
+                    queryset = queryset.filter(
+                        Q(_artist_tickets_total__gt=0) | Q(_artist_upcoming_events_total__gt=0)
+                    )
         else:
             queryset = queryset.order_by('name')
         search = self.request.query_params.get('search', None)
