@@ -562,7 +562,6 @@ const Home = () => {
             <CarouselSection slug="music" title="הופעות" kind="performer" performers={musicPerformers} />
             <CarouselSection slug="standup" title="סטנדאפ" kind="performer" performers={standupPerformers} />
             <CarouselSection slug="sports" title="כדורגל וספורט" kind="performer" performers={sportsPerformers} />
-            <CarouselSection slug="all-artists" title="כל האמנים" kind="performer" performers={allPerformers} />
           </div>
         )}
       </div>
