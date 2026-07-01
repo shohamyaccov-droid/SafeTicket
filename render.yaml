@@ -60,12 +60,8 @@ services:
         value: https://safeticket-api.onrender.com
     routes:
       - type: rewrite
+        source: /.well-known/apple-developer-merchantid-domain-association
+        destination: https://safeticket-api.onrender.com/.well-known/apple-developer-merchantid-domain-association
+      - type: rewrite
         source: /*
         destination: /index.html
-    headers:
-      - path: /.well-known/apple-developer-merchantid-domain-association
-        name: Content-Type
-        value: text/plain
-      - path: /.well-known/apple-developer-merchantid-domain-association
-        name: Content-Disposition
-        value: inline
