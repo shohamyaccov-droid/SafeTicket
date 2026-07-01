@@ -1,5 +1,6 @@
 .admin-dashboard-page {
   min-height: calc(100vh - 120px);
+  min-height: calc(100dvh - 120px);
   direction: rtl;
   text-align: right;
   padding: 1.25rem clamp(0.75rem, 3vw, 1.5rem) 3rem;

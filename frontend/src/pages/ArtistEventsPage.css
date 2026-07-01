@@ -1,5 +1,6 @@
 .artist-events-container {
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg-primary, #f8f9fa);
   padding: 2rem 1rem;
   max-width: 1200px;
@@ -29,9 +30,11 @@
   font-size: 1rem;
   cursor: pointer;
   margin-bottom: 1rem;
-  padding: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  min-height: 44px;
   text-decoration: none;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
 }
 
 .back-button:hover {

@@ -1,5 +1,6 @@
 .payme-return-page {
   min-height: calc(100vh - 180px);
+  min-height: calc(100dvh - 180px);
   display: grid;
   place-items: center;
   padding: 48px 20px;

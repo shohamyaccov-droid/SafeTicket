@@ -47,8 +47,8 @@
 
 .close-button {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
+  top: max(1rem, env(safe-area-inset-top, 0px));
+  right: max(1rem, env(safe-area-inset-right, 0px));
   background: none;
   border: none;
   color: var(--text-tertiary);
@@ -56,8 +56,11 @@
   cursor: pointer;
   line-height: 1;
   padding: 0;
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: color 0.2s ease;
 }
 
@@ -1068,11 +1071,13 @@
   }
   
   .close-button {
-    top: 1rem;
-    right: 1rem;
-    font-size: 2.5rem;
-    width: 40px;
-    height: 40px;
+    top: max(1rem, env(safe-area-inset-top, 0px));
+    right: max(1rem, env(safe-area-inset-right, 0px));
+    font-size: 2rem;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
     z-index: 1001;
   }
   

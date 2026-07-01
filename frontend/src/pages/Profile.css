@@ -4,6 +4,7 @@
   margin: 0 auto;
   padding: var(--spacing-xl) var(--spacing-lg);
   min-height: calc(100vh - 80px);
+  min-height: calc(100dvh - 80px);
   direction: rtl;
 }
 

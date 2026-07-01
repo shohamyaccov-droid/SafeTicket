@@ -1,5 +1,6 @@
 .event-details-container {
   min-height: calc(100vh - 140px);
+  min-height: calc(100dvh - 140px);
   padding: 1rem var(--spacing-lg);
   max-width: min(1200px, 100%);
   width: 100%;
@@ -7,7 +8,7 @@
   margin: 0 auto;
   direction: rtl;
   box-sizing: border-box;
-  overflow-x: visible;
+  overflow-x: clip;
   overflow-y: visible;
 }
 
@@ -698,24 +699,29 @@
 @media (min-width: 992px) {
   .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card-content {
     min-height: min(72vh, 820px);
+    min-height: min(72dvh, 820px);
     max-height: none;
   }
 
   .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card {
     min-height: min(76vh, 880px);
+    min-height: min(76dvh, 880px);
   }
 
   .tickets-split-container.tickets-split-container--ramat-gan .ramat-gan-map-scroll-wrapper {
     flex: 1;
     min-height: min(68vh, 780px);
+    min-height: min(68dvh, 780px);
   }
 
   .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__canvas-wrap {
     min-height: min(64vh, 740px);
+    min-height: min(64dvh, 740px);
   }
 
   .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__svg {
     min-height: min(60vh, 700px);
+    min-height: min(60dvh, 700px);
     max-height: none;
     width: 100%;
     height: 100%;
@@ -1918,7 +1924,9 @@
     padding: 0.65rem;
     box-sizing: border-box;
     min-height: max(260px, min(42vh, 340px));
+    min-height: max(260px, min(42dvh, 340px));
     max-height: min(52vh, 420px);
+    max-height: min(52dvh, 420px);
     display: flex;
     flex-direction: column;
   }
@@ -1929,8 +1937,11 @@
 
   .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card-content {
     min-height: max(260px, min(40vh, 340px));
+    min-height: max(260px, min(40dvh, 340px));
     max-height: min(52vh, 420px);
+    max-height: min(52dvh, 420px);
     height: min(48vh, 400px);
+    height: min(48dvh, 400px);
     padding: 0;
   }
 
@@ -1960,6 +1971,7 @@
     flex: 1;
     min-height: 260px !important;
     max-height: min(52vh, 420px) !important;
+    max-height: min(52dvh, 420px) !important;
     aspect-ratio: unset !important;
     padding: 0.45rem;
     box-sizing: border-box;
@@ -1994,7 +2006,9 @@
     position: relative !important;
     min-height: 220px !important;
     height: min(38vh, 280px) !important;
+    height: min(38dvh, 280px) !important;
     max-height: min(40vh, 300px) !important;
+    max-height: min(40dvh, 300px) !important;
     padding: 0.5rem !important;
     padding-bottom: 0.5rem !important;
     box-sizing: border-box;
@@ -2021,6 +2035,7 @@
   .tickets-section:has(.filters-section.mobile-open) .venue-map-sticky-container,
   .tickets-section:has(.sort-section.mobile-open) .venue-map-sticky-container {
     top: calc(env(safe-area-inset-top, 0px) + min(42vh, 11rem));
+    top: calc(env(safe-area-inset-top, 0px) + min(42dvh, 11rem));
   }
 }
 
@@ -2028,8 +2043,7 @@
   .event-details-container {
     padding: var(--spacing-md) var(--spacing-sm);
     max-width: 100%;
-    /* overflow: visible — required so position:sticky on the map works with document scroll */
-    overflow-x: visible;
+    overflow-x: clip;
     overflow-y: visible;
   }
 
@@ -2088,6 +2102,7 @@
     height: min(92vw, 520px);
     min-height: 340px;
     max-height: min(62vh, 560px);
+    max-height: min(62dvh, 560px);
     width: 100%;
     aspect-ratio: 1 / 1;
     background: #ffffff;
@@ -2197,8 +2212,11 @@
     padding: 0.25rem;
     box-sizing: border-box;
     min-height: max(330px, 42vh);
+    min-height: max(330px, 42dvh);
     height: clamp(330px, 56vh, 520px);
+    height: clamp(330px, 56dvh, 520px);
     max-height: min(64vh, 560px);
+    max-height: min(64dvh, 560px);
     display: flex;
     flex-direction: column;
     background: #ffffff;
@@ -2233,7 +2251,9 @@
     flex: 1;
     min-height: 260px !important;
     height: clamp(260px, 46vh, 420px) !important;
+    height: clamp(260px, 46dvh, 420px) !important;
     max-height: min(52vh, 430px) !important;
+    max-height: min(52dvh, 430px) !important;
     padding: 0.5rem !important;
     padding-bottom: 0.5rem !important;
     box-sizing: border-box;
@@ -2285,6 +2305,7 @@
   .tickets-section:has(.filters-section.mobile-open) .venue-map-sticky-container,
   .tickets-section:has(.sort-section.mobile-open) .venue-map-sticky-container {
     top: calc(env(safe-area-inset-top, 0px) + min(42vh, 11rem));
+    top: calc(env(safe-area-inset-top, 0px) + min(42dvh, 11rem));
   }
 
   .tickets-grid {

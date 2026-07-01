@@ -5,12 +5,15 @@
   max-width: 100%;
   min-width: 0;
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg-primary);
   direction: rtl;
+  overflow-x: clip;
 }
 
 .home-container--loading {
   min-height: 70vh;
+  min-height: 70dvh;
   padding-top: 1rem;
 }
 
@@ -91,15 +94,20 @@
 @media (max-width: 768px) {
   .hero-search-section {
     gap: 0.5rem;
+    padding: 2.75rem 1rem 0;
     padding-bottom: 0;
     overflow-x: hidden;
     overflow-y: visible;
+    background-attachment: scroll;
+    min-height: min(400px, 55vh);
+    min-height: min(400px, 55dvh);
   }
 
   .hero-stack {
     flex: 0 0 auto;
     min-height: 0;
     justify-content: flex-start;
+    gap: 1rem;
   }
 
   .hero-buyer-guarantee {
@@ -111,6 +119,34 @@
 
   .hero-trust-ribbon {
     margin-top: 0.35rem;
+  }
+
+  .hero-title {
+    font-size: 1.65rem;
+    margin-bottom: 1rem;
+  }
+
+  .hero-search-input {
+    padding: 1rem 3rem 1rem 1.25rem;
+    font-size: 1rem;
+  }
+
+  .social-proof-banner {
+    margin: 0 1rem;
+    padding: 0.75rem 1rem;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .social-proof-text {
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+}
+
+@media (hover: none) {
+  .hero-search-section {
+    background-attachment: scroll;
   }
 }
 
@@ -316,41 +352,6 @@
   color: rgba(255, 255, 255, 0.92);
   margin: 0 0 0.75rem;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-}
-
-@media (max-width: 768px) {
-  .hero-search-section {
-    min-height: 0;
-    padding: 2.75rem 1rem 0 !important;
-    background-attachment: scroll !important;
-  }
-
-  .hero-stack {
-    min-height: 0;
-    gap: 1rem;
-  }
-
-  .hero-title {
-    font-size: 1.65rem !important;
-    margin-bottom: 1rem !important;
-  }
-
-  .hero-search-input {
-    padding: 1rem 3rem 1rem 1.25rem !important;
-    font-size: 1rem !important;
-  }
-
-  .social-proof-banner {
-    margin: 0 1rem !important;
-    padding: 0.75rem 1rem !important;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-  }
-
-  .social-proof-text {
-    font-size: 0.88rem;
-    line-height: 1.45;
-  }
 }
 
 /* ============================================
@@ -901,12 +902,6 @@
 }
 
 @media (max-width: 768px) {
-  .hero-search-section {
-    padding: 3rem 1rem;
-    background-attachment: scroll;
-    height: 400px !important;
-  }
-  
   .trending-events-section {
     padding: 1.5rem 1rem;
   }
@@ -946,17 +941,7 @@
   .event-buy-button {
     padding: 0.625rem 1rem;
     font-size: 0.9rem;
-  }
-
-  .hero-title {
-    font-size: 1.75rem;
-    margin-bottom: 1.25rem;
-  }
-
-  .hero-search-input {
-    padding: 0.875rem 2.75rem 0.875rem 1rem;
-    /* 16px minimum: avoids iOS focus zoom on mobile */
-    font-size: 1rem !important;
+    min-height: 44px;
   }
 
   .category-pills-container {
@@ -1147,8 +1132,8 @@
 
 @media (max-width: 768px) {
   .home-carousel-arrow {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     opacity: 0.55;
   }
 

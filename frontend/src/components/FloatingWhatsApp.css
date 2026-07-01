@@ -1,7 +1,7 @@
 .floating-whatsapp {
   position: fixed;
-  bottom: 1.25rem;
-  left: 1.25rem;
+  bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  left: calc(1.25rem + env(safe-area-inset-left, 0px));
   z-index: 1100;
   display: inline-flex;
   align-items: center;
@@ -29,8 +29,13 @@
 }
 
 @media (max-width: 768px) {
+  /* Stack above mobile sell FAB (56px + 0.75rem gap) */
+  .floating-whatsapp {
+    bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
   .App > main {
-    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(10rem + env(safe-area-inset-bottom, 0px));
   }
 }
 

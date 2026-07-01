@@ -1,6 +1,7 @@
 /* Dashboard - Enterprise Style - Compact & Centered */
 .dashboard-container {
   min-height: calc(100vh - 200px);
+  min-height: calc(100dvh - 200px);
   padding: var(--spacing-md) var(--spacing-lg);
   max-width: 900px !important;
   width: 100% !important;

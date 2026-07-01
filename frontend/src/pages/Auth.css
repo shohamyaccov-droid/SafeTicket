@@ -1,6 +1,7 @@
 /* Auth Pages - Clean Professional Design */
 .auth-container {
   min-height: calc(100vh - 200px);
+  min-height: calc(100dvh - 200px);
   display: flex;
   justify-content: center;
   align-items: center;
