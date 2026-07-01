@@ -12,6 +12,7 @@ from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 
+from safeticket.apple_pay_views import apple_pay_domain_association
 from users.views import subscribe_ticket_alert
 
 
@@ -32,6 +33,11 @@ def spa_index_view(request):
 
 
 urlpatterns = [
+    path(
+        '.well-known/apple-developer-merchantid-domain-association',
+        apple_pay_domain_association,
+        name='apple_pay_domain_association',
+    ),
     path('admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls')),
     path('api/health/', health_check, name='health_check'),
@@ -50,5 +56,5 @@ if settings.DEBUG:
 # Vite emits /assets/*.js|css at repo root of collectstatic — must not be caught by SPA (would return HTML).
 urlpatterns += [
     path('', spa_index_view),
-    re_path(r'^(?!api/|admin/|static/|assets/).+$', spa_index_view),
+    re_path(r'^(?!api/|admin/|static/|assets/|\.well-known/).+$', spa_index_view),
 ]
