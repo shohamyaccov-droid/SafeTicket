@@ -46,9 +46,7 @@ export default function PerformerCard({ performerName, imageUrl, eventCount, onN
           <p className="home-performer-card__meta">{eventCount} תאריכים קרובים</p>
         ) : eventCount === 1 ? (
           <p className="home-performer-card__meta">מועד אחד</p>
-        ) : (
-          <p className="home-performer-card__meta">אין מועדים פעילים</p>
-        )}
+        ) : null}
         <p className="home-performer-card__cta">צפו במועדים ←</p>
       </div>
     </article>
