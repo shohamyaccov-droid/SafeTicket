@@ -58,6 +58,7 @@ services:
       # Public API origin; vite build bakes this in. Override in dashboard if you use a custom domain.
       - key: VITE_API_URL
         value: https://safeticket-api.onrender.com
+    # Apple Pay: proxy /.well-known to Django (static CDN cannot reliably serve dot-folder files).
     routes:
       - type: rewrite
         source: /.well-known/apple-developer-merchantid-domain-association
