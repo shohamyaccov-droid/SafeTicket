@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
@@ -22,9 +22,8 @@ function copyApplePayWellKnown(outDir) {
     throw new Error('Apple Pay domain association file is missing from frontend public and backend/.well-known');
   }
 
-  mkdirSync(join(outDir, '.well-known'), { recursive: true });
-  copyFileSync(sourcePath, join(outDir, '.well-known', fileName));
   copyFileSync(sourcePath, join(outDir, `${fileName}.txt`));
+  rmSync(join(outDir, '.well-known'), { recursive: true, force: true });
 }
 
 function applePayWellKnownPlugin() {

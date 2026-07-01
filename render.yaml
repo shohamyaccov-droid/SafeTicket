@@ -68,9 +68,16 @@ services:
         source: /*
         destination: /index.html
     headers:
+      # Apple Pay requires raw text/plain (not application/octet-stream download).
       - path: /.well-known/apple-developer-merchantid-domain-association
         name: Content-Type
-        value: text/plain
+        value: text/plain; charset=utf-8
+      - path: /.well-known/*
+        name: Content-Type
+        value: text/plain; charset=utf-8
+      - path: /.well-known/apple-developer-merchantid-domain-association
+        name: Content-Disposition
+        value: inline
       - path: /apple-developer-merchantid-domain-association.txt
         name: Content-Type
-        value: text/plain
+        value: text/plain; charset=utf-8
