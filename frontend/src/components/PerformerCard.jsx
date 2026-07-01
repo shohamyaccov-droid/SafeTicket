@@ -42,11 +42,16 @@ export default function PerformerCard({ performerName, imageUrl, eventCount, onN
       </div>
       <div className="home-performer-card__body">
         <h3 className="home-performer-card__title">{performerName}</h3>
-        {eventCount > 1 ? (
-          <p className="home-performer-card__meta">{eventCount} תאריכים קרובים</p>
-        ) : eventCount === 1 ? (
-          <p className="home-performer-card__meta">מועד אחד</p>
-        ) : null}
+        <p
+          className="home-performer-card__meta"
+          aria-hidden={eventCount === 0 ? true : undefined}
+        >
+          {eventCount > 1
+            ? `${eventCount} תאריכים קרובים`
+            : eventCount === 1
+              ? 'מועד אחד'
+              : '\u00a0'}
+        </p>
         <p className="home-performer-card__cta">צפו במועדים ←</p>
       </div>
     </article>
