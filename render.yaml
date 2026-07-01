@@ -59,6 +59,18 @@ services:
       - key: VITE_API_URL
         value: https://safeticket-api.onrender.com
     routes:
+      # Apple Pay domain verification must bypass the SPA catch-all.
+      # If dot-directories are skipped in dist, rewrite serves the flat .txt payload at the required path.
+      - type: rewrite
+        source: /.well-known/apple-developer-merchantid-domain-association
+        destination: /apple-developer-merchantid-domain-association.txt
       - type: rewrite
         source: /*
         destination: /index.html
+    headers:
+      - path: /.well-known/apple-developer-merchantid-domain-association
+        name: Content-Type
+        value: text/plain
+      - path: /apple-developer-merchantid-domain-association.txt
+        name: Content-Type
+        value: text/plain
