@@ -53,12 +53,13 @@ services:
     rootDir: frontend
     # RENDER_GIT_COMMIT is set by Render during build — same visibility as API bundle.
     buildCommand: export VITE_BUILD_ID="${VITE_BUILD_ID:-${RENDER_GIT_COMMIT:-unknown}}" && npm install && npm run build
-    staticPublishPath: dist
+    staticPublishPath: ./dist
     envVars:
       # Public API origin; vite build bakes this in. Override in dashboard if you use a custom domain.
       - key: VITE_API_URL
         value: https://safeticket-api.onrender.com
-    # Apple Pay: proxy /.well-known to Django (static CDN cannot reliably serve dot-folder files).
+    # Render serves physical files before rewrite rules. The public/.well-known file in dist
+    # bypasses the SPA catch-all even when proxy rules are not synced from Blueprint.
     routes:
       - type: rewrite
         source: /.well-known/apple-developer-merchantid-domain-association
@@ -66,3 +67,13 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
+    headers:
+      - path: /.well-known/apple-developer-merchantid-domain-association
+        name: Content-Type
+        value: text/plain
+      - path: /.well-known/apple-developer-merchantid-domain-association
+        name: Content-Disposition
+        value: inline
+      - path: /.well-known/apple-developer-merchantid-domain-association
+        name: Cache-Control
+        value: no-store, must-revalidate
