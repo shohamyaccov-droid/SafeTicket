@@ -58,7 +58,7 @@
   }
 
   .buyer-guarantee__panel {
-    padding: 0.65rem 0.85rem 0.7rem;
+    padding: 0.5rem 0.75rem 0.55rem;
     margin: 0 auto;
     max-width: min(100%, 560px);
     border-radius: 999px;
@@ -88,11 +88,11 @@
   .buyer-guarantee__subtitle {
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 2;
     overflow: hidden;
     margin: 0;
-    font-size: 0.68rem;
-    line-height: 1.45;
+    font-size: 0.65rem;
+    line-height: 1.4;
     color: rgba(241, 245, 249, 0.95);
     text-align: center;
     text-wrap: balance;

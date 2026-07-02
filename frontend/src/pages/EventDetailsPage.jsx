@@ -826,7 +826,17 @@ const EventDetailsPage = () => {
             /* ignore */
           }
         }, 80);
+        return;
       }
+      setTimeout(() => {
+        try {
+          document
+            .querySelector('.tickets-list-container')
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch {
+          /* ignore */
+        }
+      }, 80);
     },
     [ticketGroups]
   );

@@ -486,11 +486,6 @@ export default function InteractiveStadiumMap({
     return rows;
   }, [sections]);
 
-  const selectedSection = useMemo(() => {
-    if (!selectedSectionId) return null;
-    return sections.find((s) => getDbId(s.id) === selectedSectionId) ?? null;
-  }, [sections, selectedSectionId]);
-
   const setSelected = useCallback(
     (id) => {
       if (selectedSectionIdProp === undefined || selectedSectionIdProp === null) {
@@ -511,11 +506,6 @@ export default function InteractiveStadiumMap({
     },
     [onSelectSection, setSelected]
   );
-
-  const handleViewTickets = useCallback(() => {
-    if (!selectedSection || selectedSection.status !== 'available') return;
-    onSelectSection?.(getDbId(selectedSection.id));
-  }, [onSelectSection, selectedSection]);
 
   return (
     <div className="interactive-stadium-map">
@@ -719,32 +709,6 @@ export default function InteractiveStadiumMap({
           </div>
         </div>
       </div>
-
-      {selectedSection?.status === 'available' ? (
-        <div
-          className="interactive-stadium-map__bar interactive-stadium-map__bar--visible"
-          aria-live="polite"
-        >
-            <div className="interactive-stadium-map__bar-info">
-              <span className="interactive-stadium-map__bar-section">
-                Section {getDisplayName(selectedSection.id)}
-              </span>
-              <span className="interactive-stadium-map__bar-price">{selectedSection.price}</span>
-              {selectedSection.ticketsLeft != null ? (
-                <span className="interactive-stadium-map__bar-tickets">
-                  {selectedSection.ticketsLeft} tickets left
-                </span>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              className="interactive-stadium-map__bar-cta"
-              onClick={handleViewTickets}
-            >
-              View Tickets →
-            </button>
-        </div>
-      ) : null}
     </div>
   );
 }

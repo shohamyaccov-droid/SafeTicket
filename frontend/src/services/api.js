@@ -132,7 +132,7 @@ function currentReturnTo() {
   return path && path !== '/login' ? path : '/';
 }
 
-function notifySessionExpired() {
+export function notifySessionExpired() {
   if (typeof window === 'undefined') return;
   const returnTo = currentReturnTo();
   try {
@@ -485,14 +485,26 @@ export async function ensureCsrfToken() {
 export const paymentAPI = {
   simulatePayment: async (data) => {
     await ensureCsrfToken();
+    syncAxiosDefaultAuthHeader();
     return api.post('/users/payments/simulate/', data);
   },
   paymeInitCheckout: async (data) => {
     await ensureCsrfToken();
-    return api.post('/users/payments/payme/init/', data, data?.guest_email ? { skipAuth: true } : undefined);
+    syncAxiosDefaultAuthHeader();
+    const config = {};
+    if (data?.guest_email) {
+      config.skipAuth = true;
+    } else {
+      const bearer = getEffectiveBearerAccess();
+      if (bearer) {
+        config.headers = { Authorization: `Bearer ${bearer}` };
+      }
+    }
+    return api.post('/users/payments/payme/init/', data, config);
   },
   mockPaymentSuccess: async (data) => {
     await ensureCsrfToken();
+    syncAxiosDefaultAuthHeader();
     return api.post('/payments/mock-success/', data);
   },
 };
@@ -500,7 +512,10 @@ export const paymentAPI = {
 export const orderAPI = {
   createOrder: async (data) => {
     await ensureCsrfToken();
-    return api.post('/users/orders/', data);
+    syncAxiosDefaultAuthHeader();
+    const bearer = getEffectiveBearerAccess();
+    const config = bearer ? { headers: { Authorization: `Bearer ${bearer}` } } : {};
+    return api.post('/users/orders/', data, config);
   },
   guestCheckout: async (data) => {
     await ensureCsrfToken();

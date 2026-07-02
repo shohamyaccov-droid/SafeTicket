@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { authAPI, orderAPI, paymentAPI, ticketAPI, ensureCsrfToken } from '../services/api';
+import { authAPI, orderAPI, paymentAPI, ticketAPI, ensureCsrfToken, getEffectiveBearerAccess, syncAxiosDefaultAuthHeader, notifySessionExpired } from '../services/api';
 import {
   getTicketPrice,
   formatPrice,
@@ -84,6 +83,9 @@ function formatCheckoutBackendError(err) {
 function toFriendlyCheckoutMessage(detail) {
   const text = String(detail || '').trim();
   if (!text) return 'לא הצלחנו להשלים את הפעולה כרגע. נסו שוב בעוד רגע.';
+  if (/authentication credentials were not provided|not authenticated|unauthorized|forbidden/i.test(text)) {
+    return 'החיבור שלך פג תוקף. אנא התחבר מחדש.';
+  }
   if (/csrf|forbidden|403/i.test(text)) return CHECKOUT_CSRF_HTML_MESSAGE;
   if (/no longer available|not available|sold|נמכר/i.test(text)) {
     return 'הכרטיס כבר לא זמין. רעננו את הרשימה ובחרו כרטיס אחר.';
@@ -464,6 +466,20 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         return;
       }
     }
+
+    if (user) {
+      syncAxiosDefaultAuthHeader();
+      const bearer = getEffectiveBearerAccess();
+      if (!bearer) {
+        const authMsg = 'החיבור שלך פג תוקף. אנא התחבר מחדש.';
+        setError(authMsg);
+        toastError(authMsg);
+        onClose?.();
+        notifySessionExpired();
+        return;
+      }
+    }
+
     setLoading(true);
     setPaymentPhase('idle');
     paymentSubmittingRef.current = true;
@@ -733,6 +749,15 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         }
       })();
     } catch (err) {
+      const status = err.response?.status;
+      if (user && (status === 401 || status === 403)) {
+        const authMsg = 'החיבור שלך פג תוקף. אנא התחבר מחדש.';
+        setError(authMsg);
+        toastError(authMsg);
+        onClose?.();
+        notifySessionExpired();
+        return;
+      }
       const res = err.response;
       const formatted = formatCheckoutBackendError(err);
       const detail =
