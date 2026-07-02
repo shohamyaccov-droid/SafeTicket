@@ -255,8 +255,15 @@ if not USE_CLOUDINARY:
 # MediaCloudinaryStorage / RawMediaCloudinaryStorage see a fully configured SDK (avoids admin upload quirks).
 STORAGES = {
     'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
-    # Ticket PDFs (Ticket.pdf_file) — always defined; Cloudinary overrides below when USE_CLOUDINARY.
+    # Ticket PDFs only: resource_type=raw, type=authenticated (not publicly deliverable)
     'ticket_pdfs': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'OPTIONS': {
+            'location': MEDIA_ROOT,
+            'base_url': MEDIA_URL,
+        },
+    },
+    'ticket_receipts': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
         'OPTIONS': {
             'location': MEDIA_ROOT,
@@ -368,8 +375,9 @@ if USE_CLOUDINARY:
     STORAGES = {
         # Images (Artist, Event, User profile): resource_type=image uploads
         'default': {'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage'},
-        # Ticket PDFs only: resource_type=raw (required — image storage rejects PDFs)
-        'ticket_pdfs': {'BACKEND': 'cloudinary_storage.storage.RawMediaCloudinaryStorage'},
+        # Ticket PDFs + receipts: authenticated raw delivery (unsigned CDN URLs blocked)
+        'ticket_pdfs': {'BACKEND': 'users.authenticated_cloudinary_storage.AuthenticatedRawMediaCloudinaryStorage'},
+        'ticket_receipts': {'BACKEND': 'users.authenticated_cloudinary_storage.AuthenticatedRawMediaCloudinaryStorage'},
         'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
     }
 

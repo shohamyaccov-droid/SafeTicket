@@ -35,7 +35,7 @@ class Command(BaseCommand):
         url, _opts = cloudinary_url(
             public_id,
             resource_type='raw',
-            type='upload',
+            type='authenticated',
             sign_url=True,
             secure=True,
         )

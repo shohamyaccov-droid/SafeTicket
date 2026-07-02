@@ -1,10 +1,9 @@
 """
-Staff-only PDF URLs for Django admin: signed Cloudinary raw delivery.
+Staff-only PDF URLs for Django admin: signed Cloudinary authenticated delivery.
 
-Uses FieldFile.name as the Cloudinary public_id (RawMediaCloudinaryStorage contract).
+Uses FieldFile.name as the Cloudinary public_id (AuthenticatedRawMediaCloudinaryStorage contract).
 
-Delivery: prefer signed api.cloudinary.com download URLs and version-accurate signed CDN URLs.
-Plain cloudinary_url(..., type=upload) without the real asset version can yield 401 on res.cloudinary.com.
+Never returns unsigned public CDN URLs.
 """
 from __future__ import annotations
 
@@ -13,6 +12,8 @@ import os
 from typing import List, Optional
 
 from django.conf import settings
+
+from users.secure_ticket_storage import CLOUDINARY_AUTHENTICATED_TYPE
 
 _log = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ def _raw_extension(public_id: str) -> str:
 def get_ticket_file_admin_url(ticket, field_name: str = 'pdf_file') -> Optional[str]:
     """
     URL for staff-only admin file preview. Local: FieldFile.url.
-    Cloudinary: signed URL that returns 200 for raw/image assets.
+    Cloudinary: signed authenticated URL only.
     Never raises: failures return None.
     """
     try:
@@ -93,48 +94,46 @@ def _get_ticket_file_admin_url_uncaught(ticket, field_name: str) -> Optional[str
 
     try:
         import cloudinary.api
-        import cloudinary.utils
         from cloudinary.utils import cloudinary_url, private_download_url
     except ImportError:
-        try:
-            return file_field.url
-        except Exception:
-            return None
+        return None
 
-    # 1) Signed API download URL (api.cloudinary.com/.../raw/download?...) — works when CDN returns 401
+    # 1) Signed API download URL (authenticated type only)
     for pid in _public_id_variants(name):
         ext = _raw_extension(pid)
         for fmt in (ext, 'pdf', 'jpg', 'png'):
             if not fmt:
                 continue
-            for dl_type in ('upload', 'authenticated'):
-                for resource_type in ('raw', 'image'):
-                    try:
-                        dl = private_download_url(
-                            pid,
-                            fmt,
-                            resource_type=resource_type,
-                            type=dl_type,
-                        )
-                        if dl and str(dl).startswith('https://'):
-                            return str(dl)
-                    except Exception as exc:
-                        _log.debug(
-                            'private_download_url failed pid=%r fmt=%r type=%r resource=%r: %s',
-                            pid,
-                            fmt,
-                            dl_type,
-                            resource_type,
-                            exc,
-                        )
+            for resource_type in ('raw', 'image'):
+                try:
+                    dl = private_download_url(
+                        pid,
+                        fmt,
+                        resource_type=resource_type,
+                        type=CLOUDINARY_AUTHENTICATED_TYPE,
+                    )
+                    if dl and str(dl).startswith('https://'):
+                        return str(dl)
+                except Exception as exc:
+                    _log.debug(
+                        'private_download_url failed pid=%r fmt=%r resource=%r: %s',
+                        pid,
+                        fmt,
+                        resource_type,
+                        exc,
+                    )
 
-    # 2) Version-aware signed CDN URL (real version from Admin API)
+    # 2) Version-aware signed CDN URL (authenticated type only)
     for pid in _public_id_variants(name):
         info = None
         resource_type = None
         for candidate_type in ('raw', 'image'):
             try:
-                info = cloudinary.api.resource(pid, resource_type=candidate_type)
+                info = cloudinary.api.resource(
+                    pid,
+                    resource_type=candidate_type,
+                    type=CLOUDINARY_AUTHENTICATED_TYPE,
+                )
                 resource_type = candidate_type
                 break
             except Exception:
@@ -144,56 +143,29 @@ def _get_ticket_file_admin_url_uncaught(ticket, field_name: str) -> Optional[str
         cid = (info.get('public_id') or pid).replace('\\', '/')
         ver = info.get('version')
 
-        for typ in ('upload', 'authenticated'):
-            for opts in (
-                {
-                    'resource_type': resource_type,
-                    'type': typ,
-                    'sign_url': True,
-                    'secure': True,
-                    'version': ver,
-                    'long_url_signature': True,
-                },
-                {
-                    'resource_type': resource_type,
-                    'type': typ,
-                    'sign_url': True,
-                    'secure': True,
-                    'version': ver,
-                    'force_version': bool(ver),
-                },
-            ):
-                try:
-                    url, _ = cloudinary_url(cid, **opts)
-                    if url and str(url).startswith('https://'):
-                        return str(url)
-                except Exception:
-                    continue
-
-    # 3) Storage delivery URL (unsigned or as configured)
-    try:
-        u = file_field.url
-        if u and str(u).startswith('http'):
-            return str(u)
-    except Exception:
-        pass
-
-    # 4) Last resort: signed CDN URL without forcing version (may 401 on strict accounts)
-    for pid in _public_id_variants(name):
-        for typ in ('upload', 'authenticated'):
-            for resource_type in ('raw', 'image'):
-                try:
-                    url, _ = cloudinary_url(
-                        pid,
-                        resource_type=resource_type,
-                        type=typ,
-                        sign_url=True,
-                        secure=True,
-                        force_version=False,
-                    )
-                    if url and str(url).startswith('https://'):
-                        return str(url)
-                except Exception:
-                    continue
+        for opts in (
+            {
+                'resource_type': resource_type,
+                'type': CLOUDINARY_AUTHENTICATED_TYPE,
+                'sign_url': True,
+                'secure': True,
+                'version': ver,
+                'long_url_signature': True,
+            },
+            {
+                'resource_type': resource_type,
+                'type': CLOUDINARY_AUTHENTICATED_TYPE,
+                'sign_url': True,
+                'secure': True,
+                'version': ver,
+                'force_version': bool(ver),
+            },
+        ):
+            try:
+                url, _ = cloudinary_url(cid, **opts)
+                if url and str(url).startswith('https://'):
+                    return str(url)
+            except Exception:
+                continue
 
     return None

@@ -25,7 +25,7 @@ from .models import (
     Venue,
     VenueSection,
 )
-from .admin_pdf_url import get_ticket_pdf_admin_url
+from .admin_pdf_url import get_ticket_pdf_admin_url, get_ticket_receipt_admin_url
 
 _admin_log = logging.getLogger(__name__)
 
@@ -300,9 +300,8 @@ class TicketAdmin(admin.ModelAdmin):
             rf = getattr(obj, 'receipt_file', None)
             if not rf or not str(getattr(rf, 'name', None) or '').strip():
                 return mark_safe('<span style="color:#64748b;">—</span>')
-            try:
-                url = rf.url
-            except Exception:
+            url = get_ticket_receipt_admin_url(obj)
+            if not url:
                 return _admin_pdf_safe_fallback()
             return format_html(
                 '<a href="{}" target="_blank" rel="noopener noreferrer">קבלה</a>',

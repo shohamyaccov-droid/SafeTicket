@@ -6,6 +6,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
+from users.secure_ticket_storage import ticket_pdf_upload_to, ticket_receipt_upload_to
+
 
 class User(AbstractUser):
     """
@@ -147,13 +149,20 @@ class VenueSection(models.Model):
 
 def _ticket_pdf_storage():
     """
-    Ticket PDFs must upload as resource_type=raw on Cloudinary.
+    Ticket PDFs must upload as resource_type=raw on Cloudinary (authenticated delivery).
     Images (Artist/Event/User) use STORAGES['default'] → MediaCloudinaryStorage.
     Local/dev uses STORAGES['ticket_pdfs'] → FileSystemStorage (see settings.STORAGES).
     """
     from django.core.files.storage import storages
 
     return storages['ticket_pdfs']
+
+
+def _ticket_receipt_storage():
+    """Receipt files use the same authenticated raw storage backend as ticket PDFs."""
+    from django.core.files.storage import storages
+
+    return storages['ticket_receipts']
 
 
 class Event(models.Model):
@@ -451,13 +460,14 @@ class Ticket(models.Model):
     
     # PDF file (raw storage on Cloudinary — see _ticket_pdf_storage / settings.STORAGES)
     pdf_file = models.FileField(
-        upload_to='tickets/pdfs/',
+        upload_to=ticket_pdf_upload_to,
         storage=_ticket_pdf_storage(),
         help_text="Upload the PDF ticket file (can contain multiple tickets)",
     )
     
     receipt_file = models.FileField(
-        upload_to='tickets/receipts/',
+        upload_to=ticket_receipt_upload_to,
+        storage=_ticket_receipt_storage(),
         blank=True,
         null=True,
         help_text='Optional proof of purchase / receipt file',

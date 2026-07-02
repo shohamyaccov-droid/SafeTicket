@@ -173,7 +173,11 @@ def _ticket_pdf_persisted(ticket) -> bool:
                         import cloudinary.api
 
                         public_id = name.replace('\\', '/')
-                        cloudinary.api.resource(public_id, resource_type='raw')
+                        cloudinary.api.resource(
+                            public_id,
+                            resource_type='raw',
+                            type='authenticated',
+                        )
                         return True
                     except Exception:
                         logger.warning('cloudinary.api.resource failed pk=%s', ticket.pk, exc_info=True)
@@ -452,199 +456,23 @@ class PdfFetchError(Exception):
 
 
 def _download_ticket_pdf_bytes(ticket):
-    """
-    Load PDF bytes from Cloudinary-backed FileField. Tries public URL, then signed URL, then storage open().
-    """
-    import os as _os
-    import requests
-    import cloudinary.api
-    import cloudinary.utils
-    from cloudinary.utils import private_download_url
+    """Load ticket file bytes via authenticated Cloudinary fetch or local disk."""
+    from users.secure_ticket_storage import CloudinarySecureFetchError, fetch_ticket_file_field_bytes
 
-    public_id = (ticket.pdf_file.name or '').replace('\\', '/')
-
-    def _public_id_variants(pid: str):
-        """django-cloudinary-storage PREFIX (MEDIA_URL) may or may not match Cloudinary public_id."""
-        pid = pid.strip().strip('/')
-        if not pid:
-            return []
-        out = [pid]
-        media_prefix = (getattr(settings, 'MEDIA_URL', 'media/') or '').strip().strip('/')
-        if media_prefix and pid.startswith(media_prefix + '/'):
-            out.append(pid[len(media_prefix) + 1 :])
-        elif media_prefix and not pid.startswith(media_prefix):
-            out.append(f'{media_prefix}/{pid}')
-        seen = set()
-        uniq = []
-        for x in out:
-            if x not in seen:
-                seen.add(x)
-                uniq.append(x)
-        return uniq
-
-    errors = []
-
-    def _http_get_bytes(label, url):
-        if not url or not str(url).startswith('http'):
-            return None
-        r = requests.get(
-            url,
-            timeout=90,
-            headers={'User-Agent': 'TradeTix-PDF/1.0'},
-        )
-        r.raise_for_status()
-        return r.content
-
-    def _try_ticket_attachment_bytes(label, url):
-        """Fetch URL; require PDF/JPEG/PNG magic so HTML/JSON error pages do not count as success."""
-        body = _http_get_bytes(label, url)
-        if body is None:
-            return None
-        body = body.lstrip(b'\xef\xbb\xbf \t\r\n')
-        if not _ticket_attachment_magic_bytes_ok(body[:12]):
-            raise ValueError(f'{label}: response_not_ticket_file')
-        return body
-
-    # 0a) Signed Admin download URL → api.cloudinary.com (works when res.cloudinary.com delivery returns 401)
-    if public_id:
-        for pid in _public_id_variants(public_id):
-            ext = (_os.path.splitext(pid)[1].lstrip('.') or 'pdf').lower()
-            try:
-                api_dl = private_download_url(pid, ext, resource_type='raw', type='upload')
-                return _try_ticket_attachment_bytes('private_download_api', api_dl)
-            except Exception as e:
-                errors.append(('private_download_api', str(e)[:400]))
-
-    # 0) Admin API + delivery URL matrix (version + signature algorithm vary by account)
-    if public_id:
-        for pid in _public_id_variants(public_id):
-            try:
-                info = cloudinary.api.resource(pid, resource_type='raw')
-            except Exception as e:
-                errors.append(('api_resource', str(e)[:400]))
-                continue
-            cid = (info or {}).get('public_id') or pid
-            ver = (info or {}).get('version')
-
-            url_jobs = []
-            seen_u = set()
-            for u in filter(None, [(info or {}).get('secure_url'), (info or {}).get('url')]):
-                if u not in seen_u:
-                    seen_u.add(u)
-                    url_jobs.append(('api_delivery', u))
-
-            for sign in (True, False):
-                for sig_alg in (None, 'sha1', 'sha256'):
-                    opts = {
-                        'resource_type': 'raw',
-                        'type': 'upload',
-                        'sign_url': sign,
-                        'secure': True,
-                    }
-                    if ver is not None:
-                        opts['version'] = ver
-                    if sig_alg:
-                        opts['signature_algorithm'] = sig_alg
-                    try:
-                        url, _ = cloudinary.utils.cloudinary_url(cid, **opts)
-                        if url not in seen_u:
-                            seen_u.add(url)
-                            url_jobs.append((f"cf_{'sig' if sign else 'uns'}_{sig_alg or 'cfg'}", url))
-                    except Exception as e:
-                        errors.append((f'cf_build', str(e)[:200]))
-
-            for sign in (True, False):
-                try:
-                    url, _ = cloudinary.utils.cloudinary_url(
-                        cid,
-                        resource_type='raw',
-                        type='upload',
-                        sign_url=sign,
-                        secure=True,
-                        force_version=False,
-                    )
-                    if url not in seen_u:
-                        seen_u.add(url)
-                        url_jobs.append((f'cf_nover_{sign}', url))
-                except Exception as e:
-                    errors.append((f'cf_nover_{sign}', str(e)[:200]))
-
-            if ver is not None:
-                try:
-                    url, _ = cloudinary.utils.cloudinary_url(
-                        cid,
-                        resource_type='raw',
-                        type='upload',
-                        sign_url=True,
-                        secure=True,
-                        version=ver,
-                        long_url_signature=True,
-                    )
-                    if url not in seen_u:
-                        seen_u.add(url)
-                        url_jobs.append(('cf_long_sig', url))
-                except Exception as e:
-                    errors.append(('cf_long_sig', str(e)[:200]))
-
-            for label, url in url_jobs:
-                try:
-                    return _try_ticket_attachment_bytes(label, url)
-                except Exception as e:
-                    errors.append((label, str(e)[:400]))
-            break
-
-    # 1) Public delivery URL (CloudinaryResource / FileField.url)
     try:
-        url = ticket.pdf_file.url
-        return _try_ticket_attachment_bytes('public', url)
-    except Exception as e:
-        errors.append(('public_url', str(e)[:400]))
+        return fetch_ticket_file_field_bytes(ticket.pdf_file, validate_magic=True)
+    except CloudinarySecureFetchError as exc:
+        raise PdfFetchError(exc.errors or [('secure_fetch', str(exc))]) from exc
 
-    # 2) Explicit unsigned cloudinary_url (raw)
+
+def _download_ticket_receipt_bytes(ticket):
+    """Load receipt file bytes via authenticated Cloudinary fetch or local disk."""
+    from users.secure_ticket_storage import CloudinarySecureFetchError, fetch_ticket_file_field_bytes
+
     try:
-        url, _ = cloudinary.utils.cloudinary_url(
-            public_id,
-            resource_type='raw',
-            type='upload',
-            sign_url=False,
-            secure=True,
-        )
-        return _try_ticket_attachment_bytes('unsigned', url)
-    except Exception as e:
-        errors.append(('unsigned', str(e)[:400]))
-
-    # 3) Signed delivery URL
-    try:
-        url, _ = cloudinary.utils.cloudinary_url(
-            public_id,
-            resource_type='raw',
-            type='upload',
-            sign_url=True,
-            secure=True,
-        )
-        return _try_ticket_attachment_bytes('signed', url)
-    except Exception as e:
-        errors.append(('signed', str(e)[:400]))
-
-    # 4) django-cloudinary-storage FileField (uses requests inside _open)
-    try:
-        ticket.pdf_file.open('rb')
-        try:
-            raw = ticket.pdf_file.read()
-            if raw and not _ticket_attachment_magic_bytes_ok(raw[:12]):
-                raise ValueError('storage_open: not_ticket_file')
-            return raw
-        finally:
-            ticket.pdf_file.close()
-    except Exception as e:
-        errors.append(('storage_open', str(e)[:400]))
-
-    logger.error(
-        'download_pdf: all fetch strategies failed for ticket %s (strategy names: %s)',
-        ticket.pk,
-        [e[0] for e in errors],
-    )
-    raise PdfFetchError(errors)
+        return fetch_ticket_file_field_bytes(ticket.receipt_file, validate_magic=False)
+    except CloudinarySecureFetchError as exc:
+        raise PdfFetchError(exc.errors or [('secure_fetch', str(exc))]) from exc
 
 
 def _pdf_magic_bytes_ok(uploaded_file) -> bool:
@@ -656,16 +484,9 @@ def _pdf_magic_bytes_ok(uploaded_file) -> bool:
 
 
 def _ticket_attachment_magic_bytes_ok(head: bytes) -> bool:
-    """True if head looks like a PDF, JPEG, or PNG (ticket upload)."""
-    if not head:
-        return False
-    if head.startswith(b'%PDF'):
-        return True
-    if head.startswith(b'\xff\xd8\xff'):
-        return True
-    if len(head) >= 8 and head.startswith(b'\x89PNG\r\n\x1a\n'):
-        return True
-    return False
+    from users.secure_ticket_storage import ticket_attachment_magic_bytes_ok
+
+    return ticket_attachment_magic_bytes_ok(head)
 
 
 def _upload_is_ticket_attachment(uploaded_file, relax: bool) -> bool:
@@ -2892,6 +2713,10 @@ class TicketViewSet(viewsets.ModelViewSet):
             receipt_dup = (receipt_upload.read(), getattr(receipt_upload, 'name', 'receipt') or 'receipt')
             receipt_upload.seek(0)
 
+        import os
+
+        from users.secure_ticket_storage import random_ticket_storage_name
+
         # Generate listing_group_id for tickets created together
         listing_group_id = str(uuid.uuid4())
 
@@ -2904,7 +2729,6 @@ class TicketViewSet(viewsets.ModelViewSet):
             single_pdf = pdf_files[0]
             single_pdf.seek(0)  # Reset after validation read
             reader = _pdf_reader_for_upload(single_pdf, relax_pdf)
-            base_name = (single_pdf.name or 'ticket').rsplit('.', 1)[0]
 
             for i in range(available_quantity):
                 writer = PdfWriter()
@@ -2913,14 +2737,18 @@ class TicketViewSet(viewsets.ModelViewSet):
                 writer.write(buffer)
                 buffer.seek(0)
 
-                content_file = ContentFile(buffer.getvalue(), name=f'{base_name}_page_{i + 1}.pdf')
+                content_file = ContentFile(buffer.getvalue(), name=random_ticket_storage_name('.pdf'))
 
                 ticket_data = base_data.copy()
                 ticket_data['pdf_file'] = content_file
                 ticket_data['available_quantity'] = 1
                 ticket_data['listing_group_id'] = listing_group_id
                 if receipt_dup:
-                    ticket_data['receipt_file'] = ContentFile(receipt_dup[0], name=receipt_dup[1])
+                    receipt_ext = os.path.splitext(receipt_dup[1] or '')[1] or '.pdf'
+                    ticket_data['receipt_file'] = ContentFile(
+                        receipt_dup[0],
+                        name=random_ticket_storage_name(receipt_ext),
+                    )
 
                 if i < len(seat_data_list):
                     ticket_data['row_number'] = seat_data_list[i]['row_number']
@@ -2974,7 +2802,11 @@ class TicketViewSet(viewsets.ModelViewSet):
                 ticket_data['available_quantity'] = 1
                 ticket_data['listing_group_id'] = listing_group_id
                 if receipt_dup:
-                    ticket_data['receipt_file'] = ContentFile(receipt_dup[0], name=receipt_dup[1])
+                    receipt_ext = os.path.splitext(receipt_dup[1] or '')[1] or '.pdf'
+                    ticket_data['receipt_file'] = ContentFile(
+                        receipt_dup[0],
+                        name=random_ticket_storage_name(receipt_ext),
+                    )
 
                 if i < len(seat_data_list):
                     ticket_data['row_number'] = seat_data_list[i]['row_number']
@@ -3177,11 +3009,14 @@ class TicketViewSet(viewsets.ModelViewSet):
         import os
 
         try:
-            ticket.receipt_file.open('rb')
-            try:
-                content = ticket.receipt_file.read()
-            finally:
-                ticket.receipt_file.close()
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                content = _download_ticket_receipt_bytes(ticket)
+            else:
+                ticket.receipt_file.open('rb')
+                try:
+                    content = ticket.receipt_file.read()
+                finally:
+                    ticket.receipt_file.close()
             filename = os.path.basename(ticket.receipt_file.name or 'receipt')
             ctype = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
             safe_ascii = ''.join(c if ord(c) < 128 and c not in '"\\' else '_' for c in filename) or f'receipt_{ticket.id}'
@@ -3189,6 +3024,12 @@ class TicketViewSet(viewsets.ModelViewSet):
             response = HttpResponse(content, content_type=ctype)
             response['Content-Disposition'] = f'attachment; filename="{safe_ascii}"'
             return response
+        except PdfFetchError as e:
+            logger.exception('download_receipt Cloudinary fetch failed for ticket %s', ticket.pk)
+            body = {'error': 'Could not retrieve receipt file.'}
+            if settings.DEBUG and e.errors:
+                body['details'] = e.errors[-25:]
+            return Response(body, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             logger.exception('download_receipt failed for ticket %s', ticket.pk)
             return Response(
