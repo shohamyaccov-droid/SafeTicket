@@ -174,6 +174,7 @@ def build_standard_generate_sale_body(
         'sale_return_url': success_url or f'{frontend}/checkout/success?order_id={order_id_str}',
         'sale_cancel_url': failure_url or f'{frontend}/checkout/failure?order_id={order_id_str}',
         'sale_callback_url': callback_url or f'{api_origin}/api/payments/webhook/payme/',
+        'sale_payment_method': 'multi',
     }
 
     extra = getattr(settings, 'PAYME_EXTRA_BODY_JSON', None) or {}

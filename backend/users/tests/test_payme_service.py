@@ -102,6 +102,7 @@ class PayMeServiceUnitTests(SimpleTestCase):
         self.assertEqual(body['sale_return_url'], 'http://localhost/success')
         self.assertEqual(body['sale_cancel_url'], 'http://localhost/failure')
         self.assertEqual(body['sale_callback_url'], 'http://127.0.0.1:8000/api/payments/webhook/payme/')
+        self.assertEqual(body['sale_payment_method'], 'multi')
 
     @override_settings(PAYME_SELLER_ID='')
     def test_generate_payme_sale_requires_seller_id(self):
