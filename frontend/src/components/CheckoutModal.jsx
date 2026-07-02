@@ -1492,28 +1492,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   <small>מצב פיתוח פנימי בלבד. בסביבת production התשלום מתבצע דרך PayMe המאובטח.</small>
                 </p>
               </>
-            ) : (
-              <>
-                <div
-                  className="payme-hosted-hint"
-                  style={{
-                    padding: '1rem',
-                    background: '#f1f5f9',
-                    borderRadius: '8px',
-                    marginBottom: '1rem',
-                    textAlign: 'center',
-                    color: '#334155',
-                    fontSize: '0.95rem',
-                    lineHeight: 1.5,
-                  }}
-                >
-                  התשלום יתבצע בדף מאובטח של PayMe. פרטי התשלום אינם נשמרים ב-TradeTix, ולאחר אישור התשלום תוחזרו לעדכון סטטוס ההזמנה.
-                </div>
-                <p className="payment-note">
-                  <small>מוגן SSL ומעובד דרך ספק תשלומים מאושר.</small>
-                </p>
-              </>
-            )}
+            ) : null}
             
             {error && (
               <div className="error-message" role="alert" aria-live="polite">
@@ -1564,7 +1543,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     : timeRemaining === 0
                     ? 'זמן פג'
                     : usePayme
-                      ? 'המשך לתשלום מאובטח'
+                      ? 'המשך לתשלום'
                       : 'השלמת תשלום'}
               </button>
             </div>
@@ -1580,13 +1559,6 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   <circle cx="15" cy="12" r="6" fill="#F79E1B"/>
                   <circle cx="25" cy="12" r="6" fill="#FF5F00"/>
                 </svg>
-              </div>
-              <div className="ssl-badge">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M8 1L3 3V8C3 11.31 5.69 14 9 14C12.31 14 15 11.31 15 8V3L10 1L8 1Z" fill="#10b981"/>
-                  <path d="M6 8L7.5 9.5L10 7" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                <span>מוגן SSL</span>
               </div>
             </div>
           </form>
