@@ -151,7 +151,10 @@ function isPublicGuestEndpoint(url = '') {
   const path = String(url || '');
   return (
     path.includes('/users/csrf/') ||
-    path.includes('/users/orders/guest/')
+    path.includes('/users/orders/guest/') ||
+    /\/users\/tickets\/\d+\/reserve\//.test(path) ||
+    /\/users\/tickets\/\d+\/release_reservation\//.test(path) ||
+    path.includes('/users/payments/payme/init/')
   );
 }
 

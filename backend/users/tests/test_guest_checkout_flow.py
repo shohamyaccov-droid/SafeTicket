@@ -43,6 +43,20 @@ class GuestCheckoutFlowTests(TestCase):
             pdf_file='tickets/test-guest-flow.pdf',
         )
 
+    def test_guest_can_reserve_ticket_without_authentication(self):
+        guest_email = 'guest@example.test'
+        reserve_res = self.client.post(
+            f'/api/users/tickets/{self.ticket.id}/reserve/',
+            {'email': guest_email},
+            format='json',
+        )
+        self.assertEqual(reserve_res.status_code, 200, reserve_res.data)
+        self.assertTrue(reserve_res.data.get('success'))
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.status, 'reserved')
+        self.assertIsNone(self.ticket.reserved_by_id)
+        self.assertEqual(self.ticket.reservation_email, guest_email)
+
     @override_settings(PAYME_SELLER_ID='seller-id-test', PAYME_API_URL='https://testpay.payme.io/api')
     @patch('users.payme_views.generate_payme_sale_for_order')
     def test_guest_checkout_can_create_order_and_init_payme_without_authentication(self, mock_generate_sale):

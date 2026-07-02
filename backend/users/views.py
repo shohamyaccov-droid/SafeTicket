@@ -2469,6 +2469,11 @@ class TicketViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             return TicketListSerializer
         return TicketSerializer
+
+    def get_permissions(self):
+        if self.action in ('reserve', 'release_reservation'):
+            return [AllowAny()]
+        return super().get_permissions()
     
     def get_queryset(self):
         import logging
