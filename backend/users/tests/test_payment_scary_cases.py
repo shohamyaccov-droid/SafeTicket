@@ -73,7 +73,7 @@ class PaymentScaryCaseTests(TestCase):
         base.update(overrides)
         return Ticket.objects.create(**base)
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test')
+    @override_settings(DEBUG=True, PAYME_IS_SANDBOX=True, PAYME_WEBHOOK_SECRET='whsec_test')
     def test_payme_duplicate_success_webhook_is_idempotent(self):
         ticket = self._ticket()
         order = Order.objects.create(
@@ -108,7 +108,7 @@ class PaymentScaryCaseTests(TestCase):
         self.assertEqual(ticket.status, 'sold')
         self.assertEqual(Order.objects.filter(pk=order.pk).count(), 1)
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test')
+    @override_settings(DEBUG=True, PAYME_IS_SANDBOX=True, PAYME_WEBHOOK_SECRET='whsec_test')
     def test_paid_order_webhook_reconciles_unsold_ticket(self):
         ticket = self._ticket(status='active', reserved_by=None, reserved_at=None, available_quantity=1)
         order = Order.objects.create(
@@ -137,7 +137,7 @@ class PaymentScaryCaseTests(TestCase):
         self.assertEqual(ticket.status, 'sold')
         self.assertEqual(ticket.available_quantity, 0)
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test')
+    @override_settings(DEBUG=True, PAYME_IS_SANDBOX=True, PAYME_WEBHOOK_SECRET='whsec_test')
     def test_payme_finalize_failure_is_not_silent_success(self):
         ticket = self._ticket(reserved_at=timezone.now() - timedelta(hours=2))
         order = Order.objects.create(
