@@ -371,7 +371,9 @@ def normalize_payme_webhook_status(payload: dict[str, Any]) -> tuple[str | None,
 
 
 def _payme_webhook_hmac_bypassed() -> bool:
-    """Sandbox/preprod or missing secret: skip HMAC (PayMe often omits webhook secret in test)."""
+    """Skip HMAC only in DEBUG dev/sandbox. Production (DEBUG=False) never bypasses."""
+    if not getattr(settings, 'DEBUG', False):
+        return False
     secret = (get_payme_config()['webhook_secret'] or '').strip()
     is_sandbox = bool(getattr(settings, 'PAYME_IS_SANDBOX', False))
     return is_sandbox or not secret

@@ -1575,6 +1575,13 @@ def create_order(request):
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+                if not negotiated_offer.accepted_at or not negotiated_offer.checkout_expires_at:
+                    return Response(
+                        {
+                            'error': 'Invalid or ineligible offer for checkout (offer was not properly accepted).',
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 logger.debug(
                     f"Negotiated offer found: ID={oid}, Amount={negotiated_offer.amount}, Quantity={negotiated_offer.quantity}"
                 )
@@ -3363,9 +3370,9 @@ class TicketViewSet(viewsets.ModelViewSet):
 
 
 @method_decorator(csrf_required, name='dispatch')
-class EventViewSet(viewsets.ModelViewSet):
+class EventViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet for Event model
+    ViewSet for Event model (read-only API; catalog mutations via Django admin / staff tools).
     """
     queryset = Event.objects.all()
     permission_classes = [IsAuthenticatedOrReadOnly]
@@ -3638,9 +3645,9 @@ class EventViewSet(viewsets.ModelViewSet):
 
 
 @method_decorator(csrf_required, name='dispatch')
-class ArtistViewSet(viewsets.ModelViewSet):
+class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet for Artist model
+    ViewSet for Artist model (read-only API; catalog mutations via Django admin / staff tools).
     """
     queryset = Artist.objects.all()
     permission_classes = [IsAuthenticatedOrReadOnly]
@@ -4243,12 +4250,15 @@ class OfferViewSet(viewsets.ModelViewSet):
 
     CSRF exempt: cross-origin SPA on Render cannot rely on csrftoken cookie (PSL / third-party
     cookie policies). Mutations are protected by IsAuthenticated + JWT Bearer + CORS allowlist.
+
+    PATCH/PUT/DELETE are disabled — offer state changes only via accept/reject/counter actions.
     """
     serializer_class = OfferSerializer
     permission_classes = [IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'offers'
     pagination_class = None  # Full negotiation history for dashboard (no 20-item page cut-off)
+    http_method_names = ['get', 'post', 'head', 'options']
 
     def get_throttles(self):
         if getattr(self, 'action', None) in ('accept', 'reject', 'counter'):

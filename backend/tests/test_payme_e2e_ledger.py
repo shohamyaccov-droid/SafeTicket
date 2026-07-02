@@ -65,6 +65,7 @@ def assert_ledger_math(test_case, total_paid: Decimal, payout: SellerPayout) -> 
 
 
 @override_settings(
+    DEBUG=True,
     PAYME_SELLER_ID='MPL-E2E-TEST-SELLER',
     PAYME_API_URL='https://testpay.payme.io/api',
     PAYME_IS_SANDBOX=True,
@@ -335,7 +336,7 @@ class PayMeFraudFailureE2ETests(PayMeMarketplaceE2EBase):
         self.assertFalse(res.data.get('finalized'))
         self._assert_checkout_still_pending()
 
-    @override_settings(PAYME_WEBHOOK_SECRET='')
+    @override_settings(PAYME_WEBHOOK_SECRET='', DEBUG=True)
     def test_webhook_without_configured_secret_finalizes_in_sandbox(self):
         payload = self._success_webhook_payload(self.order)
         body, _ = sign_payme_payload(payload)

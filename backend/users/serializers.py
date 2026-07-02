@@ -288,7 +288,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ('username', 'email', 'password', 'password2', 'first_name', 'last_name', 'role', 'phone_number')
+        fields = ('username', 'email', 'password', 'password2', 'first_name', 'last_name', 'phone_number')
         extra_kwargs = {
             'email': {'required': True},
             'phone_number': {'required': False},
@@ -312,7 +312,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             password=validated_data['password'],
             first_name=validated_data.get('first_name', ''),
             last_name=validated_data.get('last_name', ''),
-            role=validated_data.get('role', 'buyer'),
+            role='buyer',
             phone_number=phone_number,
         )
         return user
@@ -1357,7 +1357,21 @@ class OfferSerializer(serializers.ModelSerializer):
             'purchase_completed', 'ticket_listing_status',
             'created_at', 'updated_at'
         )
-        read_only_fields = ('id', 'buyer', 'currency', 'expires_at', 'accepted_at', 'checkout_expires_at', 'created_at', 'updated_at')
+        read_only_fields = (
+            'id', 'buyer', 'currency', 'expires_at', 'accepted_at', 'checkout_expires_at',
+            'created_at', 'updated_at',
+            'status', 'amount', 'ticket', 'quantity', 'offer_round_count',
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # POST create still needs ticket/amount/quantity; PATCH is blocked on the viewset.
+        if self.instance is None:
+            from .models import Ticket
+            self.fields['ticket'].read_only = False
+            self.fields['amount'].read_only = False
+            self.fields['quantity'].read_only = False
+            self.fields['ticket'].queryset = Ticket.objects.all()
     
     def get_purchase_completed(self, obj):
         v = getattr(obj, '_purchase_done', None)
