@@ -17,7 +17,7 @@ services:
     buildCommand: bash ../build_render.sh
     # Runs against live DATABASE_URL before traffic switches — helps after Payme/migration deploys if build DB differed.
     preDeployCommand: python manage.py migrate --noinput
-    # Runtime: migrate against live DATABASE_URL, then seed + fix_admin, then Gunicorn (see backend/start_render.sh).
+    # Runtime: migrate against live DATABASE_URL, then seed (incl. August 2026 concerts) + fix_admin, then Gunicorn (see backend/start_render.sh).
     startCommand: bash start_render.sh
     plan: free
     envVars:

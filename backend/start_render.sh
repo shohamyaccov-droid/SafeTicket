@@ -40,6 +40,9 @@ python manage.py fix_eyal_golan_bloomfield_concert_venue || true
 echo "[start_render] Omer Adam Ramat Gan Stadium concerts (June 2026)..."
 python manage.py seed_omer_adam || true
 
+echo "[start_render] August 2026 concert catalog (Mor Ravia, Pe'er Tasi, Itay Levi, Eden Ben Zaken)..."
+python manage.py seed_august_2026_concerts || true
+
 echo "[start_render] Ramat Gan Stadium venue sections (Sell page dropdown)..."
 python manage.py seed_ramat_gan_sections || true
 
