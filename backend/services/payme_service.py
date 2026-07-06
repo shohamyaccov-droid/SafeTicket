@@ -6,6 +6,7 @@ Docs: https://docs.payme.io/
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
@@ -145,6 +146,39 @@ def extract_transaction_id(response_data: Any) -> str | None:
     return None
 
 
+def normalize_payme_buyer_phone(raw: str | None) -> str:
+    """PayMe expects digits-only phone, preferably with country code (972…)."""
+    digits = re.sub(r'\D', '', str(raw or ''))
+    if not digits:
+        return ''
+    if digits.startswith('972'):
+        return digits
+    if digits.startswith('0'):
+        return f'972{digits[1:]}'
+    return digits
+
+
+def resolve_buyer_details_for_order(order) -> dict[str, str]:
+    """Buyer identity for PayMe generate-sale (Bit prefill)."""
+    if getattr(order, 'user_id', None) and getattr(order, 'user', None):
+        user = order.user
+        first = (getattr(user, 'first_name', None) or '').strip()
+        last = (getattr(user, 'last_name', None) or '').strip()
+        name = f'{first} {last}'.strip() or (getattr(user, 'username', None) or '').strip()
+        return {
+            'buyer_name': name,
+            'buyer_email': (getattr(user, 'email', None) or '').strip(),
+            'buyer_phone': normalize_payme_buyer_phone(getattr(user, 'phone_number', None)),
+        }
+    first = (getattr(order, 'guest_first_name', None) or '').strip()
+    last = (getattr(order, 'guest_last_name', None) or '').strip()
+    return {
+        'buyer_name': f'{first} {last}'.strip(),
+        'buyer_email': (getattr(order, 'guest_email', None) or '').strip(),
+        'buyer_phone': normalize_payme_buyer_phone(getattr(order, 'guest_phone', None)),
+    }
+
+
 def build_standard_generate_sale_body(
     *,
     amount: Decimal | str | float | int,
@@ -155,6 +189,8 @@ def build_standard_generate_sale_body(
     success_url: str | None = None,
     failure_url: str | None = None,
     callback_url: str | None = None,
+    buyer_name: str | None = None,
+    buyer_phone: str | None = None,
 ) -> dict[str, Any]:
     """Build PayMe standard sale payload (no marketplace split)."""
     cfg = PayMeSettings.from_django()
@@ -176,6 +212,13 @@ def build_standard_generate_sale_body(
         'sale_callback_url': callback_url or f'{api_origin}/api/payments/webhook/payme/',
         'sale_payment_method': 'multi',
     }
+
+    payme_buyer_name = (buyer_name or '').strip()
+    payme_buyer_phone = normalize_payme_buyer_phone(buyer_phone)
+    if payme_buyer_name:
+        body['buyer_name'] = payme_buyer_name[:255]
+    if payme_buyer_phone:
+        body['buyer_phone'] = payme_buyer_phone
 
     extra = getattr(settings, 'PAYME_EXTRA_BODY_JSON', None) or {}
     if isinstance(extra, dict) and extra:
@@ -206,6 +249,8 @@ def generate_payme_sale(
     success_url: str | None = None,
     failure_url: str | None = None,
     callback_url: str | None = None,
+    buyer_name: str | None = None,
+    buyer_phone: str | None = None,
 ) -> dict[str, Any]:
     """
     Call PayMe POST /generate-sale (standard sale flow).
@@ -234,6 +279,8 @@ def generate_payme_sale(
         success_url=success_url,
         failure_url=failure_url,
         callback_url=callback_url,
+        buyer_name=buyer_name,
+        buyer_phone=buyer_phone,
     )
 
     logger.info(
@@ -311,11 +358,18 @@ def generate_payme_sale_for_order(
     buyer_email: str,
     success_url: str,
     failure_url: str,
+    buyer_name: str | None = None,
+    buyer_phone: str | None = None,
 ) -> dict[str, Any]:
     """Create a PayMe hosted checkout session for a pending TradeTix order."""
     total = order.total_paid_by_buyer if order.total_paid_by_buyer is not None else order.total_amount
     if total is None:
         raise PayMeError('Order has no payable total')
+
+    if not buyer_name or not buyer_phone:
+        resolved = resolve_buyer_details_for_order(order)
+        buyer_name = buyer_name or resolved.get('buyer_name') or None
+        buyer_phone = buyer_phone or resolved.get('buyer_phone') or None
 
     ticket_name = f'TradeTix — {order.event_name or "Ticket"}'
     if order.quantity and int(order.quantity) > 1:
@@ -329,6 +383,8 @@ def generate_payme_sale_for_order(
         currency=order.currency or 'ILS',
         success_url=success_url,
         failure_url=failure_url,
+        buyer_name=buyer_name,
+        buyer_phone=buyer_phone,
     )
 
 

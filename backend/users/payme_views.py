@@ -14,7 +14,12 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from services.payme_service import PayMeError, PayMeSettings, generate_payme_sale_for_order
+from services.payme_service import (
+    PayMeError,
+    PayMeSettings,
+    generate_payme_sale_for_order,
+    resolve_buyer_details_for_order,
+)
 
 from .models import Order
 from .payments import (
@@ -382,7 +387,7 @@ def payme_init_checkout(request):
     except (TypeError, ValueError):
         return Response({'error': 'order_id required'}, status=status.HTTP_400_BAD_REQUEST)
 
-    order = Order.objects.filter(pk=oid, status='pending_payment').first()
+    order = Order.objects.select_related('user').filter(pk=oid, status='pending_payment').first()
     if not order:
         return Response({'error': 'Order not found or not awaiting payment.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -403,6 +408,18 @@ def payme_init_checkout(request):
     if not buyer_email:
         return Response({'error': 'No buyer email on order.'}, status=status.HTTP_400_BAD_REQUEST)
 
+    buyer_details = resolve_buyer_details_for_order(order)
+    if not buyer_details.get('buyer_name'):
+        return Response(
+            {'error': 'Buyer name is required for PayMe checkout. Complete guest details or update your profile.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not buyer_details.get('buyer_phone'):
+        return Response(
+            {'error': 'Buyer phone is required for PayMe checkout. Complete guest details or update your profile.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     success_url = (request.data.get('success_url') or '').strip()
     failure_url = (request.data.get('failure_url') or '').strip()
     if not success_url or not failure_url:
@@ -414,6 +431,8 @@ def payme_init_checkout(request):
             buyer_email=buyer_email,
             success_url=success_url,
             failure_url=failure_url,
+            buyer_name=buyer_details.get('buyer_name'),
+            buyer_phone=buyer_details.get('buyer_phone'),
         )
     except PayMeError as exc:
         log_payme(

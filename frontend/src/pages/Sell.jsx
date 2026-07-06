@@ -302,7 +302,7 @@ const Sell = () => {
     return c === '' || c === 'IL';
   };
 
-  const WHATSAPP_SUPPORT_PHONE = '972500000000';
+  const WHATSAPP_SUPPORT_PHONE = '972557214170';
   const missingEventWhatsAppHref = `https://wa.me/${WHATSAPP_SUPPORT_PHONE}?text=${encodeURIComponent(
     'היי TradeTix, אני רוצה למכור כרטיס לאירוע שלא קיים באתר — נא לפרט: שם אמן/קבוצות, תאריך, אולם/עיר.'
   )}`;

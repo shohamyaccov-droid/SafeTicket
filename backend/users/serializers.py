@@ -684,6 +684,8 @@ class EventListSerializer(serializers.ModelSerializer):
 
 
 class GuestCheckoutSerializer(serializers.Serializer):
+    guest_first_name = serializers.CharField(max_length=100, required=True, trim_whitespace=True)
+    guest_last_name = serializers.CharField(max_length=100, required=True, trim_whitespace=True)
     guest_email = serializers.EmailField(required=True)
     guest_phone = serializers.CharField(max_length=20, required=True)
     ticket_id = serializers.IntegerField(required=True)  # Used to find the ticket

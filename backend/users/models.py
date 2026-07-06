@@ -609,6 +609,8 @@ class Order(models.Model):
     # Guest checkout fields
     guest_email = models.EmailField(blank=True, null=True)
     guest_phone = models.CharField(max_length=20, blank=True, null=True)
+    guest_first_name = models.CharField(max_length=100, blank=True, null=True)
+    guest_last_name = models.CharField(max_length=100, blank=True, null=True)
     
     # Order details
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')

@@ -104,6 +104,24 @@ class PayMeServiceUnitTests(SimpleTestCase):
         self.assertEqual(body['sale_callback_url'], 'http://127.0.0.1:8000/api/payments/webhook/payme/')
         self.assertEqual(body['sale_payment_method'], 'multi')
 
+    @override_settings(
+        PAYME_SELLER_ID='MPL-TEST-SELLER',
+        PAYME_API_URL='https://testpay.payme.io/api',
+        API_PUBLIC_ORIGIN='http://127.0.0.1:8000',
+        FRONTEND_ORIGIN='http://localhost:5173',
+    )
+    def test_build_standard_generate_sale_body_includes_buyer_identity(self):
+        body = build_standard_generate_sale_body(
+            amount=Decimal('115.00'),
+            ticket_name='Section 5 Ticket',
+            customer_email='buyer@example.com',
+            order_id='42',
+            buyer_name='Israel Israeli',
+            buyer_phone='0501234567',
+        )
+        self.assertEqual(body['buyer_name'], 'Israel Israeli')
+        self.assertEqual(body['buyer_phone'], '972501234567')
+
     @override_settings(PAYME_SELLER_ID='')
     def test_generate_payme_sale_requires_seller_id(self):
         with self.assertRaises(PayMeError) as ctx:

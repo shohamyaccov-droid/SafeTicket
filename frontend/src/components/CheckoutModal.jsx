@@ -99,7 +99,15 @@ function toFriendlyCheckoutMessage(detail) {
   return text;
 }
 
-function validateGuestContact(email, phone) {
+function validateGuestContact({ firstName, lastName, email, phone }) {
+  const fn = String(firstName || '').trim();
+  if (fn.length < 2) {
+    return 'נא להזין שם פרטי תקין';
+  }
+  const ln = String(lastName || '').trim();
+  if (ln.length < 2) {
+    return 'נא להזין שם משפחה תקין';
+  }
   const em = String(email || '').trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
     return 'נא להזין אימייל תקין';
@@ -144,6 +152,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const [step, setStep] = useState('info'); // 'info', 'payment', 'success'
   const [quantity, setQuantity] = useState(initialQuantity);
   const [guestForm, setGuestForm] = useState({
+    firstName: '',
+    lastName: '',
     email: '',
     phone: '',
   });
@@ -424,12 +434,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       return;
     }
     if (!user) {
-      if (!guestForm.email || !guestForm.phone) {
+      if (!guestForm.firstName || !guestForm.lastName || !guestForm.email || !guestForm.phone) {
         setError('אנא מלא את כל השדות הנדרשים');
         setInfoStepBusy(false);
         return;
       }
-      const gErr = validateGuestContact(guestForm.email, guestForm.phone);
+      const gErr = validateGuestContact(guestForm);
       if (gErr) {
         setError(gErr);
         setInfoStepBusy(false);
@@ -607,6 +617,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       } else {
         // Guest checkout
         const orderData = {
+          guest_first_name: guestForm.firstName.trim(),
+          guest_last_name: guestForm.lastName.trim(),
           guest_email: guestForm.email.trim(),
           guest_phone: guestForm.phone.trim(),
           ticket_id: ticketId,
@@ -1734,6 +1746,32 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           <div className="guest-checkout">
             <p>המשך כאורח או <a href="/login">התחבר</a> לחשבון שלך</p>
             <form onSubmit={handleInfoSubmit}>
+              <div className="form-group">
+                <label htmlFor="firstName">שם פרטי *</label>
+                <input
+                  type="text"
+                  id="firstName"
+                  name="firstName"
+                  value={guestForm.firstName}
+                  onChange={handleGuestChange}
+                  required
+                  placeholder="ישראל"
+                  autoComplete="given-name"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="lastName">שם משפחה *</label>
+                <input
+                  type="text"
+                  id="lastName"
+                  name="lastName"
+                  value={guestForm.lastName}
+                  onChange={handleGuestChange}
+                  required
+                  placeholder="ישראלי"
+                  autoComplete="family-name"
+                />
+              </div>
               <div className="form-group">
                 <label htmlFor="email">אימייל *</label>
                 <input

@@ -2436,6 +2436,8 @@ def guest_checkout(request):
             order = Order.objects.create(
                 guest_email=order_data['guest_email'],
                 guest_phone=order_data['guest_phone'],
+                guest_first_name=order_data['guest_first_name'],
+                guest_last_name=order_data['guest_last_name'],
                 ticket=ticket,
                 total_amount=server_total,
                 currency=order_cur,

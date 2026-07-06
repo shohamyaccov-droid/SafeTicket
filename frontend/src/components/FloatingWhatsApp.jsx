@@ -1,16 +1,16 @@
 import './FloatingWhatsApp.css';
 
+/** Dedicated TradeTix WhatsApp Business support link (pre-filled Hebrew greeting). */
+const WHATSAPP_SUPPORT_HREF =
+  'https://wa.me/972557214170?text=%D7%94%D7%99%D7%99+%D7%A6%D7%95%D7%95%D7%AA+TradeTix%2C+%D7%90%D7%A0%D7%99+%D7%A6%D7%A8%D7%99%D7%9A+%D7%A2%D7%96%D7%A8%D7%94...';
+
 /**
  * Global floating WhatsApp support (RTL-friendly: fixed corner).
  */
 const FloatingWhatsApp = () => {
-  const phone = '972500000000';
-  const text = encodeURIComponent('היי צוות TradeTix, אני צריך עזרה...');
-  const href = `https://wa.me/${phone}?text=${text}`;
-
   return (
     <a
-      href={href}
+      href={WHATSAPP_SUPPORT_HREF}
       target="_blank"
       rel="noopener noreferrer"
       className="floating-whatsapp"

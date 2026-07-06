@@ -71,6 +71,8 @@ class GuestCheckoutFlowTests(TestCase):
         create_res = self.client.post(
             '/api/users/orders/guest/',
             {
+                'guest_first_name': 'Guest',
+                'guest_last_name': 'Buyer',
                 'guest_email': guest_email,
                 'guest_phone': '0501234567',
                 'ticket_id': self.ticket.id,
