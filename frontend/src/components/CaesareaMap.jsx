@@ -70,8 +70,8 @@ const CaesareaMap = ({
               fillColor = '#e8e8e8';
             }
 
-            const labelY = hasPrice && !isActive ? section.labelY - 14 : section.labelY;
-            const priceY = section.labelY + (isOrchestra ? 16 : 12);
+            const labelY = section.labelY;
+            const priceTagY = section.labelY - (isOrchestra ? 34 : 28);
 
             return (
               <g
@@ -102,26 +102,12 @@ const CaesareaMap = ({
                   }}
                 />
 
-                <text
-                  x={section.labelX}
-                  y={labelY}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fill={isActive ? '#f9fafb' : '#6b7280'}
-                  fontSize={isOrchestra ? 12 : 14}
-                  fontWeight={isOrchestra ? 600 : 500}
-                  pointerEvents="none"
-                  className="section-label"
-                >
-                  {labelText}
-                </text>
-
                 {hasPrice && !isActive && (
-                  <g transform={`translate(${section.labelX}, ${priceY})`}>
+                  <g transform={`translate(${section.labelX}, ${priceTagY})`}>
                     <rect x="-34" y="-11" width="68" height="22" rx="4" fill="white" stroke="#e5e7eb" strokeWidth="1" />
                     <text
                       x="0"
-                      y="5"
+                      y="0"
                       textAnchor="middle"
                       dominantBaseline="middle"
                       fill="#1f2937"
@@ -135,6 +121,20 @@ const CaesareaMap = ({
                     <polygon points="0,11 -5,16 5,16" fill="white" stroke="#e5e7eb" strokeWidth="1" pointerEvents="none" />
                   </g>
                 )}
+
+                <text
+                  x={section.labelX}
+                  y={labelY}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fill={isActive ? '#f9fafb' : '#6b7280'}
+                  fontSize={isOrchestra ? 12 : 14}
+                  fontWeight={isOrchestra ? 600 : 500}
+                  pointerEvents="none"
+                  className="section-label"
+                >
+                  {labelText}
+                </text>
               </g>
             );
           })}
