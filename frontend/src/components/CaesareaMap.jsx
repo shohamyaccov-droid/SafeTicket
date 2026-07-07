@@ -50,24 +50,27 @@ const CaesareaMap = ({
         style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
       >
         <svg viewBox={VIEWBOX} className="interactive-stadium-svg caesarea-stadium-svg" preserveAspectRatio="xMidYMid meet">
-          <path d={ARENA_OUTLINE.d} fill="#f9fafb" stroke="#e5e7eb" strokeWidth="2" className="caesarea-outline" />
+          <path d={ARENA_OUTLINE.d} fill="#f9fafb" stroke="#e5e7eb" strokeWidth="1.5" className="caesarea-outline" />
 
           {CAESAREA_SECTIONS.map((section) => {
             const isActive = activeSectionId !== null && activeSectionId === section.id;
             const rawPrice = lowestPrices[section.id];
             const price = rawPrice !== undefined && rawPrice !== null ? Number(rawPrice) : null;
             const hasPrice = price !== null && !Number.isNaN(price);
+            const isOrchestra = section.id === 'אורקסטרה';
+            const labelText = section.displayLabel || section.id;
 
             let fillColor;
             if (isActive) {
               fillColor = '#1f2937';
             } else if (hasPrice) {
-              fillColor = '#4ade80';
+              fillColor = '#b2d982';
             } else {
-              fillColor = '#e5e7eb';
+              fillColor = '#e8e8e8';
             }
 
-            const shortLabel = section.id.replace(' תחתון', '').replace(' אמצע', '').replace(' עליון', '');
+            const labelY = hasPrice && !isActive ? section.labelY - 16 : section.labelY;
+            const priceY = section.labelY + (isOrchestra ? 14 : 10);
 
             return (
               <g
@@ -88,9 +91,8 @@ const CaesareaMap = ({
                   d={section.d}
                   fill={fillColor}
                   stroke="#ffffff"
-                  strokeWidth={isActive ? 3 : 1.5}
+                  strokeWidth={isActive ? 2.5 : 2}
                   strokeLinejoin="round"
-                  strokeLinecap="round"
                   className="section-path caesarea-section-path"
                   style={{
                     transition: 'all 0.2s ease',
@@ -98,53 +100,37 @@ const CaesareaMap = ({
                   }}
                 />
 
-                {hasPrice && !isActive ? (
-                  <text
-                    x={section.labelX}
-                    y={section.labelY - 18}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fill="#9ca3af"
-                    fontSize="11"
-                    fontWeight="500"
-                    pointerEvents="none"
-                    className="section-label"
-                  >
-                    {shortLabel}
-                  </text>
-                ) : (
-                  <text
-                    x={section.labelX}
-                    y={section.labelY}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fill={isActive ? '#f9fafb' : '#9ca3af'}
-                    fontSize="11"
-                    fontWeight="500"
-                    pointerEvents="none"
-                    className="section-label"
-                  >
-                    {shortLabel}
-                  </text>
-                )}
+                <text
+                  x={section.labelX}
+                  y={labelY}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fill={isActive ? '#f9fafb' : '#6b7280'}
+                  fontSize={isOrchestra ? 11 : 13}
+                  fontWeight={isOrchestra ? 600 : 500}
+                  pointerEvents="none"
+                  className="section-label"
+                >
+                  {labelText}
+                </text>
 
                 {hasPrice && !isActive && (
-                  <g transform={`translate(${section.labelX}, ${section.labelY + 6})`}>
-                    <rect x="-35" y="-12" width="70" height="24" rx="4" fill="white" stroke="#e5e7eb" strokeWidth="1" />
+                  <g transform={`translate(${section.labelX}, ${priceY})`}>
+                    <rect x="-34" y="-11" width="68" height="22" rx="4" fill="white" stroke="#e5e7eb" strokeWidth="1" />
                     <text
                       x="0"
-                      y="6"
+                      y="5"
                       textAnchor="middle"
                       dominantBaseline="middle"
                       fill="#1f2937"
-                      fontSize="13"
+                      fontSize="12"
                       fontWeight="700"
                       pointerEvents="none"
                     >
                       {currencySymbol(currencyIso)}
                       {formatAmountForCurrency(price, currencyIso)}
                     </text>
-                    <polygon points="0,12 -6,18 6,18" fill="white" stroke="#e5e7eb" strokeWidth="1" pointerEvents="none" />
+                    <polygon points="0,11 -5,16 5,16" fill="white" stroke="#e5e7eb" strokeWidth="1" pointerEvents="none" />
                   </g>
                 )}
               </g>
@@ -157,10 +143,9 @@ const CaesareaMap = ({
               y={STAGE.y}
               width={STAGE.w}
               height={STAGE.h}
-              rx="4"
-              fill="#9ca3af"
-              stroke="#6b7280"
-              strokeWidth="2"
+              fill="#bdbdbd"
+              stroke="#9e9e9e"
+              strokeWidth="1"
               className="caesarea-stage"
             />
             <text
@@ -169,8 +154,9 @@ const CaesareaMap = ({
               textAnchor="middle"
               dominantBaseline="middle"
               fill="#111827"
-              fontSize="16"
+              fontSize="14"
               fontWeight="700"
+              letterSpacing="1"
               className="stage-label"
             >
               STAGE
