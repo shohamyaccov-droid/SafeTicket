@@ -47,7 +47,8 @@
 }
 
 .stage-area,
-.stage-label {
+.stage-label,
+.vip-area-label {
   pointer-events: none;
   user-select: none;
 }

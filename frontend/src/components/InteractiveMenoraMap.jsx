@@ -332,6 +332,19 @@ const InteractiveMenoraMap = ({
 
           {/* Stage nested inside VIP — non-clickable, drawn on top */}
           <g className="stage-overlay" pointerEvents="none">
+            <text
+              x="400"
+              y="248"
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="#b45309"
+              fontSize="20"
+              fontWeight="800"
+              letterSpacing="2"
+              className="vip-area-label"
+            >
+              VIP
+            </text>
             <rect
               x="320"
               y="262"

@@ -6,7 +6,6 @@ import {
   STAGE,
   ARENA_OUTLINE,
   CAESAREA_SECTIONS,
-  CAESAREA_DECORATIVE_PATHS,
 } from '../utils/caesareaGeometry';
 import './InteractiveMenoraMap.css';
 import './CaesareaMap.css';
@@ -52,17 +51,6 @@ const CaesareaMap = ({
       >
         <svg viewBox={VIEWBOX} className="interactive-stadium-svg caesarea-stadium-svg" preserveAspectRatio="xMidYMid meet">
           <path d={ARENA_OUTLINE.d} fill="#f9fafb" stroke="#e5e7eb" strokeWidth="2" className="caesarea-outline" />
-
-          {CAESAREA_DECORATIVE_PATHS.map((d, i) => (
-            <path
-              key={`deco-${i}`}
-              d={d}
-              fill="#f3f4f6"
-              stroke="#ffffff"
-              strokeWidth="1.5"
-              pointerEvents="none"
-            />
-          ))}
 
           {CAESAREA_SECTIONS.map((section) => {
             const isActive = activeSectionId !== null && activeSectionId === section.id;
@@ -164,18 +152,28 @@ const CaesareaMap = ({
           })}
 
           <g className="stage-overlay" pointerEvents="none">
-            <path d={STAGE.d} fill="#374151" stroke="#1f2937" strokeWidth="2" className="caesarea-stage" />
+            <rect
+              x={STAGE.x}
+              y={STAGE.y}
+              width={STAGE.w}
+              height={STAGE.h}
+              rx="4"
+              fill="#9ca3af"
+              stroke="#6b7280"
+              strokeWidth="2"
+              className="caesarea-stage"
+            />
             <text
               x={STAGE.labelX}
               y={STAGE.labelY}
               textAnchor="middle"
               dominantBaseline="middle"
-              fill="#ffffff"
-              fontSize="18"
+              fill="#111827"
+              fontSize="16"
               fontWeight="700"
               className="stage-label"
             >
-              במה
+              STAGE
             </text>
           </g>
         </svg>
