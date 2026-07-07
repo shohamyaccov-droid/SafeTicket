@@ -51,7 +51,7 @@ const CaesareaMap = ({
         style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
       >
         <svg viewBox={VIEWBOX} className="interactive-stadium-svg caesarea-stadium-svg" preserveAspectRatio="xMidYMid meet">
-          <path d={ARENA_OUTLINE.d} fill="#ffffff" stroke="#e5e7eb" strokeWidth="2" className="caesarea-outline" />
+          <path d={ARENA_OUTLINE.d} fill="#FFFFFF" stroke="#e5e7eb" strokeWidth="1.5" className="caesarea-outline" />
 
           {CAESAREA_SECTIONS.map((section) => {
             const isActive = activeSectionId !== null && activeSectionId === section.id;

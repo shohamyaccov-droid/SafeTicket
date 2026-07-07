@@ -1,6 +1,11 @@
 .caesarea-map-container {
   aspect-ratio: 530 / 330;
   max-height: 420px !important;
+  background: #ffffff;
+}
+
+.caesarea-map-container .svg-map-wrapper {
+  background: #ffffff;
 }
 
 .sr-only {
@@ -27,6 +32,7 @@
 }
 
 .caesarea-outline {
+  fill: #ffffff;
   pointer-events: none;
 }
 
