@@ -8,9 +8,10 @@ import BecomeSellerModal from '../components/BecomeSellerModal';
 import { toastError } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
 import { iso4217FromCountry, currencySymbol, formatAmountForCurrency } from '../utils/priceFormat';
-import { VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN } from '../utils/venueMaps';
+import { VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN, VENUE_CAESAREA } from '../utils/venueMaps';
 import { CONCERT_BLOCK_COUNT, CONCERT_SECTION_NAMES } from '../utils/bloomfieldConcertGeometry';
 import { isRamatGanVenueEvent, ramatGanSellSectionOptions } from '../utils/ramatGanSellSections';
+import { isCaesareaVenueEvent, caesareaSellSectionOptions } from '../utils/caesareaSellSections';
 import './Sell.css';
 
 const SELL_PAGE_BUILD_TAG = import.meta.env.VITE_BUILD_ID || 'local-dev';
@@ -155,6 +156,7 @@ function canonicalVenueName(eventLike) {
   if (haystack.includes('בלומפילד')) return 'אצטדיון בלומפילד';
   if (haystack.includes('פיס ארנה') || haystack.includes('ארנה ירושלים')) return 'פיס ארנה ירושלים';
   if (haystack.includes('מנורה') || haystack.includes('מבטחים')) return 'היכל מנורה מבטחים';
+  if (isCaesareaVenueEvent(eventLike)) return VENUE_CAESAREA;
   if (isRamatGanVenueEvent(eventLike)) return VENUE_RAMAT_GAN;
   return values[0] || '';
 }
@@ -180,6 +182,9 @@ function generatedSectionOptionsForVenue(venueName) {
   }
   if (venueName === VENUE_RAMAT_GAN) {
     return ramatGanSellSectionOptions();
+  }
+  if (venueName === VENUE_CAESAREA) {
+    return caesareaSellSectionOptions();
   }
   return [];
 }
