@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { MapPin, ChevronLeft } from 'lucide-react';
 import { artistAPI } from '../services/api';
 import WaitlistSignupModal from '../components/WaitlistSignupModal';
 import { getFullImageUrl } from '../utils/formatters';
 import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import { toastError } from '../utils/toast';
-import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
+import { formatArtistEventRowDate, displayEventVenueName } from '../utils/eventLocalTime';
 import './ArtistEventsPage.css';
 
 const ArtistEventsPage = () => {
@@ -90,8 +91,24 @@ const ArtistEventsPage = () => {
     };
   }, [artistId, retryKey]);
 
-  const upcomingEvents = events.filter(
-    (event) => event?.date && new Date(event.date) >= new Date(new Date().setHours(0, 0, 0, 0))
+  const upcomingEvents = useMemo(
+    () =>
+      events.filter(
+        (event) => event?.date && new Date(event.date) >= new Date(new Date().setHours(0, 0, 0, 0))
+      ),
+    [events]
+  );
+
+  const maxTicketSupply = useMemo(() => {
+    if (!upcomingEvents.length) return 0;
+    return Math.max(...upcomingEvents.map((event) => Number(event.tickets_count) || 0));
+  }, [upcomingEvents]);
+
+  const openEvent = useCallback(
+    (eventId) => {
+      navigate(`/event/${eventId}`);
+    },
+    [navigate]
   );
 
   if (loading) {
@@ -117,7 +134,7 @@ const ArtistEventsPage = () => {
 
   return (
     <div className="artist-events-container">
-      <button onClick={() => navigate(-1)} className="back-button">
+      <button type="button" onClick={() => navigate(-1)} className="back-button">
         ← חזרה
       </button>
 
@@ -152,18 +169,45 @@ const ArtistEventsPage = () => {
           </div>
         ) : (
           <div className="events-table">
-            {upcomingEvents.map((event) => (
-              <div key={event.id} className="event-row">
-                <div className="event-date">{formatEventDateTimeWithLocality(event.date, event)}</div>
-                <div className="event-venue">{event.venue || 'מיקום לא צוין'}</div>
-                <div className="event-city">{event.city || ''}</div>
-                <div className="event-action">
-                  <button onClick={() => navigate(`/event/${event.id}`)} className="see-tickets-button">
-                    צפה באירוע
-                  </button>
+            {upcomingEvents.map((event) => {
+              const ticketCount = Number(event.tickets_count) || 0;
+              const isMostSupply = maxTicketSupply > 0 && ticketCount === maxTicketSupply;
+              const venueLabel = displayEventVenueName(event);
+
+              return (
+                <div
+                  key={event.id}
+                  className="event-row"
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => openEvent(event.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openEvent(event.id);
+                    }
+                  }}
+                >
+                  <div className="event-row__main">
+                    <div className="event-row__top">
+                      <time className="event-date" dateTime={event.date}>
+                        {formatArtistEventRowDate(event.date)}
+                      </time>
+                      {isMostSupply ? (
+                        <span className="event-supply-badge" role="status">
+                          🔥 הכי הרבה כרטיסים
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="event-venue">
+                      <MapPin className="event-venue__icon" size={15} strokeWidth={2.25} aria-hidden />
+                      <span className="event-venue__label">{venueLabel}</span>
+                    </div>
+                  </div>
+                  <ChevronLeft className="event-row__chevron" size={20} strokeWidth={2.25} aria-hidden />
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
