@@ -8,12 +8,14 @@ import WaitlistSignupModal from '../components/WaitlistSignupModal';
 import Toast from '../components/Toast';
 import VenueMapPin from '../components/VenueMapPin';
 import InteractiveMenoraMap from '../components/InteractiveMenoraMap';
+import CaesareaMap from '../components/CaesareaMap';
 import BloomfieldStadiumMap from '../components/BloomfieldStadiumMap';
 import BloomfieldConcertMap from '../components/BloomfieldConcertMap';
 import BloomfieldTicketListPanel from '../components/BloomfieldTicketListPanel';
 import JerusalemArenaMap from '../components/JerusalemArenaMap';
 import InteractiveStadiumMap from '../components/InteractiveStadiumMap';
-import { VENUE_MAPS, VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN, getVenueConfig, normalizeSection } from '../utils/venueMaps';
+import { VENUE_MAPS, VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN, VENUE_CAESAREA, getVenueConfig, normalizeSection } from '../utils/venueMaps';
+import { CAESAREA_SECTION_IDS } from '../utils/caesareaGeometry';
 import {
   buildRamatGanActiveListingsSummary,
   ramatGanSectionIdFromTicket,
@@ -251,6 +253,17 @@ const EventDetailsPage = () => {
         if (mapId) return mapId;
       }
 
+      const isCaesareaHall =
+        venueHay.includes('קיסריה') ||
+        /caesarea/i.test(venueHay) ||
+        venueHay.includes('אמפי קיסריה');
+      if (isCaesareaHall) {
+        const raw = String(section).trim();
+        if (/אורקסטרה|אוקסטרה|אוקקוסטר/i.test(raw)) return 'אורקסטרה';
+        const hebTier = raw.match(/(\d+)\s*(תחתון|אמצע|עליון)/);
+        if (hebTier) return `${hebTier[1]} ${hebTier[2]}`;
+      }
+
       // Menora (היכל מנורה): real bowl labels 101–112 / 301–312 → SVG ids "1 Lower" … "12 Upper"
       const isMenoraHall =
         (venueHay.includes('מנורה') || venueHay.includes('מבטחים')) &&
@@ -259,6 +272,9 @@ const EventDetailsPage = () => {
         !/פיס\s*ארנה|ארנה\s*ירושלים/i.test(venueHay) &&
         !(venueHay.includes('ירושלים') && venueHay.includes('ארנה'));
       if (isMenoraHall) {
+        if (/^vip$/i.test(section.trim()) || /\bvip\b/i.test(section)) {
+          return 'VIP';
+        }
         const m3 = section.match(/^(\d{3})$/);
         if (m3) {
           const n = parseInt(m3[1], 10);
@@ -446,7 +462,19 @@ const EventDetailsPage = () => {
               // Extract number and tier from section name
               const sectionStr = String(section);
               const numMatch = sectionStr.match(/\d+/);
-              if (numMatch) {
+              if (/^vip$/i.test(sectionStr.trim()) || /\bvip\b/i.test(sectionStr)) {
+                prices.VIP = price;
+                prices[section] = price;
+              } else if (/אורקסטרה|אוקסטרה/i.test(sectionStr)) {
+                prices['אורקסטרה'] = price;
+                prices[section] = price;
+              } else if (/(\d+)\s*(תחתון|אמצע|עליון)/.test(sectionStr)) {
+                const heb = sectionStr.match(/(\d+)\s*(תחתון|אמצע|עליון)/);
+                if (heb) {
+                  prices[`${heb[1]} ${heb[2]}`] = price;
+                  prices[section] = price;
+                }
+              } else if (numMatch) {
                 const num = numMatch[0];
                 const hasLower = /תחתון|lower|תחת/i.test(sectionStr);
                 const hasUpper = /עליון|upper|עלי/i.test(sectionStr);
@@ -504,8 +532,53 @@ const EventDetailsPage = () => {
   // Handle section click from map (two-way binding) - Updated for Lower/Upper
   const handleSectionClick = useCallback((sectionId) => {
     try {
+      if (CAESAREA_SECTION_IDS.includes(sectionId)) {
+        const matchingGroup = ticketGroups.find((group) => {
+          const firstTicket = group.tickets?.[0];
+          if (!firstTicket) return false;
+          return getSectionNameForMap(firstTicket) === sectionId;
+        });
+        if (matchingGroup) {
+          const groupId = matchingGroup.listing_group_id || matchingGroup.id;
+          setActiveTicketId(groupId);
+          setTimeout(() => {
+            try {
+              document
+                .querySelector(`[data-ticket-group-id="${groupId}"]`)
+                ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } catch {
+              /* scrollIntoView unavailable */
+            }
+          }, 100);
+        }
+        return;
+      }
+
+      if (sectionId === 'VIP') {
+        const matchingGroup = ticketGroups.find((group) => {
+          const firstTicket = group.tickets?.[0];
+          if (!firstTicket) return false;
+          return getSectionNameForMap(firstTicket) === 'VIP';
+        });
+        if (matchingGroup) {
+          const groupId = matchingGroup.listing_group_id || matchingGroup.id;
+          setActiveTicketId(groupId);
+          setTimeout(() => {
+            try {
+              const ticketRow = document.querySelector(`[data-ticket-group-id="${groupId}"]`);
+              if (ticketRow) {
+                ticketRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+            } catch {
+              /* scrollIntoView unavailable */
+            }
+          }, 100);
+        }
+        return;
+      }
+
       // Validate section exists in arena topology (24 sections: 1-12 Lower and 1-12 Upper)
-      const validSections = [];
+      const validSections = ['VIP'];
       for (let i = 1; i <= 12; i++) {
         validSections.push(`${i} Lower`, `${i} Upper`);
       }
@@ -760,6 +833,13 @@ const EventDetailsPage = () => {
     if (candidates.includes('אצטדיון בלומפילד')) return 'אצטדיון בלומפילד';
     if (candidates.includes('היכל מנורה מבטחים')) return 'היכל מנורה מבטחים';
     if (candidates.includes('פיס ארנה ירושלים')) return 'פיס ארנה ירושלים';
+    if (
+      candidates.some((v) => v.includes('קיסריה')) ||
+      candidates.some((v) => /caesarea/i.test(v)) ||
+      candidates.includes(VENUE_CAESAREA)
+    ) {
+      return VENUE_CAESAREA;
+    }
 
     const haystack = candidates.join(' ');
     if (haystack.includes('בלומפילד')) return 'אצטדיון בלומפילד';
@@ -785,6 +865,7 @@ const EventDetailsPage = () => {
     (canonicalVenueForMap === 'אצטדיון בלומפילד' &&
       String(event?.category || '').toLowerCase() === 'concert');
   const isMenoraVenue = canonicalVenueForMap === 'היכל מנורה מבטחים';
+  const isCaesareaVenue = canonicalVenueForMap === VENUE_CAESAREA;
   const isJerusalemArenaVenue = canonicalVenueForMap === 'פיס ארנה ירושלים';
   const isRamatGanVenue = canonicalVenueForMap === VENUE_RAMAT_GAN;
 
@@ -1198,7 +1279,7 @@ const EventDetailsPage = () => {
         </div>
         <div
           className={`tickets-split-container${
-            isBloomfieldVenue || isJerusalemArenaVenue || isRamatGanVenue
+            isBloomfieldVenue || isJerusalemArenaVenue || isRamatGanVenue || isCaesareaVenue
               ? ' tickets-split-container--bloomfield'
               : ''
           }${isRamatGanVenue ? ' tickets-split-container--ramat-gan' : ''}`}
@@ -1249,6 +1330,17 @@ const EventDetailsPage = () => {
                             onSelectedSectionChange={setRamatGanSelectedSectionId}
                           />
                         </div>
+                      );
+                    }
+
+                    if (isCaesareaVenue) {
+                      return (
+                        <CaesareaMap
+                          activeSection={activeSectionName || null}
+                          onSectionClick={handleSectionClick || (() => {})}
+                          lowestPrices={lowestPricesPerSection || {}}
+                          currencyIso={listingCurrency}
+                        />
                       );
                     }
 

@@ -1,0 +1,24 @@
+.caesarea-map-container {
+  aspect-ratio: 1 / 1;
+  max-height: 480px !important;
+}
+
+.caesarea-stadium-svg {
+  background: #ffffff;
+}
+
+.caesarea-section-path:hover {
+  fill: #60a5fa !important;
+  stroke: #3b82f6 !important;
+  stroke-width: 3 !important;
+  filter: drop-shadow(0 2px 4px rgba(37, 99, 235, 0.3));
+}
+
+.caesarea-outline {
+  pointer-events: none;
+}
+
+.caesarea-stage,
+.stage-overlay {
+  pointer-events: none;
+}

@@ -125,9 +125,19 @@ const InteractiveMenoraMap = ({
     };
   };
 
-  // Build all sections with paths - Lower and Upper tiers
-  // CRITICAL FIX: Use regex to extract ONLY digits, then append tier suffix
-  // This prevents any string contamination between Lower and Upper
+  // Large central VIP floor (replaces former basketball court)
+  const vipSection = {
+    id: 'VIP',
+    tier: 'VIP',
+    displayLabel: 'VIP',
+    path:
+      'M 230 300 A 170 125 0 1 1 570 300 A 170 125 0 1 1 230 300 Z',
+    centerX: 400,
+    centerY: 300,
+    textX: 400,
+    textY: 300,
+  };
+
   const allSections = [
     // Lower Tier (inner ring, closer to court)
     ...lowerTierSections.map(section => {
@@ -161,6 +171,7 @@ const InteractiveMenoraMap = ({
         textY: center.y - 8, // Section label above center
       };
     }),
+    vipSection,
   ];
 
   return (
@@ -201,48 +212,7 @@ const InteractiveMenoraMap = ({
             strokeWidth="2"
           />
 
-          {/* Central Basketball Court (Wood-colored rectangle) */}
-          <rect 
-            x="280" 
-            y="220" 
-            width="240" 
-            height="160" 
-            rx="8"
-            fill="#d4a574" 
-            stroke="#b88652" 
-            strokeWidth="2"
-            className="court-area"
-          />
-          
-          {/* Court center circle */}
-          <ellipse 
-            cx="400" 
-            cy="300" 
-            rx="50" 
-            ry="50" 
-            fill="none" 
-            stroke="#92400e" 
-            strokeWidth="2"
-          />
-          
-          {/* Court center line */}
-          <line 
-            x1="400" 
-            y1="220" 
-            x2="400" 
-            y2="380" 
-            stroke="#92400e" 
-            strokeWidth="2"
-            strokeDasharray="4,4"
-          />
-
-          {/* Free throw lines */}
-          <line x1="280" y1="280" x2="360" y2="280" stroke="#92400e" strokeWidth="1.5" />
-          <line x1="280" y1="320" x2="360" y2="320" stroke="#92400e" strokeWidth="1.5" />
-          <line x1="440" y1="280" x2="520" y2="280" stroke="#92400e" strokeWidth="1.5" />
-          <line x1="440" y1="320" x2="520" y2="320" stroke="#92400e" strokeWidth="1.5" />
-
-          {/* Seating Sections - Lower and Upper tiers (24 sections total) */}
+          {/* Seating Sections - Lower, Upper, VIP */}
           {allSections.map((section) => {
             // STRICT MATCHING: Must match EXACT string ID ('5 Lower' !== '5 Upper')
             const isActive = activeSectionId !== null && activeSectionId === section.id;
@@ -252,14 +222,16 @@ const InteractiveMenoraMap = ({
             const price = rawPrice !== undefined && rawPrice !== null ? Number(rawPrice) : null;
             const hasPrice = price !== null && !Number.isNaN(price);
             
-            // Viagogo color logic: green if has price, gray if not, black if active
+            // Viagogo color logic: green if has price, gray if not; VIP uses gold
             let fillColor;
             if (isActive) {
-              fillColor = '#1f2937'; // Dark charcoal/black for active
+              fillColor = section.tier === 'VIP' ? '#d97706' : '#1f2937';
+            } else if (section.tier === 'VIP') {
+              fillColor = hasPrice ? '#fde68a' : '#fef3c7';
             } else if (hasPrice) {
-              fillColor = '#4ade80'; // Viagogo Green for available tickets
+              fillColor = '#4ade80';
             } else {
-              fillColor = '#f3f4f6'; // Light gray for no tickets
+              fillColor = '#f3f4f6';
             }
 
             return (
@@ -275,7 +247,7 @@ const InteractiveMenoraMap = ({
                   strokeWidth="1.5"
                   strokeLinejoin="round"
                   strokeLinecap="round"
-                  className="section-path"
+                  className={`section-path${section.tier === 'VIP' ? ' vip-section' : ''}`}
                   style={{
                     transition: 'all 0.2s ease',
                     filter: isActive ? 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))' : 'none',
@@ -296,7 +268,7 @@ const InteractiveMenoraMap = ({
                     pointerEvents="none"
                     className="section-label"
                   >
-                    {section.id.replace('Lower', 'תחתון').replace('Upper', 'עליון')}
+                    {section.displayLabel || section.id.replace('Lower', 'תחתון').replace('Upper', 'עליון')}
                   </text>
                 ) : (
                   <text
@@ -310,7 +282,7 @@ const InteractiveMenoraMap = ({
                     pointerEvents="none"
                     className="section-label"
                   >
-                    {section.id.replace('Lower', 'תחתון').replace('Upper', 'עליון')}
+                    {section.displayLabel || section.id.replace('Lower', 'תחתון').replace('Upper', 'עליון')}
                   </text>
                 )}
 
@@ -357,6 +329,33 @@ const InteractiveMenoraMap = ({
               </g>
             );
           })}
+
+          {/* Stage nested inside VIP — non-clickable, drawn on top */}
+          <g className="stage-overlay" pointerEvents="none">
+            <rect
+              x="320"
+              y="262"
+              width="160"
+              height="76"
+              rx="6"
+              fill="#1f2937"
+              stroke="#111827"
+              strokeWidth="2"
+              className="stage-area"
+            />
+            <text
+              x="400"
+              y="304"
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="#f9fafb"
+              fontSize="22"
+              fontWeight="700"
+              className="stage-label"
+            >
+              במה
+            </text>
+          </g>
         </svg>
       </div>
 

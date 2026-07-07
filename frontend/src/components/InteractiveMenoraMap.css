@@ -35,13 +35,21 @@
   filter: drop-shadow(0 2px 4px rgba(37, 99, 235, 0.3));
 }
 
+.section-path.vip-section:hover {
+  fill: #fbbf24 !important;
+  stroke: #f59e0b !important;
+  filter: drop-shadow(0 2px 4px rgba(245, 158, 11, 0.35));
+}
+
 .section-label {
   pointer-events: none;
   user-select: none;
 }
 
-.court-area {
+.stage-area,
+.stage-label {
   pointer-events: none;
+  user-select: none;
 }
 
 .stands-background {
