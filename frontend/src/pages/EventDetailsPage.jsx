@@ -14,7 +14,7 @@ import BloomfieldConcertMap from '../components/BloomfieldConcertMap';
 import BloomfieldTicketListPanel from '../components/BloomfieldTicketListPanel';
 import JerusalemArenaMap from '../components/JerusalemArenaMap';
 import InteractiveStadiumMap from '../components/InteractiveStadiumMap';
-import { VENUE_MAPS, VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN, VENUE_CAESAREA, getVenueConfig, normalizeSection } from '../utils/venueMaps';
+import { VENUE_MAPS, VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN, VENUE_CAESAREA, VENUE_MENORA, getVenueConfig, isMenoraVenueName, normalizeSection } from '../utils/venueMaps';
 import { CAESAREA_SECTION_IDS } from '../utils/caesareaGeometry';
 import {
   buildRamatGanActiveListingsSummary,
@@ -831,7 +831,7 @@ const EventDetailsPage = () => {
 
     if (candidates.some((v) => v === VENUE_BLOOMFIELD_CONCERT)) return VENUE_BLOOMFIELD_CONCERT;
     if (candidates.includes('אצטדיון בלומפילד')) return 'אצטדיון בלומפילד';
-    if (candidates.includes('היכל מנורה מבטחים')) return 'היכל מנורה מבטחים';
+    if (candidates.includes(VENUE_MENORA)) return VENUE_MENORA;
     if (candidates.includes('פיס ארנה ירושלים')) return 'פיס ארנה ירושלים';
     if (
       candidates.some((v) => v.includes('קיסריה')) ||
@@ -1333,6 +1333,18 @@ const EventDetailsPage = () => {
                       );
                     }
 
+                    if (isMenoraVenue) {
+                      return (
+                        <InteractiveMenoraMap
+                          activeSection={activeSectionName || null}
+                          onSectionClick={handleSectionClick || (() => {})}
+                          sectionPrices={sectionPrices || {}}
+                          lowestPrices={lowestPricesPerSection || {}}
+                          currencyIso={listingCurrency}
+                        />
+                      );
+                    }
+
                     if (isCaesareaVenue) {
                       return (
                         <CaesareaMap
@@ -1342,27 +1354,6 @@ const EventDetailsPage = () => {
                           currencyIso={listingCurrency}
                         />
                       );
-                    }
-
-                    if (isMenoraVenue) {
-                      try {
-                        return (
-                          <InteractiveMenoraMap
-                            activeSection={activeSectionName || null}
-                            onSectionClick={handleSectionClick || (() => {})}
-                            sectionPrices={sectionPrices || {}}
-                            lowestPrices={lowestPricesPerSection || {}}
-                            currencyIso={listingCurrency}
-                          />
-                        );
-                      } catch {
-                        return (
-                          <VenueMapPin
-                            venueName={finalVenueNameForMap}
-                            sectionName={activeSectionName}
-                          />
-                        );
-                      }
                     }
 
                     if (isBloomfieldVenue) {

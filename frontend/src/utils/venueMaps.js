@@ -12,6 +12,17 @@ export const VENUE_RAMAT_GAN = 'אצטדיון רמת גן';
 /** Caesarea Amphitheater — CaesareaMap on EventDetailsPage. */
 export const VENUE_CAESAREA = 'אמפי קיסריה';
 
+/** Menora Mivtachim Arena — InteractiveMenoraMap on EventDetailsPage. */
+export const VENUE_MENORA = 'היכל מנורה מבטחים';
+
+/** True when a venue string should use the interactive Menora SVG map (not Bloomfield / pin fallback). */
+export function isMenoraVenueName(venueName) {
+  if (!venueName) return false;
+  const v = String(venueName).trim();
+  if (v === VENUE_MENORA) return true;
+  return (v.includes('מנורה') || v.includes('מבטחים')) && !v.includes('בלומפילד');
+}
+
 export const VENUE_MAPS = {
   // בלומפילד — static image fallback; interactive maps live in EventDetailsPage:
   // BloomfieldStadiumMap (sport) vs BloomfieldConcertMap (category concert).
@@ -240,10 +251,7 @@ export const getVenueConfig = (venueName) => {
     }
   }
   
-  // Hardcoded safe config - NEVER return null, always return Menora as fallback
-  const safeConfig = VENUE_MAPS['מנורה מבטחים'] || VENUE_MAPS['מנורה תל אביב'] || Object.values(VENUE_MAPS)[0];
-  const safeName = Object.keys(VENUE_MAPS).find(k => VENUE_MAPS[k] === safeConfig) || 'מנורה מבטחים';
-  return { config: safeConfig, matchedName: safeName };
+  return null;
 };
 
 /**

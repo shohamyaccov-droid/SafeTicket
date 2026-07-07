@@ -60,7 +60,7 @@ SHOWS: tuple[ShowSpec, ...] = (
         ShowSpec('פאר טסי', 2026, 8, day, 20, 30, VENUE_OTHER, VENUE_CAESAREA_PLACE, 'קיסריה')
         for day in (13, 15, 18, 20, 22, 25)
     ),
-    ShowSpec('עדן בן זקן', 2026, 8, 10, 20, 30, VENUE_OTHER, VENUE_HUTZOT_PLACE, 'תל אביב'),
+    ShowSpec('עדן בן זקן', 2026, 8, 17, 21, 0, VENUE_MENORA, VENUE_MENORA_PLACE, 'תל אביב'),
 )
 
 

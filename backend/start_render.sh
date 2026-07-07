@@ -43,6 +43,9 @@ python manage.py seed_omer_adam || true
 echo "[start_render] August 2026 concert catalog (Mor Ravia, Pe'er Tasi, Itay Levi, Eden Ben Zaken)..."
 python manage.py seed_august_2026_concerts || true
 
+echo "[start_render] Eden Ben Zaken event id=77 (Menora Aug 17 2026)..."
+python manage.py fix_eden_ben_zaken_event || true
+
 echo "[start_render] Ramat Gan Stadium venue sections (Sell page dropdown)..."
 python manage.py seed_ramat_gan_sections || true
 
