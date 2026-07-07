@@ -6,6 +6,7 @@ import {
   STAGE,
   ARENA_OUTLINE,
   CAESAREA_SECTIONS,
+  CAESAREA_SELECTABLE_COUNT,
 } from '../utils/caesareaGeometry';
 import './InteractiveMenoraMap.css';
 import './CaesareaMap.css';
@@ -50,7 +51,7 @@ const CaesareaMap = ({
         style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
       >
         <svg viewBox={VIEWBOX} className="interactive-stadium-svg caesarea-stadium-svg" preserveAspectRatio="xMidYMid meet">
-          <path d={ARENA_OUTLINE.d} fill="#f9fafb" stroke="#e5e7eb" strokeWidth="1.5" className="caesarea-outline" />
+          <path d={ARENA_OUTLINE.d} fill="#ffffff" stroke="#e5e7eb" strokeWidth="2" className="caesarea-outline" />
 
           {CAESAREA_SECTIONS.map((section) => {
             const isActive = activeSectionId !== null && activeSectionId === section.id;
@@ -69,8 +70,8 @@ const CaesareaMap = ({
               fillColor = '#e8e8e8';
             }
 
-            const labelY = hasPrice && !isActive ? section.labelY - 16 : section.labelY;
-            const priceY = section.labelY + (isOrchestra ? 14 : 10);
+            const labelY = hasPrice && !isActive ? section.labelY - 14 : section.labelY;
+            const priceY = section.labelY + (isOrchestra ? 16 : 12);
 
             return (
               <g
@@ -93,6 +94,7 @@ const CaesareaMap = ({
                   stroke="#ffffff"
                   strokeWidth={isActive ? 2.5 : 2}
                   strokeLinejoin="round"
+                  strokeLinecap="round"
                   className="section-path caesarea-section-path"
                   style={{
                     transition: 'all 0.2s ease',
@@ -106,7 +108,7 @@ const CaesareaMap = ({
                   textAnchor="middle"
                   dominantBaseline="middle"
                   fill={isActive ? '#f9fafb' : '#6b7280'}
-                  fontSize={isOrchestra ? 11 : 13}
+                  fontSize={isOrchestra ? 12 : 14}
                   fontWeight={isOrchestra ? 600 : 500}
                   pointerEvents="none"
                   className="section-label"
@@ -138,16 +140,7 @@ const CaesareaMap = ({
           })}
 
           <g className="stage-overlay" pointerEvents="none">
-            <rect
-              x={STAGE.x}
-              y={STAGE.y}
-              width={STAGE.w}
-              height={STAGE.h}
-              fill="#bdbdbd"
-              stroke="#9e9e9e"
-              strokeWidth="1"
-              className="caesarea-stage"
-            />
+            <path d={STAGE.d} fill="#bdbdbd" stroke="#9e9e9e" strokeWidth="1.5" className="caesarea-stage" />
             <text
               x={STAGE.labelX}
               y={STAGE.labelY}
@@ -164,6 +157,9 @@ const CaesareaMap = ({
           </g>
         </svg>
       </div>
+      <span className="sr-only" aria-live="polite">
+        {CAESAREA_SELECTABLE_COUNT} selectable sections
+      </span>
     </div>
   );
 };
