@@ -1,6 +1,6 @@
 .caesarea-map-container {
-  aspect-ratio: 1 / 1;
-  max-height: 480px !important;
+  aspect-ratio: 530 / 330;
+  max-height: 420px !important;
 }
 
 .sr-only {
