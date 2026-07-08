@@ -41,8 +41,13 @@ from pypdf import PdfReader, PdfWriter
 
 logger = logging.getLogger(__name__)
 
-# Hard blocklist: never surface in homepage discovery / recommended rows.
-DISCOVERY_EXCLUDED_ARTIST_NAMES = ('עומר אדם', 'אייל גולן')
+# Hide internal checkout test artists from browse/recommended discovery.
+DISCOVERY_EXCLUDED_ARTIST_NAMES = (
+    'אמן בדיקת Checkout א',
+    'אמן בדיקת Checkout ב',
+    'א Checkout אמן בדיקת',
+    'ב Checkout אמן בדיקת',
+)
 
 
 def csrf_required(view):
@@ -3558,7 +3563,9 @@ class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
         return ArtistSerializer
     
     def get_queryset(self):
-        queryset = Artist.objects.all().exclude(name__in=DISCOVERY_EXCLUDED_ARTIST_NAMES)
+        queryset = Artist.objects.all().exclude(
+            Q(name__in=DISCOVERY_EXCLUDED_ARTIST_NAMES) | Q(name__icontains='checkout')
+        )
         if self.action == 'list':
             for_sell_raw = str(self.request.query_params.get('for_sell', '')).lower()
             for_sell = for_sell_raw in ('1', 'true', 'yes', 'on')

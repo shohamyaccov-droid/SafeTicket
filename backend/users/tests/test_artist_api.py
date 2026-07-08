@@ -213,12 +213,29 @@ class ArtistListApiTests(TestCase):
         names = [item['name'] for item in payload]
         self.assertNotIn(past_only_artist.name, names)
 
-    def test_recommended_artist_list_excludes_omer_adam_and_eyal_golan(self):
-        omer = Artist.objects.create(name='עומר אדם', category='music')
-        eyal = Artist.objects.create(name='אייל גולן', category='music')
-        for artist, label in ((omer, 'Omer'), (eyal, 'Eyal')):
+    def test_recommended_artist_list_excludes_checkout_test_artists(self):
+        visible_artist = Artist.objects.create(name='עומר אדם', category='music')
+        hidden_artists = (
+            Artist.objects.create(name='אמן בדיקת Checkout א', category='music'),
+            Artist.objects.create(name='אמן בדיקת Checkout ב', category='music'),
+            Artist.objects.create(name='א Checkout אמן בדיקת', category='music'),
+            Artist.objects.create(name='ב Checkout אמן בדיקת', category='music'),
+            Artist.objects.create(name='Demo checkout bot artist', category='music'),
+        )
+
+        Event.objects.create(
+            name='Visible Future Show',
+            artist=visible_artist,
+            date=timezone.now() + timezone.timedelta(days=14),
+            venue='היכל מנורה מבטחים',
+            city='Tel Aviv',
+            country='IL',
+            category='concert',
+            status='פעיל',
+        )
+        for idx, artist in enumerate(hidden_artists, start=1):
             Event.objects.create(
-                name=f'{label} Future Show',
+                name=f'Hidden Checkout Show {idx}',
                 artist=artist,
                 date=timezone.now() + timezone.timedelta(days=14),
                 venue='היכל מנורה מבטחים',
@@ -233,8 +250,12 @@ class ArtistListApiTests(TestCase):
         self.assertEqual(res.status_code, 200, res.content)
         payload = res.data if isinstance(res.data, list) else res.data.get('results', [])
         names = [item['name'] for item in payload]
-        self.assertNotIn('עומר אדם', names)
-        self.assertNotIn('אייל גולן', names)
+        self.assertIn('עומר אדם', names)
+        self.assertNotIn('אמן בדיקת Checkout א', names)
+        self.assertNotIn('אמן בדיקת Checkout ב', names)
+        self.assertNotIn('א Checkout אמן בדיקת', names)
+        self.assertNotIn('ב Checkout אמן בדיקת', names)
+        self.assertNotIn('Demo checkout bot artist', names)
 
 
 class EventListApiTests(TestCase):

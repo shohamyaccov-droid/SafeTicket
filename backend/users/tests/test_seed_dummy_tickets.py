@@ -196,15 +196,15 @@ class SeedDummyTicketsTests(TestCase):
         dup_b_is_active = self.eden_dup_b.status == "פעיל"
         self.assertNotEqual(dup_a_is_active, dup_b_is_active)
 
-        # 3) Omer Adam / Eyal Golan: all events canceled (past and future).
+        # 3) Omer Adam / Eyal Golan are untouched by dummy-ticket seeding.
         self.omer_past.refresh_from_db()
         self.eyal_past.refresh_from_db()
         self.omer_future.refresh_from_db()
         self.eyal_future.refresh_from_db()
-        self.assertEqual(self.omer_past.status, 'בוטל')
-        self.assertEqual(self.eyal_past.status, 'בוטל')
-        self.assertEqual(self.omer_future.status, 'בוטל')
-        self.assertEqual(self.eyal_future.status, 'בוטל')
+        self.assertEqual(self.omer_past.status, 'פעיל')
+        self.assertEqual(self.eyal_past.status, 'פעיל')
+        self.assertEqual(self.omer_future.status, 'פעיל')
+        self.assertEqual(self.eyal_future.status, 'פעיל')
 
         # 4) Seeded tickets exist for the 3 Eden events and have correct section/price/group constraints.
         eden_event_ids = [ev.id for ev in eden_menora_active]

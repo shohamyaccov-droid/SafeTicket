@@ -5,7 +5,6 @@ This command is intended for staging/dev data only:
 - It is idempotent with respect to the dummy seller: deletes all tickets owned by
   `system_seed_user` before re-seeding.
 - It fixes Eden Ben Zaken (Menora) to the real schedule dates: 2026-08-17, 2026-08-18, 2026-08-20.
-- It cancels past Omer Adam / Eyal Golan events so they stop appearing in discovery flows.
 - It seeds dummy tickets (anchor pricing) for Pe'er Tasi, Ben Tzur (Caesarea), and Eden Ben Zaken (Menora),
   ensuring seeded section labels match the exact SVG layer IDs used by the frontend maps.
 - It ensures Ben Tzur Caesarea shows exist on 2026-07-26 and 2026-07-27.
@@ -40,9 +39,6 @@ TZ_IL = ZoneInfo("Asia/Jerusalem")
 SEED_ARTIST_EDEN = "עדן בן זקן"
 SEED_ARTIST_PEER = "פאר טסי"
 SEED_ARTIST_BEN_TZUR = "בן צור"
-SEED_ARTIST_OMER = "עומר אדם"
-SEED_ARTIST_EYAL = "אייל גולן"
-
 VENUE_MENORA = "היכל מנורה מבטחים"
 VENUE_CAESAREA = "אמפי קיסריה"
 VENUE_OTHER = "אחר"
@@ -114,10 +110,7 @@ class Command(BaseCommand):
             self._fix_eden_ben_zaken_menora_schedule(rng=rng)
             self._ensure_ben_tzur_caesarea_schedule()
 
-            # 3) Permanently remove Omer Adam / Eyal Golan from the catalog.
-            self._purge_omer_eyal_events()
-
-        # 4) Seed tickets with anchor pricing (round ILS tiers).
+        # 3) Seed tickets with anchor pricing (round ILS tiers).
         with transaction.atomic():
             self._seed_dummy_tickets_for_relevant_events(seed_user=seed_user, rng=rng)
 
@@ -165,19 +158,6 @@ class Command(BaseCommand):
                 seller.save()
 
         return seller
-
-    def _purge_omer_eyal_events(self) -> None:
-        """Cancel every Omer Adam / Eyal Golan event (any date/status) so they never surface in discovery."""
-        from django.db.models import Q
-
-        qs = Event.objects.filter(
-            Q(artist__name__in=[SEED_ARTIST_OMER, SEED_ARTIST_EYAL])
-            | Q(name__icontains=SEED_ARTIST_OMER)
-            | Q(name__icontains=SEED_ARTIST_EYAL)
-        )
-        cancelled = qs.exclude(status='בוטל').update(status='בוטל')
-        if cancelled:
-            self.stdout.write(self.style.WARNING(f'Cancelled {cancelled} Omer/Eyal event(s).'))
 
     def _fix_eden_ben_zaken_menora_schedule(self, *, rng: random.Random) -> None:
         eden_artist, _ = Artist.objects.get_or_create(

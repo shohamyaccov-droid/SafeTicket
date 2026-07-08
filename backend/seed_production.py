@@ -164,6 +164,20 @@ SEED_ARTISTS: list[dict] = [
         'cover_image': 'https://images.unsplash.com/photo-1501612780327-45045589102c?auto=format&fit=crop&w=1600&q=80',
     },
     {
+        'name': 'עומר אדם',
+        'genre': 'פופ / מזרחית',
+        'description': 'אמן ישראלי מוביל.',
+        'image': 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80',
+        'cover_image': 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=1600&q=80',
+    },
+    {
+        'name': 'אייל גולן',
+        'genre': 'מזרחית',
+        'description': 'זמר ואמן ישראלי.',
+        'image': 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=800&q=80',
+        'cover_image': 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=1600&q=80',
+    },
+    {
         'name': 'עדן חסון',
         'genre': 'פופ',
         'description': 'זמרת ישראלית.',
