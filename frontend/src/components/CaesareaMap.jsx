@@ -11,6 +11,16 @@ import {
 import './InteractiveMenoraMap.css';
 import './CaesareaMap.css';
 
+/** Empty-section fills by tier (premium sky depth). Ticket / active colors stay elsewhere. */
+function emptyTierFill(sectionId) {
+  const id = String(sectionId || '');
+  if (id === 'אורקסטרה' || /אורקסטרה|אוקסטרה/i.test(id)) return '#bae6fd'; // sky-200
+  if (/תחתון/.test(id)) return '#e0f2fe'; // sky-100
+  if (/אמצע/.test(id)) return '#f0f9ff'; // sky-50
+  if (/עליון/.test(id)) return '#f8fafc'; // slate-50 / icy
+  return '#e0f2fe';
+}
+
 const CaesareaMap = ({
   activeSection,
   onSectionClick,
@@ -62,12 +72,15 @@ const CaesareaMap = ({
             const labelText = section.displayLabel || section.id;
 
             let fillColor;
+            let sectionToneClass = 'caesarea-section--empty';
             if (isActive) {
               fillColor = '#1f2937';
+              sectionToneClass = 'caesarea-section--active';
             } else if (hasPrice) {
               fillColor = '#b2d982';
+              sectionToneClass = 'caesarea-section--available';
             } else {
-              fillColor = '#e8e8e8';
+              fillColor = emptyTierFill(section.id);
             }
 
             const labelY = section.labelY;
@@ -95,7 +108,7 @@ const CaesareaMap = ({
                   strokeWidth={isActive ? 2.5 : 2}
                   strokeLinejoin="round"
                   strokeLinecap="round"
-                  className="section-path caesarea-section-path"
+                  className={`section-path caesarea-section-path ${sectionToneClass}`}
                   style={{
                     transition: 'all 0.2s ease',
                     filter: isActive ? 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))' : 'none',
