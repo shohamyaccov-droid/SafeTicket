@@ -19,6 +19,7 @@ SYSTEM_SEED_USERNAME = "system_seed_user"
 EDEN = "עדן בן זקן"
 PEER = "פאר טסי"
 BEN_TZUR = "בן צור"
+MOR = "מור רביעי"
 OMER = "עומר אדם"
 EYAL = "אייל גולן"
 
@@ -39,7 +40,14 @@ CAESAREA_SECTION_IDS = [
     *[f"{n} עליון" for n in range(1, 7)],
 ]
 
-ANCHOR_PRICES_ILS = {370, 380, 390, 410, 420, 430}
+PREMIUM_PRICES_ILS = {550, 580, 600, 620, 650}
+HIGH_PRICES_ILS = {420, 450, 480}
+MID_PRICES_ILS = {330, 350, 380}
+BASE_PRICES_ILS = {250, 270, 290}
+FALLBACK_PRICES_ILS = {350, 380, 400}
+ALL_ALLOWED_PRICES_ILS = (
+    PREMIUM_PRICES_ILS | HIGH_PRICES_ILS | MID_PRICES_ILS | BASE_PRICES_ILS | FALLBACK_PRICES_ILS
+)
 
 
 def _dt(y: int, m: int, d: int, hour: int, minute: int = 0) -> datetime:
@@ -56,6 +64,9 @@ class SeedDummyTicketsTests(TestCase):
         self.omer_artist, _ = Artist.objects.get_or_create(name=OMER, defaults={"category": "music", "genre": "Pop"})
         self.eyal_artist, _ = Artist.objects.get_or_create(
             name=EYAL, defaults={"category": "music", "genre": "Mizrahi"}
+        )
+        self.mor_artist, _ = Artist.objects.get_or_create(
+            name=MOR, defaults={"category": "music", "genre": "Pop"}
         )
 
         self.menora_venue, _ = Venue.objects.get_or_create(name=VENUE_MENORA, city="תל אביב")
@@ -169,6 +180,33 @@ class SeedDummyTicketsTests(TestCase):
             status="פעיל",
             country="IL",
         )
+        self.mor_event = Event.objects.create(
+            artist=self.mor_artist,
+            name="mor menora test",
+            date=_dt(2026, 8, 13, 21, 0),
+            venue=VENUE_MENORA,
+            venue_place=self.menora_venue,
+            city="תל אביב",
+            category="concert",
+            status="פעיל",
+            country="IL",
+        )
+
+    def _assert_tiered_prices_match_section(self, tickets):
+        for t in tickets:
+            price = int(t.asking_price)
+            section = t.custom_section_text or ""
+            section_lower = section.lower()
+            if "אורקסטרה" in section or "vip" in section_lower:
+                self.assertIn(price, PREMIUM_PRICES_ILS)
+            elif "תחתון" in section or "lower" in section_lower:
+                self.assertIn(price, HIGH_PRICES_ILS)
+            elif "אמצע" in section:
+                self.assertIn(price, MID_PRICES_ILS)
+            elif "עליון" in section or "upper" in section_lower:
+                self.assertIn(price, BASE_PRICES_ILS)
+            else:
+                self.assertIn(price, FALLBACK_PRICES_ILS)
 
     def test_seed_dummy_tickets_idempotent_and_correct(self):
         # First run.
@@ -210,7 +248,8 @@ class SeedDummyTicketsTests(TestCase):
         eden_event_ids = [ev.id for ev in eden_menora_active]
         eden_tickets = Ticket.objects.filter(seller=seed_user, event_id__in=eden_event_ids, status="active")
         self.assertGreater(eden_tickets.count(), 0)
-        self.assertTrue(all(int(t.asking_price) in ANCHOR_PRICES_ILS for t in eden_tickets))
+        self.assertTrue(all(int(t.asking_price) in ALL_ALLOWED_PRICES_ILS for t in eden_tickets))
+        self._assert_tiered_prices_match_section(eden_tickets)
 
         for ev in eden_menora_active:
             tickets = list(Ticket.objects.filter(seller=seed_user, event=ev, status="active"))
@@ -235,7 +274,8 @@ class SeedDummyTicketsTests(TestCase):
         peer_event = Event.objects.get(id=self.peer_event.id)
         peer_tickets = list(Ticket.objects.filter(seller=seed_user, event=peer_event, status="active"))
         self.assertGreater(len(peer_tickets), 0)
-        self.assertTrue(all(int(t.asking_price) in ANCHOR_PRICES_ILS for t in peer_tickets))
+        self.assertTrue(all(int(t.asking_price) in ALL_ALLOWED_PRICES_ILS for t in peer_tickets))
+        self._assert_tiered_prices_match_section(peer_tickets)
 
         peer_sections = {t.custom_section_text for t in peer_tickets}
         self.assertTrue(peer_sections.issubset(set(CAESAREA_SECTION_IDS)))
@@ -274,11 +314,20 @@ class SeedDummyTicketsTests(TestCase):
             Ticket.objects.filter(seller=seed_user, event__in=ben_events, status="active")
         )
         self.assertGreater(len(ben_tickets), 0)
-        self.assertTrue(all(int(t.asking_price) in ANCHOR_PRICES_ILS for t in ben_tickets))
+        self.assertTrue(all(int(t.asking_price) in ALL_ALLOWED_PRICES_ILS for t in ben_tickets))
+        self._assert_tiered_prices_match_section(ben_tickets)
         ben_sections = {t.custom_section_text for t in ben_tickets}
         self.assertTrue(ben_sections.issubset(set(CAESAREA_SECTION_IDS)))
 
-        # 7) Idempotency: running again must not grow ticket count.
+        # 7) Mor Rabaie Menora events are seeded with Menora section ids and tiered prices.
+        mor_tickets = list(Ticket.objects.filter(seller=seed_user, event=self.mor_event, status="active"))
+        self.assertGreater(len(mor_tickets), 0)
+        self.assertTrue(all(int(t.asking_price) in ALL_ALLOWED_PRICES_ILS for t in mor_tickets))
+        self._assert_tiered_prices_match_section(mor_tickets)
+        mor_sections = {t.custom_section_text for t in mor_tickets}
+        self.assertTrue(mor_sections.issubset(set(MENORA_SECTION_IDS)))
+
+        # 8) Idempotency: running again must not grow ticket count.
         ticket_count_after_first = Ticket.objects.filter(seller=seed_user).count()
         call_command("seed_dummy_tickets", random_seed=123)
         self.assertEqual(Ticket.objects.filter(seller=seed_user).count(), ticket_count_after_first)

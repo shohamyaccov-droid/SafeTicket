@@ -39,6 +39,7 @@ TZ_IL = ZoneInfo("Asia/Jerusalem")
 SEED_ARTIST_EDEN = "עדן בן זקן"
 SEED_ARTIST_PEER = "פאר טסי"
 SEED_ARTIST_BEN_TZUR = "בן צור"
+SEED_ARTIST_MOR = "מור רביעי"
 VENUE_MENORA = "היכל מנורה מבטחים"
 VENUE_CAESAREA = "אמפי קיסריה"
 VENUE_OTHER = "אחר"
@@ -49,7 +50,11 @@ MENORA_SECTION_IDS = [
     *[f"{n} Upper" for n in range(1, 13)],
 ]
 
-ANCHOR_PRICES_ILS = [370, 380, 390, 410, 420, 430]
+PREMIUM_PRICES_ILS = [550, 580, 600, 620, 650]
+HIGH_PRICES_ILS = [420, 450, 480]
+MID_PRICES_ILS = [330, 350, 380]
+BASE_PRICES_ILS = [250, 270, 290]
+FALLBACK_PRICES_ILS = [350, 380, 400]
 
 CAESAREA_SECTION_IDS = [
     "אורקסטרה",
@@ -276,8 +281,19 @@ class Command(BaseCommand):
             or "caesarea" in venue_haystack.lower()
         )
 
-    def _anchor_price_ils(self, *, rng: random.Random) -> Decimal:
-        return Decimal(str(rng.choice(ANCHOR_PRICES_ILS)))
+    def _anchor_price_for_section_ils(self, *, section_label: str, rng: random.Random) -> Decimal:
+        label = (section_label or "").lower()
+        if "אורקסטרה" in section_label or "vip" in label:
+            pool = PREMIUM_PRICES_ILS
+        elif "תחתון" in section_label or "lower" in label:
+            pool = HIGH_PRICES_ILS
+        elif "אמצע" in section_label:
+            pool = MID_PRICES_ILS
+        elif "עליון" in section_label or "upper" in label:
+            pool = BASE_PRICES_ILS
+        else:
+            pool = FALLBACK_PRICES_ILS
+        return Decimal(str(rng.choice(pool)))
 
     def _seed_ticket_groups_for_event(
         self,
@@ -296,7 +312,7 @@ class Command(BaseCommand):
         group_sizes_weighted = [2, 2, 2, 3, 4]
 
         for idx, section_id in enumerate(chosen_sections, start=1):
-            price = self._anchor_price_ils(rng=rng)
+            price = self._anchor_price_for_section_ils(section_label=section_id, rng=rng)
             group_size = rng.choice(group_sizes_weighted)
             listing_group_id = str(uuid.uuid4())
 
@@ -335,18 +351,19 @@ class Command(BaseCommand):
                 ticket.save()
 
     def _seed_dummy_tickets_for_relevant_events(self, *, seed_user: User, rng: random.Random) -> None:
-        # Seed Eden (Menora).
-        eden_events = list(
-            Event.objects.filter(artist__name=SEED_ARTIST_EDEN, venue=VENUE_MENORA, status="פעיל").order_by("date")
-        )
-        for ev in eden_events:
-            self._seed_ticket_groups_for_event(
-                event=ev,
-                seed_user=seed_user,
-                section_pool=MENORA_SECTION_IDS,
-                rng=rng,
-                base_row=1,
+        # Seed Menora anchor tickets for Eden and Mor Rabaie.
+        for artist_name, base_row in ((SEED_ARTIST_EDEN, 1), (SEED_ARTIST_MOR, 3)):
+            menora_events = list(
+                Event.objects.filter(artist__name=artist_name, venue=VENUE_MENORA, status="פעיל").order_by("date")
             )
+            for ev in menora_events:
+                self._seed_ticket_groups_for_event(
+                    event=ev,
+                    seed_user=seed_user,
+                    section_pool=MENORA_SECTION_IDS,
+                    rng=rng,
+                    base_row=base_row,
+                )
 
         # Seed Caesarea anchor tickets for Pe'er Tasi and Ben Tzur.
         for artist_name, base_row in ((SEED_ARTIST_PEER, 5), (SEED_ARTIST_BEN_TZUR, 8)):
