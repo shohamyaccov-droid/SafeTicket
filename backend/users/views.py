@@ -1403,6 +1403,15 @@ def create_order(request):
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+                if timezone.now() > negotiated_offer.checkout_expires_at:
+                    negotiated_offer.status = 'expired'
+                    negotiated_offer.save(update_fields=['status', 'updated_at'])
+                    return Response(
+                        {
+                            'error': 'הצעה זו פגה. חלון הרכישה לאחר אישור הסתיים — בקשו הצעה חדשה מהמוכר.',
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 logger.debug(
                     f"Negotiated offer found: ID={oid}, Amount={negotiated_offer.amount}, Quantity={negotiated_offer.quantity}"
                 )
@@ -2144,6 +2153,11 @@ def guest_checkout(request):
             )
 
         if negotiated_offer:
+            if not negotiated_offer.accepted_at or not negotiated_offer.checkout_expires_at:
+                return Response(
+                    {'error': 'Invalid or ineligible offer for checkout (offer was not properly accepted).'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             expected_total = expected_negotiated_total_from_offer_base(negotiated_offer.amount)
             received_total = decimal_money(order_data.get('total_amount', 0))
             if not payment_amounts_match(received_total, expected_total):
@@ -2172,6 +2186,27 @@ def guest_checkout(request):
 
         # CRITICAL: Use transaction.atomic + select_for_update to prevent double-selling (race conditions)
         with transaction.atomic():
+            if negotiated_offer is not None:
+                locked_offer = (
+                    Offer.objects.select_for_update()
+                    .filter(id=negotiated_offer.id, status='accepted')
+                    .first()
+                )
+                if not locked_offer:
+                    return Response(
+                        {'error': 'Invalid or ineligible offer for checkout.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if timezone.now() > locked_offer.checkout_expires_at:
+                    locked_offer.status = 'expired'
+                    locked_offer.save(update_fields=['status', 'updated_at'])
+                    return Response(
+                        {
+                            'error': 'הצעה זו פגה. חלון הרכישה לאחר אישור הסתיים — בקשו הצעה חדשה מהמוכר.',
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                negotiated_offer = locked_offer
             release_abandoned_carts()
             # If listing_group_id is provided, IGNORE the specific ticket_id and find any active tickets in the group
             if listing_group_id:
@@ -3253,6 +3288,18 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
                             queryset=VenueSection.objects.order_by('name'),
                         ),
                     )
+                    .annotate(
+                        _active_tickets_total=Coalesce(
+                            Sum(
+                                'tickets__available_quantity',
+                                filter=Q(
+                                    tickets__status='active',
+                                    tickets__available_quantity__gt=0,
+                                ),
+                            ),
+                            Value(0),
+                        )
+                    )
                     .order_by('date', 'name')
                 )
                 artist_raw = qp.get('artist')
@@ -3516,11 +3563,29 @@ class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
             if for_sell:
                 # Sell form: any artist with an upcoming active concert (inventory not required).
                 now = timezone.now()
-                queryset = queryset.filter(
-                    events__date__gte=now,
-                    events__category='concert',
-                    events__status='פעיל',
-                ).distinct().order_by('name')
+                queryset = (
+                    queryset.filter(
+                        events__date__gte=now,
+                        events__category='concert',
+                        events__status='פעיל',
+                    )
+                    .distinct()
+                    .annotate(
+                        _artist_tickets_total=Coalesce(
+                            Sum(
+                                'events__tickets__available_quantity',
+                                filter=Q(
+                                    events__date__gte=now,
+                                    events__status='פעיל',
+                                    events__tickets__status='active',
+                                    events__tickets__available_quantity__gt=0,
+                                ),
+                            ),
+                            Value(0),
+                        ),
+                    )
+                    .order_by('name')
+                )
             else:
                 # Marketplace browse/homepage: return all artists so the discovery UI stays full
                 # even before inventory is listed. `total_tickets_count` still reflects live stock.
