@@ -90,6 +90,12 @@ function toFriendlyCheckoutMessage(detail) {
   if (/no longer available|not available|sold|נמכר/i.test(text)) {
     return 'הכרטיס כבר לא זמין. רעננו את הרשימה ובחרו כרטיס אחר.';
   }
+  if (/held by another|someone else|reserved|locked|שמור כרגע|בעגלה של מישהו אחר/i.test(text)) {
+    return 'הכרטיס שמור כרגע על ידי רוכש אחר. נסו שוב בעוד כמה דקות.';
+  }
+  if (/payment failed|payment error|could not process payment|payme/i.test(text)) {
+    return 'התשלום לא הושלם. בדקו את פרטי התשלום ונסו שוב.';
+  }
   if (/timeout|network|failed to fetch|ecconn/i.test(text)) {
     return 'יש בעיית חיבור לשרת. בדקו את האינטרנט ונסו שוב.';
   }

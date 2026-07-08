@@ -191,6 +191,18 @@ class SeedDummyTicketsTests(TestCase):
             status="פעיל",
             country="IL",
         )
+        self.checkout_artist = Artist.objects.create(name="אמן בדיקת Checkout א", category="music")
+        self.checkout_event = Event.objects.create(
+            artist=self.checkout_artist,
+            name="checkout test show",
+            date=_dt(2026, 9, 1, 20, 0),
+            venue=VENUE_MENORA,
+            venue_place=self.menora_venue,
+            city="תל אביב",
+            category="concert",
+            status="פעיל",
+            country="IL",
+        )
 
     def _assert_tiered_prices_match_section(self, tickets):
         for t in tickets:
@@ -327,7 +339,11 @@ class SeedDummyTicketsTests(TestCase):
         mor_sections = {t.custom_section_text for t in mor_tickets}
         self.assertTrue(mor_sections.issubset(set(MENORA_SECTION_IDS)))
 
-        # 8) Idempotency: running again must not grow ticket count.
+        # 8) Checkout test artists are auto-scrubbed from DB.
+        self.assertFalse(Artist.objects.filter(name__icontains="checkout").exists())
+        self.assertFalse(Event.objects.filter(name__icontains="checkout").exists())
+
+        # 9) Idempotency: running again must not grow ticket count.
         ticket_count_after_first = Ticket.objects.filter(seller=seed_user).count()
         call_command("seed_dummy_tickets", random_seed=123)
         self.assertEqual(Ticket.objects.filter(seller=seed_user).count(), ticket_count_after_first)

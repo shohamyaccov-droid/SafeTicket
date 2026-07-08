@@ -1580,10 +1580,10 @@ def create_order(request):
                         {'error': 'Ticket group not found'},
                         status=status.HTTP_404_NOT_FOUND
                     )
-                except Exception as e:
-                    logger.debug(f"Error processing group purchase: {str(e)}")
+                except Exception:
+                    logger.exception("create_order: group purchase processing failed")
                     return Response(
-                        {'error': f'Error processing purchase: {str(e)}'},
+                        {'error': 'לא ניתן להשלים את הרכישה כרגע. נסו שוב בעוד רגע.'},
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR
                     )
             else:
@@ -2023,10 +2023,10 @@ def payment_simulation(request):
                     )
                 ticket = locked_tickets[0]
                 logger.debug(f"payment_simulation - Using reference ticket {ticket.id} for price calculation")
-            except Exception as e:
-                logger.debug(f"payment_simulation - Error processing group: {str(e)}")
+            except Exception:
+                logger.exception("payment_simulation: group processing failed")
                 return Response(
-                    {'error': f'Error processing payment: {str(e)}'},
+                    {'error': 'לא ניתן לעבד את התשלום כרגע. נסו שוב בעוד רגע.'},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
         else:
@@ -2323,10 +2323,10 @@ def guest_checkout(request):
                         {'error': 'Ticket group not found'},
                         status=status.HTTP_404_NOT_FOUND
                     )
-                except Exception as e:
-                    logger.debug(f"Error processing guest group purchase: {str(e)}")
+                except Exception:
+                    logger.exception("guest_checkout: group purchase processing failed")
                     return Response(
-                        {'error': f'Error processing purchase: {str(e)}'},
+                        {'error': 'לא ניתן להשלים את הרכישה כרגע. נסו שוב בעוד רגע.'},
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR
                     )
             else:

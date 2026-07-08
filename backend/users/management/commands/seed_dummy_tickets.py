@@ -104,6 +104,12 @@ class Command(BaseCommand):
         random_seed = options.get("random_seed")
         rng = random.Random(random_seed) if random_seed is not None else random
 
+        # 0) Auto-scrub any checkout test artists (and cascaded events) from DB.
+        with transaction.atomic():
+            deleted, _ = Artist.objects.filter(name__icontains="checkout").delete()
+            if deleted:
+                self.stdout.write(self.style.WARNING(f"Deleted {deleted} checkout test row(s)."))
+
         seed_user = self._resolve_system_seed_user()
 
         # 1) Idempotency: delete all tickets owned by the dummy seller first.
