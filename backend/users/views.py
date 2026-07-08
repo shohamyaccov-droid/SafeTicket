@@ -1,6 +1,7 @@
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.middleware.csrf import get_token
+from django.core.management import call_command
 
 from rest_framework import generics, status, viewsets
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -3741,6 +3742,23 @@ def subscribe_ticket_alert(request):
 
 # Backward-compatible alias
 create_ticket_alert = subscribe_ticket_alert
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def secret_run_seed_dummy_tickets(request):
+    """
+    Temporary hidden hook to trigger `seed_dummy_tickets` in environments without shell access.
+
+    WARNING: This endpoint is intentionally undocumented and should be removed after use.
+    """
+    # Synchronous execution; request will block until the command finishes.
+    call_command('seed_dummy_tickets')
+    return Response(
+        {'status': 'success', 'message': 'Dummy tickets seeded successfully'},
+        status=status.HTTP_200_OK,
+    )
 
 
 def _admin_staff_or_superuser(request):
