@@ -4449,13 +4449,67 @@ class OfferViewSet(viewsets.ModelViewSet):
             if competing_offer_ids:
                 Offer.objects.filter(id__in=competing_offer_ids).update(status='rejected')
 
-            # Non-bundled listing: hold stock for the accepted buyer during checkout window
-            if not ticket.listing_group_id:
+            # Hold stock for the accepted buyer during checkout window.
+            # IMPORTANT: grouped listings must also reserve inventory, otherwise a "Buy Now"
+            # user can steal the same seats before the offer-buyer starts checkout.
+            now = timezone.now()
+            needed_qty = int(offer.quantity or 1)
+
+            if ticket.listing_group_id:
+                offer_buyer = offer.buyer
+                buyer_id = getattr(offer, 'buyer_id', None)
+                buyer_email = ''
+                try:
+                    buyer_email = (offer_buyer.email or '').strip().lower()
+                except Exception:
+                    buyer_email = ''
+
+                def _reserved_belongs_to_offer_buyer(t):
+                    if t.reserved_by_id is not None and buyer_id is not None:
+                        try:
+                            return int(t.reserved_by_id) == int(buyer_id)
+                        except (TypeError, ValueError):
+                            return False
+                    if t.reserved_by_id is None and buyer_email:
+                        ge = (t.reservation_email or '').strip().lower()
+                        return bool(ge) and ge == buyer_email
+                    return False
+
+                reserved_for_buyer = [
+                    t for t in locked_tickets
+                    if t.status == 'reserved' and _reserved_belongs_to_offer_buyer(t)
+                ]
+
+                # Refresh existing reservations and upgrade guest-email reservations to reserved_by.
+                for t in reserved_for_buyer:
+                    fields = []
+                    if buyer_id is not None and (t.reserved_by_id != buyer_id):
+                        t.reserved_by = offer_buyer
+                        t.reservation_email = None
+                        fields.extend(['reserved_by', 'reservation_email'])
+                    t.reserved_at = now
+                    fields.extend(['reserved_at', 'updated_at'])
+                    t.save(update_fields=fields)
+
+                reserve_needed = max(0, needed_qty - len(reserved_for_buyer))
+                active_rows = sorted(
+                    [t for t in locked_tickets if t.status == 'active'],
+                    key=lambda x: x.id,
+                )
+                to_reserve = active_rows[:reserve_needed]
+                for t in to_reserve:
+                    t.status = 'reserved'
+                    t.reserved_by = offer_buyer
+                    t.reserved_at = now
+                    t.reservation_email = None
+                    t.save(update_fields=['status', 'reserved_by', 'reserved_at', 'reservation_email', 'updated_at'])
+            else:
+                # Non-bundled listing: hold stock for the accepted buyer during checkout window
                 hold_fields = []
                 if ticket.status == 'active':
                     ticket.status = 'reserved'
                     ticket.reserved_by = offer.buyer
-                    ticket.reserved_at = timezone.now()
+                    ticket.reserved_at = now
                     hold_fields = ['status', 'reserved_by', 'reserved_at', 'updated_at']
                 elif ticket.status == 'reserved':
                     try:
@@ -4472,7 +4526,7 @@ class OfferViewSet(viewsets.ModelViewSet):
                         ge = (ticket.reservation_email or '').strip().lower()
                         same = bool(be and ge and be == ge)
                     if same:
-                        ticket.reserved_at = timezone.now()
+                        ticket.reserved_at = now
                         hold_fields = ['reserved_at', 'updated_at']
                 if hold_fields:
                     ticket.save(update_fields=hold_fields)

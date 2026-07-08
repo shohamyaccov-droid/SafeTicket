@@ -1298,7 +1298,9 @@ const EventDetailsPage = () => {
           <div className="venue-map-sticky-container max-md:sticky max-md:top-0 max-md:z-40 max-md:border-b max-md:border-slate-200 max-md:shadow-[0_4px_12px_rgba(15,23,42,0.08)]">
             <div className="venue-map-card">
               <div className="venue-map-card-header">
-                <h2>מפת אולם</h2>
+                <h2>
+                  מפת אולם{finalVenueNameForMap ? ` - ${finalVenueNameForMap}` : ''}
+                </h2>
                 {isBloomfieldConcertLayout ? (
                   <p className="venue-map-card-subtitle">
                     {CONCERT_BLOCK_COUNT} גושים · פריסת הופעה בבלומפילד

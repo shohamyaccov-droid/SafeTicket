@@ -12,13 +12,10 @@ import './InteractiveMenoraMap.css';
 import './CaesareaMap.css';
 
 /** Empty-section fills by tier (premium sky depth). Ticket / active colors stay elsewhere. */
-function emptyTierFill(sectionId) {
-  const id = String(sectionId || '');
-  if (id === 'אורקסטרה' || /אורקסטרה|אוקסטרה/i.test(id)) return '#bae6fd'; // sky-200
-  if (/תחתון/.test(id)) return '#e0f2fe'; // sky-100
-  if (/אמצע/.test(id)) return '#f0f9ff'; // sky-50
-  if (/עליון/.test(id)) return '#f8fafc'; // slate-50 / icy
-  return '#e0f2fe';
+function emptyTierFill() {
+  // Premium uniform fill for ALL empty/unselected sections.
+  // Ticket availability (green) and active selection (dark) are handled separately.
+  return '#bae6fd'; // sky-200
 }
 
 const CaesareaMap = ({
@@ -80,7 +77,7 @@ const CaesareaMap = ({
               fillColor = '#b2d982';
               sectionToneClass = 'caesarea-section--available';
             } else {
-              fillColor = emptyTierFill(section.id);
+              fillColor = emptyTierFill();
             }
 
             const labelY = section.labelY;
