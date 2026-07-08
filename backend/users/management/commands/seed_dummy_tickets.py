@@ -53,6 +53,8 @@ MENORA_SECTION_IDS = [
     *[f"{n} Upper" for n in range(1, 13)],
 ]
 
+ANCHOR_PRICES_ILS = [370, 380, 390, 410, 420, 430]
+
 CAESAREA_SECTION_IDS = [
     "אורקסטרה",
     *[f"{n} תחתון" for n in range(1, 7)],
@@ -115,7 +117,7 @@ class Command(BaseCommand):
             # 3) Cancel past Omer Adam / Eyal Golan events.
             self._cancel_past_omer_eyal_events()
 
-        # 4) Seed tickets with anchor pricing (380-480 ILS).
+        # 4) Seed tickets with anchor pricing (round ILS tiers).
         with transaction.atomic():
             self._seed_dummy_tickets_for_relevant_events(seed_user=seed_user, rng=rng)
 
@@ -289,8 +291,7 @@ class Command(BaseCommand):
         )
 
     def _anchor_price_ils(self, *, rng: random.Random) -> Decimal:
-        # Anchor pricing: realistic but slightly high; hard cap to avoid outliers.
-        return Decimal(str(rng.randint(380, 480)))
+        return Decimal(str(rng.choice(ANCHOR_PRICES_ILS)))
 
     def _seed_ticket_groups_for_event(
         self,

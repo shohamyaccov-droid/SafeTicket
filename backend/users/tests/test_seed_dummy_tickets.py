@@ -39,6 +39,8 @@ CAESAREA_SECTION_IDS = [
     *[f"{n} עליון" for n in range(1, 7)],
 ]
 
+ANCHOR_PRICES_ILS = {370, 380, 390, 410, 420, 430}
+
 
 def _dt(y: int, m: int, d: int, hour: int, minute: int = 0) -> datetime:
     return datetime(y, m, d, hour, minute, 0, tzinfo=TZ_IL)
@@ -208,7 +210,7 @@ class SeedDummyTicketsTests(TestCase):
         eden_event_ids = [ev.id for ev in eden_menora_active]
         eden_tickets = Ticket.objects.filter(seller=seed_user, event_id__in=eden_event_ids, status="active")
         self.assertGreater(eden_tickets.count(), 0)
-        self.assertTrue(all(380 <= int(t.asking_price) <= 480 for t in eden_tickets))
+        self.assertTrue(all(int(t.asking_price) in ANCHOR_PRICES_ILS for t in eden_tickets))
 
         for ev in eden_menora_active:
             tickets = list(Ticket.objects.filter(seller=seed_user, event=ev, status="active"))
@@ -233,7 +235,7 @@ class SeedDummyTicketsTests(TestCase):
         peer_event = Event.objects.get(id=self.peer_event.id)
         peer_tickets = list(Ticket.objects.filter(seller=seed_user, event=peer_event, status="active"))
         self.assertGreater(len(peer_tickets), 0)
-        self.assertTrue(all(380 <= int(t.asking_price) <= 480 for t in peer_tickets))
+        self.assertTrue(all(int(t.asking_price) in ANCHOR_PRICES_ILS for t in peer_tickets))
 
         peer_sections = {t.custom_section_text for t in peer_tickets}
         self.assertTrue(peer_sections.issubset(set(CAESAREA_SECTION_IDS)))
@@ -272,7 +274,7 @@ class SeedDummyTicketsTests(TestCase):
             Ticket.objects.filter(seller=seed_user, event__in=ben_events, status="active")
         )
         self.assertGreater(len(ben_tickets), 0)
-        self.assertTrue(all(380 <= int(t.asking_price) <= 480 for t in ben_tickets))
+        self.assertTrue(all(int(t.asking_price) in ANCHOR_PRICES_ILS for t in ben_tickets))
         ben_sections = {t.custom_section_text for t in ben_tickets}
         self.assertTrue(ben_sections.issubset(set(CAESAREA_SECTION_IDS)))
 

@@ -1545,7 +1545,8 @@ const EventDetailsPage = () => {
                       </div>
                       <div className="ticket-mini-tags">
                         <span className="mini-tag quantity-tag">
-                          🎟️ כרטיסים זמינים
+                          🎟️ {group.available_count || 1}{' '}
+                          {(group.available_count || 1) === 1 ? 'כרטיס' : 'כרטיסים'}
                           {splitType === 'pairs' && (
                             <span className="split-badge badge-pairs">נמכר בזוגות בלבד</span>
                           )}
@@ -1568,7 +1569,7 @@ const EventDetailsPage = () => {
                     {/* Left Side: Price */}
                     <div className="ticket-row-price">
                       <div className="ticket-price-container">
-                        <BuyerListingPrice ticket={firstTicket} />
+                        <BuyerListingPrice ticket={firstTicket} quantity={group.available_count || 1} />
                       </div>
                     </div>
                   </div>

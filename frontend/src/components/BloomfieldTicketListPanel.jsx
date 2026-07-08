@@ -164,7 +164,8 @@ export default function BloomfieldTicketListPanel({
             const baseNum = getTicketBaseNumeric(firstTicket);
             const priceStr = formatAmountForCurrency(baseNum, cur);
             const feeNum = baseNum > 0 ? getBuyerServiceFeeShekels(baseNum) : 0;
-            const feeStr = feeNum > 0 ? formatAmountForCurrency(feeNum, cur) : '';
+            const qty = group.available_count || 1;
+            const qtyLabel = `${qty} ${qty === 1 ? 'כרטיס' : 'כרטיסים'}`;
 
             /* ── section title ────────────────────────────────────────────── */
             const rawSection =
@@ -211,6 +212,18 @@ export default function BloomfieldTicketListPanel({
                   <div style={PRICE_COL_STYLE}>
                     <span
                       style={{
+                        fontSize: '0.8125rem',
+                        fontWeight: 600,
+                        color: '#374151',
+                        marginBottom: 2,
+                        direction: 'rtl',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {qtyLabel}
+                    </span>
+                    <span
+                      style={{
                         fontSize: '1.5rem',
                         fontWeight: 700,
                         color: '#111827',
@@ -233,7 +246,7 @@ export default function BloomfieldTicketListPanel({
                           direction: 'rtl',
                         }}
                       >
-                        + {sym}{feeStr} עמלת ביטחון (15%)
+                        + 15% עמלת ביטחון
                       </span>
                     )}
                   </div>
@@ -258,7 +271,7 @@ export default function BloomfieldTicketListPanel({
                       {group.available_count > 0 ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
                           <Ticket className="h-3.5 w-3.5 shrink-0 text-pink-500" strokeWidth={2} aria-hidden />
-                          כרטיסים זמינים
+                          {group.available_count} {group.available_count === 1 ? 'כרטיס' : 'כרטיסים'}
                         </span>
                       ) : null}
                       {isBestValue ? (
