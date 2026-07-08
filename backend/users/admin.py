@@ -273,7 +273,15 @@ class TicketAdmin(admin.ModelAdmin):
             pdf = getattr(obj, 'pdf_file', None)
             if not pdf or not str(getattr(pdf, 'name', None) or '').strip():
                 return _admin_pdf_safe_fallback()
-            url = get_ticket_pdf_admin_url(obj)
+            try:
+                url = get_ticket_pdf_admin_url(obj)
+            except Exception as url_exc:
+                _admin_log.warning(
+                    'TicketAdmin.pdf_staff_link URL helper failed pk=%s: %s',
+                    getattr(obj, 'pk', None),
+                    url_exc,
+                )
+                return _admin_pdf_safe_fallback()
             if not url:
                 return _admin_pdf_safe_fallback()
             try:
@@ -286,11 +294,14 @@ class TicketAdmin(admin.ModelAdmin):
                     'TicketAdmin.pdf_staff_link format_html failed pk=%s: %s',
                     getattr(obj, 'pk', None),
                     fmt_exc,
-                    exc_info=True,
                 )
                 return _admin_pdf_safe_fallback()
-        except Exception:
-            _admin_log.exception('TicketAdmin.pdf_staff_link failed pk=%s', getattr(obj, 'pk', None))
+        except Exception as exc:
+            _admin_log.warning(
+                'TicketAdmin.pdf_staff_link failed pk=%s: %s',
+                getattr(obj, 'pk', None),
+                exc,
+            )
             return _admin_pdf_safe_fallback()
 
     pdf_staff_link.short_description = 'PDF (סטאף)'

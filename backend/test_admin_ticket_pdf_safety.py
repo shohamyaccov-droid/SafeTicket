@@ -101,7 +101,10 @@ class AdminTicketPdfSafetyTests(TestCase):
         """Forced exception from URL helper must not crash changelist."""
         self._make_ticket()
         path = '/admin/users/ticket/'
-        with mock.patch('users.admin.get_ticket_pdf_admin_url', side_effect=RuntimeError('simulated cloudinary failure')):
+        def _boom(*_a, **_k):
+            raise RuntimeError('simulated cloudinary failure')
+
+        with mock.patch('users.admin.get_ticket_pdf_admin_url', side_effect=_boom):
             r = self.client.get(path)
         self.assertEqual(r.status_code, 200, r.content[:500])
         self.assertIn(b'File Error / Missing', r.content)
