@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 import { useState, useCallback } from 'react';
 import { currencySymbol, formatAmountForCurrency } from '../utils/priceFormat';
 import './InteractiveMenoraMap.css';
@@ -5,10 +6,12 @@ import './InteractiveMenoraMap.css';
 const InteractiveMenoraMap = ({
   activeSection,
   onSectionClick,
-  sectionPrices = {},
   lowestPrices = {},
   currencyIso = 'ILS',
+  // Accept legacy props (e.g. sectionPrices) without unused-var warnings.
+  ..._legacyProps
 }) => {
+  void _legacyProps;
   const [zoomLevel, setZoomLevel] = useState(1);
 
   const handleZoomIn = useCallback(() => {

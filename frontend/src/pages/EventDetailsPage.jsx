@@ -850,21 +850,25 @@ const EventDetailsPage = () => {
     ) {
       return 'פיס ארנה ירושלים';
     }
-    if (haystack.includes('מנורה') || haystack.includes('מבטחים')) return 'היכל מנורה מבטחים';
+    if (haystack.includes('מנורה') || haystack.includes('מבטחים')) return VENUE_MENORA;
 
     const venueMatch = getVenueConfig(candidates[0] || '');
-    return venueMatch?.matchedName || candidates[0] || '';
+    const matched = venueMatch?.matchedName || candidates[0] || '';
+    if (isMenoraVenueName(matched)) return VENUE_MENORA;
+    return matched;
   }, [event]);
 
   const finalVenueNameForMap = canonicalVenueForMap || event?.venue || '';
+  const isMenoraVenue = isMenoraVenueName(canonicalVenueForMap);
   const isBloomfieldVenue =
-    canonicalVenueForMap === 'אצטדיון בלומפילד' || canonicalVenueForMap === VENUE_BLOOMFIELD_CONCERT;
+    !isMenoraVenue &&
+    (canonicalVenueForMap === 'אצטדיון בלומפילד' || canonicalVenueForMap === VENUE_BLOOMFIELD_CONCERT);
   /** Concert layout (pitch + stage); football/soccer keeps BloomfieldStadiumMap. */
   const isBloomfieldConcertLayout =
-    canonicalVenueForMap === VENUE_BLOOMFIELD_CONCERT ||
-    (canonicalVenueForMap === 'אצטדיון בלומפילד' &&
-      String(event?.category || '').toLowerCase() === 'concert');
-  const isMenoraVenue = canonicalVenueForMap === 'היכל מנורה מבטחים';
+    !isMenoraVenue &&
+    (canonicalVenueForMap === VENUE_BLOOMFIELD_CONCERT ||
+      (canonicalVenueForMap === 'אצטדיון בלומפילד' &&
+        String(event?.category || '').toLowerCase() === 'concert'));
   const isCaesareaVenue = canonicalVenueForMap === VENUE_CAESAREA;
   const isJerusalemArenaVenue = canonicalVenueForMap === 'פיס ארנה ירושלים';
   const isRamatGanVenue = canonicalVenueForMap === VENUE_RAMAT_GAN;
@@ -1335,13 +1339,13 @@ const EventDetailsPage = () => {
 
                     if (isMenoraVenue) {
                       return (
-                        <InteractiveMenoraMap
-                          activeSection={activeSectionName || null}
-                          onSectionClick={handleSectionClick || (() => {})}
-                          sectionPrices={sectionPrices || {}}
-                          lowestPrices={lowestPricesPerSection || {}}
-                          currencyIso={listingCurrency}
-                        />
+                          <InteractiveMenoraMap
+                            activeSection={activeSectionName || null}
+                            onSectionClick={handleSectionClick || (() => {})}
+                            sectionPrices={sectionPrices || {}}
+                            lowestPrices={lowestPricesPerSection || {}}
+                            currencyIso={listingCurrency}
+                          />
                       );
                     }
 
