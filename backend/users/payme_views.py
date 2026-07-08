@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from rest_framework.decorators import api_view, parser_classes, permission_classes
@@ -364,7 +365,8 @@ def payme_webhook(request):
         logger.exception('PayMe webhook failed unexpectedly: %s', exc)
         print(f'PayMe webhook failed unexpectedly: {exc}')
         _log_payme_webhook_rejection('unexpected_exception', payload={'error': str(exc)})
-        return Response({'error': 'webhook failed', 'reason': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        reason = str(exc) if settings.DEBUG else 'internal_error'
+        return Response({'error': 'webhook failed', 'reason': reason}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @csrf_exempt

@@ -8,6 +8,7 @@ import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import { toastError } from '../utils/toast';
 import { formatArtistEventRowDate, displayEventVenueName } from '../utils/eventLocalTime';
+import { pickMostSupplyEventId } from '../utils/artistEventSupply';
 import './ArtistEventsPage.css';
 
 const ArtistEventsPage = () => {
@@ -99,10 +100,10 @@ const ArtistEventsPage = () => {
     [events]
   );
 
-  const maxTicketSupply = useMemo(() => {
-    if (!upcomingEvents.length) return 0;
-    return Math.max(...upcomingEvents.map((event) => Number(event.tickets_count) || 0));
-  }, [upcomingEvents]);
+  const mostSupplyEventId = useMemo(
+    () => pickMostSupplyEventId(upcomingEvents),
+    [upcomingEvents]
+  );
 
   const openEvent = useCallback(
     (eventId) => {
@@ -170,8 +171,7 @@ const ArtistEventsPage = () => {
         ) : (
           <div className="events-table">
             {upcomingEvents.map((event) => {
-              const ticketCount = Number(event.tickets_count) || 0;
-              const isMostSupply = maxTicketSupply > 0 && ticketCount === maxTicketSupply;
+              const isMostSupply = mostSupplyEventId != null && event.id === mostSupplyEventId;
               const venueLabel = displayEventVenueName(event);
 
               return (
