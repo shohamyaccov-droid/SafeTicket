@@ -213,6 +213,29 @@ class ArtistListApiTests(TestCase):
         names = [item['name'] for item in payload]
         self.assertNotIn(past_only_artist.name, names)
 
+    def test_recommended_artist_list_excludes_omer_adam_and_eyal_golan(self):
+        omer = Artist.objects.create(name='עומר אדם', category='music')
+        eyal = Artist.objects.create(name='אייל גולן', category='music')
+        for artist, label in ((omer, 'Omer'), (eyal, 'Eyal')):
+            Event.objects.create(
+                name=f'{label} Future Show',
+                artist=artist,
+                date=timezone.now() + timezone.timedelta(days=14),
+                venue='היכל מנורה מבטחים',
+                city='Tel Aviv',
+                country='IL',
+                category='concert',
+                status='פעיל',
+            )
+
+        res = APIClient().get('/api/users/artists/?recommended=1')
+
+        self.assertEqual(res.status_code, 200, res.content)
+        payload = res.data if isinstance(res.data, list) else res.data.get('results', [])
+        names = [item['name'] for item in payload]
+        self.assertNotIn('עומר אדם', names)
+        self.assertNotIn('אייל גולן', names)
+
 
 class EventListApiTests(TestCase):
     def test_event_list_orders_active_inventory_before_empty_events(self):

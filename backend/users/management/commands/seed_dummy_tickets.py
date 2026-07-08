@@ -114,8 +114,8 @@ class Command(BaseCommand):
             self._fix_eden_ben_zaken_menora_schedule(rng=rng)
             self._ensure_ben_tzur_caesarea_schedule()
 
-            # 3) Cancel past Omer Adam / Eyal Golan events.
-            self._cancel_past_omer_eyal_events()
+            # 3) Permanently remove Omer Adam / Eyal Golan from the catalog.
+            self._purge_omer_eyal_events()
 
         # 4) Seed tickets with anchor pricing (round ILS tiers).
         with transaction.atomic():
@@ -166,12 +166,18 @@ class Command(BaseCommand):
 
         return seller
 
-    def _cancel_past_omer_eyal_events(self) -> None:
-        """Cancel all Omer Adam / Eyal Golan events so they never appear in discovery."""
-        Event.objects.filter(
-            artist__name__in=[SEED_ARTIST_OMER, SEED_ARTIST_EYAL],
-            status="פעיל",
-        ).update(status="בוטל")
+    def _purge_omer_eyal_events(self) -> None:
+        """Cancel every Omer Adam / Eyal Golan event (any date/status) so they never surface in discovery."""
+        from django.db.models import Q
+
+        qs = Event.objects.filter(
+            Q(artist__name__in=[SEED_ARTIST_OMER, SEED_ARTIST_EYAL])
+            | Q(name__icontains=SEED_ARTIST_OMER)
+            | Q(name__icontains=SEED_ARTIST_EYAL)
+        )
+        cancelled = qs.exclude(status='בוטל').update(status='בוטל')
+        if cancelled:
+            self.stdout.write(self.style.WARNING(f'Cancelled {cancelled} Omer/Eyal event(s).'))
 
     def _fix_eden_ben_zaken_menora_schedule(self, *, rng: random.Random) -> None:
         eden_artist, _ = Artist.objects.get_or_create(

@@ -41,6 +41,9 @@ from pypdf import PdfReader, PdfWriter
 
 logger = logging.getLogger(__name__)
 
+# Hard blocklist: never surface in homepage discovery / recommended rows.
+DISCOVERY_EXCLUDED_ARTIST_NAMES = ('עומר אדם', 'אייל גולן')
+
 
 def csrf_required(view):
     """
@@ -3555,7 +3558,7 @@ class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
         return ArtistSerializer
     
     def get_queryset(self):
-        queryset = Artist.objects.all()
+        queryset = Artist.objects.all().exclude(name__in=DISCOVERY_EXCLUDED_ARTIST_NAMES)
         if self.action == 'list':
             for_sell_raw = str(self.request.query_params.get('for_sell', '')).lower()
             for_sell = for_sell_raw in ('1', 'true', 'yes', 'on')
@@ -3743,13 +3746,14 @@ create_ticket_alert = subscribe_ticket_alert
 
 
 @csrf_exempt
-@api_view(['POST'])
+@api_view(['GET'])
 @permission_classes([AllowAny])
 def secret_run_seed_dummy_tickets(request):
     """
     Temporary hidden hook to trigger `seed_dummy_tickets` in environments without shell access.
 
     WARNING: This endpoint is intentionally undocumented and should be removed after use.
+    Open in a browser: GET /api/secret-run-seed-9988/
     """
     # Synchronous execution; request will block until the command finishes.
     call_command('seed_dummy_tickets')

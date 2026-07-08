@@ -43,11 +43,11 @@ python manage.py seed_ramat_gan_sections || true
 echo "[start_render] Caesarea Amphitheater venue sections (Sell page dropdown)..."
 python manage.py seed_caesarea_sections || true
 
-echo "[start_render] Anchor-priced dummy tickets (Pe'er Tasi, Eden Ben Zaken, Ben Tzur)..."
-python manage.py seed_dummy_tickets || true
-
 echo "[start_render] Checkout test tickets for manual PayMe QA..."
 python manage.py seed_checkout_test_tickets || true
+
+echo "[start_render] Anchor-priced dummy tickets + Omer/Eyal purge (MUST run last)..."
+python manage.py seed_dummy_tickets || true
 
 echo "[start_render] Admin promotion hook..."
 python fix_admin.py

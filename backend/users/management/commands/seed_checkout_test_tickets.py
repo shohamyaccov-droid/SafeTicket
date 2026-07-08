@@ -25,18 +25,18 @@ PDF_BYTES = b'%PDF-1.4\n1 0 obj<< /Type /Catalog >>endobj\ntrailer<< /Root 1 0 R
 
 EVENT_SPECS = (
     {
-        'artist': 'עומר אדם',
+        'artist': 'אמן בדיקת Checkout א',
         'genre': 'Pop',
-        'event_name': 'עומר אדם - בדיקת Checkout',
+        'event_name': 'בדיקת Checkout — אמן א',
         'venue': 'אחר',
         'venue_place': 'אצטדיון רמת גן',
         'city': 'רמת גן',
         'days_from_now': 21,
     },
     {
-        'artist': 'אייל גולן',
+        'artist': 'אמן בדיקת Checkout ב',
         'genre': 'Mizrahi',
-        'event_name': 'אייל גולן - בדיקת Checkout',
+        'event_name': 'בדיקת Checkout — אמן ב',
         'venue': 'אצטדיון בלומפילד (הופעות)',
         'venue_place': 'אצטדיון בלומפילד',
         'city': 'תל אביב',
