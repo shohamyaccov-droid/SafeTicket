@@ -165,10 +165,9 @@ class Command(BaseCommand):
         return seller
 
     def _cancel_past_omer_eyal_events(self) -> None:
-        now = timezone.now()
+        """Cancel all Omer Adam / Eyal Golan events so they never appear in discovery."""
         Event.objects.filter(
             artist__name__in=[SEED_ARTIST_OMER, SEED_ARTIST_EYAL],
-            date__lt=now,
             status="פעיל",
         ).update(status="בוטל")
 

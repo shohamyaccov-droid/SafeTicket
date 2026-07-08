@@ -3615,9 +3615,7 @@ class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
                     .order_by('-_artist_tickets_total', 'name')
                 )
                 if recommended:
-                    queryset = queryset.filter(
-                        Q(_artist_tickets_total__gt=0) | Q(_artist_upcoming_events_total__gt=0)
-                    )
+                    queryset = queryset.filter(_artist_upcoming_events_total__gt=0)
         else:
             queryset = queryset.order_by('name')
         search = self.request.query_params.get('search', None)

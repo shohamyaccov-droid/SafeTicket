@@ -22,18 +22,24 @@ class VenueSeedIntegrityTests(TestCase):
         call_command('seed_august_2026_concerts')
         artist = Artist.objects.filter(name='עדן בן זקן').first()
         self.assertIsNotNone(artist)
-        events = Event.objects.filter(artist=artist).order_by('date')
-        self.assertTrue(events.exists())
-        target = events.filter(date__date=timezone.datetime(2026, 8, 17).date()).first()
-        if target is None:
-            # Some DBs store aware datetimes — match by month/day
-            target = next(
-                (e for e in events if e.date.month == 8 and e.date.day == 17),
-                events.first(),
-            )
-        self.assertIsNotNone(target)
-        self.assertEqual(target.venue, 'היכל מנורה מבטחים')
-        self.assertEqual(target.city, 'תל אביב')
+        events = Event.objects.filter(artist=artist, venue='היכל מנורה מבטחים', status='פעיל').order_by('date')
+        self.assertEqual(events.count(), 3)
+        days = sorted(e.date.day for e in events)
+        self.assertEqual(days, [17, 18, 20])
+        self.assertTrue(all(e.city == 'תל אביב' for e in events))
+
+    def test_seed_august_2026_creates_ben_tzur_caesarea_shows(self):
+        call_command('seed_august_2026_concerts')
+        artist = Artist.objects.filter(name='בן צור').first()
+        self.assertIsNotNone(artist)
+        self.assertEqual(artist.category, 'music')
+        caesarea = Venue.objects.filter(name='אמפי קיסריה', city='קיסריה').first()
+        self.assertIsNotNone(caesarea)
+        events = Event.objects.filter(artist=artist, venue_place=caesarea, status='פעיל').order_by('date')
+        self.assertEqual(events.count(), 2)
+        days = sorted(e.date.day for e in events)
+        self.assertEqual(days, [26, 27])
+        self.assertTrue(all(e.high_demand for e in events))
 
     def test_fix_eden_ben_zaken_event_command_is_idempotent(self):
         artist = Artist.objects.create(name='עדן בן זקן')

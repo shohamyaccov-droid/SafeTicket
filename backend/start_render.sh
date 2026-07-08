@@ -34,17 +34,8 @@ python manage.py migrate --noinput
 echo "[start_render] Idempotent production seed (skips if DB unavailable)..."
 python seed_production.py
 
-echo "[start_render] Bloomfield concert venue label (Eyal Golan / concert events)..."
-python manage.py fix_eyal_golan_bloomfield_concert_venue || true
-
-echo "[start_render] Omer Adam Ramat Gan Stadium concerts (June 2026)..."
-python manage.py seed_omer_adam || true
-
-echo "[start_render] August 2026 concert catalog (Mor Ravia, Pe'er Tasi, Itay Levi, Eden Ben Zaken)..."
+echo "[start_render] Concert catalog (Mor Ravia, Pe'er Tasi, Itay Levi, Eden Ben Zaken, Ben Tzur)..."
 python manage.py seed_august_2026_concerts || true
-
-echo "[start_render] Eden Ben Zaken event id=77 (Menora Aug 17 2026)..."
-python manage.py fix_eden_ben_zaken_event || true
 
 echo "[start_render] Ramat Gan Stadium venue sections (Sell page dropdown)..."
 python manage.py seed_ramat_gan_sections || true
@@ -52,8 +43,8 @@ python manage.py seed_ramat_gan_sections || true
 echo "[start_render] Caesarea Amphitheater venue sections (Sell page dropdown)..."
 python manage.py seed_caesarea_sections || true
 
-echo "[start_render] Verify Omer Adam catalog (fail loudly if seed/API contract broken)..."
-python manage.py verify_omer_adam_catalog --api-base "${PUBLIC_API_BASE:-https://safeticket-api.onrender.com/api}" || true
+echo "[start_render] Anchor-priced dummy tickets (Pe'er Tasi, Eden Ben Zaken, Ben Tzur)..."
+python manage.py seed_dummy_tickets || true
 
 echo "[start_render] Checkout test tickets for manual PayMe QA..."
 python manage.py seed_checkout_test_tickets || true

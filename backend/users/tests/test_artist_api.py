@@ -174,6 +174,45 @@ class ArtistListApiTests(TestCase):
         self.assertIn(future_artist.name, names)
         self.assertIn(ticket_artist.name, names)
 
+    def test_recommended_artist_list_excludes_past_only_inventory(self):
+        seller = User.objects.create_user(
+            username='past_inventory_seller',
+            email='past-inventory-seller@example.test',
+            password='pass-12345',
+            role='seller',
+        )
+        past_only_artist = Artist.objects.create(name='Past Inventory Artist')
+        past_event = Event.objects.create(
+            name='Past Inventory Show',
+            artist=past_only_artist,
+            date=timezone.now() - timezone.timedelta(days=5),
+            venue='היכל מנורה מבטחים',
+            city='Tel Aviv',
+            country='IL',
+            category='concert',
+            status='פעיל',
+        )
+        Ticket.objects.create(
+            seller=seller,
+            event=past_event,
+            event_name=past_event.name,
+            event_date=past_event.date,
+            venue=past_event.venue,
+            original_price='100.00',
+            asking_price='100.00',
+            available_quantity=1,
+            status='active',
+            verification_status='מאומת',
+            pdf_file='tickets/past-inventory.pdf',
+        )
+
+        res = APIClient().get('/api/users/artists/?recommended=1')
+
+        self.assertEqual(res.status_code, 200, res.content)
+        payload = res.data if isinstance(res.data, list) else res.data.get('results', [])
+        names = [item['name'] for item in payload]
+        self.assertNotIn(past_only_artist.name, names)
+
 
 class EventListApiTests(TestCase):
     def test_event_list_orders_active_inventory_before_empty_events(self):

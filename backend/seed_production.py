@@ -164,20 +164,6 @@ SEED_ARTISTS: list[dict] = [
         'cover_image': 'https://images.unsplash.com/photo-1501612780327-45045589102c?auto=format&fit=crop&w=1600&q=80',
     },
     {
-        'name': 'עומר אדם',
-        'genre': 'פופ / מזרחית',
-        'description': 'אמן ישראלי מוביל.',
-        'image': 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80',
-        'cover_image': 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=1600&q=80',
-    },
-    {
-        'name': 'אייל גולן',
-        'genre': 'מזרחית',
-        'description': 'זמר ואמן ישראלי.',
-        'image': 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=800&q=80',
-        'cover_image': 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=1600&q=80',
-    },
-    {
         'name': 'עדן חסון',
         'genre': 'פופ',
         'description': 'זמרת ישראלית.',
@@ -188,28 +174,6 @@ SEED_ARTISTS: list[dict] = [
 
 # Official launch headliners (inventory required for homepage marketplace feed).
 SEED_LAUNCH_EVENTS: list[dict] = [
-    {
-        'name': 'בן צור - ארנה ירושלים',
-        'date': _il_dt(2026, 5, 28, 21, 0),
-        'venue': 'פיס ארנה ירושלים',
-        'venue_struct': ('פיס ארנה ירושלים', 'ירושלים'),
-        'city': 'ירושלים',
-        'category': 'concert',
-        'artist_name': 'בן צור',
-        'prices': [169, 219, 319],
-        'event_image': 'https://images.unsplash.com/photo-1540039155633-ebb4a7940fd9?auto=format&fit=crop&w=1400&q=85',
-    },
-    {
-        'name': 'אייל גולן - בלומפילד',
-        'date': _il_dt(2026, 6, 18, 20, 0),
-        'venue': 'אצטדיון בלומפילד (הופעות)',
-        'venue_struct': ('אצטדיון בלומפילד', 'תל אביב'),
-        'city': 'תל אביב',
-        'category': 'concert',
-        'artist_name': 'אייל גולן',
-        'prices': [229, 269, 299],
-        'event_image': 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=1400&q=85',
-    },
     {
         'name': 'איתי לוי - אמפי MAX',
         'date': _il_dt(2026, 5, 28, 20, 45),
@@ -276,19 +240,6 @@ SEED_WAITLIST_EVENTS: list[dict] = [
         'away_team': None,
         'tournament': 'גביע המדינה',
         'event_image': 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1400&q=85',
-    },
-    {
-        'name': 'עומר אדם - מופע פארק',
-        'date': _il_dt(2026, 6, 10, 19, 30),
-        'venue': 'אחר',
-        'venue_struct': ('פארק הירקון', 'תל אביב'),
-        'city': 'תל אביב',
-        'category': 'concert',
-        'artist_name': 'עומר אדם',
-        'home_team': None,
-        'away_team': None,
-        'tournament': None,
-        'event_image': 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=1400&q=85',
     },
 ]
 
@@ -481,7 +432,7 @@ def seed_artists() -> None:
 
 
 def seed_launch_events_and_tickets() -> None:
-    """Four official launch shows + verified listing inventory (feed requires active tickets)."""
+    """Official launch shows + verified listing inventory (feed requires active tickets)."""
     seller = _user_model().objects.filter(username=QA_USER_USERNAME).first()
     if not seller:
         _seed_log('[seed] launch inventory skipped — QA user missing')
@@ -595,7 +546,7 @@ def _expected_catalog_event_names() -> frozenset:
 
 def assert_catalog_event_inventory() -> None:
     """
-    Post-condition for production catalog: exactly 4 launch + N waitlist events,
+    Post-condition for production catalog: launch + waitlist events from this module only,
     launch rows have active ticket stock, waitlist rows have zero tickets and high_demand.
     """
     from django.db.models import Sum
