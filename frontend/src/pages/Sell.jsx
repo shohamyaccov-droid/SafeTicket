@@ -1,10 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ticketAPI, eventAPI, artistAPI, eventRequestAPI } from '../services/api';
+import { ticketAPI, eventAPI, artistAPI, eventRequestAPI, authAPI } from '../services/api';
 import { createListFetchAbort } from '../utils/listFetch';
 import SellFormSkeleton from '../components/skeletons/SellFormSkeleton';
-import BecomeSellerModal from '../components/BecomeSellerModal';
 import { toastError } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
 import { iso4217FromCountry, currencySymbol, formatAmountForCurrency } from '../utils/priceFormat';
@@ -13,6 +11,7 @@ import { CONCERT_BLOCK_COUNT, CONCERT_SECTION_NAMES } from '../utils/bloomfieldC
 import { isRamatGanVenueEvent, ramatGanSellSectionOptions } from '../utils/ramatGanSellSections';
 import { isCaesareaVenueEvent, caesareaSellSectionOptions } from '../utils/caesareaSellSections';
 import './Sell.css';
+import '../components/BecomeSellerModal.css';
 
 const SELL_PAGE_BUILD_TAG = import.meta.env.VITE_BUILD_ID || 'local-dev';
 
@@ -73,6 +72,243 @@ function SellFieldError({ message }) {
   );
 }
 /* eslint-enable react/prop-types */
+
+function parseApiMessage(data, fallback) {
+  if (typeof data === 'object' && data !== null) {
+    const txt = Object.values(data).flat().filter(Boolean).join(' ');
+    if (txt) return txt;
+  }
+  if (typeof data === 'string' && data.trim()) return data;
+  return fallback;
+}
+
+function InlineAuthFunnel({ onAuthed }) {
+  const { login, register } = useAuth();
+  const [mode, setMode] = useState('login');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({
+    email: '',
+    password: '',
+    password2: '',
+    first_name: '',
+    last_name: '',
+  });
+
+  const onChange = (e) => {
+    const { name, value } = e.target;
+    setError('');
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (mode === 'register' && form.password !== form.password2) {
+      setError('הסיסמאות אינן תואמות.');
+      return;
+    }
+    setSaving(true);
+    try {
+      if (mode === 'login') {
+        const result = await login(form.email.trim(), form.password);
+        if (!result.success) {
+          setError(result.errorHebrew || result.error || 'ההתחברות נכשלה.');
+          return;
+        }
+      } else {
+        const result = await register({
+          username: form.email.trim(),
+          email: form.email.trim(),
+          first_name: form.first_name.trim(),
+          last_name: form.last_name.trim(),
+          password: form.password,
+          password2: form.password2,
+          role: 'buyer',
+        });
+        if (!result.success) {
+          setError(parseApiMessage(result.error, 'ההרשמה נכשלה.'));
+          return;
+        }
+      }
+      onAuthed?.();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="listing-card sell-inline-card">
+      <h2>{mode === 'login' ? 'התחברות כדי להתחיל למכור' : 'הרשמה מהירה כדי להתחיל למכור'}</h2>
+      <p className="sell-inline-lead">הכל קורה כאן בדף אחד, בלי מעברי עמוד.</p>
+      {error ? <div className="error-message">{error}</div> : null}
+      <form onSubmit={onSubmit} className="sell-inline-auth-form">
+        {mode === 'register' ? (
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="first_name">שם פרטי</label>
+              <input id="first_name" name="first_name" value={form.first_name} onChange={onChange} required />
+            </div>
+            <div className="form-group">
+              <label htmlFor="last_name">שם משפחה</label>
+              <input id="last_name" name="last_name" value={form.last_name} onChange={onChange} required />
+            </div>
+          </div>
+        ) : null}
+        <div className="form-group">
+          <label htmlFor="email">אימייל</label>
+          <input id="email" type="email" name="email" value={form.email} onChange={onChange} required />
+        </div>
+        <div className="form-group">
+          <label htmlFor="password">סיסמה</label>
+          <input id="password" type="password" name="password" value={form.password} onChange={onChange} required />
+        </div>
+        {mode === 'register' ? (
+          <div className="form-group">
+            <label htmlFor="password2">אימות סיסמה</label>
+            <input id="password2" type="password" name="password2" value={form.password2} onChange={onChange} required />
+          </div>
+        ) : null}
+        <button type="submit" className="auth-button" disabled={saving}>
+          {saving ? 'שומר…' : mode === 'login' ? 'התחברות' : 'הרשמה'}
+        </button>
+      </form>
+      <button
+        type="button"
+        className="sell-inline-switch-btn"
+        onClick={() => {
+          setMode((prev) => (prev === 'login' ? 'register' : 'login'));
+          setError('');
+        }}
+      >
+        {mode === 'login' ? 'אין חשבון? מעבר להרשמה' : 'יש חשבון? מעבר להתחברות'}
+      </button>
+    </div>
+  );
+}
+
+function InlineBecomeSellerSection({ onSuccess }) {
+  const [expanded, setExpanded] = useState(false);
+  const [phone, setPhone] = useState('');
+  const [payoutMethod, setPayoutMethod] = useState('bank');
+  const [bitPhone, setBitPhone] = useState('');
+  const [bitPhoneConfirm, setBitPhoneConfirm] = useState('');
+  const [acceptedEscrow, setAcceptedEscrow] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [bank, setBank] = useState({
+    account_holder_name: '',
+    id_number: '',
+    bank_name_or_code: '',
+    branch_number: '',
+    account_number: '',
+  });
+
+  const setBankField = (k, v) => setBank((prev) => ({ ...prev, [k]: v }));
+
+  const validate = () => {
+    const fe = {};
+    if ((phone || '').trim().length < 8) fe.phone = 'נא להזין מספר טלפון תקין.';
+    if ((bank.account_holder_name || '').trim().length < 2) fe.account_holder_name = 'נא להזין שם בעל חשבון.';
+    const idRaw = (bank.id_number || '').replace(/[\s-]/g, '');
+    if (!/^\d+$/.test(idRaw) || idRaw.length < 5 || idRaw.length > 9) fe.id_number = 'נא להזין מספר תעודת זהות תקין.';
+    if (!acceptedEscrow) fe.acceptedEscrow = 'יש לאשר את תנאי הנאמנות כדי להמשיך.';
+    if (payoutMethod === 'bank') {
+      if (!(bank.bank_name_or_code || '').trim()) fe.bank_name_or_code = 'נא לציין בנק.';
+      if (!/^\d+$/.test((bank.branch_number || '').trim())) fe.branch_number = 'נא להזין מספר סניף תקין.';
+      if (!/^\d{4,}$/.test((bank.account_number || '').trim())) fe.account_number = 'נא להזין מספר חשבון תקין.';
+    } else {
+      const normalize = (v) => String(v || '').replace(/\D/g, '').replace(/^972/, '0');
+      const one = normalize(bitPhone);
+      const two = normalize(bitPhoneConfirm);
+      if (!/^05\d{8}$/.test(one)) fe.bit_phone_number = 'נא להזין מספר טלפון ביט ישראלי תקין.';
+      if (one !== two) fe.bit_phone_number_confirm = 'מספרי הטלפון לביט אינם תואמים.';
+    }
+    return fe;
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError('');
+    const fe = validate();
+    if (Object.keys(fe).length) {
+      setFieldErrors(fe);
+      return;
+    }
+    setFieldErrors({});
+    setSaving(true);
+    try {
+      await authAPI.getCsrf();
+      await authAPI.upgradeToSeller({
+        phone_number: phone.trim(),
+        payout_method: payoutMethod,
+        bit_phone_number: payoutMethod === 'bit' ? bitPhone.replace(/\D/g, '').replace(/^972/, '0') : '',
+        account_holder_name: bank.account_holder_name.trim(),
+        id_number: bank.id_number.replace(/[\s-]/g, ''),
+        bank_name_or_code: payoutMethod === 'bank' ? bank.bank_name_or_code.trim() : '',
+        branch_number: payoutMethod === 'bank' ? bank.branch_number.trim() : '',
+        account_number: payoutMethod === 'bank' ? bank.account_number.trim() : '',
+        accepted_escrow_terms: true,
+      });
+      onSuccess?.();
+    } catch (err) {
+      setError(parseApiMessage(err.response?.data, err.message || 'שגיאה בשדרוג החשבון.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="listing-card sell-inline-card">
+      <button type="button" className="sell-onboarding-toggle" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+        <span>הפוך למוכר</span>
+        <span>{expanded ? '▲' : '▼'}</span>
+      </button>
+      <div className={`sell-onboarding-accordion ${expanded ? 'expanded' : ''}`}>
+        <form onSubmit={submit} className="become-seller-form">
+          <label className="become-seller-label">מספר טלפון
+            <input type="tel" dir="ltr" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+            {fieldErrors.phone ? <span className="become-seller-field-error">{fieldErrors.phone}</span> : null}
+          </label>
+          <fieldset className="become-seller-bank-fieldset">
+            <legend>איך תרצה לקבל את התשלום?</legend>
+            <div className="become-seller-payout-methods">
+              <label className="become-seller-radio"><input type="radio" checked={payoutMethod === 'bank'} onChange={() => setPayoutMethod('bank')} />העברה בנקאית</label>
+              <label className="become-seller-radio"><input type="radio" checked={payoutMethod === 'bit'} onChange={() => setPayoutMethod('bit')} />ביט</label>
+            </div>
+            <label className="become-seller-label">שם בעל החשבון
+              <input type="text" value={bank.account_holder_name} onChange={(e) => setBankField('account_holder_name', e.target.value)} required />
+            </label>
+            <label className="become-seller-label">תעודת זהות
+              <input type="text" dir="ltr" value={bank.id_number} onChange={(e) => setBankField('id_number', e.target.value)} required />
+            </label>
+            {payoutMethod === 'bank' ? (
+              <>
+                <label className="become-seller-label">בנק (שם או מספר בנק)<input type="text" value={bank.bank_name_or_code} onChange={(e) => setBankField('bank_name_or_code', e.target.value)} required /></label>
+                <div className="become-seller-row">
+                  <label className="become-seller-label">סניף<input type="text" dir="ltr" value={bank.branch_number} onChange={(e) => setBankField('branch_number', e.target.value)} required /></label>
+                  <label className="become-seller-label">מספר חשבון<input type="text" dir="ltr" value={bank.account_number} onChange={(e) => setBankField('account_number', e.target.value)} required /></label>
+                </div>
+              </>
+            ) : (
+              <div className="become-seller-row">
+                <label className="become-seller-label">מספר טלפון לביט<input type="tel" dir="ltr" value={bitPhone} onChange={(e) => setBitPhone(e.target.value)} required /></label>
+                <label className="become-seller-label">אימות מספר טלפון לביט<input type="tel" dir="ltr" value={bitPhoneConfirm} onChange={(e) => setBitPhoneConfirm(e.target.value)} required /></label>
+              </div>
+            )}
+            {fieldErrors.bit_phone_number ? <span className="become-seller-field-error">{fieldErrors.bit_phone_number}</span> : null}
+            {fieldErrors.bit_phone_number_confirm ? <span className="become-seller-field-error">{fieldErrors.bit_phone_number_confirm}</span> : null}
+          </fieldset>
+          <label className="become-seller-check"><input type="checkbox" checked={acceptedEscrow} onChange={(e) => setAcceptedEscrow(e.target.checked)} /><span>אני מסכים לקבל את התשלום רק לאחר קיום האירוע, בהתאם לתקנון האתר</span></label>
+          {fieldErrors.acceptedEscrow ? <span className="become-seller-field-error become-seller-field-error--block">{fieldErrors.acceptedEscrow}</span> : null}
+          {error ? <div className="become-seller-error">{error}</div> : null}
+          <button type="submit" className="become-seller-submit" disabled={saving}>{saving ? 'שומר…' : 'אישור והמשך'}</button>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 const rangeOptions = (start, end) =>
   Array.from({ length: end - start + 1 }, (_, i) => {
@@ -232,8 +468,6 @@ function TicketAttachmentPreview({ file }) {
 const Sell = () => {
   // ALL HOOKS MUST BE CALLED FIRST - BEFORE ANY EARLY RETURNS
   const { user, loading: authLoading, refreshProfile } = useAuth();
-  const [showSellerOnboarding, setShowSellerOnboarding] = useState(false);
-  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     event_id: '',
     event_name: '', // Legacy - kept for backward compatibility
@@ -615,54 +849,19 @@ const Sell = () => {
     );
   }
 
-  // Check if user is logged in and is a seller
   if (!user) {
     return (
       <div className="sell-container">
-        <div className="listing-card">
-          <h2>נדרשת התחברות</h2>
-          <p>אתה צריך להתחבר כדי למכור כרטיסים.</p>
-          <button onClick={() => navigate('/login')} className="auth-button">
-            מעבר להתחברות
-          </button>
-        </div>
+        <InlineAuthFunnel />
       </div>
     );
   }
 
   if (user.role !== 'seller') {
     return (
-      <>
-        <div className="sell-container">
-          <div className="listing-card">
-            <h2>הפוך למוכר</h2>
-            <p>
-              כדי להעלות כרטיסים, יש להשלים הרשמה כמוכר: פרטי תשלום והסכמה לנאמנות — התשלום משוחרר אחרי האירוע.
-            </p>
-            <div className="sell-upgrade-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '1rem' }}>
-              <button
-                type="button"
-                className="auth-button"
-                data-e2e="sell-upgrade-cta"
-                onClick={() => setShowSellerOnboarding(true)}
-              >
-                הפוך למוכר עכשיו
-              </button>
-              <button type="button" className="auth-button secondary" onClick={() => navigate('/')}>
-                חזרה לדף הבית
-              </button>
-            </div>
-          </div>
-        </div>
-        <BecomeSellerModal
-          open={showSellerOnboarding}
-          onClose={() => setShowSellerOnboarding(false)}
-          onSuccess={async () => {
-            await refreshProfile();
-            setShowSellerOnboarding(false);
-          }}
-        />
-      </>
+      <div className="sell-container">
+        <InlineBecomeSellerSection onSuccess={refreshProfile} />
+      </div>
     );
   }
 
@@ -1127,10 +1326,6 @@ const Sell = () => {
       submitAttemptedRef.current = false;
       setSuccessWasIsrael(ilEvent);
       setSuccess(true);
-      // Show success message for 3 seconds before redirect
-      setTimeout(() => {
-        navigate('/');
-      }, 3000);
     } catch (err) {
       const raw = `${err?.message || ''} ${JSON.stringify(err?.response?.data || {})}`;
       const errorMessage = /cloudinary|storage|upload|media/i.test(raw)
@@ -1367,6 +1562,57 @@ const Sell = () => {
                   </a>
                 </div>
               </div>
+              {eventRequestOpen ? (
+                <div className="event-request-inline-panel">
+                  <h3>בקשה להוספת אירוע</h3>
+                  <p className="event-request-modal-lead">
+                    נתאר בקצרה את האירוע החסר. צוות TradeTix יעדכן את הקטלוג כשהפרטים מאומתים.
+                  </p>
+                  <form onSubmit={submitEventRequest}>
+                    <div className="form-group">
+                      <label htmlFor="event_request_hint">שם אמן / קבוצות / כותרת (אופציונלי)</label>
+                      <input
+                        id="event_request_hint"
+                        type="text"
+                        value={eventRequestHint}
+                        onChange={(e) => setEventRequestHint(e.target.value)}
+                        placeholder="לדוגמה: הפועל ת״א נגד בי״ס"
+                        className="premium-select"
+                        style={{ width: '100%', padding: '0.65rem' }}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="event_request_details">פרטים * (תאריך, עיר, אולם…)</label>
+                      <textarea
+                        id="event_request_details"
+                        value={eventRequestDetails}
+                        onChange={(e) => setEventRequestDetails(e.target.value)}
+                        required
+                        rows={4}
+                        placeholder="ככל שתפרטו יותר — נוכל להוסיף מהר יותר."
+                        className="premium-select"
+                        style={{ width: '100%', padding: '0.65rem', resize: 'vertical' }}
+                      />
+                      {eventRequestFeedback?.type === 'error' ? (
+                        <SellFieldError message={eventRequestFeedback.text} />
+                      ) : null}
+                    </div>
+                    {eventRequestFeedback?.type === 'ok' ? (
+                      <p className="event-request-feedback ok" role="status">
+                        {eventRequestFeedback.text}
+                      </p>
+                    ) : null}
+                    <div className="event-request-inline-actions">
+                      <button type="button" className="missing-event-whatsapp-link" disabled={eventRequestSubmitting} onClick={() => setEventRequestOpen(false)}>
+                        סגירה
+                      </button>
+                      <button type="submit" className="missing-event-primary-btn" disabled={eventRequestSubmitting}>
+                        {eventRequestSubmitting ? 'שולח…' : 'שליחה'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              ) : null}
             </>
           )}
 
@@ -1831,82 +2077,6 @@ const Sell = () => {
           </button>
         </form>
 
-        {eventRequestOpen && (
-          <div
-            className="event-request-modal-overlay"
-            role="presentation"
-            onClick={() => !eventRequestSubmitting && setEventRequestOpen(false)}
-          >
-            <div
-              className="event-request-modal"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="event-request-title"
-              onClick={(ev) => ev.stopPropagation()}
-            >
-              <h3 id="event-request-title">בקשה להוספת אירוע</h3>
-              <p className="event-request-modal-lead">
-                נתאר בקצרה את האירוע החסר. צוות TradeTix יעדכן את הקטלוג כשהפרטים מאומתים.
-              </p>
-              <form onSubmit={submitEventRequest}>
-                <div className="form-group">
-                  <label htmlFor="event_request_hint">שם אמן / קבוצות / כותרת (אופציונלי)</label>
-                  <input
-                    id="event_request_hint"
-                    type="text"
-                    value={eventRequestHint}
-                    onChange={(e) => setEventRequestHint(e.target.value)}
-                    placeholder="לדוגמה: הפועל ת״א נגד בי״ס"
-                    className="premium-select"
-                    style={{ width: '100%', padding: '0.65rem' }}
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="event_request_details">פרטים * (תאריך, עיר, אולם…)</label>
-                  <textarea
-                    id="event_request_details"
-                    value={eventRequestDetails}
-                    onChange={(e) => setEventRequestDetails(e.target.value)}
-                    required
-                    rows={4}
-                    placeholder="ככל שתפרטו יותר — נוכל להוסיף מהר יותר."
-                    className="premium-select"
-                    style={{ width: '100%', padding: '0.65rem', resize: 'vertical' }}
-                  />
-                  {eventRequestFeedback?.type === 'error' ? (
-                    <SellFieldError message={eventRequestFeedback.text} />
-                  ) : null}
-                </div>
-                {eventRequestFeedback?.type === 'ok' ? (
-                  <p className="event-request-feedback ok" role="status">
-                    {eventRequestFeedback.text}
-                  </p>
-                ) : null}
-                <div className="event-request-modal-actions">
-                  <button
-                    type="button"
-                    className="missing-event-whatsapp-link"
-                    style={{ border: 'none', cursor: 'pointer' }}
-                    disabled={eventRequestSubmitting}
-                    onClick={() => setEventRequestOpen(false)}
-                  >
-                    ביטול
-                  </button>
-                  <button type="submit" className="missing-event-primary-btn" disabled={eventRequestSubmitting}>
-                    {eventRequestSubmitting ? 'שולח…' : 'שליחה'}
-                  </button>
-                </div>
-              </form>
-              <p className="event-request-modal-foot">
-                או{' '}
-                <a href={missingEventWhatsAppHref} target="_blank" rel="noopener noreferrer">
-                  פתיחת WhatsApp
-                </a>{' '}
-                עם הודעה מוכנה.
-              </p>
-            </div>
-          </div>
-        )}
         <div className="sell-submit-sticky-wrap">
           <button
             type="submit"

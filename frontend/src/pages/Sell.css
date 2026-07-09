@@ -928,6 +928,55 @@
   background: rgba(37, 99, 235, 0.08);
 }
 
+.sell-inline-card {
+  max-width: 560px;
+}
+
+.sell-inline-lead {
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+
+.sell-inline-auth-form {
+  margin-top: 0.5rem;
+}
+
+.sell-inline-switch-btn {
+  margin-top: 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--primary-blue);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sell-onboarding-toggle {
+  width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sell-onboarding-accordion {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.35s ease, opacity 0.2s ease;
+}
+
+.sell-onboarding-accordion.expanded {
+  max-height: 2000px;
+  opacity: 1;
+  margin-top: 0.9rem;
+}
+
 .sell-upgrade-actions .auth-button {
   width: auto;
   flex: 1 1 160px;
@@ -1196,6 +1245,24 @@
   color: rgb(239 68 68);
   font-size: 0.88rem;
   margin: 0.25rem 0 0;
+}
+
+.event-request-inline-panel {
+  border: 1px solid rgba(14, 165, 233, 0.25);
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 1rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.event-request-inline-panel h3 {
+  margin: 0 0 0.35rem;
+}
+
+.event-request-inline-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
 }
 
 @media (max-width: 640px) {
