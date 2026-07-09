@@ -22,7 +22,8 @@ const COUNTRY_HE = {
 export function localityLabelFromTicketLike(obj) {
   if (!obj || typeof obj !== 'object') return '';
   const city = String(obj.event_city ?? obj.city ?? '').trim();
-  const venue = String(obj.venue ?? obj.venue_display ?? '').trim();
+  const venueRaw = String(obj.venue ?? obj.venue_display ?? '').trim();
+  const venue = venueRaw === VENUE_OTHER_LEGACY ? VENUE_ISRAEL : venueRaw;
   const countryCode = String(obj.event_country ?? obj.country ?? '').trim().toUpperCase();
   if (city) return city;
   if (venue) return venue;

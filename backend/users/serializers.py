@@ -635,7 +635,23 @@ class VenueDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class EventSerializer(serializers.ModelSerializer):
+def _normalize_event_venue_api_label(venue):
+    """Map legacy choice אחר to buyer-facing ישראל in API responses."""
+    v = (venue or '').strip()
+    if v == 'אחר':
+        return 'ישראל'
+    return v
+
+
+class EventVenueApiNormalizeMixin:
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if 'venue' in data:
+            data['venue'] = _normalize_event_venue_api_label(data.get('venue'))
+        return data
+
+
+class EventSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializer):
     """Serializer for Event model"""
     image_url = serializers.SerializerMethodField()
     tickets_count = serializers.SerializerMethodField()
@@ -680,7 +696,7 @@ class EventSerializer(serializers.ModelSerializer):
         return safe_event_high_demand_bool(obj)
 
 
-class EventListSerializer(serializers.ModelSerializer):
+class EventListSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializer):
     """Simplified serializer for Event list view"""
     image_url = serializers.SerializerMethodField()
     tickets_count = serializers.SerializerMethodField()

@@ -10,7 +10,7 @@ import { VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN, VENUE_CAESAREA } from '../ut
 import { CONCERT_BLOCK_COUNT, CONCERT_SECTION_NAMES } from '../utils/bloomfieldConcertGeometry';
 import { isRamatGanVenueEvent, ramatGanSellSectionOptions } from '../utils/ramatGanSellSections';
 import { isCaesareaVenueEvent, caesareaSellSectionOptions } from '../utils/caesareaSellSections';
-import { displayEventVenueName } from '../utils/eventLocalTime';
+import { displayEventVenueName, formatEventLocation } from '../utils/eventLocalTime';
 import '../components/BecomeSellerModal.css';
 
 const SELL_PAGE_BUILD_TAG = import.meta.env.VITE_BUILD_ID || 'local-dev';
@@ -97,6 +97,78 @@ function formatEventDropdownLabel(event) {
     || ''
   ).trim();
   return [dateStr, venue, artist].filter(Boolean).join(' | ');
+}
+
+const SELL_DRAFT_STORAGE_KEY = 'safeticket_sell_listing_draft_v1';
+
+const defaultSellFormData = () => ({
+  event_id: '',
+  event_name: '',
+  event_date: '',
+  event_time: '',
+  venue: '',
+  selectedEvent: null,
+  seat_row: '',
+  section: '',
+  row: '',
+  available_quantity: 1,
+  ticket_packages: [],
+  singleMultiPagePdf: null,
+  is_together: true,
+  start_seat: '',
+  listing_price: '',
+  ticket_type: 'pdf',
+  split_type: 'כל כמות',
+  is_obstructed_view: false,
+});
+
+function readSellListingDraft() {
+  try {
+    const raw = sessionStorage.getItem(SELL_DRAFT_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSellListingDraft(draft) {
+  try {
+    if (!draft) sessionStorage.removeItem(SELL_DRAFT_STORAGE_KEY);
+    else sessionStorage.setItem(SELL_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function buildSellListingDraftSnapshot({
+  formData,
+  uploadMethod,
+  selectedCategory,
+  selectedArtistId,
+  sellerListingTermsAccepted,
+}) {
+  return {
+    uploadMethod,
+    selectedCategory,
+    selectedArtistId,
+    sellerListingTermsAccepted,
+    formData: {
+      event_id: formData.event_id,
+      event_name: formData.event_name,
+      section: formData.section,
+      row: formData.row,
+      available_quantity: formData.available_quantity,
+      is_together: formData.is_together,
+      start_seat: formData.start_seat,
+      listing_price: formData.listing_price,
+      ticket_type: formData.ticket_type,
+      split_type: formData.split_type,
+      is_obstructed_view: formData.is_obstructed_view,
+      ticket_packages: (formData.ticket_packages || []).map((pkg) => ({
+        seat_number: pkg?.seat_number || '',
+      })),
+    },
+  };
 }
 
 /* eslint-disable react/prop-types */
@@ -242,20 +314,31 @@ function InlineAuthFunnel({ onAuthed }) {
           return;
         }
         if (becomeSellerNow) {
-          await authAPI.getCsrf();
-          await authAPI.upgradeToSeller({
-            phone_number: form.phone_number.trim(),
-            payout_method: payoutMethod,
-            bit_phone_number: payoutMethod === 'bit' ? form.phone_number.replace(/\D/g, '').replace(/^972/, '0') : '',
-            account_holder_name: payoutMethod === 'bank'
-              ? sellerBank.account_holder_name.trim()
-              : `${form.first_name.trim()} ${form.last_name.trim()}`.trim(),
-            id_number: sellerBank.id_number.replace(/[\s-]/g, ''),
-            bank_name_or_code: payoutMethod === 'bank' ? sellerBank.bank_name_or_code.trim() : '',
-            branch_number: payoutMethod === 'bank' ? sellerBank.branch_number.trim() : '',
-            account_number: payoutMethod === 'bank' ? sellerBank.account_number.trim() : '',
-            accepted_escrow_terms: true,
-          });
+          try {
+            await authAPI.getCsrf();
+            await authAPI.upgradeToSeller({
+              phone_number: form.phone_number.trim(),
+              payout_method: payoutMethod,
+              bit_phone_number: payoutMethod === 'bit' ? form.phone_number.replace(/\D/g, '').replace(/^972/, '0') : '',
+              account_holder_name: payoutMethod === 'bank'
+                ? sellerBank.account_holder_name.trim()
+                : `${form.first_name.trim()} ${form.last_name.trim()}`.trim(),
+              id_number: sellerBank.id_number.replace(/[\s-]/g, ''),
+              bank_name_or_code: payoutMethod === 'bank' ? sellerBank.bank_name_or_code.trim() : '',
+              branch_number: payoutMethod === 'bank' ? sellerBank.branch_number.trim() : '',
+              account_number: payoutMethod === 'bank' ? sellerBank.account_number.trim() : '',
+              accepted_escrow_terms: true,
+            });
+          } catch (upgradeErr) {
+            setError(
+              `נרשמת בהצלחה, אך שדרוג למוכר נכשל: ${parseApiMessage(
+                upgradeErr.response?.data,
+                upgradeErr.message || 'נסה שוב מטאטא "הפוך למוכר".'
+              )}`
+            );
+            await onAuthed?.();
+            return;
+          }
         }
       }
       await onAuthed?.();
@@ -685,32 +768,27 @@ function TicketAttachmentPreview({ file }) {
 /* eslint-enable react/prop-types */
 
 const Sell = () => {
+  const sellDraft = useMemo(() => readSellListingDraft(), []);
   // ALL HOOKS MUST BE CALLED FIRST - BEFORE ANY EARLY RETURNS
   const { user, loading: authLoading, refreshProfile } = useAuth();
-  const [formData, setFormData] = useState({
-    event_id: '',
-    event_name: '', // Legacy - kept for backward compatibility
-    event_date: '', // Legacy
-    event_time: '', // Legacy
-    venue: '', // Legacy
-    selectedEvent: null, // Store full event object for venue access
-    seat_row: '', // Legacy field - kept for backward compatibility
-    section: '', // Global: גוש (Section) - shared by all tickets
-    row: '', // Global: שורה (Row) - shared by all tickets
-    available_quantity: 1, // Quantity selector (1-10)
-    ticket_packages: [], // Array of {seat_number, pdf_file} - row comes from global formData.row
-    singleMultiPagePdf: null, // Single file mode: 1 PDF with N pages for auto-split
-    is_together: true, // Default to true (seats together)
-    start_seat: '', // For auto-generating seat numbers
-    listing_price: '', // Buyer-facing price
-    // Master Architecture fields
-    ticket_type: 'pdf',
-    split_type: 'כל כמות',
-    is_obstructed_view: false,
+  const [formData, setFormData] = useState(() => {
+    const base = defaultSellFormData();
+    const draftForm = sellDraft?.formData;
+    if (!draftForm) return base;
+    return {
+      ...base,
+      ...draftForm,
+      selectedEvent: null,
+      singleMultiPagePdf: null,
+      ticket_packages: (draftForm.ticket_packages || []).map((pkg) => ({
+        seat_number: pkg?.seat_number || '',
+        pdf_file: null,
+      })),
+    };
   });
-  const [uploadMethod, setUploadMethod] = useState('single_file'); // 'single_file' | 'separate_files'
-  const [selectedCategory, setSelectedCategory] = useState('concert');
-  const [selectedArtistId, setSelectedArtistId] = useState('');
+  const [uploadMethod, setUploadMethod] = useState(sellDraft?.uploadMethod || 'single_file');
+  const [selectedCategory, setSelectedCategory] = useState(sellDraft?.selectedCategory || 'concert');
+  const [selectedArtistId, setSelectedArtistId] = useState(sellDraft?.selectedArtistId || '');
   const [artists, setArtists] = useState([]);
   const [events, setEvents] = useState([]);
   /** Concert only: rows from GET ?for_sell=1&artist=<id> — sole source for the event <select> (no merged catalog). */
@@ -728,7 +806,9 @@ const Sell = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadPhase, setUploadPhase] = useState('');
   /** Single mandatory compliance checkbox — label depends on event.country (venue), not artist. */
-  const [sellerListingTermsAccepted, setSellerListingTermsAccepted] = useState(false);
+  const [sellerListingTermsAccepted, setSellerListingTermsAccepted] = useState(
+    Boolean(sellDraft?.sellerListingTermsAccepted)
+  );
   const [eventRequestOpen, setEventRequestOpen] = useState(false);
   const [eventRequestHint, setEventRequestHint] = useState('');
   const [eventRequestDetails, setEventRequestDetails] = useState('');
@@ -949,6 +1029,40 @@ const Sell = () => {
       return false;
     });
   }, [events, artistEvents, artistEventsLoading, selectedCategory, selectedArtistId]);
+
+  useEffect(() => {
+    if (!formData.event_id || formData.selectedEvent) return;
+    const match = eventsForDropdown.find((ev) => String(ev.id) === String(formData.event_id));
+    if (!match) return;
+    setFormData((prev) => ({
+      ...prev,
+      selectedEvent: match,
+      event_name: getEventDisplayName(match),
+    }));
+  }, [formData.event_id, formData.selectedEvent, eventsForDropdown]);
+
+  useEffect(() => {
+    const hasMeaningfulDraft = Boolean(
+      formData.event_id ||
+      formData.section ||
+      formData.row ||
+      formData.listing_price ||
+      selectedArtistId
+    );
+    if (!hasMeaningfulDraft) {
+      writeSellListingDraft(null);
+      return;
+    }
+    writeSellListingDraft(
+      buildSellListingDraftSnapshot({
+        formData,
+        uploadMethod,
+        selectedCategory,
+        selectedArtistId,
+        sellerListingTermsAccepted,
+      })
+    );
+  }, [formData, uploadMethod, selectedCategory, selectedArtistId, sellerListingTermsAccepted]);
 
   const submitEventRequest = async (e) => {
     e.preventDefault();
@@ -1544,6 +1658,7 @@ const Sell = () => {
       setUploadPhase('הכרטיסים נשמרו בהצלחה.');
       submitAttemptedRef.current = false;
       setSuccessWasIsrael(ilEvent);
+      writeSellListingDraft(null);
       setSuccess(true);
     } catch (err) {
       const raw = `${err?.message || ''} ${JSON.stringify(err?.response?.data || {})}`;
@@ -1731,7 +1846,7 @@ const Sell = () => {
                   <div>
                     <strong>{getEventDisplayName(formData.selectedEvent)}</strong>
                     <span>
-                      {selectedVenueLabel || formData.selectedEvent.venue} ·{' '}
+                      {formatEventLocation(formData.selectedEvent)} ·{' '}
                       {sectionOptions.length > 0
                         ? isBloomfieldConcertEvent(formData.selectedEvent)
                           ? `${CONCERT_BLOCK_COUNT} גושים בפריסת הופעה (${sectionOptions.length} זמינים לבחירה)`

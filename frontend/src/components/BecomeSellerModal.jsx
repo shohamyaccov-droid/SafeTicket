@@ -19,7 +19,6 @@ const initialBank = {
 export default function BecomeSellerModal({ open, onClose, onSuccess }) {
   const [phone, setPhone] = useState('');
   const [payoutMethod, setPayoutMethod] = useState('bank');
-  const [bitPhone, setBitPhone] = useState('');
   const [bitPhoneConfirm, setBitPhoneConfirm] = useState('');
   const [bank, setBank] = useState(initialBank);
   const [acceptedEscrow, setAcceptedEscrow] = useState(false);
@@ -74,12 +73,12 @@ export default function BecomeSellerModal({ open, onClose, onSuccess }) {
         if (digits.startsWith('972')) return `0${digits.slice(3)}`;
         return digits;
       };
-      const bitNorm = normalize(bitPhone);
+      const phoneNorm = normalize(phone);
       const bitConfirmNorm = normalize(bitPhoneConfirm);
-      if (!/^05\d{8}$/.test(bitNorm)) {
+      if (!/^05\d{8}$/.test(phoneNorm)) {
         fe.bit_phone_number = 'נא להזין מספר טלפון ביט ישראלי תקין.';
       }
-      if (bitNorm !== bitConfirmNorm) {
+      if (phoneNorm !== bitConfirmNorm) {
         fe.bit_phone_number_confirm = 'מספרי הטלפון לביט אינם תואמים.';
       }
     }
@@ -99,7 +98,7 @@ export default function BecomeSellerModal({ open, onClose, onSuccess }) {
     try {
       await authAPI.getCsrf();
       const idNorm = bank.id_number.replace(/[\s-]/g, '');
-      const bitNorm = bitPhone.replace(/\D/g, '').replace(/^972/, '0');
+      const bitNorm = phone.replace(/\D/g, '').replace(/^972/, '0');
       await authAPI.upgradeToSeller({
         phone_number: phone.trim(),
         payout_method: payoutMethod,
@@ -195,6 +194,10 @@ export default function BecomeSellerModal({ open, onClose, onSuccess }) {
               </label>
             </div>
 
+            {payoutMethod === 'bit' ? (
+              <p className="sell-inline-bit-disclaimer">אפשר להזין רק מספר טלפון לקבלה בביט — ללא פרטי בנק</p>
+            ) : null}
+
             <label className="become-seller-label">
               שם בעל החשבון
               <input
@@ -278,40 +281,25 @@ export default function BecomeSellerModal({ open, onClose, onSuccess }) {
                 </div>
               </>
             ) : (
-              <div className="become-seller-row">
-                <label className="become-seller-label">
-                  מספר טלפון לביט
-                  <input
-                    type="tel"
-                    dir="ltr"
-                    inputMode="tel"
-                    value={bitPhone}
-                    onChange={(e) => setBitPhone(e.target.value)}
-                    required
-                    placeholder="050-0000000"
-                    autoComplete="tel"
-                  />
-                  {fieldErrors.bit_phone_number ? (
-                    <span className="become-seller-field-error">{fieldErrors.bit_phone_number}</span>
-                  ) : null}
-                </label>
-                <label className="become-seller-label">
-                  אימות מספר טלפון לביט
-                  <input
-                    type="tel"
-                    dir="ltr"
-                    inputMode="tel"
-                    value={bitPhoneConfirm}
-                    onChange={(e) => setBitPhoneConfirm(e.target.value)}
-                    required
-                    placeholder="הכנס שוב את המספר"
-                    autoComplete="tel"
-                  />
-                  {fieldErrors.bit_phone_number_confirm ? (
-                    <span className="become-seller-field-error">{fieldErrors.bit_phone_number_confirm}</span>
-                  ) : null}
-                </label>
-              </div>
+              <label className="become-seller-label">
+                אימות מספר טלפון לביט
+                <input
+                  type="tel"
+                  dir="ltr"
+                  inputMode="tel"
+                  value={bitPhoneConfirm}
+                  onChange={(e) => setBitPhoneConfirm(e.target.value)}
+                  required
+                  placeholder="הכנס שוב את המספר"
+                  autoComplete="tel"
+                />
+                {fieldErrors.bit_phone_number ? (
+                  <span className="become-seller-field-error">{fieldErrors.bit_phone_number}</span>
+                ) : null}
+                {fieldErrors.bit_phone_number_confirm ? (
+                  <span className="become-seller-field-error">{fieldErrors.bit_phone_number_confirm}</span>
+                ) : null}
+              </label>
             )}
           </fieldset>
 
