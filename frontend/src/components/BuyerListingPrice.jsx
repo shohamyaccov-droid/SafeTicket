@@ -24,7 +24,10 @@ const BuyerListingPrice = ({ ticket, compact = false, quantity = null }) => {
   return (
     <div className={`buyer-listing-price ${compact ? 'buyer-listing-price--compact' : ''}`}>
       {qtyLabel ? <div className="buyer-listing-price-qty">{qtyLabel}</div> : null}
-      <div className="buyer-listing-price-main">{sym}{getTicketPrice(ticket)}</div>
+      <div className="buyer-listing-price-main">
+        <span>{sym}{getTicketPrice(ticket)}</span>
+        <span className="buyer-listing-price-per-ticket">לכרטיס</span>
+      </div>
       {showFee && (
         <div className="buyer-listing-price-fee">
           + {BUYER_SERVICE_FEE_PERCENT}% עמלת ביטחון

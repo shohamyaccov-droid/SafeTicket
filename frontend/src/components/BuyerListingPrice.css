@@ -15,14 +15,27 @@
 }
 
 .buyer-listing-price-main {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  white-space: nowrap;
+  line-height: 1.15;
+}
+
+.buyer-listing-price-main > span:first-child {
   font-size: 1.75rem;
   font-weight: 700;
   color: #1f2937;
   direction: ltr;
   unicode-bidi: embed;
-  white-space: nowrap;
   letter-spacing: -0.02em;
-  line-height: 1.15;
+}
+
+.buyer-listing-price-per-ticket {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  direction: rtl;
 }
 
 .buyer-listing-price-fee {
@@ -35,7 +48,15 @@
 }
 
 .buyer-listing-price--compact .buyer-listing-price-main {
+  gap: 0.3rem;
+}
+
+.buyer-listing-price--compact .buyer-listing-price-main > span:first-child {
   font-size: 1.25rem;
+}
+
+.buyer-listing-price--compact .buyer-listing-price-per-ticket {
+  font-size: 0.75rem;
 }
 
 .buyer-listing-price--compact .buyer-listing-price-fee {

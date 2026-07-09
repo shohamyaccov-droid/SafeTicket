@@ -224,17 +224,35 @@ export default function BloomfieldTicketListPanel({
                     </span>
                     <span
                       style={{
-                        fontSize: '1.5rem',
-                        fontWeight: 700,
-                        color: '#111827',
-                        direction: 'ltr',
-                        unicodeBidi: 'embed',
+                        display: 'inline-flex',
+                        alignItems: 'baseline',
+                        gap: '0.35rem',
                         whiteSpace: 'nowrap',
-                        letterSpacing: '-0.02em',
                         lineHeight: 1.15,
                       }}
                     >
-                      {sym}{priceStr}
+                      <span
+                        style={{
+                          fontSize: '1.5rem',
+                          fontWeight: 700,
+                          color: '#111827',
+                          direction: 'ltr',
+                          unicodeBidi: 'embed',
+                          letterSpacing: '-0.02em',
+                        }}
+                      >
+                        {sym}{priceStr}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '0.8125rem',
+                          fontWeight: 500,
+                          color: '#6b7280',
+                          direction: 'rtl',
+                        }}
+                      >
+                        לכרטיס
+                      </span>
                     </span>
                     {feeNum > 0 && (
                       <span
