@@ -68,9 +68,9 @@ else:
     )
 
 # Platform commission rates (Decimal).
-# New model: sellers pay 0% (cold-start subsidy); buyers pay 15% service fee added at checkout.
+# New model: sellers pay 0% (cold-start subsidy); buyers pay 5% service fee added at checkout.
 PLATFORM_BUYER_SERVICE_FEE_RATE = Decimal(
-    str(os.environ.get('PLATFORM_BUYER_SERVICE_FEE_RATE', '0.15'))
+    str(os.environ.get('PLATFORM_BUYER_SERVICE_FEE_RATE', '0.05'))
 )
 PLATFORM_SELLER_SERVICE_FEE_RATE = Decimal(
     str(os.environ.get('PLATFORM_SELLER_SERVICE_FEE_RATE', '0.00'))

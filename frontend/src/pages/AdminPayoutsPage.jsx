@@ -90,7 +90,7 @@ export default function AdminPayoutsPage() {
           <div>
             <h1 className="admin-dash-title">ניהול תשלומים למוכרים</h1>
             <p className="admin-dash-sub">
-              שלום {user?.username || 'מנהל'} — עקוב אחר חובות למוכרים ועמלות הפלטפורמה (15%)
+              שלום {user?.username || 'מנהל'} — עקוב אחר חובות למוכרים ועמלות הפלטפורמה (5%)
             </p>
           </div>
           <div className="admin-dash-header-actions">
@@ -112,7 +112,7 @@ export default function AdminPayoutsPage() {
             sub={`${summary.pending_count ?? 0} תשלומים ממתינים`}
           />
           <SummaryCard
-            label="הכנסות פלטפורמה (15%)"
+            label="הכנסות פלטפורמה (5%)"
             value={formatAmountForCurrency(summary.total_platform_revenue, 'ILS')}
             sub="סה״כ עמלות שנגבו"
           />
@@ -129,7 +129,7 @@ export default function AdminPayoutsPage() {
                 <th>פרטי בנק</th>
                 <th>אירוע / הזמנה</th>
                 <th>סכום נטו למוכר</th>
-                <th>עמלה (15%)</th>
+                <th>עמלה (5%)</th>
                 <th>פעולה</th>
               </tr>
             </thead>

@@ -2042,6 +2042,7 @@
 @media (max-width: 768px) {
   .event-details-container {
     padding: var(--spacing-md) var(--spacing-sm);
+    padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px));
     max-width: 100%;
     overflow-x: clip;
     overflow-y: visible;

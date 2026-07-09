@@ -311,7 +311,7 @@ const TicketSelectionPage = () => {
                 {selSym}{formatAmountForCurrency(calculateEstimatedTotalWithFee(), selCur)}
               </span>
             </div>
-            <p className="price-summary-note">הסכום כולל עמלת ביטחון (10%) — יופיע בפירוט מלא בקופה לפני התשלום.</p>
+            <p className="price-summary-note">הסכום כולל דמי שירות ותפעול (10%) — יופיע בפירוט מלא בקופה לפני התשלום.</p>
           </div>
 
           {/* Validation Message */}

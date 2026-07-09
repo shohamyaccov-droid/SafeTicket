@@ -264,7 +264,7 @@ export default function BloomfieldTicketListPanel({
                           direction: 'rtl',
                         }}
                       >
-                        + 15% עמלת ביטחון
+                        + 5% דמי שירות ותפעול
                       </span>
                     )}
                   </div>

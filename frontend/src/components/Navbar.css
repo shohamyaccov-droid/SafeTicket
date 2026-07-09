@@ -117,10 +117,12 @@
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-primary);
-  max-width: 42vw;
+  max-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .nav-login-inline {
@@ -551,6 +553,7 @@
 
   .nav-right-cluster {
     gap: 0.3rem;
+    justify-content: flex-start;
   }
 
   .nav-sell-cta-inline {
@@ -589,18 +592,8 @@
   }
 
   /* Long campus emails must not cover the centered logo */
-  .nav-left-cluster span.nav-user-inline,
-  .nav-left-cluster > span {
-    max-width: 80px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: inline-block;
-    vertical-align: middle;
-  }
-
   .nav-user-inline {
-    max-width: 80px;
+    max-width: 100px;
     font-size: 0.72rem;
   }
 
@@ -630,9 +623,8 @@
     height: 40px;
   }
 
-  .nav-left-cluster span.nav-user-inline,
-  .nav-left-cluster > span {
-    max-width: 68px;
+  .nav-user-inline {
+    max-width: 100px;
   }
 }
 

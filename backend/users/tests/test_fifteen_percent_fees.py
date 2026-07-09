@@ -1,4 +1,4 @@
-"""15% platform fee model: 15% buyer + 0% seller; admin dashboard aggregates buyer fee only."""
+"""5% platform fee model: 5% buyer + 0% seller; admin dashboard aggregates buyer fee only."""
 from __future__ import annotations
 
 from decimal import Decimal
@@ -43,7 +43,7 @@ class FifteenPercentFeeTests(TestCase):
         )
         t.pdf_file.save('f.pdf', ContentFile(_pdf()), save=True)
 
-        # Buyer pays base (100) + 15% fee = 115; seller keeps 100% of base (0% seller fee)
+        # Buyer pays base (100) + 5% fee = 115; seller keeps 100% of base (0% seller fee)
         bd = compute_order_price_breakdown(Decimal('115'), None, t, 1)
         self.assertEqual(bd['final_negotiated_price'], Decimal('100'))
         self.assertEqual(bd['buyer_service_fee'], Decimal('15'))
@@ -81,7 +81,7 @@ class FifteenPercentFeeTests(TestCase):
         )
         t.pdf_file.save('g.pdf', ContentFile(_pdf()), save=True)
 
-        # New model: 15% buyer fee on 480 GBP base = 72; 0% seller fee; platform keeps only buyer fee.
+        # New model: 5% buyer fee on 480 GBP base = 72; 0% seller fee; platform keeps only buyer fee.
         Order.objects.create(
             user=User.objects.create_user(username='b2', email='b2@t.com', password='x', role='buyer'),
             ticket=t,

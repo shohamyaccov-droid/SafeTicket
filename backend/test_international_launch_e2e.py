@@ -125,7 +125,7 @@ class InternationalLaunchE2ETest(TestCase):
         )
 
     def test_usd_full_negotiation_counter_accept_pay_and_fee_breakdown(self):
-        """International (USD): list → offer → seller counter → buyer accept → checkout → pay; verify 15% buyer fee + seller fee from settings."""
+        """International (USD): list → offer → seller counter → buyer accept → checkout → pay; verify 5% buyer fee + seller fee from settings."""
         pdf = SimpleUploadedFile('tix_us.pdf', _pdf_bytes(), content_type='application/pdf')
         self.client.force_authenticate(self.seller)
         r_list = self.client.post(

@@ -1,6 +1,6 @@
 """
 Event.country → ISO 4217 currency for listings, offers, orders (no mixed-currency negotiation).
-Fee math: buyer pays base + buyer fee (15%); seller net equals base (0% seller fee — sellers keep 100% of asking price).
+Fee math: buyer pays base + buyer fee (5%); seller net equals base (0% seller fee — sellers keep 100% of asking price).
 """
 from __future__ import annotations
 

@@ -30,7 +30,7 @@ const BuyerListingPrice = ({ ticket, compact = false, quantity = null }) => {
       </div>
       {showFee && (
         <div className="buyer-listing-price-fee">
-          + {BUYER_SERVICE_FEE_PERCENT}% עמלת ביטחון
+          + {BUYER_SERVICE_FEE_PERCENT}% דמי שירות ותפעול
         </div>
       )}
     </div>

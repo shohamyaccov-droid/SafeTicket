@@ -667,7 +667,7 @@ class Order(models.Model):
         max_digits=10,
         decimal_places=2,
         default=0,
-        help_text='15% buyer-side service fee (added on top of final_negotiated_price)',
+        help_text='5% buyer-side service fee (added on top of final_negotiated_price)',
     )
     seller_service_fee = models.DecimalField(
         max_digits=10,
@@ -786,7 +786,7 @@ class SellerPayout(models.Model):
         TRANSFERRED = 'transferred', 'Transferred'
         CANCELLED = 'cancelled', 'Cancelled'
 
-    PLATFORM_FEE_RATE = Decimal('0.15')
+    PLATFORM_FEE_RATE = Decimal('0.05')
 
     order = models.OneToOneField(
         Order,
@@ -806,7 +806,7 @@ class SellerPayout(models.Model):
     platform_fee = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        help_text='TradeTix platform fee (buyer Security Fee plus any seller-side fee)',
+        help_text='TradeTix platform fee (buyer Service and Operation Fee plus any seller-side fee)',
     )
     net_payout = models.DecimalField(
         max_digits=10,

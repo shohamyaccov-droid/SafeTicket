@@ -186,6 +186,11 @@ const Navbar = () => {
 
       <div className="nav-container nav-container--bar">
         <div className="nav-right-cluster">
+          <Link to="/sell" className="nav-sell-cta-inline" onClick={closeDrawer} aria-label="מכירת כרטיסים">
+            <span className="nav-sell-cta-icon" aria-hidden="true">+</span>
+            <span className="nav-sell-cta-label-full">מכירת כרטיסים</span>
+            <span className="nav-sell-cta-label-compact">מכירה</span>
+          </Link>
           <button
             type="button"
             className="nav-drawer-toggle"
@@ -215,11 +220,6 @@ const Navbar = () => {
               התחבר
             </Link>
           )}
-          <Link to="/sell" className="nav-sell-cta-inline" onClick={closeDrawer} aria-label="מכירת כרטיסים">
-            <span className="nav-sell-cta-icon" aria-hidden="true">+</span>
-            <span className="nav-sell-cta-label-full">מכירת כרטיסים</span>
-            <span className="nav-sell-cta-label-compact">מכירה</span>
-          </Link>
         </div>
       </div>
 

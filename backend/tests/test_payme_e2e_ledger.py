@@ -48,7 +48,7 @@ def sign_payme_payload(payload: dict, secret: str = 'whsec_test') -> tuple[bytes
 
 
 def assert_ledger_math(test_case, total_paid: Decimal, payout: SellerPayout) -> None:
-    """Assert platform fee is the buyer Security Fee and seller receives listing price."""
+    """Assert platform fee is the buyer Service and Operation Fee and seller receives listing price."""
     total = Decimal(total_paid).quantize(Decimal('0.01'))
     expected_net = payout.order.net_seller_revenue.quantize(Decimal('0.01'))
     expected_fee = (total - expected_net).quantize(Decimal('0.01'))

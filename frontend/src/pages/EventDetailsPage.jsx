@@ -543,9 +543,7 @@ const EventDetailsPage = () => {
           setActiveTicketId(groupId);
           setTimeout(() => {
             try {
-              document
-                .querySelector(`[data-ticket-group-id="${groupId}"]`)
-                ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              scrollTicketRowIntoTopView(groupId);
             } catch {
               /* scrollIntoView unavailable */
             }
@@ -565,10 +563,7 @@ const EventDetailsPage = () => {
           setActiveTicketId(groupId);
           setTimeout(() => {
             try {
-              const ticketRow = document.querySelector(`[data-ticket-group-id="${groupId}"]`);
-              if (ticketRow) {
-                ticketRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }
+              scrollTicketRowIntoTopView(groupId);
             } catch {
               /* scrollIntoView unavailable */
             }
@@ -627,10 +622,7 @@ const EventDetailsPage = () => {
         // Scroll to the ticket row
         setTimeout(() => {
           try {
-            const ticketRow = document.querySelector(`[data-ticket-group-id="${groupId}"]`);
-            if (ticketRow) {
-              ticketRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
+            scrollTicketRowIntoTopView(groupId);
           } catch {
             /* scrollIntoView unavailable */
           }
@@ -639,7 +631,7 @@ const EventDetailsPage = () => {
     } catch {
       /* invalid map interaction */
     }
-  }, [ticketGroups, getSectionNameForMap]);
+  }, [ticketGroups, getSectionNameForMap, scrollTicketRowIntoTopView]);
 
   const handleBuy = async (ticketGroup) => {
     if (!ticketGroup) {
@@ -891,6 +883,15 @@ const EventDetailsPage = () => {
     });
   }, [isRamatGanVenue, ramatGanSectionFilter, ticketGroups]);
 
+  const scrollTicketRowIntoTopView = useCallback((groupId) => {
+    if (typeof window === 'undefined' || groupId == null) return;
+    const row = document.querySelector(`[data-ticket-group-id="${groupId}"]`);
+    if (!row) return;
+    const navbarHeight = document.querySelector('.navbar')?.getBoundingClientRect().height || 0;
+    const top = row.getBoundingClientRect().top + window.scrollY - navbarHeight - 12;
+    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  }, []);
+
   const handleRamatGanSectionSelect = useCallback(
     (sectionId) => {
       if (!sectionId) return;
@@ -904,9 +905,7 @@ const EventDetailsPage = () => {
         setActiveTicketId(gid);
         setTimeout(() => {
           try {
-            document
-              .querySelector(`[data-ticket-group-id="${gid}"]`)
-              ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            scrollTicketRowIntoTopView(gid);
           } catch {
             /* ignore */
           }
@@ -915,15 +914,18 @@ const EventDetailsPage = () => {
       }
       setTimeout(() => {
         try {
-          document
-            .querySelector('.tickets-list-container')
-            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          const listContainer = document.querySelector('.tickets-list-container');
+          if (listContainer) {
+            const navbarHeight = document.querySelector('.navbar')?.getBoundingClientRect().height || 0;
+            const top = listContainer.getBoundingClientRect().top + window.scrollY - navbarHeight - 12;
+            window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+          }
         } catch {
           /* ignore */
         }
       }, 80);
     },
-    [ticketGroups]
+    [ticketGroups, scrollTicketRowIntoTopView]
   );
 
   const bloomfieldFilteredGroups = useMemo(() => {
@@ -962,15 +964,13 @@ const EventDetailsPage = () => {
       setBloomfieldHoverId(null);
       setTimeout(() => {
         try {
-          document
-            .querySelector(`[data-ticket-group-id="${gid}"]`)
-            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          scrollTicketRowIntoTopView(gid);
         } catch {
           /* ignore */
         }
       }, 80);
     },
-    [bloomfieldRows]
+    [bloomfieldRows, scrollTicketRowIntoTopView]
   );
 
   const jerusalemRows = useMemo(() => {
@@ -1004,15 +1004,13 @@ const EventDetailsPage = () => {
       setJerusalemHoverId(null);
       setTimeout(() => {
         try {
-          document
-            .querySelector(`[data-ticket-group-id="${gid}"]`)
-            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          scrollTicketRowIntoTopView(gid);
         } catch {
           /* ignore */
         }
       }, 80);
     },
-    [jerusalemRows]
+    [jerusalemRows, scrollTicketRowIntoTopView]
   );
 
   if (loading) {
@@ -1714,7 +1712,7 @@ const EventDetailsPage = () => {
                     ) : null}
                     <p className="current-price">מחיר נוכחי: {offerModalSym}{getTicketPrice(selectedOfferTicket)}</p>
                     <p className="offer-fee-clarification" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem', lineHeight: 1.5 }}>
-                      ההצעה היא לפני עמלת ביטחון ({BUYER_SERVICE_FEE_PERCENT}% יתווספו בקופה).
+                      ההצעה היא לפני דמי שירות ותפעול ({BUYER_SERVICE_FEE_PERCENT}% יתווספו בקופה).
                     </p>
                   </div>
                 </div>

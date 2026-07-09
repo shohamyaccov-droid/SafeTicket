@@ -257,7 +257,7 @@ class UserWalletApiTests(PayoutApiTestBase):
         fee = Decimal(tx['platform_fee'])
         net = Decimal(tx['net_earnings'])
         self.assertEqual(total, fee + net)
-        self.assertEqual(fee, (net * Decimal('0.15')).quantize(Decimal('0.01')))
+        self.assertEqual(fee, (net * Decimal('0.05')).quantize(Decimal('0.01')))
 
     def test_wallet_does_not_release_before_36_hours_even_with_stale_24h_date(self):
         ticket = self._ticket_for_event_offset(hours_from_now=-35)

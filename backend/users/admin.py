@@ -660,7 +660,7 @@ class SellerPayoutAdmin(admin.ModelAdmin):
                 (
                     f'Ledger summary — Total owed to sellers: ₪{extra_context["ledger_total_owed"]} '
                     f'({extra_context["ledger_pending_count"]} pending) · '
-                    f'Platform revenue (15% fees): ₪{extra_context["ledger_platform_revenue"]}'
+                    f'Platform revenue (5% fees): ₪{extra_context["ledger_platform_revenue"]}'
                 ),
                 level=messages.INFO,
             )

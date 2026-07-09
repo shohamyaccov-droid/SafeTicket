@@ -35,8 +35,8 @@ def resolve_order_seller(order: Order) -> User | None:
 def payout_amounts_from_order(order: Order) -> tuple[Decimal, Decimal, Decimal] | None:
     """
     Derive (total_paid, platform_fee, net_payout) from order pricing fields.
-    The buyer pays seller price + buyer Security Fee. Seller payout must therefore
-    preserve the seller net amount, not re-charge 15% against the gross PayMe amount.
+    The buyer pays seller price + buyer Service and Operation Fee. Seller payout must therefore
+    preserve the seller net amount, not re-charge 5% against the gross PayMe amount.
     Returns None when the order is not ready for a ledger row.
     """
     if order.status not in ('paid', 'completed'):
