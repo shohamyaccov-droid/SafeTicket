@@ -529,6 +529,20 @@ const EventDetailsPage = () => {
     return prices;
   }, [ticketGroups, getSectionNameForMap]);
 
+  /** Scroll active ticket row to top of viewport (below navbar). Must be declared before handlers that depend on it. */
+  const scrollTicketRowIntoTopView = useCallback((groupId) => {
+    try {
+      if (typeof window === 'undefined' || groupId == null) return;
+      const row = document.querySelector(`[data-ticket-group-id="${String(groupId)}"]`);
+      if (!row?.getBoundingClientRect) return;
+      const navbarHeight = document.querySelector('.navbar')?.getBoundingClientRect?.()?.height ?? 0;
+      const top = row.getBoundingClientRect().top + window.scrollY - navbarHeight - 12;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    } catch {
+      /* scroll is best-effort — must not crash the page */
+    }
+  }, []);
+
   // Handle section click from map (two-way binding) - Updated for Lower/Upper
   const handleSectionClick = useCallback((sectionId) => {
     try {
@@ -883,15 +897,6 @@ const EventDetailsPage = () => {
     });
   }, [isRamatGanVenue, ramatGanSectionFilter, ticketGroups]);
 
-  const scrollTicketRowIntoTopView = useCallback((groupId) => {
-    if (typeof window === 'undefined' || groupId == null) return;
-    const row = document.querySelector(`[data-ticket-group-id="${groupId}"]`);
-    if (!row) return;
-    const navbarHeight = document.querySelector('.navbar')?.getBoundingClientRect().height || 0;
-    const top = row.getBoundingClientRect().top + window.scrollY - navbarHeight - 12;
-    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
-  }, []);
-
   const handleRamatGanSectionSelect = useCallback(
     (sectionId) => {
       if (!sectionId) return;
@@ -915,11 +920,10 @@ const EventDetailsPage = () => {
       setTimeout(() => {
         try {
           const listContainer = document.querySelector('.tickets-list-container');
-          if (listContainer) {
-            const navbarHeight = document.querySelector('.navbar')?.getBoundingClientRect().height || 0;
-            const top = listContainer.getBoundingClientRect().top + window.scrollY - navbarHeight - 12;
-            window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
-          }
+          if (!listContainer?.getBoundingClientRect) return;
+          const navbarHeight = document.querySelector('.navbar')?.getBoundingClientRect?.()?.height ?? 0;
+          const top = listContainer.getBoundingClientRect().top + window.scrollY - navbarHeight - 12;
+          window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
         } catch {
           /* ignore */
         }
