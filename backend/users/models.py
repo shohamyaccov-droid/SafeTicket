@@ -10,6 +10,11 @@ from users.secure_ticket_storage import ticket_pdf_upload_to, ticket_receipt_upl
 
 
 class User(AbstractUser):
+    PAYOUT_METHOD_CHOICES = [
+        ('bank', 'Bank transfer'),
+        ('bit', 'Bit'),
+    ]
+
     """
     Custom User model with roles (Buyer/Seller) and additional fields
     """
@@ -48,6 +53,18 @@ class User(AbstractUser):
         blank=True,
         default='',
         help_text='Bank account number for seller payouts',
+    )
+    payout_method = models.CharField(
+        max_length=10,
+        choices=PAYOUT_METHOD_CHOICES,
+        default='bank',
+        help_text='Preferred manual payout destination (bank or Bit).',
+    )
+    bit_phone_number = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text='Bit payout phone number when payout_method=bit.',
     )
     accepted_escrow_terms = models.BooleanField(default=False)
     escrow_terms_accepted_at = models.DateTimeField(null=True, blank=True)

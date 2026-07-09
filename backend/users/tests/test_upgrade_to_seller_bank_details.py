@@ -74,3 +74,39 @@ class UpgradeToSellerBankDetailsTests(TestCase):
         self.client.force_authenticate(self.buyer)
         res = self.client.post(UPGRADE_URL, _valid_payload(), format='json')
         self.assertEqual(res.status_code, 400)
+
+    def test_upgrade_with_bit_payout_method(self):
+        self.client.force_authenticate(self.buyer)
+        res = self.client.post(
+            UPGRADE_URL,
+            _valid_payload(
+                payout_method='bit',
+                bit_phone_number='0501234567',
+                bank_name_or_code='',
+                branch_number='',
+                account_number='',
+            ),
+            format='json',
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.buyer.refresh_from_db()
+        self.assertEqual(self.buyer.payout_method, 'bit')
+        self.assertEqual(self.buyer.bit_phone_number, '0501234567')
+        self.assertEqual(self.buyer.bank_name, '')
+        self.assertEqual(self.buyer.branch_number, '')
+        self.assertEqual(self.buyer.account_number, '')
+
+    def test_bit_requires_valid_phone(self):
+        self.client.force_authenticate(self.buyer)
+        res = self.client.post(
+            UPGRADE_URL,
+            _valid_payload(
+                payout_method='bit',
+                bit_phone_number='123',
+                bank_name_or_code='',
+                branch_number='',
+                account_number='',
+            ),
+            format='json',
+        )
+        self.assertEqual(res.status_code, 400)

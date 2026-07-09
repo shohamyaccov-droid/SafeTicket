@@ -18,6 +18,9 @@ const initialBank = {
  */
 export default function BecomeSellerModal({ open, onClose, onSuccess }) {
   const [phone, setPhone] = useState('');
+  const [payoutMethod, setPayoutMethod] = useState('bank');
+  const [bitPhone, setBitPhone] = useState('');
+  const [bitPhoneConfirm, setBitPhoneConfirm] = useState('');
   const [bank, setBank] = useState(initialBank);
   const [acceptedEscrow, setAcceptedEscrow] = useState(false);
   const [error, setError] = useState('');
@@ -53,16 +56,32 @@ export default function BecomeSellerModal({ open, onClose, onSuccess }) {
     if (!/^\d+$/.test(idRaw) || idRaw.length < 5 || idRaw.length > 9) {
       fe.id_number = 'נא להזין מספר תעודת זהות תקין (ספרות בלבד).';
     }
-    if (!bank.bank_name_or_code.trim()) {
-      fe.bank_name_or_code = 'נא לציין בנק (שם או מספר).';
-    }
-    const br = bank.branch_number.trim();
-    if (!/^\d+$/.test(br) || !br.length) {
-      fe.branch_number = 'נא להזין מספר סניף (ספרות בלבד).';
-    }
-    const ac = bank.account_number.trim();
-    if (!/^\d+$/.test(ac) || ac.length < 4) {
-      fe.account_number = 'נא להזין מספר חשבון בנק (ספרות בלבד).';
+    if (payoutMethod === 'bank') {
+      if (!bank.bank_name_or_code.trim()) {
+        fe.bank_name_or_code = 'נא לציין בנק (שם או מספר).';
+      }
+      const br = bank.branch_number.trim();
+      if (!/^\d+$/.test(br) || !br.length) {
+        fe.branch_number = 'נא להזין מספר סניף (ספרות בלבד).';
+      }
+      const ac = bank.account_number.trim();
+      if (!/^\d+$/.test(ac) || ac.length < 4) {
+        fe.account_number = 'נא להזין מספר חשבון בנק (ספרות בלבד).';
+      }
+    } else {
+      const normalize = (v) => {
+        const digits = String(v || '').replace(/\D/g, '');
+        if (digits.startsWith('972')) return `0${digits.slice(3)}`;
+        return digits;
+      };
+      const bitNorm = normalize(bitPhone);
+      const bitConfirmNorm = normalize(bitPhoneConfirm);
+      if (!/^05\d{8}$/.test(bitNorm)) {
+        fe.bit_phone_number = 'נא להזין מספר טלפון ביט ישראלי תקין.';
+      }
+      if (bitNorm !== bitConfirmNorm) {
+        fe.bit_phone_number_confirm = 'מספרי הטלפון לביט אינם תואמים.';
+      }
     }
     return fe;
   };
@@ -80,13 +99,16 @@ export default function BecomeSellerModal({ open, onClose, onSuccess }) {
     try {
       await authAPI.getCsrf();
       const idNorm = bank.id_number.replace(/[\s-]/g, '');
+      const bitNorm = bitPhone.replace(/\D/g, '').replace(/^972/, '0');
       await authAPI.upgradeToSeller({
         phone_number: phone.trim(),
+        payout_method: payoutMethod,
+        bit_phone_number: payoutMethod === 'bit' ? bitNorm : '',
         account_holder_name: bank.account_holder_name.trim(),
         id_number: idNorm,
-        bank_name_or_code: bank.bank_name_or_code.trim(),
-        branch_number: bank.branch_number.trim(),
-        account_number: bank.account_number.trim(),
+        bank_name_or_code: payoutMethod === 'bank' ? bank.bank_name_or_code.trim() : '',
+        branch_number: payoutMethod === 'bank' ? bank.branch_number.trim() : '',
+        account_number: payoutMethod === 'bank' ? bank.account_number.trim() : '',
         accepted_escrow_terms: true,
       });
       onSuccess?.();
@@ -148,7 +170,30 @@ export default function BecomeSellerModal({ open, onClose, onSuccess }) {
           </label>
 
           <fieldset className="become-seller-bank-fieldset">
-            <legend>פרטי חשבון בנק לזיכוי (ישראל)</legend>
+            <legend>איך תרצה לקבל את התשלום?</legend>
+
+            <div className="become-seller-payout-methods" role="radiogroup" aria-label="בחירת שיטת זיכוי">
+              <label className="become-seller-radio">
+                <input
+                  type="radio"
+                  name="payout_method"
+                  value="bank"
+                  checked={payoutMethod === 'bank'}
+                  onChange={() => setPayoutMethod('bank')}
+                />
+                <span>העברה בנקאית</span>
+              </label>
+              <label className="become-seller-radio">
+                <input
+                  type="radio"
+                  name="payout_method"
+                  value="bit"
+                  checked={payoutMethod === 'bit'}
+                  onChange={() => setPayoutMethod('bit')}
+                />
+                <span>ביט</span>
+              </label>
+            </div>
 
             <label className="become-seller-label">
               שם בעל החשבון
@@ -180,55 +225,94 @@ export default function BecomeSellerModal({ open, onClose, onSuccess }) {
               {fieldErrors.id_number ? <span className="become-seller-field-error">{fieldErrors.id_number}</span> : null}
             </label>
 
-            <label className="become-seller-label">
-              בנק (שם או מספר בנק)
-              <input
-                type="text"
-                value={bank.bank_name_or_code}
-                onChange={(e) => setBankField('bank_name_or_code', e.target.value)}
-                required
-                placeholder="למשל: לאומי או 10"
-                inputMode="text"
-              />
-              {fieldErrors.bank_name_or_code ? (
-                <span className="become-seller-field-error">{fieldErrors.bank_name_or_code}</span>
-              ) : null}
-            </label>
+            {payoutMethod === 'bank' ? (
+              <>
+                <label className="become-seller-label">
+                  בנק (שם או מספר בנק)
+                  <input
+                    type="text"
+                    value={bank.bank_name_or_code}
+                    onChange={(e) => setBankField('bank_name_or_code', e.target.value)}
+                    required
+                    placeholder="למשל: לאומי או 10"
+                    inputMode="text"
+                  />
+                  {fieldErrors.bank_name_or_code ? (
+                    <span className="become-seller-field-error">{fieldErrors.bank_name_or_code}</span>
+                  ) : null}
+                </label>
 
-            <div className="become-seller-row">
-              <label className="become-seller-label">
-                סניף
-                <input
-                  type="text"
-                  dir="ltr"
-                  inputMode="numeric"
-                  value={bank.branch_number}
-                  onChange={(e) => setBankField('branch_number', e.target.value)}
-                  required
-                  placeholder="מספר סניף"
-                  autoComplete="off"
-                />
-                {fieldErrors.branch_number ? (
-                  <span className="become-seller-field-error">{fieldErrors.branch_number}</span>
-                ) : null}
-              </label>
-              <label className="become-seller-label">
-                מספר חשבון
-                <input
-                  type="text"
-                  dir="ltr"
-                  inputMode="numeric"
-                  value={bank.account_number}
-                  onChange={(e) => setBankField('account_number', e.target.value)}
-                  required
-                  placeholder="מספר חשבון"
-                  autoComplete="off"
-                />
-                {fieldErrors.account_number ? (
-                  <span className="become-seller-field-error">{fieldErrors.account_number}</span>
-                ) : null}
-              </label>
-            </div>
+                <div className="become-seller-row">
+                  <label className="become-seller-label">
+                    סניף
+                    <input
+                      type="text"
+                      dir="ltr"
+                      inputMode="numeric"
+                      value={bank.branch_number}
+                      onChange={(e) => setBankField('branch_number', e.target.value)}
+                      required
+                      placeholder="מספר סניף"
+                      autoComplete="off"
+                    />
+                    {fieldErrors.branch_number ? (
+                      <span className="become-seller-field-error">{fieldErrors.branch_number}</span>
+                    ) : null}
+                  </label>
+                  <label className="become-seller-label">
+                    מספר חשבון
+                    <input
+                      type="text"
+                      dir="ltr"
+                      inputMode="numeric"
+                      value={bank.account_number}
+                      onChange={(e) => setBankField('account_number', e.target.value)}
+                      required
+                      placeholder="מספר חשבון"
+                      autoComplete="off"
+                    />
+                    {fieldErrors.account_number ? (
+                      <span className="become-seller-field-error">{fieldErrors.account_number}</span>
+                    ) : null}
+                  </label>
+                </div>
+              </>
+            ) : (
+              <div className="become-seller-row">
+                <label className="become-seller-label">
+                  מספר טלפון לביט
+                  <input
+                    type="tel"
+                    dir="ltr"
+                    inputMode="tel"
+                    value={bitPhone}
+                    onChange={(e) => setBitPhone(e.target.value)}
+                    required
+                    placeholder="050-0000000"
+                    autoComplete="tel"
+                  />
+                  {fieldErrors.bit_phone_number ? (
+                    <span className="become-seller-field-error">{fieldErrors.bit_phone_number}</span>
+                  ) : null}
+                </label>
+                <label className="become-seller-label">
+                  אימות מספר טלפון לביט
+                  <input
+                    type="tel"
+                    dir="ltr"
+                    inputMode="tel"
+                    value={bitPhoneConfirm}
+                    onChange={(e) => setBitPhoneConfirm(e.target.value)}
+                    required
+                    placeholder="הכנס שוב את המספר"
+                    autoComplete="tel"
+                  />
+                  {fieldErrors.bit_phone_number_confirm ? (
+                    <span className="become-seller-field-error">{fieldErrors.bit_phone_number_confirm}</span>
+                  ) : null}
+                </label>
+              </div>
+            )}
           </fieldset>
 
           <label className="become-seller-check">

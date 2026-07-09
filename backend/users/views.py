@@ -1034,10 +1034,13 @@ def upgrade_to_seller(request):
     u = request.user
     u.phone_number = ser.validated_data['phone_number']
     u.payout_details = ser.validated_data['payout_details']
+    u.payout_method = ser.validated_data.get('payout_method', 'bank')
+    bit_phone = ser.validated_data.get('bit_phone_number') or ''
+    u.bit_phone_number = bit_phone or None
     u.account_holder_name = ser.validated_data['account_holder_name']
-    u.bank_name = ser.validated_data['bank_name_or_code']
-    u.branch_number = ser.validated_data['branch_number']
-    u.account_number = ser.validated_data['account_number']
+    u.bank_name = ser.validated_data.get('bank_name_or_code', '')
+    u.branch_number = ser.validated_data.get('branch_number', '')
+    u.account_number = ser.validated_data.get('account_number', '')
     u.accepted_escrow_terms = True
     u.escrow_terms_accepted_at = timezone.now()
     u.role = 'seller'
@@ -1045,6 +1048,8 @@ def upgrade_to_seller(request):
         update_fields=[
             'phone_number',
             'payout_details',
+            'payout_method',
+            'bit_phone_number',
             'account_holder_name',
             'bank_name',
             'branch_number',

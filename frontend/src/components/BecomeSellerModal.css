@@ -86,6 +86,29 @@
   color: var(--text-secondary, #334155);
 }
 
+.become-seller-payout-methods {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0.25rem 0 1rem;
+  flex-wrap: wrap;
+}
+
+.become-seller-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 999px;
+  padding: 0.5rem 0.8rem;
+  background: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.become-seller-radio input {
+  margin: 0;
+}
+
 .become-seller-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

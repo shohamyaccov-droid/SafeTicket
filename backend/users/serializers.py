@@ -336,6 +336,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             'id', 'username', 'email', 'role', 'phone_number', 'payout_details',
+            'payout_method', 'bit_phone_number',
             'accepted_escrow_terms', 'profile_image', 'is_verified_seller', 'is_email_verified',
             'is_superuser', 'is_staff', 'date_joined',
         )
@@ -352,11 +353,13 @@ class UpgradeToSellerSerializer(serializers.Serializer):
     """
 
     phone_number = serializers.CharField(max_length=30, required=True)
+    payout_method = serializers.ChoiceField(choices=['bank', 'bit'], required=False, default='bank')
+    bit_phone_number = serializers.CharField(max_length=20, required=False, allow_blank=True, allow_null=True)
     account_holder_name = serializers.CharField(max_length=200, required=True, trim_whitespace=True)
     id_number = serializers.CharField(max_length=20, required=True, trim_whitespace=True)
-    bank_name_or_code = serializers.CharField(max_length=120, required=True, trim_whitespace=True)
-    branch_number = serializers.CharField(max_length=20, required=True, trim_whitespace=True)
-    account_number = serializers.CharField(max_length=30, required=True, trim_whitespace=True)
+    bank_name_or_code = serializers.CharField(max_length=120, required=False, allow_blank=True, trim_whitespace=True)
+    branch_number = serializers.CharField(max_length=20, required=False, allow_blank=True, trim_whitespace=True)
+    account_number = serializers.CharField(max_length=30, required=False, allow_blank=True, trim_whitespace=True)
     accepted_escrow_terms = serializers.BooleanField(required=True)
 
     def validate_phone_number(self, value):
@@ -364,6 +367,16 @@ class UpgradeToSellerSerializer(serializers.Serializer):
         if len(s) < 8:
             raise serializers.ValidationError('נא להזין מספר טלפון תקין.')
         return s
+
+    def validate_bit_phone_number(self, value):
+        if value in (None, ''):
+            return ''
+        digits = ''.join(ch for ch in str(value) if ch.isdigit())
+        if digits.startswith('972'):
+            digits = '0' + digits[3:]
+        if not (digits.startswith('05') and len(digits) == 10):
+            raise serializers.ValidationError('נא להזין מספר טלפון ביט ישראלי תקין.')
+        return digits
 
     def validate_accepted_escrow_terms(self, value):
         if not value:
@@ -386,6 +399,8 @@ class UpgradeToSellerSerializer(serializers.Serializer):
 
     def validate_branch_number(self, value):
         s = (value or '').strip()
+        if s == '':
+            return s
         if not s.isdigit():
             raise serializers.ValidationError('מספר סניף חייב להכיל ספרות בלבד.')
         if len(s) < 1 or len(s) > 10:
@@ -394,6 +409,8 @@ class UpgradeToSellerSerializer(serializers.Serializer):
 
     def validate_account_number(self, value):
         s = (value or '').strip()
+        if s == '':
+            return s
         if not s.isdigit():
             raise serializers.ValidationError('מספר חשבון חייב להכיל ספרות בלבד.')
         if len(s) < 4 or len(s) > 20:
@@ -402,18 +419,40 @@ class UpgradeToSellerSerializer(serializers.Serializer):
 
     def validate_bank_name_or_code(self, value):
         s = (value or '').strip()
+        if s == '':
+            return s
         if len(s) < 1:
             raise serializers.ValidationError('נא לציין בנק (שם או מספר).')
         return s
 
     def validate(self, attrs):
-        payload = {
-            'account_holder_name': attrs['account_holder_name'].strip(),
-            'id_number': attrs['id_number'],
-            'bank_name_or_code': attrs['bank_name_or_code'].strip(),
-            'branch_number': attrs['branch_number'],
-            'account_number': attrs['account_number'],
-        }
+        payout_method = attrs.get('payout_method') or 'bank'
+        bit_phone = attrs.get('bit_phone_number', '')
+
+        if payout_method == 'bit':
+            if not bit_phone:
+                raise serializers.ValidationError({'bit_phone_number': 'נא להזין מספר טלפון לביט.'})
+            payload = {
+                'payout_method': 'bit',
+                'bit_phone_number': bit_phone,
+                'account_holder_name': attrs['account_holder_name'].strip(),
+                'id_number': attrs['id_number'],
+            }
+        else:
+            if not attrs.get('bank_name_or_code'):
+                raise serializers.ValidationError({'bank_name_or_code': 'נא לציין בנק (שם או מספר).'})
+            if not attrs.get('branch_number'):
+                raise serializers.ValidationError({'branch_number': 'נא להזין מספר סניף.'})
+            if not attrs.get('account_number'):
+                raise serializers.ValidationError({'account_number': 'נא להזין מספר חשבון.'})
+            payload = {
+                'payout_method': 'bank',
+                'account_holder_name': attrs['account_holder_name'].strip(),
+                'id_number': attrs['id_number'],
+                'bank_name_or_code': attrs['bank_name_or_code'].strip(),
+                'branch_number': attrs['branch_number'],
+                'account_number': attrs['account_number'],
+            }
         dumped = json.dumps(payload, ensure_ascii=False)
         if len(dumped) > 8000:
             raise serializers.ValidationError('פרטי הבנק ארוכים מדי — נא לקצר.')
