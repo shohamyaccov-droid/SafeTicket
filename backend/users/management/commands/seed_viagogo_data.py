@@ -33,7 +33,7 @@ User = get_user_model()
 TZ_IL = ZoneInfo('Asia/Jerusalem')
 SELLER_EMAIL = 'seed_viagogo@safeticket.demo'
 
-VENUE_LEGACY_OTHER = 'אחר'
+VENUE_LEGACY_ISRAEL = 'ישראל'
 VENUE_BLOOMFIELD_CONCERTS = 'אצטדיון בלומפילד (הופעות)'
 
 # Homepage category labels (mapped to Event.category in DB)
@@ -300,7 +300,7 @@ class Command(BaseCommand):
                 artist=omer,
                 when=when,
                 name=title,
-                venue_label=VENUE_LEGACY_OTHER,
+                venue_label=VENUE_LEGACY_ISRAEL,
                 venue_place=ramat,
                 city='תל אביב',
                 category=CATEGORIES['Concerts'],
@@ -363,7 +363,7 @@ class Command(BaseCommand):
                 artist=artzi,
                 when=when,
                 name=f'{title} — {when.strftime("%d.%m.%Y")}',
-                venue_label=VENUE_LEGACY_OTHER,
+                venue_label=VENUE_LEGACY_ISRAEL,
                 venue_place=vp,
                 city=city,
                 category=CATEGORIES['Concerts'],
@@ -382,7 +382,7 @@ class Command(BaseCommand):
                 artist=ribo,
                 when=when,
                 name=title,
-                venue_label=VENUE_LEGACY_OTHER,
+                venue_label=VENUE_LEGACY_ISRAEL,
                 venue_place=zappa_shuni,
                 city='בנימינה',
                 category=CATEGORIES['Concerts'],
@@ -399,7 +399,7 @@ class Command(BaseCommand):
             artist=eden,
             when=when_eden,
             name=f'עדן חסון - זאפה לייב פארק — {when_eden.strftime("%d.%m.%Y")}',
-            venue_label=VENUE_LEGACY_OTHER,
+            venue_label=VENUE_LEGACY_ISRAEL,
             venue_place=zappa_park,
             city='ראשון לציון',
             category=CATEGORIES['Concerts'],
@@ -417,7 +417,7 @@ class Command(BaseCommand):
             artist=miller,
             when=when_miller,
             name=f'אדיר מילר - תיאטרון ירושלים — {when_miller.strftime("%d.%m.%Y")}',
-            venue_label=VENUE_LEGACY_OTHER,
+            venue_label=VENUE_LEGACY_ISRAEL,
             venue_place=jlm_theatre,
             city='ירושלים',
             category=CATEGORIES['Comedy'],
@@ -433,7 +433,7 @@ class Command(BaseCommand):
             artist=None,
             when=when_sport,
             name=f'מכבי אשדוד נגד הפועל חולון — {when_sport.strftime("%d.%m.%Y")}',
-            venue_label=VENUE_LEGACY_OTHER,
+            venue_label=VENUE_LEGACY_ISRAEL,
             venue_place=hakirya,
             city='אשדוד',
             category=CATEGORIES['Sports'],
@@ -458,7 +458,7 @@ class Command(BaseCommand):
             artist=sound,
             when=when_theatre,
             name=f'The Sound of Music — תיאטרון ירושלים — {when_theatre.strftime("%d.%m.%Y")}',
-            venue_label=VENUE_LEGACY_OTHER,
+            venue_label=VENUE_LEGACY_ISRAEL,
             venue_place=jlm_theatre,
             city='ירושלים',
             category=CATEGORIES['Theatre'],

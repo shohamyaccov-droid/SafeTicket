@@ -53,7 +53,7 @@ class VenueSeedIntegrityTests(TestCase):
             artist=artist,
             name='wrong title',
             date=timezone.now() + timedelta(days=1),
-            venue='אחר',
+            venue='ישראל',
             city='תל אביב',
             category='concert',
             status='פעיל',

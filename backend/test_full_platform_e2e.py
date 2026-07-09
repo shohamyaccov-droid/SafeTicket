@@ -49,7 +49,7 @@ class FullPlatformE2ETest(TestCase):
             name='E2E Full Platform Event',
             artist=self.artist,
             date=future,
-            venue='אחר',
+            venue='ישראל',
             city='Tel Aviv',
             country='US',
             category='concert',

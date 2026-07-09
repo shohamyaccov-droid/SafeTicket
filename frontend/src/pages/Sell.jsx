@@ -10,7 +10,7 @@ import { VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN, VENUE_CAESAREA } from '../ut
 import { CONCERT_BLOCK_COUNT, CONCERT_SECTION_NAMES } from '../utils/bloomfieldConcertGeometry';
 import { isRamatGanVenueEvent, ramatGanSellSectionOptions } from '../utils/ramatGanSellSections';
 import { isCaesareaVenueEvent, caesareaSellSectionOptions } from '../utils/caesareaSellSections';
-import './Sell.css';
+import { displayEventVenueName } from '../utils/eventLocalTime';
 import '../components/BecomeSellerModal.css';
 
 const SELL_PAGE_BUILD_TAG = import.meta.env.VITE_BUILD_ID || 'local-dev';
@@ -89,7 +89,7 @@ function formatEventDropdownLabel(event) {
     d && !Number.isNaN(d.getTime())
       ? `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
       : '';
-  const venue = (event.venue_detail?.name || event.venue || '').trim();
+  const venue = displayEventVenueName(event);
   const artist = (
     event.artist_name
     || event.artist_detail?.name
@@ -191,6 +191,10 @@ function InlineAuthFunnel({ onAuthed }) {
       if (!/^\d+$/.test((sellerBank.branch_number || '').trim())) fe.branch_number = 'נא להזין מספר סניף תקין.';
       if (!/^\d{4,}$/.test((sellerBank.account_number || '').trim())) fe.account_number = 'נא להזין מספר חשבון תקין.';
     } else {
+      const idRaw = (sellerBank.id_number || '').replace(/[\s-]/g, '');
+      if (!/^\d+$/.test(idRaw) || idRaw.length < 5 || idRaw.length > 9) {
+        fe.id_number = 'נא להזין מספר תעודת זהות תקין.';
+      }
       const normalize = (v) => String(v || '').replace(/\D/g, '').replace(/^972/, '0');
       const phoneMain = normalize(form.phone_number);
       const phoneConfirm = normalize(bitPhoneConfirm);
@@ -243,8 +247,10 @@ function InlineAuthFunnel({ onAuthed }) {
             phone_number: form.phone_number.trim(),
             payout_method: payoutMethod,
             bit_phone_number: payoutMethod === 'bit' ? form.phone_number.replace(/\D/g, '').replace(/^972/, '0') : '',
-            account_holder_name: payoutMethod === 'bank' ? sellerBank.account_holder_name.trim() : '',
-            id_number: payoutMethod === 'bank' ? sellerBank.id_number.replace(/[\s-]/g, '') : '',
+            account_holder_name: payoutMethod === 'bank'
+              ? sellerBank.account_holder_name.trim()
+              : `${form.first_name.trim()} ${form.last_name.trim()}`.trim(),
+            id_number: sellerBank.id_number.replace(/[\s-]/g, ''),
             bank_name_or_code: payoutMethod === 'bank' ? sellerBank.bank_name_or_code.trim() : '',
             branch_number: payoutMethod === 'bank' ? sellerBank.branch_number.trim() : '',
             account_number: payoutMethod === 'bank' ? sellerBank.account_number.trim() : '',
@@ -352,13 +358,20 @@ function InlineAuthFunnel({ onAuthed }) {
                 </div>
               </>
             ) : (
-              <div className="become-seller-row">
+              <>
                 <label className="become-seller-label">
-                  אימות מספר טלפון לביט
-                  <input type="tel" dir="ltr" value={bitPhoneConfirm} onChange={(e) => setBitPhoneConfirm(e.target.value)} required />
-                  {sellerFieldErrors.bit_phone_number_confirm ? <span className="become-seller-field-error">{sellerFieldErrors.bit_phone_number_confirm}</span> : null}
+                  תעודת זהות
+                  <input type="text" dir="ltr" value={sellerBank.id_number} onChange={(e) => setSellerBankField('id_number', e.target.value)} required />
+                  {sellerFieldErrors.id_number ? <span className="become-seller-field-error">{sellerFieldErrors.id_number}</span> : null}
                 </label>
-              </div>
+                <div className="become-seller-row">
+                  <label className="become-seller-label">
+                    אימות מספר טלפון לביט
+                    <input type="tel" dir="ltr" value={bitPhoneConfirm} onChange={(e) => setBitPhoneConfirm(e.target.value)} required />
+                    {sellerFieldErrors.bit_phone_number_confirm ? <span className="become-seller-field-error">{sellerFieldErrors.bit_phone_number_confirm}</span> : null}
+                  </label>
+                </div>
+              </>
             )}
             <label className="become-seller-check">
               <input type="checkbox" checked={acceptedEscrow} onChange={(e) => setAcceptedEscrow(e.target.checked)} />
@@ -391,7 +404,6 @@ function InlineBecomeSellerSection({ onSuccess }) {
   const [expanded, setExpanded] = useState(false);
   const [phone, setPhone] = useState('');
   const [payoutMethod, setPayoutMethod] = useState('bank');
-  const [bitPhone, setBitPhone] = useState('');
   const [bitPhoneConfirm, setBitPhoneConfirm] = useState('');
   const [acceptedEscrow, setAcceptedEscrow] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -420,7 +432,7 @@ function InlineBecomeSellerSection({ onSuccess }) {
       if (!/^\d{4,}$/.test((bank.account_number || '').trim())) fe.account_number = 'נא להזין מספר חשבון תקין.';
     } else {
       const normalize = (v) => String(v || '').replace(/\D/g, '').replace(/^972/, '0');
-      const one = normalize(bitPhone);
+      const one = normalize(phone);
       const two = normalize(bitPhoneConfirm);
       if (!/^05\d{8}$/.test(one)) fe.bit_phone_number = 'נא להזין מספר טלפון ביט ישראלי תקין.';
       if (one !== two) fe.bit_phone_number_confirm = 'מספרי הטלפון לביט אינם תואמים.';
@@ -443,7 +455,7 @@ function InlineBecomeSellerSection({ onSuccess }) {
       await authAPI.upgradeToSeller({
         phone_number: phone.trim(),
         payout_method: payoutMethod,
-        bit_phone_number: payoutMethod === 'bit' ? bitPhone.replace(/\D/g, '').replace(/^972/, '0') : '',
+        bit_phone_number: payoutMethod === 'bit' ? phone.replace(/\D/g, '').replace(/^972/, '0') : '',
         account_holder_name: bank.account_holder_name.trim(),
         id_number: bank.id_number.replace(/[\s-]/g, ''),
         bank_name_or_code: payoutMethod === 'bank' ? bank.bank_name_or_code.trim() : '',
@@ -477,28 +489,35 @@ function InlineBecomeSellerSection({ onSuccess }) {
               <label className="become-seller-radio"><input type="radio" checked={payoutMethod === 'bank'} onChange={() => setPayoutMethod('bank')} />העברה בנקאית</label>
               <label className="become-seller-radio"><input type="radio" checked={payoutMethod === 'bit'} onChange={() => setPayoutMethod('bit')} />ביט</label>
             </div>
+            {payoutMethod === 'bit' ? (
+              <p className="sell-inline-bit-disclaimer">אפשר להזין רק מספר טלפון לקבלה בביט — ללא פרטי בנק</p>
+            ) : null}
             <label className="become-seller-label">שם בעל החשבון
               <input type="text" value={bank.account_holder_name} onChange={(e) => setBankField('account_holder_name', e.target.value)} required />
+              {fieldErrors.account_holder_name ? <span className="become-seller-field-error">{fieldErrors.account_holder_name}</span> : null}
             </label>
             <label className="become-seller-label">תעודת זהות
               <input type="text" dir="ltr" value={bank.id_number} onChange={(e) => setBankField('id_number', e.target.value)} required />
+              {fieldErrors.id_number ? <span className="become-seller-field-error">{fieldErrors.id_number}</span> : null}
             </label>
             {payoutMethod === 'bank' ? (
               <>
                 <label className="become-seller-label">בנק (שם או מספר בנק)<input type="text" value={bank.bank_name_or_code} onChange={(e) => setBankField('bank_name_or_code', e.target.value)} required /></label>
+                {fieldErrors.bank_name_or_code ? <span className="become-seller-field-error">{fieldErrors.bank_name_or_code}</span> : null}
                 <div className="become-seller-row">
                   <label className="become-seller-label">סניף<input type="text" dir="ltr" value={bank.branch_number} onChange={(e) => setBankField('branch_number', e.target.value)} required /></label>
                   <label className="become-seller-label">מספר חשבון<input type="text" dir="ltr" value={bank.account_number} onChange={(e) => setBankField('account_number', e.target.value)} required /></label>
                 </div>
+                {fieldErrors.branch_number ? <span className="become-seller-field-error">{fieldErrors.branch_number}</span> : null}
+                {fieldErrors.account_number ? <span className="become-seller-field-error">{fieldErrors.account_number}</span> : null}
               </>
             ) : (
-              <div className="become-seller-row">
-                <label className="become-seller-label">מספר טלפון לביט<input type="tel" dir="ltr" value={bitPhone} onChange={(e) => setBitPhone(e.target.value)} required /></label>
-                <label className="become-seller-label">אימות מספר טלפון לביט<input type="tel" dir="ltr" value={bitPhoneConfirm} onChange={(e) => setBitPhoneConfirm(e.target.value)} required /></label>
-              </div>
+              <label className="become-seller-label">אימות מספר טלפון לביט
+                <input type="tel" dir="ltr" value={bitPhoneConfirm} onChange={(e) => setBitPhoneConfirm(e.target.value)} required />
+                {fieldErrors.bit_phone_number ? <span className="become-seller-field-error">{fieldErrors.bit_phone_number}</span> : null}
+                {fieldErrors.bit_phone_number_confirm ? <span className="become-seller-field-error">{fieldErrors.bit_phone_number_confirm}</span> : null}
+              </label>
             )}
-            {fieldErrors.bit_phone_number ? <span className="become-seller-field-error">{fieldErrors.bit_phone_number}</span> : null}
-            {fieldErrors.bit_phone_number_confirm ? <span className="become-seller-field-error">{fieldErrors.bit_phone_number_confirm}</span> : null}
           </fieldset>
           <label className="become-seller-check"><input type="checkbox" checked={acceptedEscrow} onChange={(e) => setAcceptedEscrow(e.target.checked)} /><span>אני מסכים לקבל את התשלום רק לאחר קיום האירוע, בהתאם לתקנון האתר</span></label>
           {fieldErrors.acceptedEscrow ? <span className="become-seller-field-error become-seller-field-error--block">{fieldErrors.acceptedEscrow}</span> : null}
@@ -2227,7 +2246,7 @@ const Sell = () => {
             />
             <SellFieldError message={fieldErrors.listing_price} />
             <small className="sell-il-pricing-hint">
-              זה המחיר עבור כרטיס אחד שיוצג לקונים לפני דמי שירות ותפעול. (אם העלית מספר כרטיסים, המערכת תכפיל את הסכום אוטומטית). אין צורך להזין מחיר מקורי או להעלות קבלה.
+              זה המחיר עבור כרטיס אחד שיוצג לקונים לפני עמלת ביטחון. (אם העלית מספר כרטיסים, המערכת תכפיל את הסכום אוטומטית). אין צורך להזין מחיר מקורי או להעלות קבלה.
             </small>
 
             {feeBasis > 0 ? (

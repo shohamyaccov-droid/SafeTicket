@@ -106,7 +106,7 @@ class Command(BaseCommand):
             name='עומר אדם — הופעה בפארק הירקון',
             defaults={
                 'date': future_a,
-                'venue': 'אחר',
+                'venue': 'ישראל',
                 'city': 'תל אביב',
                 'category': 'concert',
                 'status': 'פעיל',

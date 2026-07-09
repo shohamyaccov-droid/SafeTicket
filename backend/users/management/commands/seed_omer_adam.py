@@ -24,7 +24,7 @@ from users.models import Artist, Event, Venue
 TZ_IL = ZoneInfo('Asia/Jerusalem')
 
 ARTIST_NAME = 'עומר אדם'
-VENUE_LABEL = 'אחר'  # CharField choice — display name comes from venue_place
+VENUE_LABEL = 'ישראל'  # CharField choice — display name comes from venue_place
 VENUE_PLACE_NAME = 'אצטדיון רמת גן'
 VENUE_CITY = 'רמת גן'
 EVENT_NAME_BASE = 'עומר אדם - אצטדיון רמת גן'

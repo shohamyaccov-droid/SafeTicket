@@ -144,7 +144,7 @@ def _event_specs(now):
             'artist': 'עומר אדם',
             'name': 'עומר אדם — הופעה בפארק הירקון',
             'date': d(14, 20, 30),
-            'venue': 'אחר',
+            'venue': 'ישראל',
             'city': 'תל אביב-יפו',
             'category': 'concert',
             'image': 'https://images.unsplash.com/photo-1429962714451-bb934ecdc4ec?auto=format&w=1200&q=80',

@@ -41,7 +41,7 @@ class UkNegotiationCurrencyE2ETest(TestCase):
             artist=self.artist,
             date=self.starts,
             ends_at=self.ends,
-            venue='אחר',
+            venue='ישראל',
             city='London',
             country='GB',
             category='concert',
@@ -123,7 +123,7 @@ class UkNegotiationCurrencyE2ETest(TestCase):
         self.assertEqual(r_acc.status_code, 200, r_acc.content)
         line(f'[C2] Buyer accepted offer {oid1}')
 
-        # Step D — Checkout totals: £480 + 5% buyer fee = £552
+        # Step D — Checkout totals: £480 + 15% buyer fee = £552
         base, fee, total = buyer_charge_from_base_amount(Decimal('480'))
         self.assertEqual(float(fee), 72.0)
         self.assertEqual(float(total), 552.0)

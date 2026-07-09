@@ -191,7 +191,7 @@ SEED_LAUNCH_EVENTS: list[dict] = [
     {
         'name': 'איתי לוי - אמפי MAX',
         'date': _il_dt(2026, 5, 28, 20, 45),
-        'venue': 'אחר',
+        'venue': 'ישראל',
         'venue_struct': ('אמפי MAX (לייב פארק)', 'ראשון לציון'),
         'city': 'ראשון לציון',
         'category': 'concert',

@@ -1,5 +1,6 @@
 /* eslint-disable react/prop-types */
 import { getFullImageUrl } from '../utils/formatters';
+import { formatEventLocation } from '../utils/eventLocalTime';
 
 /**
  * Homepage event tile.
@@ -20,9 +21,7 @@ export default function EventCard({
   const title = event.name || 'אירוע';
   const subtitle = event.artist_detail?.name || event.artist_name || '';
   const fallback = `https://via.placeholder.com/640x360/0f172a/e2e8f0?text=${encodeURIComponent(title.slice(0, 24))}`;
-  const venueLine = event.venue_detail?.name
-    ? `${event.venue_detail.name}, ${event.city || ''}`.replace(/,\s*$/, '').trim()
-    : [event.venue, event.city].filter(Boolean).join(', ');
+  const venueLine = formatEventLocation(event);
 
   const multiDates =
     typeof dateVariantCount === 'number' && Number.isFinite(dateVariantCount) && dateVariantCount > 1;

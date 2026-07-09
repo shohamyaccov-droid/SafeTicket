@@ -45,7 +45,7 @@ class HybridSeatingListingEmailResilienceTests(TestCase):
             name='Structured Venue Event',
             artist=self.artist,
             date=future,
-            venue='אחר',
+            venue='ישראל',
             venue_place=self.venue,
             city='Tel Aviv',
             country='US',
@@ -54,7 +54,7 @@ class HybridSeatingListingEmailResilienceTests(TestCase):
             name='Plain Text Venue Event',
             artist=self.artist,
             date=future,
-            venue='אחר',
+            venue='ישראל',
             city='New York',
             country='US',
         )

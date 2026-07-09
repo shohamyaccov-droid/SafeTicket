@@ -2,6 +2,10 @@
  * Event datetime in listings/modals: show clock in user's locale and label as venue-local time + place.
  */
 
+/** Legacy generic venue choice — display as country label. */
+export const VENUE_OTHER_LEGACY = 'אחר';
+export const VENUE_ISRAEL = 'ישראל';
+
 const COUNTRY_HE = {
   IL: 'ישראל',
   US: 'ארצות הברית',
@@ -51,17 +55,44 @@ export function formatArtistEventRowDate(dateString) {
 }
 
 /**
+ * Map legacy "אחר" venue choice to buyer-facing country label "ישראל".
+ */
+export function normalizeVenueLabel(venue) {
+  const v = String(venue || '').trim();
+  if (!v || v === VENUE_OTHER_LEGACY || v === VENUE_ISRAEL) return VENUE_ISRAEL;
+  return v;
+}
+
+/**
+ * Full location line: "ישראל, תל אביב" or "היכל מנורה מבטחים, תל אביב".
+ */
+export function formatEventLocation(eventLike) {
+  if (!eventLike || typeof eventLike !== 'object') return '';
+  const city = String(eventLike.city || '').trim();
+  const placeName = String(eventLike.venue_detail?.name || '').trim();
+
+  if (placeName && placeName !== VENUE_OTHER_LEGACY) {
+    return city ? `${placeName}, ${city}` : placeName;
+  }
+
+  const venue = normalizeVenueLabel(eventLike.venue);
+  if (venue === VENUE_ISRAEL && city) return `${VENUE_ISRAEL}, ${city}`;
+  if (venue && city) return `${venue}, ${city}`;
+  return venue || city || '';
+}
+
+/**
  * Human venue label for listings — prefers structured place name over legacy "אחר".
  */
 export function displayEventVenueName(eventLike) {
   if (!eventLike || typeof eventLike !== 'object') return 'מיקום לא צוין';
   const placeName = String(eventLike.venue_detail?.name || '').trim();
-  const venue = String(eventLike.venue || '').trim();
+  const venue = normalizeVenueLabel(eventLike.venue);
   const city = String(eventLike.city || '').trim();
 
-  if (placeName && placeName !== 'אחר') return placeName;
-  if (venue && venue !== 'אחר') return venue;
-  if (placeName) return placeName;
+  if (placeName && placeName !== VENUE_OTHER_LEGACY) return placeName;
+  if (venue && venue !== VENUE_ISRAEL) return venue;
+  if (venue === VENUE_ISRAEL && city) return `${VENUE_ISRAEL}, ${city}`;
   if (city) return city;
   return 'מיקום לא צוין';
 }

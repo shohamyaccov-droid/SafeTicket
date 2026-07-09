@@ -38,7 +38,7 @@ import BuyerListingPrice from '../components/BuyerListingPrice';
 import { getFullImageUrl } from '../utils/formatters';
 import { toastError } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
-import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
+import { formatEventDateTimeWithLocality, formatEventLocation } from '../utils/eventLocalTime';
 import { Helmet } from 'react-helmet-async';
 import { BUYER_SERVICE_FEE_PERCENT } from '../constants/pricing';
 import './EventDetailsPage.css';
@@ -1144,8 +1144,7 @@ const EventDetailsPage = () => {
             <div className="event-hero-meta">
               <p className="event-hero-date">📅 {formatEventDateTimeWithLocality(event.date, event)}</p>
               <p className="event-hero-location">
-                📍 {event.venue}
-                {event.city ? `, ${event.city}` : ''}
+                📍 {formatEventLocation(event)}
               </p>
             </div>
           </div>

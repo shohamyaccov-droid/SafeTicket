@@ -32,7 +32,7 @@ class OvernightE2EJourneyTest(TestCase):
             name="E2E לילה — פארק הירקון",
             artist=self.artist,
             date=future,
-            venue="אחר",
+            venue="ישראל",
             city="תל אביב",
         )
         self.admin = User.objects.create_superuser(

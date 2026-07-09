@@ -47,7 +47,7 @@ class AdminTicketPdfSafetyTests(TestCase):
             name='PDF QA Event',
             artist=self.artist,
             date=future,
-            venue='אחר',
+            venue='ישראל',
             city='תל אביב',
         )
         self.client = Client(HTTP_HOST='localhost')

@@ -24,7 +24,7 @@ class TicketAlertSubscribeTests(TestCase):
             artist=self.artist,
             name='Test Show',
             date=timezone.now() + timedelta(days=30),
-            venue='אחר',
+            venue='ישראל',
             venue_place=self.venue,
             city='Tel Aviv',
             category='concert',

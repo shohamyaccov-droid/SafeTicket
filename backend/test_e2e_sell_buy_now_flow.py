@@ -40,7 +40,7 @@ class SellBuyNowE2EFlowTest(TestCase):
             name='BuyNow Arena (E2E)',
             artist=self.artist,
             date=future,
-            venue='אחר',
+            venue='ישראל',
             city='NYC',
             country='US',
             category='concert',

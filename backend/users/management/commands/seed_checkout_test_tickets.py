@@ -28,7 +28,7 @@ EVENT_SPECS = (
         'artist': 'אמן בדיקת Checkout א',
         'genre': 'Pop',
         'event_name': 'בדיקת Checkout — אמן א',
-        'venue': 'אחר',
+        'venue': 'ישראל',
         'venue_place': 'אצטדיון רמת גן',
         'city': 'רמת גן',
         'days_from_now': 21,

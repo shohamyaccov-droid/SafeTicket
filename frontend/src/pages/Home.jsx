@@ -14,6 +14,7 @@ import {
   filterLastMinuteEvents,
   sortPerformersByDemand,
 } from '../utils/homeDiscover';
+import { formatEventLocation } from '../utils/eventLocalTime';
 import './Home.css';
 
 function formatEventDateHe(iso) {
@@ -583,13 +584,7 @@ const Home = () => {
           >
             <h2 id="home-date-modal-title">{datePickGroup.displayEvent?.name || 'בחרו תאריך'}</h2>
             <p className="home-date-modal-sub">
-              {(() => {
-                const ev = datePickGroup.displayEvent;
-                const v = ev?.venue_detail?.name
-                  ? `${ev.venue_detail.name}, ${ev.city || ''}`.replace(/,\s*$/, '').trim()
-                  : [ev?.venue, ev?.city].filter(Boolean).join(', ');
-                return v || 'בחרו מועד להמשך לרכישה';
-              })()}
+              {formatEventLocation(datePickGroup.displayEvent) || 'בחרו מועד להמשך לרכישה'}
             </p>
             <ul className="home-date-modal-list">
               {datePickGroup.events.map((ev) => (

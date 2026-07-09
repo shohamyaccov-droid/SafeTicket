@@ -193,7 +193,7 @@ class Event(models.Model):
         ('פיס ארנה ירושלים', 'פיס ארנה ירושלים'),
         ('סמי עופר', 'סמי עופר'),
         ('בארבי תל אביב', 'בארבי תל אביב'),
-        ('אחר', 'אחר'),
+        ('ישראל', 'ישראל'),
     ]
     
     artist = models.ForeignKey(
@@ -308,13 +308,16 @@ class Event(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def venue_display_name(self):
-        """Buyer-facing venue: prefer linked Venue.name (full hall) over the choice field (e.g. אחר)."""
+        """Buyer-facing venue: prefer linked Venue.name (full hall) over the choice field (e.g. ישראל)."""
         vp = getattr(self, 'venue_place', None)
         if vp is not None:
             name = (vp.name or '').strip()
             if name:
                 return name
-        return (self.venue or '').strip()
+        raw = (self.venue or '').strip()
+        if raw in ('אחר', 'ישראל', ''):
+            return 'ישראל'
+        return raw
     
     def __str__(self):
         # For sports events with teams, show team matchup
@@ -667,7 +670,7 @@ class Order(models.Model):
         max_digits=10,
         decimal_places=2,
         default=0,
-        help_text='5% buyer-side service fee (added on top of final_negotiated_price)',
+        help_text='15% buyer-side service fee (added on top of final_negotiated_price)',
     )
     seller_service_fee = models.DecimalField(
         max_digits=10,
@@ -786,7 +789,7 @@ class SellerPayout(models.Model):
         TRANSFERRED = 'transferred', 'Transferred'
         CANCELLED = 'cancelled', 'Cancelled'
 
-    PLATFORM_FEE_RATE = Decimal('0.05')
+    PLATFORM_FEE_RATE = Decimal('0.15')
 
     order = models.OneToOneField(
         Order,
@@ -806,7 +809,7 @@ class SellerPayout(models.Model):
     platform_fee = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        help_text='TradeTix platform fee (buyer Service and Operation Fee plus any seller-side fee)',
+        help_text='TradeTix platform fee (buyer Security Fee plus any seller-side fee)',
     )
     net_payout = models.DecimalField(
         max_digits=10,

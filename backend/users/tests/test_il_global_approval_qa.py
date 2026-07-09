@@ -42,7 +42,7 @@ class IlGlobalApprovalQATest(TestCase):
             name='QA IL Concert',
             artist=self.artist,
             date=future,
-            venue='אחר',
+            venue='ישראל',
             city='Tel Aviv',
             country='IL',
         )
@@ -50,7 +50,7 @@ class IlGlobalApprovalQATest(TestCase):
             name='QA US Show',
             artist=self.artist,
             date=future,
-            venue='אחר',
+            venue='ישראל',
             city='New York',
             country='US',
         )

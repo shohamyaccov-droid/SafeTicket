@@ -42,7 +42,7 @@ SEED_ARTIST_BEN_TZUR = "בן צור"
 SEED_ARTIST_MOR = "מור רביעי"
 VENUE_MENORA = "היכל מנורה מבטחים"
 VENUE_CAESAREA = "אמפי קיסריה"
-VENUE_OTHER = "אחר"
+VENUE_ISRAEL = "ישראל"
 
 MENORA_SECTION_IDS = [
     "VIP",
@@ -262,7 +262,7 @@ class Command(BaseCommand):
                         venue_label=VENUE_CAESAREA,
                         when=when,
                     ),
-                    "venue": VENUE_OTHER,
+                    "venue": VENUE_ISRAEL,
                     "venue_place": caesarea_place,
                     "city": "קיסריה",
                     "category": "concert",

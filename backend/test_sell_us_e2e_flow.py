@@ -44,7 +44,7 @@ class SellUsE2EFlowTest(TestCase):
             name='Taylor Swift — USA Stadium (E2E)',
             artist=self.artist,
             date=future,
-            venue='אחר',
+            venue='ישראל',
             city='Nashville',
             country='US',
             category='concert',

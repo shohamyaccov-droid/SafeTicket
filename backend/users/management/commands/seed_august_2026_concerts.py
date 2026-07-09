@@ -25,7 +25,7 @@ from users.models import Artist, Event, Venue
 TZ_IL = ZoneInfo('Asia/Jerusalem')
 
 VENUE_MENORA = 'היכל מנורה מבטחים'
-VENUE_OTHER = 'אחר'
+VENUE_ISRAEL = 'ישראל'
 
 VENUE_MENORA_PLACE = ('היכל מנורה מבטחים', 'תל אביב')
 VENUE_CAESAREA_PLACE = ('אמפי קיסריה', 'קיסריה')
@@ -69,7 +69,7 @@ SHOWS: tuple[ShowSpec, ...] = (
     ShowSpec('מור רביעי', 2026, 8, 13, 21, 0, VENUE_MENORA, VENUE_MENORA_PLACE, 'תל אביב'),
     ShowSpec('איתי לוי', 2026, 8, 15, 21, 30, VENUE_MENORA, VENUE_MENORA_PLACE, 'תל אביב'),
     *(
-        ShowSpec('פאר טסי', 2026, 8, day, 20, 30, VENUE_OTHER, VENUE_CAESAREA_PLACE, 'קיסריה')
+        ShowSpec('פאר טסי', 2026, 8, day, 20, 30, VENUE_ISRAEL, VENUE_CAESAREA_PLACE, 'קיסריה')
         for day in (13, 15, 18, 20, 22, 25)
     ),
     *(
@@ -77,7 +77,7 @@ SHOWS: tuple[ShowSpec, ...] = (
         for y, m, d, h, minute in EDEN_MENORA_DATES
     ),
     *(
-        ShowSpec('בן צור', y, m, d, h, minute, VENUE_OTHER, VENUE_CAESAREA_PLACE, 'קיסריה')
+        ShowSpec('בן צור', y, m, d, h, minute, VENUE_ISRAEL, VENUE_CAESAREA_PLACE, 'קיסריה')
         for y, m, d, h, minute in BEN_TZUR_CAESAREA_DATES
     ),
 )

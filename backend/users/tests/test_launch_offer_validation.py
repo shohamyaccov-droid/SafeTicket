@@ -34,7 +34,7 @@ class OfferAmountValidationTests(TestCase):
             artist=artist,
             name='OA Event',
             date=timezone.now() + timedelta(days=20),
-            venue='אחר',
+            venue='ישראל',
             city='London',
             country='GB',
         )
