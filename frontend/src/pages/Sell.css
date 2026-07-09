@@ -446,27 +446,26 @@
   border: 2px solid var(--border-color);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
   background: var(--bg-card);
   direction: rtl;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .upload-method-option:hover {
-  border-color: var(--primary-blue);
-  background: rgba(0, 69, 175, 0.03);
+  border-color: #2563eb;
+  background: #eff6ff;
 }
 
 .upload-method-option.selected {
-  border-color: var(--primary-blue);
-  background: rgba(0, 69, 175, 0.08);
-  box-shadow: 0 0 0 1px var(--primary-blue);
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 1px #2563eb;
 }
 
-/* Radio strictly on the RIGHT side of text (RTL) */
-.upload-method-option input[type="radio"] {
-  flex-shrink: 0;
-  margin: 0;
-  order: -1; /* First in visual order = right side in RTL */
+.upload-method-option:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .upload-method-option .option-content {
@@ -521,6 +520,13 @@
 
 .upload-constraints-card strong {
   color: #0f172a;
+}
+
+.upload-constraints-card--compact {
+  margin-top: 0.35rem;
+  margin-bottom: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.82rem;
 }
 
 .upload-field-hint {
@@ -959,6 +965,40 @@
 .sell-inline-auth-form--compact .form-group select {
   padding: 0.55rem 0.6rem;
   min-height: 40px;
+}
+
+.sell-password-field-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.sell-password-field-wrap input {
+  width: 100%;
+  padding-inline-end: 2.5rem;
+}
+
+.sell-password-toggle {
+  position: absolute;
+  inset-inline-end: 0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.sell-password-toggle:hover {
+  color: var(--primary-blue);
+  background: rgba(0, 69, 175, 0.06);
 }
 
 .sell-inline-switch-btn {

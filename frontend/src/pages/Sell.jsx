@@ -82,6 +82,63 @@ function parseApiMessage(data, fallback) {
   return fallback;
 }
 
+/** DD.MM.YYYY | Venue Name | Artist Name — compact labels for iOS event <select> */
+function formatEventDropdownLabel(event) {
+  const d = event?.date ? new Date(event.date) : null;
+  const dateStr =
+    d && !Number.isNaN(d.getTime())
+      ? `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
+      : '';
+  const venue = (event.venue_detail?.name || event.venue || '').trim();
+  const artist = (
+    event.artist_name
+    || event.artist_detail?.name
+    || event.name
+    || ''
+  ).trim();
+  return [dateStr, venue, artist].filter(Boolean).join(' | ');
+}
+
+/* eslint-disable react/prop-types */
+function PasswordField({ id, name, label, value, onChange, required }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="form-group">
+      <label htmlFor={id}>{label}</label>
+      <div className="sell-password-field-wrap">
+        <input
+          id={id}
+          type={visible ? 'text' : 'password'}
+          name={name}
+          value={value}
+          onChange={onChange}
+          required={required}
+          autoComplete={name === 'password2' ? 'new-password' : 'current-password'}
+        />
+        <button
+          type="button"
+          className="sell-password-toggle"
+          onClick={() => setVisible((v) => !v)}
+          aria-label={visible ? 'הסתר סיסמה' : 'הצג סיסמה'}
+          aria-pressed={visible}
+        >
+          {visible ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3 3l18 18M10.58 10.58A2 2 0 0012 15a2 2 0 001.42-.58M9.88 4.24A10.94 10.94 0 0112 5c5 0 9.27 3.11 11 7a11.8 11.8 0 01-2.16 3.19M6.11 6.11A10.94 10.94 0 003 12c1.73 3.89 6 7 11 7 1.01 0 1.98-.13 2.88-.37" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+            </svg>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+/* eslint-enable react/prop-types */
+
 function InlineAuthFunnel({ onAuthed }) {
   const { login, register } = useAuth();
   const [mode, setMode] = useState('register');
@@ -206,7 +263,6 @@ function InlineAuthFunnel({ onAuthed }) {
   return (
     <div className="listing-card sell-inline-card">
       <h2>{mode === 'login' ? 'התחברות כדי להתחיל למכור' : 'הרשמה מהירה כדי להתחיל למכור'}</h2>
-      <p className="sell-inline-lead">הכל קורה כאן בדף אחד, בלי מעברי עמוד.</p>
       {error ? <div className="error-message">{error}</div> : null}
       <form onSubmit={onSubmit} className="sell-inline-auth-form sell-inline-auth-form--compact">
         {mode === 'register' ? (
@@ -232,15 +288,9 @@ function InlineAuthFunnel({ onAuthed }) {
             {sellerFieldErrors.phone_number ? <span className="become-seller-field-error">{sellerFieldErrors.phone_number}</span> : null}
           </div>
         ) : null}
-        <div className="form-group">
-          <label htmlFor="password">סיסמה</label>
-          <input id="password" type="password" name="password" value={form.password} onChange={onChange} required />
-        </div>
+        <PasswordField id="password" name="password" label="סיסמה" value={form.password} onChange={onChange} required />
         {mode === 'register' ? (
-          <div className="form-group">
-            <label htmlFor="password2">אימות סיסמה</label>
-            <input id="password2" type="password" name="password2" value={form.password2} onChange={onChange} required />
-          </div>
+          <PasswordField id="password2" name="password2" label="אימות סיסמה" value={form.password2} onChange={onChange} required />
         ) : null}
         {mode === 'register' ? (
           <label className="sell-inline-become-seller-check">
@@ -1644,22 +1694,11 @@ const Sell = () => {
                     }
                   >
                     <option value="">-- בחר אירוע --</option>
-                    {eventsForDropdown.map((event) => {
-                      const displayName = getEventDisplayName(event);
-                      const eventDate = event.date ? new Date(event.date).toLocaleDateString('he-IL', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      }) : '';
-                      const venueInfo = event.venue && event.city ? ` - ${event.venue}, ${event.city}` : '';
-                      return (
-                        <option key={event.id} value={String(event.id)}>
-                          {displayName}{venueInfo} {eventDate ? `• ${eventDate}` : ''}
-                        </option>
-                      );
-                    })}
+                    {eventsForDropdown.map((event) => (
+                      <option key={event.id} value={String(event.id)}>
+                        {formatEventDropdownLabel(event)}
+                      </option>
+                    ))}
                   </select>
                 )}
                 {selectedCategory === 'concert' && !selectedArtistId && (
@@ -1686,6 +1725,7 @@ const Sell = () => {
                 </div>
               ) : null}
 
+              {!formData.selectedEvent ? (
               <div className="missing-event-banner" role="region" aria-label="בקשה להוספת אירוע">
                 <div className="missing-event-banner-text">
                   <strong>לא מצאת את ההופעה או המשחק שלך?</strong>
@@ -1712,7 +1752,8 @@ const Sell = () => {
                   </a>
                 </div>
               </div>
-              {eventRequestOpen ? (
+              ) : null}
+              {!formData.selectedEvent && eventRequestOpen ? (
                 <div className="event-request-inline-panel">
                   <h3>בקשה להוספת אירוע</h3>
                   <p className="event-request-modal-lead">
@@ -1777,6 +1818,9 @@ const Sell = () => {
                 handleChange(e);
                 // Clear ticket packages when quantity changes - user must re-enter
                 if (newQuantity !== formData.available_quantity) {
+                  if (newQuantity === 1) {
+                    setUploadMethod('single_file');
+                  }
                   setFormData((prev) => ({
                     ...prev,
                     available_quantity: newQuantity,
@@ -1920,59 +1964,69 @@ const Sell = () => {
             )}
           </div>
 
-          {/* Ticket file upload mode */}
+          {formData.available_quantity > 1 ? (
           <div className="form-group pdf-upload-toggle-section">
             <label>אופן העלאת קבצי הכרטיס</label>
-            <div className="upload-method-options">
-              <label className={`upload-method-option ${uploadMethod === 'single_file' ? 'selected' : ''}`}>
-                <input
-                  type="radio"
-                  name="uploadMethod"
-                  value="single_file"
-                  checked={uploadMethod === 'single_file'}
-                  onChange={() => {
-                    setUploadMethod('single_file');
-                    setFormData((prev) => ({
-                      ...prev,
-                      ticket_packages: (prev.ticket_packages || []).map((p) => ({ ...p, pdf_file: null })),
-                    }));
-                    setFieldErrors((prev) => {
-                      const next = { ...prev };
-                      delete next.upload_mode;
-                      delete next.upload_packages;
-                      return next;
-                    });
-                    setError('');
-                  }}
-                />
+            <div className="upload-method-options" role="radiogroup" aria-label="אופן העלאת קבצי הכרטיס">
+              <div
+                role="radio"
+                aria-checked={uploadMethod === 'single_file'}
+                tabIndex={0}
+                className={`upload-method-option ${uploadMethod === 'single_file' ? 'selected' : ''}`}
+                onClick={() => {
+                  setUploadMethod('single_file');
+                  setFormData((prev) => ({
+                    ...prev,
+                    ticket_packages: (prev.ticket_packages || []).map((p) => ({ ...p, pdf_file: null })),
+                  }));
+                  setFieldErrors((prev) => {
+                    const next = { ...prev };
+                    delete next.upload_mode;
+                    delete next.upload_packages;
+                    return next;
+                  });
+                  setError('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}
+              >
                 <div className="option-content">
                   <span className="option-title">קובץ PDF אחד המכיל את כל הכרטיסים (אנו נטפל בפיצול)</span>
                   <span className="option-desc">העלה קובץ PDF עם עמוד נפרד לכל כרטיס – המערכת תפצל אוטומטית</span>
                 </div>
-              </label>
-              <label className={`upload-method-option ${uploadMethod === 'separate_files' ? 'selected' : ''}`}>
-                <input
-                  type="radio"
-                  name="uploadMethod"
-                  value="separate_files"
-                  checked={uploadMethod === 'separate_files'}
-                  onChange={() => {
-                    setUploadMethod('separate_files');
-                    setFormData((prev) => ({ ...prev, singleMultiPagePdf: null }));
-                    setFieldErrors((prev) => {
-                      const next = { ...prev };
-                      delete next.upload_mode;
-                      delete next.upload_single;
-                      return next;
-                    });
-                    setError('');
-                  }}
-                />
+              </div>
+              <div
+                role="radio"
+                aria-checked={uploadMethod === 'separate_files'}
+                tabIndex={0}
+                className={`upload-method-option ${uploadMethod === 'separate_files' ? 'selected' : ''}`}
+                onClick={() => {
+                  setUploadMethod('separate_files');
+                  setFormData((prev) => ({ ...prev, singleMultiPagePdf: null }));
+                  setFieldErrors((prev) => {
+                    const next = { ...prev };
+                    delete next.upload_mode;
+                    delete next.upload_single;
+                    return next;
+                  });
+                  setError('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}
+              >
                 <div className="option-content">
                   <span className="option-title">קובץ נפרד לכל כרטיס (PDF או תמונה)</span>
                   <span className="option-desc">העלה קובץ ייחודי (PDF, JPG, PNG) לכל כרטיס</span>
                 </div>
-              </label>
+              </div>
             </div>
             <div className="upload-constraints-card" role="note">
               <strong>הנחיות לקובץ הכרטיס</strong>
@@ -1983,6 +2037,11 @@ const Sell = () => {
             </div>
             <SellFieldError message={fieldErrors.upload_mode} />
           </div>
+          ) : (
+            <div className="upload-constraints-card upload-constraints-card--compact" role="note">
+              <span>{TICKET_FILE_CONSTRAINTS_HE}</span>
+            </div>
+          )}
 
           {/* Single file dropzone (Option A) */}
           {uploadMethod === 'single_file' && (
@@ -2210,7 +2269,7 @@ const Sell = () => {
                   תקנון האתר
                 </a>
                 , ומצהיר/ה כי המחיר המבוקש אינו עולה על העלות המקורית של הכרטיס. כמו כן, ידוע לי שהתשלום
-                יועבר אליי מספר ימי עסקים לאחר קיום האירוע, כדי להבטיח קנייה בטוחה לרוכש.
+                יועבר אליי לאחר קיום האירוע, כדי להבטיח קנייה בטוחה לרוכש.
               </span>
             </label>
           </div>
