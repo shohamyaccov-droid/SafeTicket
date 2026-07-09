@@ -84,9 +84,23 @@ function parseApiMessage(data, fallback) {
 
 function InlineAuthFunnel({ onAuthed }) {
   const { login, register } = useAuth();
-  const [mode, setMode] = useState('login');
+  const [mode, setMode] = useState('register');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [becomeSellerNow, setBecomeSellerNow] = useState(false);
+  const [sellerFieldErrors, setSellerFieldErrors] = useState({});
+  const [payoutMethod, setPayoutMethod] = useState('bank');
+  const [bitPhone, setBitPhone] = useState('');
+  const [bitPhoneConfirm, setBitPhoneConfirm] = useState('');
+  const [acceptedEscrow, setAcceptedEscrow] = useState(false);
+  const [sellerPhone, setSellerPhone] = useState('');
+  const [sellerBank, setSellerBank] = useState({
+    account_holder_name: '',
+    id_number: '',
+    bank_name_or_code: '',
+    branch_number: '',
+    account_number: '',
+  });
   const [form, setForm] = useState({
     email: '',
     password: '',
@@ -101,12 +115,46 @@ function InlineAuthFunnel({ onAuthed }) {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const setSellerBankField = (key, value) => {
+    setSellerBank((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const validateSellerOnboarding = () => {
+    const fe = {};
+    if ((sellerPhone || '').trim().length < 8) fe.phone_number = 'נא להזין מספר טלפון תקין.';
+    if ((sellerBank.account_holder_name || '').trim().length < 2) fe.account_holder_name = 'נא להזין שם בעל חשבון.';
+    const idRaw = (sellerBank.id_number || '').replace(/[\s-]/g, '');
+    if (!/^\d+$/.test(idRaw) || idRaw.length < 5 || idRaw.length > 9) fe.id_number = 'נא להזין מספר תעודת זהות תקין.';
+    if (!acceptedEscrow) fe.acceptedEscrow = 'יש לאשר את תנאי הנאמנות כדי להמשיך.';
+
+    if (payoutMethod === 'bank') {
+      if (!(sellerBank.bank_name_or_code || '').trim()) fe.bank_name_or_code = 'נא לציין בנק (שם או מספר).';
+      if (!/^\d+$/.test((sellerBank.branch_number || '').trim())) fe.branch_number = 'נא להזין מספר סניף תקין.';
+      if (!/^\d{4,}$/.test((sellerBank.account_number || '').trim())) fe.account_number = 'נא להזין מספר חשבון תקין.';
+    } else {
+      const normalize = (v) => String(v || '').replace(/\D/g, '').replace(/^972/, '0');
+      const phoneOne = normalize(bitPhone);
+      const phoneTwo = normalize(bitPhoneConfirm);
+      if (!/^05\d{8}$/.test(phoneOne)) fe.bit_phone_number = 'נא להזין מספר טלפון ביט ישראלי תקין.';
+      if (phoneOne !== phoneTwo) fe.bit_phone_number_confirm = 'מספרי הטלפון לביט אינם תואמים.';
+    }
+    return fe;
+  };
+
   const onSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSellerFieldErrors({});
     if (mode === 'register' && form.password !== form.password2) {
       setError('הסיסמאות אינן תואמות.');
       return;
+    }
+    if (mode === 'register' && becomeSellerNow) {
+      const sellerErrors = validateSellerOnboarding();
+      if (Object.keys(sellerErrors).length > 0) {
+        setSellerFieldErrors(sellerErrors);
+        return;
+      }
     }
     setSaving(true);
     try {
@@ -130,8 +178,24 @@ function InlineAuthFunnel({ onAuthed }) {
           setError(parseApiMessage(result.error, 'ההרשמה נכשלה.'));
           return;
         }
+        if (becomeSellerNow) {
+          await authAPI.getCsrf();
+          await authAPI.upgradeToSeller({
+            phone_number: sellerPhone.trim(),
+            payout_method: payoutMethod,
+            bit_phone_number: payoutMethod === 'bit' ? bitPhone.replace(/\D/g, '').replace(/^972/, '0') : '',
+            account_holder_name: sellerBank.account_holder_name.trim(),
+            id_number: sellerBank.id_number.replace(/[\s-]/g, ''),
+            bank_name_or_code: payoutMethod === 'bank' ? sellerBank.bank_name_or_code.trim() : '',
+            branch_number: payoutMethod === 'bank' ? sellerBank.branch_number.trim() : '',
+            account_number: payoutMethod === 'bank' ? sellerBank.account_number.trim() : '',
+            accepted_escrow_terms: true,
+          });
+        }
       }
-      onAuthed?.();
+      await onAuthed?.();
+    } catch (err) {
+      setError(parseApiMessage(err.response?.data, err.message || 'הפעולה נכשלה.'));
     } finally {
       setSaving(false);
     }
@@ -142,7 +206,7 @@ function InlineAuthFunnel({ onAuthed }) {
       <h2>{mode === 'login' ? 'התחברות כדי להתחיל למכור' : 'הרשמה מהירה כדי להתחיל למכור'}</h2>
       <p className="sell-inline-lead">הכל קורה כאן בדף אחד, בלי מעברי עמוד.</p>
       {error ? <div className="error-message">{error}</div> : null}
-      <form onSubmit={onSubmit} className="sell-inline-auth-form">
+      <form onSubmit={onSubmit} className="sell-inline-auth-form sell-inline-auth-form--compact">
         {mode === 'register' ? (
           <div className="form-row">
             <div className="form-group">
@@ -168,6 +232,93 @@ function InlineAuthFunnel({ onAuthed }) {
             <label htmlFor="password2">אימות סיסמה</label>
             <input id="password2" type="password" name="password2" value={form.password2} onChange={onChange} required />
           </div>
+        ) : null}
+        {mode === 'register' ? (
+          <label className="sell-inline-become-seller-check">
+            <input
+              type="checkbox"
+              checked={becomeSellerNow}
+              onChange={(e) => {
+                setBecomeSellerNow(e.target.checked);
+                setSellerFieldErrors({});
+              }}
+            />
+            <span>הפוך למוכר עכשיו כדי להעלות כרטיסים</span>
+          </label>
+        ) : null}
+        {mode === 'register' && becomeSellerNow ? (
+          <fieldset className="become-seller-bank-fieldset sell-inline-seller-fieldset">
+            <legend>פרטי זיכוי למוכר</legend>
+            <div className="become-seller-payout-methods">
+              <label className="become-seller-radio">
+                <input type="radio" name="inline_payout_method" checked={payoutMethod === 'bank'} onChange={() => setPayoutMethod('bank')} />
+                <span>העברה בנקאית</span>
+              </label>
+              <label className="become-seller-radio">
+                <input type="radio" name="inline_payout_method" checked={payoutMethod === 'bit'} onChange={() => setPayoutMethod('bit')} />
+                <span>ביט</span>
+              </label>
+            </div>
+            {payoutMethod === 'bit' ? (
+              <p className="sell-inline-bit-disclaimer">אפשר להזין רק מספר טלפון לקבלה בביט</p>
+            ) : null}
+            <label className="become-seller-label">
+              מספר טלפון
+              <input type="tel" dir="ltr" value={sellerPhone} onChange={(e) => setSellerPhone(e.target.value)} required />
+              {sellerFieldErrors.phone_number ? <span className="become-seller-field-error">{sellerFieldErrors.phone_number}</span> : null}
+            </label>
+            <label className="become-seller-label">
+              שם בעל החשבון
+              <input type="text" value={sellerBank.account_holder_name} onChange={(e) => setSellerBankField('account_holder_name', e.target.value)} required />
+              {sellerFieldErrors.account_holder_name ? <span className="become-seller-field-error">{sellerFieldErrors.account_holder_name}</span> : null}
+            </label>
+            <label className="become-seller-label">
+              תעודת זהות
+              <input type="text" dir="ltr" value={sellerBank.id_number} onChange={(e) => setSellerBankField('id_number', e.target.value)} required />
+              {sellerFieldErrors.id_number ? <span className="become-seller-field-error">{sellerFieldErrors.id_number}</span> : null}
+            </label>
+            {payoutMethod === 'bank' ? (
+              <>
+                <label className="become-seller-label">
+                  בנק (שם או מספר בנק)
+                  <input type="text" value={sellerBank.bank_name_or_code} onChange={(e) => setSellerBankField('bank_name_or_code', e.target.value)} required />
+                  {sellerFieldErrors.bank_name_or_code ? <span className="become-seller-field-error">{sellerFieldErrors.bank_name_or_code}</span> : null}
+                </label>
+                <div className="become-seller-row">
+                  <label className="become-seller-label">
+                    סניף
+                    <input type="text" dir="ltr" value={sellerBank.branch_number} onChange={(e) => setSellerBankField('branch_number', e.target.value)} required />
+                    {sellerFieldErrors.branch_number ? <span className="become-seller-field-error">{sellerFieldErrors.branch_number}</span> : null}
+                  </label>
+                  <label className="become-seller-label">
+                    מספר חשבון
+                    <input type="text" dir="ltr" value={sellerBank.account_number} onChange={(e) => setSellerBankField('account_number', e.target.value)} required />
+                    {sellerFieldErrors.account_number ? <span className="become-seller-field-error">{sellerFieldErrors.account_number}</span> : null}
+                  </label>
+                </div>
+              </>
+            ) : (
+              <div className="become-seller-row">
+                <label className="become-seller-label">
+                  מספר טלפון לביט
+                  <input type="tel" dir="ltr" value={bitPhone} onChange={(e) => setBitPhone(e.target.value)} required />
+                  {sellerFieldErrors.bit_phone_number ? <span className="become-seller-field-error">{sellerFieldErrors.bit_phone_number}</span> : null}
+                </label>
+                <label className="become-seller-label">
+                  אימות מספר טלפון לביט
+                  <input type="tel" dir="ltr" value={bitPhoneConfirm} onChange={(e) => setBitPhoneConfirm(e.target.value)} required />
+                  {sellerFieldErrors.bit_phone_number_confirm ? <span className="become-seller-field-error">{sellerFieldErrors.bit_phone_number_confirm}</span> : null}
+                </label>
+              </div>
+            )}
+            <label className="become-seller-check">
+              <input type="checkbox" checked={acceptedEscrow} onChange={(e) => setAcceptedEscrow(e.target.checked)} />
+              <span>אני מסכים לקבל את התשלום רק לאחר קיום האירוע, בהתאם לתקנון האתר</span>
+            </label>
+            {sellerFieldErrors.acceptedEscrow ? (
+              <span className="become-seller-field-error become-seller-field-error--block">{sellerFieldErrors.acceptedEscrow}</span>
+            ) : null}
+          </fieldset>
         ) : null}
         <button type="submit" className="auth-button" disabled={saving}>
           {saving ? 'שומר…' : mode === 'login' ? 'התחברות' : 'הרשמה'}
@@ -852,7 +1003,7 @@ const Sell = () => {
   if (!user) {
     return (
       <div className="sell-container">
-        <InlineAuthFunnel />
+        <InlineAuthFunnel onAuthed={refreshProfile} />
       </div>
     );
   }
