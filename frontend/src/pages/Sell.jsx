@@ -11,7 +11,9 @@ import { CONCERT_BLOCK_COUNT, CONCERT_SECTION_NAMES } from '../utils/bloomfieldC
 import { isRamatGanVenueEvent, ramatGanSellSectionOptions } from '../utils/ramatGanSellSections';
 import { isCaesareaVenueEvent, caesareaSellSectionOptions } from '../utils/caesareaSellSections';
 import { displayEventVenueName, formatEventLocation } from '../utils/eventLocalTime';
-import '../components/BecomeSellerModal.css';
+import SellCompletionModal from '../components/SellCompletionModal';
+import '../components/SellCompletionModal.css';
+import './Sell.css';
 
 const SELL_PAGE_BUILD_TAG = import.meta.env.VITE_BUILD_ID || 'local-dev';
 
@@ -171,445 +173,49 @@ function buildSellListingDraftSnapshot({
   };
 }
 
-/* eslint-disable react/prop-types */
-function PasswordField({ id, name, label, value, onChange, required }) {
-  const [visible, setVisible] = useState(false);
-  return (
-    <div className="form-group">
-      <label htmlFor={id}>{label}</label>
-      <div className="sell-password-field-wrap">
-        <input
-          id={id}
-          type={visible ? 'text' : 'password'}
-          name={name}
-          value={value}
-          onChange={onChange}
-          required={required}
-          autoComplete={name === 'password2' ? 'new-password' : 'current-password'}
-        />
-        <button
-          type="button"
-          className="sell-password-toggle"
-          onClick={() => setVisible((v) => !v)}
-          aria-label={visible ? 'הסתר סיסמה' : 'הצג סיסמה'}
-          aria-pressed={visible}
-        >
-          {visible ? (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M3 3l18 18M10.58 10.58A2 2 0 0012 15a2 2 0 001.42-.58M9.88 4.24A10.94 10.94 0 0112 5c5 0 9.27 3.11 11 7a11.8 11.8 0 01-2.16 3.19M6.11 6.11A10.94 10.94 0 003 12c1.73 3.89 6 7 11 7 1.01 0 1.98-.13 2.88-.37" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          ) : (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
-            </svg>
-          )}
-        </button>
-      </div>
-    </div>
-  );
-}
-/* eslint-enable react/prop-types */
+function validateCompletionPayload(payload, { needsAuth }) {
+  const fe = {};
+  const { authMode, authForm, payoutMethod, sellerBank, bitPhoneConfirm, acceptedEscrow } = payload;
+  const phoneRaw = (authForm?.phone_number || '').trim();
 
-function InlineAuthFunnel({ onAuthed }) {
-  const { login, register } = useAuth();
-  const [mode, setMode] = useState('register');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [becomeSellerNow, setBecomeSellerNow] = useState(false);
-  const [sellerFieldErrors, setSellerFieldErrors] = useState({});
-  const [payoutMethod, setPayoutMethod] = useState('bank');
-  const [bitPhoneConfirm, setBitPhoneConfirm] = useState('');
-  const [acceptedEscrow, setAcceptedEscrow] = useState(false);
-  const [sellerBank, setSellerBank] = useState({
-    account_holder_name: '',
-    id_number: '',
-    bank_name_or_code: '',
-    branch_number: '',
-    account_number: '',
-  });
-  const [form, setForm] = useState({
-    email: '',
-    phone_number: '',
-    password: '',
-    password2: '',
-    first_name: '',
-    last_name: '',
-  });
+  if (!acceptedEscrow) fe.acceptedEscrow = 'יש לאשר את תנאי הנאמנות כדי להמשיך.';
+  if ((sellerBank.account_holder_name || '').trim().length < 2) {
+    fe.account_holder_name = 'נא להזין שם בעל חשבון.';
+  }
+  const idRaw = (sellerBank.id_number || '').replace(/[\s-]/g, '');
+  if (!/^\d+$/.test(idRaw) || idRaw.length < 5 || idRaw.length > 9) {
+    fe.id_number = 'נא להזין מספר תעודת זהות תקין.';
+  }
 
-  const onChange = (e) => {
-    const { name, value } = e.target;
-    setError('');
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
+  if (payoutMethod === 'bank') {
+    if (!(sellerBank.bank_name_or_code || '').trim()) fe.bank_name_or_code = 'נא לציין בנק.';
+    if (!/^\d+$/.test((sellerBank.branch_number || '').trim())) fe.branch_number = 'נא להזין מספר סניף תקין.';
+    if (!/^\d{4,}$/.test((sellerBank.account_number || '').trim())) fe.account_number = 'נא להזין מספר חשבון תקין.';
+  } else {
+    const normalize = (v) => String(v || '').replace(/\D/g, '').replace(/^972/, '0');
+    const one = normalize(phoneRaw);
+    const two = normalize(bitPhoneConfirm);
+    if (!/^05\d{8}$/.test(one)) fe.bit_phone_number = 'נא להזין מספר טלפון ביט ישראלי תקין.';
+    if (one !== two) fe.bit_phone_number_confirm = 'מספרי הטלפון לביט אינם תואמים.';
+  }
 
-  const setSellerBankField = (key, value) => {
-    setSellerBank((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const validateSellerOnboarding = () => {
-    const fe = {};
-    if (!acceptedEscrow) fe.acceptedEscrow = 'יש לאשר את תנאי הנאמנות כדי להמשיך.';
-    const signupPhone = String(form.phone_number || '').replace(/\D/g, '').replace(/^972/, '0');
-    if (!/^05\d{8}$/.test(signupPhone)) {
-      fe.phone_number = 'נא להזין מספר טלפון ישראלי תקין.';
+  if (needsAuth) {
+    if (authMode === 'register' && !(authForm.first_name || '').trim()) {
+      fe.first_name = 'נא להזין שם פרטי.';
     }
-
-    if (payoutMethod === 'bank') {
-      if ((sellerBank.account_holder_name || '').trim().length < 2) fe.account_holder_name = 'נא להזין שם בעל חשבון.';
-      const idRaw = (sellerBank.id_number || '').replace(/[\s-]/g, '');
-      if (!/^\d+$/.test(idRaw) || idRaw.length < 5 || idRaw.length > 9) fe.id_number = 'נא להזין מספר תעודת זהות תקין.';
-      if (!(sellerBank.bank_name_or_code || '').trim()) fe.bank_name_or_code = 'נא לציין בנק (שם או מספר).';
-      if (!/^\d+$/.test((sellerBank.branch_number || '').trim())) fe.branch_number = 'נא להזין מספר סניף תקין.';
-      if (!/^\d{4,}$/.test((sellerBank.account_number || '').trim())) fe.account_number = 'נא להזין מספר חשבון תקין.';
-    } else {
-      const idRaw = (sellerBank.id_number || '').replace(/[\s-]/g, '');
-      if (!/^\d+$/.test(idRaw) || idRaw.length < 5 || idRaw.length > 9) {
-        fe.id_number = 'נא להזין מספר תעודת זהות תקין.';
-      }
-      const normalize = (v) => String(v || '').replace(/\D/g, '').replace(/^972/, '0');
-      const phoneMain = normalize(form.phone_number);
-      const phoneConfirm = normalize(bitPhoneConfirm);
-      if (phoneMain !== phoneConfirm) fe.bit_phone_number_confirm = 'אימות מספר הטלפון לביט חייב להיות זהה למספר הטלפון הראשי.';
+    if (!(authForm.email || '').trim()) fe.email = 'נא להזין אימייל.';
+    if (!(authForm.password || '').trim()) fe.password = 'נא להזין סיסמה.';
+    if (authMode === 'register') {
+      const signupPhone = String(authForm.phone_number || '').replace(/\D/g, '').replace(/^972/, '0');
+      if (!/^05\d{8}$/.test(signupPhone)) fe.phone_number = 'נא להזין מספר טלפון ישראלי תקין.';
+    } else if (phoneRaw.length < 8) {
+      fe.phone = 'נא להזין מספר טלפון תקין.';
     }
-    return fe;
-  };
+  } else if (phoneRaw.length < 8) {
+    fe.phone = 'נא להזין מספר טלפון תקין.';
+  }
 
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSellerFieldErrors({});
-    if (mode === 'register' && form.password !== form.password2) {
-      setError('הסיסמאות אינן תואמות.');
-      return;
-    }
-    if (mode === 'register' && becomeSellerNow) {
-      const sellerErrors = validateSellerOnboarding();
-      if (Object.keys(sellerErrors).length > 0) {
-        setSellerFieldErrors(sellerErrors);
-        return;
-      }
-    }
-    setSaving(true);
-    try {
-      if (mode === 'login') {
-        const result = await login(form.email.trim(), form.password);
-        if (!result.success) {
-          setError(result.errorHebrew || result.error || 'ההתחברות נכשלה.');
-          return;
-        }
-      } else {
-        const result = await register({
-          username: form.email.trim(),
-          email: form.email.trim(),
-          phone_number: form.phone_number.trim(),
-          first_name: form.first_name.trim(),
-          last_name: form.last_name.trim(),
-          password: form.password,
-          password2: form.password2,
-          role: 'buyer',
-        });
-        if (!result.success) {
-          setError(parseApiMessage(result.error, 'ההרשמה נכשלה.'));
-          return;
-        }
-        if (becomeSellerNow) {
-          try {
-            await authAPI.getCsrf();
-            await authAPI.upgradeToSeller({
-              phone_number: form.phone_number.trim(),
-              payout_method: payoutMethod,
-              bit_phone_number: payoutMethod === 'bit' ? form.phone_number.replace(/\D/g, '').replace(/^972/, '0') : '',
-              account_holder_name: payoutMethod === 'bank'
-                ? sellerBank.account_holder_name.trim()
-                : `${form.first_name.trim()} ${form.last_name.trim()}`.trim(),
-              id_number: sellerBank.id_number.replace(/[\s-]/g, ''),
-              bank_name_or_code: payoutMethod === 'bank' ? sellerBank.bank_name_or_code.trim() : '',
-              branch_number: payoutMethod === 'bank' ? sellerBank.branch_number.trim() : '',
-              account_number: payoutMethod === 'bank' ? sellerBank.account_number.trim() : '',
-              accepted_escrow_terms: true,
-            });
-          } catch (upgradeErr) {
-            setError(
-              `נרשמת בהצלחה, אך שדרוג למוכר נכשל: ${parseApiMessage(
-                upgradeErr.response?.data,
-                upgradeErr.message || 'נסה שוב מטאטא "הפוך למוכר".'
-              )}`
-            );
-            await onAuthed?.();
-            return;
-          }
-        }
-      }
-      await onAuthed?.();
-    } catch (err) {
-      setError(parseApiMessage(err.response?.data, err.message || 'הפעולה נכשלה.'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="listing-card sell-inline-card">
-      <h2>{mode === 'login' ? 'התחברות כדי להתחיל למכור' : 'הרשמה מהירה כדי להתחיל למכור'}</h2>
-      {error ? <div className="error-message">{error}</div> : null}
-      <form onSubmit={onSubmit} className="sell-inline-auth-form sell-inline-auth-form--compact">
-        {mode === 'register' ? (
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="first_name">שם פרטי</label>
-              <input id="first_name" name="first_name" value={form.first_name} onChange={onChange} required />
-            </div>
-            <div className="form-group">
-              <label htmlFor="last_name">שם משפחה</label>
-              <input id="last_name" name="last_name" value={form.last_name} onChange={onChange} required />
-            </div>
-          </div>
-        ) : null}
-        <div className="form-group">
-          <label htmlFor="email">אימייל</label>
-          <input id="email" type="email" name="email" value={form.email} onChange={onChange} required />
-        </div>
-        {mode === 'register' ? (
-          <div className="form-group">
-            <label htmlFor="phone_number">מספר טלפון</label>
-            <input id="phone_number" type="tel" dir="ltr" name="phone_number" value={form.phone_number} onChange={onChange} required />
-            {sellerFieldErrors.phone_number ? <span className="become-seller-field-error">{sellerFieldErrors.phone_number}</span> : null}
-          </div>
-        ) : null}
-        <PasswordField id="password" name="password" label="סיסמה" value={form.password} onChange={onChange} required />
-        {mode === 'register' ? (
-          <PasswordField id="password2" name="password2" label="אימות סיסמה" value={form.password2} onChange={onChange} required />
-        ) : null}
-        {mode === 'register' ? (
-          <label className="sell-inline-become-seller-check">
-            <input
-              type="checkbox"
-              checked={becomeSellerNow}
-              onChange={(e) => {
-                setBecomeSellerNow(e.target.checked);
-                setSellerFieldErrors({});
-              }}
-            />
-            <span>הפוך למוכר עכשיו כדי להעלות כרטיסים</span>
-          </label>
-        ) : null}
-        {mode === 'register' && becomeSellerNow ? (
-          <fieldset className="become-seller-bank-fieldset sell-inline-seller-fieldset">
-            <legend>פרטי זיכוי למוכר</legend>
-            <div className="become-seller-payout-methods">
-              <label className="become-seller-radio">
-                <input type="radio" name="inline_payout_method" checked={payoutMethod === 'bank'} onChange={() => setPayoutMethod('bank')} />
-                <span>העברה בנקאית</span>
-              </label>
-              <label className="become-seller-radio">
-                <input type="radio" name="inline_payout_method" checked={payoutMethod === 'bit'} onChange={() => setPayoutMethod('bit')} />
-                <span>ביט</span>
-              </label>
-            </div>
-            {payoutMethod === 'bit' ? (
-              <p className="sell-inline-bit-disclaimer">אפשר להזין רק מספר טלפון לקבלה בביט</p>
-            ) : null}
-            {payoutMethod === 'bank' ? (
-              <>
-                <label className="become-seller-label">
-                  שם בעל החשבון
-                  <input type="text" value={sellerBank.account_holder_name} onChange={(e) => setSellerBankField('account_holder_name', e.target.value)} required />
-                  {sellerFieldErrors.account_holder_name ? <span className="become-seller-field-error">{sellerFieldErrors.account_holder_name}</span> : null}
-                </label>
-                <label className="become-seller-label">
-                  תעודת זהות
-                  <input type="text" dir="ltr" value={sellerBank.id_number} onChange={(e) => setSellerBankField('id_number', e.target.value)} required />
-                  {sellerFieldErrors.id_number ? <span className="become-seller-field-error">{sellerFieldErrors.id_number}</span> : null}
-                </label>
-                <label className="become-seller-label">
-                  בנק (שם או מספר בנק)
-                  <input type="text" value={sellerBank.bank_name_or_code} onChange={(e) => setSellerBankField('bank_name_or_code', e.target.value)} required />
-                  {sellerFieldErrors.bank_name_or_code ? <span className="become-seller-field-error">{sellerFieldErrors.bank_name_or_code}</span> : null}
-                </label>
-                <div className="become-seller-row">
-                  <label className="become-seller-label">
-                    סניף
-                    <input type="text" dir="ltr" value={sellerBank.branch_number} onChange={(e) => setSellerBankField('branch_number', e.target.value)} required />
-                    {sellerFieldErrors.branch_number ? <span className="become-seller-field-error">{sellerFieldErrors.branch_number}</span> : null}
-                  </label>
-                  <label className="become-seller-label">
-                    מספר חשבון
-                    <input type="text" dir="ltr" value={sellerBank.account_number} onChange={(e) => setSellerBankField('account_number', e.target.value)} required />
-                    {sellerFieldErrors.account_number ? <span className="become-seller-field-error">{sellerFieldErrors.account_number}</span> : null}
-                  </label>
-                </div>
-              </>
-            ) : (
-              <>
-                <label className="become-seller-label">
-                  תעודת זהות
-                  <input type="text" dir="ltr" value={sellerBank.id_number} onChange={(e) => setSellerBankField('id_number', e.target.value)} required />
-                  {sellerFieldErrors.id_number ? <span className="become-seller-field-error">{sellerFieldErrors.id_number}</span> : null}
-                </label>
-                <div className="become-seller-row">
-                  <label className="become-seller-label">
-                    אימות מספר טלפון לביט
-                    <input type="tel" dir="ltr" value={bitPhoneConfirm} onChange={(e) => setBitPhoneConfirm(e.target.value)} required />
-                    {sellerFieldErrors.bit_phone_number_confirm ? <span className="become-seller-field-error">{sellerFieldErrors.bit_phone_number_confirm}</span> : null}
-                  </label>
-                </div>
-              </>
-            )}
-            <label className="become-seller-check">
-              <input type="checkbox" checked={acceptedEscrow} onChange={(e) => setAcceptedEscrow(e.target.checked)} />
-              <span>אני מסכים לקבל את התשלום רק לאחר קיום האירוע, בהתאם לתקנון האתר</span>
-            </label>
-            {sellerFieldErrors.acceptedEscrow ? (
-              <span className="become-seller-field-error become-seller-field-error--block">{sellerFieldErrors.acceptedEscrow}</span>
-            ) : null}
-          </fieldset>
-        ) : null}
-        <button type="submit" className="auth-button" disabled={saving}>
-          {saving ? 'שומר…' : mode === 'login' ? 'התחברות' : 'הרשמה'}
-        </button>
-      </form>
-      <button
-        type="button"
-        className="sell-inline-switch-btn"
-        onClick={() => {
-          setMode((prev) => (prev === 'login' ? 'register' : 'login'));
-          setError('');
-        }}
-      >
-        {mode === 'login' ? 'אין חשבון? מעבר להרשמה' : 'יש חשבון? מעבר להתחברות'}
-      </button>
-    </div>
-  );
-}
-
-function InlineBecomeSellerSection({ onSuccess }) {
-  const [expanded, setExpanded] = useState(false);
-  const [phone, setPhone] = useState('');
-  const [payoutMethod, setPayoutMethod] = useState('bank');
-  const [bitPhoneConfirm, setBitPhoneConfirm] = useState('');
-  const [acceptedEscrow, setAcceptedEscrow] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [fieldErrors, setFieldErrors] = useState({});
-  const [bank, setBank] = useState({
-    account_holder_name: '',
-    id_number: '',
-    bank_name_or_code: '',
-    branch_number: '',
-    account_number: '',
-  });
-
-  const setBankField = (k, v) => setBank((prev) => ({ ...prev, [k]: v }));
-
-  const validate = () => {
-    const fe = {};
-    if ((phone || '').trim().length < 8) fe.phone = 'נא להזין מספר טלפון תקין.';
-    if ((bank.account_holder_name || '').trim().length < 2) fe.account_holder_name = 'נא להזין שם בעל חשבון.';
-    const idRaw = (bank.id_number || '').replace(/[\s-]/g, '');
-    if (!/^\d+$/.test(idRaw) || idRaw.length < 5 || idRaw.length > 9) fe.id_number = 'נא להזין מספר תעודת זהות תקין.';
-    if (!acceptedEscrow) fe.acceptedEscrow = 'יש לאשר את תנאי הנאמנות כדי להמשיך.';
-    if (payoutMethod === 'bank') {
-      if (!(bank.bank_name_or_code || '').trim()) fe.bank_name_or_code = 'נא לציין בנק.';
-      if (!/^\d+$/.test((bank.branch_number || '').trim())) fe.branch_number = 'נא להזין מספר סניף תקין.';
-      if (!/^\d{4,}$/.test((bank.account_number || '').trim())) fe.account_number = 'נא להזין מספר חשבון תקין.';
-    } else {
-      const normalize = (v) => String(v || '').replace(/\D/g, '').replace(/^972/, '0');
-      const one = normalize(phone);
-      const two = normalize(bitPhoneConfirm);
-      if (!/^05\d{8}$/.test(one)) fe.bit_phone_number = 'נא להזין מספר טלפון ביט ישראלי תקין.';
-      if (one !== two) fe.bit_phone_number_confirm = 'מספרי הטלפון לביט אינם תואמים.';
-    }
-    return fe;
-  };
-
-  const submit = async (e) => {
-    e.preventDefault();
-    setError('');
-    const fe = validate();
-    if (Object.keys(fe).length) {
-      setFieldErrors(fe);
-      return;
-    }
-    setFieldErrors({});
-    setSaving(true);
-    try {
-      await authAPI.getCsrf();
-      await authAPI.upgradeToSeller({
-        phone_number: phone.trim(),
-        payout_method: payoutMethod,
-        bit_phone_number: payoutMethod === 'bit' ? phone.replace(/\D/g, '').replace(/^972/, '0') : '',
-        account_holder_name: bank.account_holder_name.trim(),
-        id_number: bank.id_number.replace(/[\s-]/g, ''),
-        bank_name_or_code: payoutMethod === 'bank' ? bank.bank_name_or_code.trim() : '',
-        branch_number: payoutMethod === 'bank' ? bank.branch_number.trim() : '',
-        account_number: payoutMethod === 'bank' ? bank.account_number.trim() : '',
-        accepted_escrow_terms: true,
-      });
-      onSuccess?.();
-    } catch (err) {
-      setError(parseApiMessage(err.response?.data, err.message || 'שגיאה בשדרוג החשבון.'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="listing-card sell-inline-card">
-      <button type="button" className="sell-onboarding-toggle" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
-        <span>הפוך למוכר</span>
-        <span>{expanded ? '▲' : '▼'}</span>
-      </button>
-      <div className={`sell-onboarding-accordion ${expanded ? 'expanded' : ''}`}>
-        <form onSubmit={submit} className="become-seller-form">
-          <label className="become-seller-label">מספר טלפון
-            <input type="tel" dir="ltr" value={phone} onChange={(e) => setPhone(e.target.value)} required />
-            {fieldErrors.phone ? <span className="become-seller-field-error">{fieldErrors.phone}</span> : null}
-          </label>
-          <fieldset className="become-seller-bank-fieldset">
-            <legend>איך תרצה לקבל את התשלום?</legend>
-            <div className="become-seller-payout-methods">
-              <label className="become-seller-radio"><input type="radio" checked={payoutMethod === 'bank'} onChange={() => setPayoutMethod('bank')} />העברה בנקאית</label>
-              <label className="become-seller-radio"><input type="radio" checked={payoutMethod === 'bit'} onChange={() => setPayoutMethod('bit')} />ביט</label>
-            </div>
-            {payoutMethod === 'bit' ? (
-              <p className="sell-inline-bit-disclaimer">אפשר להזין רק מספר טלפון לקבלה בביט — ללא פרטי בנק</p>
-            ) : null}
-            <label className="become-seller-label">שם בעל החשבון
-              <input type="text" value={bank.account_holder_name} onChange={(e) => setBankField('account_holder_name', e.target.value)} required />
-              {fieldErrors.account_holder_name ? <span className="become-seller-field-error">{fieldErrors.account_holder_name}</span> : null}
-            </label>
-            <label className="become-seller-label">תעודת זהות
-              <input type="text" dir="ltr" value={bank.id_number} onChange={(e) => setBankField('id_number', e.target.value)} required />
-              {fieldErrors.id_number ? <span className="become-seller-field-error">{fieldErrors.id_number}</span> : null}
-            </label>
-            {payoutMethod === 'bank' ? (
-              <>
-                <label className="become-seller-label">בנק (שם או מספר בנק)<input type="text" value={bank.bank_name_or_code} onChange={(e) => setBankField('bank_name_or_code', e.target.value)} required /></label>
-                {fieldErrors.bank_name_or_code ? <span className="become-seller-field-error">{fieldErrors.bank_name_or_code}</span> : null}
-                <div className="become-seller-row">
-                  <label className="become-seller-label">סניף<input type="text" dir="ltr" value={bank.branch_number} onChange={(e) => setBankField('branch_number', e.target.value)} required /></label>
-                  <label className="become-seller-label">מספר חשבון<input type="text" dir="ltr" value={bank.account_number} onChange={(e) => setBankField('account_number', e.target.value)} required /></label>
-                </div>
-                {fieldErrors.branch_number ? <span className="become-seller-field-error">{fieldErrors.branch_number}</span> : null}
-                {fieldErrors.account_number ? <span className="become-seller-field-error">{fieldErrors.account_number}</span> : null}
-              </>
-            ) : (
-              <label className="become-seller-label">אימות מספר טלפון לביט
-                <input type="tel" dir="ltr" value={bitPhoneConfirm} onChange={(e) => setBitPhoneConfirm(e.target.value)} required />
-                {fieldErrors.bit_phone_number ? <span className="become-seller-field-error">{fieldErrors.bit_phone_number}</span> : null}
-                {fieldErrors.bit_phone_number_confirm ? <span className="become-seller-field-error">{fieldErrors.bit_phone_number_confirm}</span> : null}
-              </label>
-            )}
-          </fieldset>
-          <label className="become-seller-check"><input type="checkbox" checked={acceptedEscrow} onChange={(e) => setAcceptedEscrow(e.target.checked)} /><span>אני מסכים לקבל את התשלום רק לאחר קיום האירוע, בהתאם לתקנון האתר</span></label>
-          {fieldErrors.acceptedEscrow ? <span className="become-seller-field-error become-seller-field-error--block">{fieldErrors.acceptedEscrow}</span> : null}
-          {error ? <div className="become-seller-error">{error}</div> : null}
-          <button type="submit" className="become-seller-submit" disabled={saving}>{saving ? 'שומר…' : 'אישור והמשך'}</button>
-        </form>
-      </div>
-    </div>
-  );
+  return fe;
 }
 
 const rangeOptions = (start, end) =>
@@ -769,8 +375,7 @@ function TicketAttachmentPreview({ file }) {
 
 const Sell = () => {
   const sellDraft = useMemo(() => readSellListingDraft(), []);
-  // ALL HOOKS MUST BE CALLED FIRST - BEFORE ANY EARLY RETURNS
-  const { user, loading: authLoading, refreshProfile } = useAuth();
+  const { user, loading: authLoading, refreshProfile, login, register } = useAuth();
   const [formData, setFormData] = useState(() => {
     const base = defaultSellFormData();
     const draftForm = sellDraft?.formData;
@@ -815,6 +420,11 @@ const Sell = () => {
   const [eventRequestSubmitting, setEventRequestSubmitting] = useState(false);
   const [eventRequestFeedback, setEventRequestFeedback] = useState(null);
   const submitAttemptedRef = useRef(false);
+  const listingSnapshotRef = useRef(null);
+  const [completionOpen, setCompletionOpen] = useState(false);
+  const [completionSaving, setCompletionSaving] = useState(false);
+  const [completionError, setCompletionError] = useState('');
+  const [completionFieldErrors, setCompletionFieldErrors] = useState({});
   /** Full event from GET /events/:id/ — includes venue_detail.sections for seating UI. */
   const [eventDetail, setEventDetail] = useState(null);
 
@@ -1170,34 +780,16 @@ const Sell = () => {
       : formData.selectedEvent || {}
   );
 
-  // NOW ALL EARLY RETURNS CAN HAPPEN AFTER ALL HOOKS
-  // Wait for auth to finish loading
+  // Wait for auth to finish loading — then show listing form for everyone (reverse funnel).
   if (authLoading) {
     return (
       <div className="sell-container">
-        <div className="listing-card">
-          <p>טוען...</p>
-        </div>
+        <SellFormSkeleton />
       </div>
     );
   }
 
-  if (!user) {
-    return (
-      <div className="sell-container">
-        <InlineAuthFunnel onAuthed={refreshProfile} />
-      </div>
-    );
-  }
-
-  if (user.role !== 'seller') {
-    return (
-      <div className="sell-container">
-        <InlineBecomeSellerSection onSuccess={refreshProfile} />
-      </div>
-    );
-  }
-
+  const isSeller = Boolean(user && user.role === 'seller');
   const handleCategoryChange = (e) => {
     const newCategory = e.target.value;
     setSelectedCategory(newCategory);
@@ -1424,6 +1016,202 @@ const Sell = () => {
 
   };
 
+  const captureListingSnapshot = () => {
+    listingSnapshotRef.current = {
+      formData: {
+        ...formData,
+        singleMultiPagePdf: formData.singleMultiPagePdf,
+        ticket_packages: (formData.ticket_packages || []).map((pkg) => ({
+          seat_number: pkg?.seat_number || '',
+          pdf_file: pkg?.pdf_file || null,
+        })),
+        selectedEvent: formData.selectedEvent,
+      },
+      uploadMethod,
+    };
+  };
+
+  const buildUpgradePayload = (payload) => {
+    const { authForm, payoutMethod, sellerBank } = payload;
+    const phone = (authForm?.phone_number || '').trim();
+    return {
+      phone_number: phone,
+      payout_method: payoutMethod,
+      bit_phone_number: payoutMethod === 'bit' ? phone.replace(/\D/g, '').replace(/^972/, '0') : '',
+      account_holder_name: sellerBank.account_holder_name.trim(),
+      id_number: sellerBank.id_number.replace(/[\s-]/g, ''),
+      bank_name_or_code: payoutMethod === 'bank' ? sellerBank.bank_name_or_code.trim() : '',
+      branch_number: payoutMethod === 'bank' ? sellerBank.branch_number.trim() : '',
+      account_number: payoutMethod === 'bank' ? sellerBank.account_number.trim() : '',
+      accepted_escrow_terms: true,
+    };
+  };
+
+  const executeTicketUpload = async (snapshot = null) => {
+    const activeForm = snapshot?.formData ?? formData;
+    const activeUploadMethod = snapshot?.uploadMethod ?? uploadMethod;
+    const ilEvent = isIsraelEvent(activeForm.selectedEvent);
+    const requiredCount = activeForm.available_quantity || 1;
+    const useSingleFile =
+      activeUploadMethod === 'single_file' && activeForm.singleMultiPagePdf && requiredCount >= 1;
+
+    setLoading(true);
+    setUploadProgress(30);
+    setUploadPhase('מכין את הקבצים להעלאה...');
+    let progressTimer = null;
+
+    const fdText = (v) => (v === undefined || v === null ? '' : String(v));
+    const qtyNum = Math.max(1, Math.min(10, parseInt(String(activeForm.available_quantity ?? 1), 10) || 1));
+    const listingPriceNum = Math.max(
+      0,
+      parseFloat(String(activeForm.listing_price ?? '').replace(',', '.')) || 0
+    );
+    const listingPriceStr = fdText(listingPriceNum);
+
+    const submitData = new FormData();
+    submitData.append('event_id', fdText(activeForm.event_id));
+    const evNameTrim = fdText(activeForm.event_name).trim();
+    if (evNameTrim) submitData.append('event_name', evNameTrim);
+    submitData.append('seat_row', fdText(activeForm.seat_row));
+    const secVal = (activeForm.section || '').trim();
+    const selectedSection = sectionOptions.find((option) => String(option.value) === String(secVal));
+    if (selectedSection?.structured && secVal) {
+      submitData.append('venue_section', fdText(secVal));
+    } else if (secVal) {
+      submitData.append('custom_section_text', fdText(secVal));
+    }
+    submitData.append('row', fdText(activeForm.row));
+    submitData.append('original_price', listingPriceStr);
+    submitData.append('listing_price', fdText(String(Math.max(0, Math.round(listingPriceNum)))));
+    if (ilEvent) submitData.append('il_legal_declaration', 'true');
+    submitData.append('delivery_method', 'instant');
+    submitData.append('available_quantity', fdText(qtyNum));
+    submitData.append('is_together', activeForm.is_together ? 'true' : 'false');
+    submitData.append('ticket_type', 'כרטיס אלקטרוני (PDF או תמונה)');
+    submitData.append('split_type', fdText(activeForm.split_type || 'כל כמות'));
+    submitData.append('is_obstructed_view', activeForm.is_obstructed_view ? 'true' : 'false');
+
+    const packages = activeForm.ticket_packages || [];
+    const globalRow = activeForm.row || '';
+
+    if (useSingleFile) {
+      const pdf0 = activeForm.singleMultiPagePdf;
+      if (!(pdf0 instanceof File) && !(pdf0 instanceof Blob)) {
+        setFieldErrors({ upload_single: 'שגיאה פנימית: קובץ כרטיס חסר. נסו לבחור את הקובץ שוב.' });
+        setLoading(false);
+        return;
+      }
+      const fname0 = pdf0 instanceof File ? pdf0.name : 'ticket.pdf';
+      submitData.append('pdf_files_count', '1');
+      submitData.append('pdf_file_0', pdf0, fname0);
+      packages.forEach((pkg, index) => {
+        submitData.append(`row_number_${index}`, fdText(globalRow));
+        submitData.append(`seat_number_${index}`, fdText(pkg?.seat_number));
+      });
+    } else {
+      packages.forEach((pkg, index) => {
+        if (pkg?.pdf_file) {
+          const f = pkg.pdf_file;
+          const fn = f instanceof File ? f.name : `ticket_${index}.pdf`;
+          submitData.append(`pdf_file_${index}`, f, fn);
+        }
+        submitData.append(`row_number_${index}`, fdText(globalRow));
+        submitData.append(`seat_number_${index}`, fdText(pkg?.seat_number));
+      });
+      submitData.append('pdf_files_count', fdText(packages.length));
+    }
+
+    try {
+      setUploadProgress(55);
+      setUploadPhase('מעלה את הכרטיסים לאימות מאובטח...');
+      progressTimer = window.setInterval(() => {
+        setUploadProgress((prev) => Math.min(90, prev + 4));
+      }, 700);
+      await ticketAPI.createTicket(submitData);
+      setUploadProgress(100);
+      setUploadPhase('הכרטיסים נשמרו בהצלחה.');
+      submitAttemptedRef.current = false;
+      setSuccessWasIsrael(ilEvent);
+      writeSellListingDraft(null);
+      listingSnapshotRef.current = null;
+      setSuccess(true);
+    } catch (err) {
+      const raw = `${err?.message || ''} ${JSON.stringify(err?.response?.data || {})}`;
+      const errorMessage = /cloudinary|storage|upload|media/i.test(raw)
+        ? 'העלאת הקובץ נכשלה מול שירות האחסון. בדקו שהקובץ תקין ועד 5MB ונסו שוב בעוד רגע.'
+        : apiErrorMessageHe(err, 'יצירת רשימת הכרטיס נכשלה. אנא נסה שוב.');
+      setFieldErrors({});
+      setError(errorMessage);
+      toastError(errorMessage);
+    } finally {
+      if (progressTimer != null) window.clearInterval(progressTimer);
+      setLoading(false);
+      setUploadProgress(0);
+      setUploadPhase('');
+    }
+  };
+
+  const handleCompletionSubmit = async (payload) => {
+    const needsAuth = !user;
+    const fe = validateCompletionPayload(payload, { needsAuth });
+    if (Object.keys(fe).length) {
+      setCompletionFieldErrors(fe);
+      return;
+    }
+    setCompletionFieldErrors({});
+    setCompletionError('');
+    setCompletionSaving(true);
+    try {
+      const { authMode, authForm } = payload;
+
+      if (!user) {
+        if (authMode === 'register') {
+          const reg = await register({
+            username: authForm.email.trim(),
+            email: authForm.email.trim(),
+            phone_number: authForm.phone_number.trim(),
+            first_name: authForm.first_name.trim(),
+            last_name: authForm.first_name.trim() || '-',
+            password: authForm.password,
+            password2: authForm.password,
+            role: 'buyer',
+          });
+          if (!reg.success) {
+            setCompletionError(parseApiMessage(reg.error, 'ההרשמה נכשלה.'));
+            return;
+          }
+          const loginRes = await login(authForm.email.trim(), authForm.password);
+          if (!loginRes.success) {
+            setCompletionError(loginRes.errorHebrew || loginRes.error || 'ההתחברות נכשלה לאחר הרשמה.');
+            return;
+          }
+        } else {
+          const loginRes = await login(authForm.email.trim(), authForm.password);
+          if (!loginRes.success) {
+            setCompletionError(loginRes.errorHebrew || loginRes.error || 'ההתחברות נכשלה.');
+            return;
+          }
+        }
+      }
+
+      await authAPI.getCsrf();
+      const profileRes = await authAPI.getProfile();
+      const currentUser = profileRes.data?.user || profileRes.data;
+      if (currentUser?.role !== 'seller') {
+        await authAPI.upgradeToSeller(buildUpgradePayload(payload));
+        await refreshProfile();
+      }
+
+      setCompletionOpen(false);
+      const snapshot = listingSnapshotRef.current;
+      await executeTicketUpload(snapshot);
+    } catch (err) {
+      setCompletionError(parseApiMessage(err.response?.data, err.message || 'הפעולה נכשלה.'));
+    } finally {
+      setCompletionSaving(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     submitAttemptedRef.current = true;
@@ -1433,7 +1221,6 @@ const Sell = () => {
     setUploadProgress(5);
     setUploadPhase('בודק את פרטי הכרטיס והקבצים...');
     setLoading(true);
-    let progressTimer = null;
 
     if (!sellerListingTermsAccepted) {
       setFieldErrors({ terms: 'יש לאשר את תנאי ההצהרה כדי להמשיך' });
@@ -1448,7 +1235,6 @@ const Sell = () => {
       return;
     }
 
-    const ilEvent = isIsraelEvent(formData.selectedEvent);
     if (formData.listing_price === '' || formData.listing_price == null) {
       setFieldErrors({ listing_price: 'נא להזין מחיר מכירה.' });
       setLoading(false);
@@ -1573,107 +1359,18 @@ const Sell = () => {
       }
     }
 
-    setUploadProgress(30);
-    setUploadPhase('מכין את הקבצים להעלאה...');
-
-    // Create FormData for file upload — never append undefined/null as values (multipart-safe scalars).
-    const fdText = (v) => (v === undefined || v === null ? '' : String(v));
-    const qtyNum = Math.max(1, Math.min(10, parseInt(String(formData.available_quantity ?? 1), 10) || 1));
-    const listingPriceNum = Math.max(
-      0,
-      parseFloat(String(formData.listing_price ?? '').replace(',', '.')) || 0
-    );
-    const listingPriceStr = fdText(listingPriceNum);
-
-    const submitData = new FormData();
-    submitData.append('event_id', fdText(formData.event_id));
-    const evNameTrim = fdText(formData.event_name).trim();
-    if (evNameTrim) {
-      submitData.append('event_name', evNameTrim);
-    }
-    submitData.append('seat_row', fdText(formData.seat_row)); // Legacy field
-    const secVal = (formData.section || '').trim();
-    const selectedSection = sectionOptions.find((option) => String(option.value) === String(secVal));
-    if (selectedSection?.structured && secVal) {
-      submitData.append('venue_section', fdText(secVal));
-    } else if (secVal) {
-      submitData.append('custom_section_text', fdText(secVal));
-    }
-    submitData.append('row', fdText(formData.row));
-    submitData.append('original_price', listingPriceStr);
-    const askForApi = String(Math.max(0, Math.round(listingPriceNum)));
-    submitData.append('listing_price', fdText(askForApi));
-    if (ilEvent) {
-      submitData.append('il_legal_declaration', 'true');
-    }
-    submitData.append('delivery_method', 'instant');
-    submitData.append('available_quantity', fdText(qtyNum));
-    submitData.append('is_together', formData.is_together ? 'true' : 'false');
-    // Master Architecture fields
-    submitData.append('ticket_type', 'כרטיס אלקטרוני (PDF או תמונה)');
-    submitData.append('split_type', fdText(formData.split_type || 'כל כמות'));
-    // Multipart: send explicit boolean strings (avoid FormData coercing booleans oddly).
-    submitData.append('is_obstructed_view', formData.is_obstructed_view ? 'true' : 'false');
-    
-    const packages = formData.ticket_packages || [];
-    const globalRow = formData.row || '';
-
-    if (useSingleFile) {
-      // Single PDF auto-split: backend receives pdf_file_0, pdf_files_count=1
-      const pdf0 = formData.singleMultiPagePdf;
-      if (!(pdf0 instanceof File) && !(pdf0 instanceof Blob)) {
-        setFieldErrors({ upload_single: 'שגיאה פנימית: קובץ כרטיס חסר. נסו לבחור את הקובץ שוב.' });
-        setLoading(false);
-        return;
-      }
-      const fname0 = pdf0 instanceof File ? pdf0.name : 'ticket.pdf';
-      submitData.append('pdf_files_count', '1');
-      submitData.append('pdf_file_0', pdf0, fname0);
-      packages.forEach((pkg, index) => {
-        submitData.append(`row_number_${index}`, fdText(globalRow));
-        submitData.append(`seat_number_${index}`, fdText(pkg?.seat_number));
-      });
-    } else {
-      // Separate files: each ticket gets its own PDF (third arg = filename; required by some stacks)
-      packages.forEach((pkg, index) => {
-        if (pkg?.pdf_file) {
-          const f = pkg.pdf_file;
-          const fn = f instanceof File ? f.name : `ticket_${index}.pdf`;
-          submitData.append(`pdf_file_${index}`, f, fn);
-        }
-        submitData.append(`row_number_${index}`, fdText(globalRow));
-        submitData.append(`seat_number_${index}`, fdText(pkg?.seat_number));
-      });
-      submitData.append('pdf_files_count', fdText(packages.length));
-    }
-
-    try {
-      setUploadProgress(55);
-      setUploadPhase('מעלה את הכרטיסים לאימות מאובטח...');
-      progressTimer = window.setInterval(() => {
-        setUploadProgress((prev) => Math.min(90, prev + 4));
-      }, 700);
-      await ticketAPI.createTicket(submitData);
-      setUploadProgress(100);
-      setUploadPhase('הכרטיסים נשמרו בהצלחה.');
-      submitAttemptedRef.current = false;
-      setSuccessWasIsrael(ilEvent);
-      writeSellListingDraft(null);
-      setSuccess(true);
-    } catch (err) {
-      const raw = `${err?.message || ''} ${JSON.stringify(err?.response?.data || {})}`;
-      const errorMessage = /cloudinary|storage|upload|media/i.test(raw)
-        ? 'העלאת הקובץ נכשלה מול שירות האחסון. בדקו שהקובץ תקין ועד 5MB ונסו שוב בעוד רגע.'
-        : apiErrorMessageHe(err, 'יצירת רשימת הכרטיס נכשלה. אנא נסה שוב.');
-      setFieldErrors({});
-      setError(errorMessage);
-      toastError(errorMessage);
-    } finally {
-      if (progressTimer != null) window.clearInterval(progressTimer);
+    if (!isSeller) {
+      captureListingSnapshot();
+      setCompletionOpen(true);
+      setCompletionError('');
+      setCompletionFieldErrors({});
       setLoading(false);
       setUploadProgress(0);
       setUploadPhase('');
+      return;
     }
+
+    await executeTicketUpload();
   };
 
   if (success) {
@@ -1701,7 +1398,7 @@ const Sell = () => {
 
   return (
     <div className="sell-container">
-      {loading && (
+      {loading && !completionOpen && (
         <div className="sell-upload-overlay" role="status" aria-live="polite" aria-busy="true">
           <div className="sell-upload-overlay-card">
             <div className="sell-upload-spinner" aria-hidden />
@@ -2409,7 +2106,7 @@ const Sell = () => {
           </div>
           <SellFieldError message={fieldErrors.terms} />
 
-          <button type="submit" disabled={loading} className="submit-button sell-submit--desktop-only">
+          <button type="submit" disabled={loading || completionSaving} className="submit-button sell-submit--desktop-only">
             {loading ? (
               <>
                 מפרסם כרטיס… <span className="button-spinner" aria-hidden />
@@ -2424,7 +2121,7 @@ const Sell = () => {
           <button
             type="submit"
             form="sell-listing-form"
-            disabled={loading}
+            disabled={loading || completionSaving}
             className="submit-button sell-submit-sticky-btn"
           >
             {loading ? (
@@ -2437,6 +2134,18 @@ const Sell = () => {
           </button>
         </div>
       </div>
+
+      <SellCompletionModal
+        open={completionOpen}
+        needsAuth={!user}
+        saving={completionSaving}
+        error={completionError}
+        fieldErrors={completionFieldErrors}
+        onClose={() => {
+          if (!completionSaving) setCompletionOpen(false);
+        }}
+        onSubmit={handleCompletionSubmit}
+      />
     </div>
   );
 };
