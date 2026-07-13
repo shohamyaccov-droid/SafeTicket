@@ -49,7 +49,7 @@ BEN_TZUR_CAESAREA_DATES = (
     (2026, 7, 27, 21, 0),
 )
 
-REMOVED_ARTIST_NAMES = ('עומר אדם', 'אייל גולן')
+REMOVED_ARTIST_NAMES = ('עומר אדם',)
 
 
 @dataclass(frozen=True)

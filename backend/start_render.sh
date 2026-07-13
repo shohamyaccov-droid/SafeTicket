@@ -37,6 +37,10 @@ python seed_production.py
 echo "[start_render] Concert catalog (Mor Ravia, Pe'er Tasi, Itay Levi, Eden Ben Zaken, Ben Tzur)..."
 python manage.py seed_august_2026_concerts || true
 
+echo "[start_render] High-demand Menora events (Odiya & Osher Cohen, Eyal Golan Sept 2026)..."
+python manage.py seed_odiya_osher_hope_event || true
+python manage.py seed_eyal_golan_menora || true
+
 echo "[start_render] Ramat Gan Stadium venue sections (Sell page dropdown)..."
 python manage.py seed_ramat_gan_sections || true
 
