@@ -46,8 +46,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  min-height: 38px;
-  padding: 0.42rem 0.62rem;
+  min-height: 44px;
+  padding: 0.42rem 0.75rem;
   border-radius: 10px;
   border: 1px solid var(--primary-blue);
   background: rgba(0, 69, 175, 0.08);
@@ -557,8 +557,8 @@
   }
 
   .nav-sell-cta-inline {
-    min-height: 34px;
-    padding: 0.36rem 0.5rem;
+    min-height: 44px;
+    padding: 0.4rem 0.55rem;
     font-size: 0.76rem;
     border-radius: 9px;
   }

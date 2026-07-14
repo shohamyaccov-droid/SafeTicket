@@ -1295,13 +1295,18 @@ def update_ticket_price(request, ticket_id):
         
         # Update price
         new_price = request.data.get('original_price')
-        if new_price:
+        if new_price is not None and new_price != '':
             try:
-                from decimal import Decimal, ROUND_HALF_UP
+                from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
                 # Round to 2 decimal places to match model's save() behavior
                 new_price_decimal = Decimal(str(new_price)).quantize(
                     Decimal('1'), rounding=ROUND_HALF_UP
                 )
+                if new_price_decimal <= 0:
+                    return Response(
+                        {'error': 'המחיר חייב להיות מספר חיובי.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 
                 # Determine which tickets to update
                 if ticket.listing_group_id:
@@ -1335,7 +1340,7 @@ def update_ticket_price(request, ticket_id):
                     response_data['updated_count'] = updated_count
                 
                 return Response(response_data, status=status.HTTP_200_OK)
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, InvalidOperation):
                 return Response(
                     {'error': 'Invalid price format'},
                     status=status.HTTP_400_BAD_REQUEST

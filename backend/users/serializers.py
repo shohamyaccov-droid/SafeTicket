@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
@@ -755,12 +756,18 @@ class TicketSerializer(serializers.ModelSerializer):
     seller_is_verified = serializers.BooleanField(source='seller.is_verified_seller', read_only=True)
     pdf_file_url = serializers.SerializerMethodField()
     receipt_file_url = serializers.SerializerMethodField()
-    original_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    original_price = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        min_value=Decimal('0.01'),
+    )
     listing_price = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
         required=False,
         write_only=True,
+        min_value=Decimal('0.01'),
         help_text='Listing / buyer price. If original_price is omitted, it is copied from this value.',
     )
     asking_price = serializers.DecimalField(

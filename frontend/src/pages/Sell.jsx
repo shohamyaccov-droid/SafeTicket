@@ -1202,9 +1202,19 @@ const Sell = () => {
         await refreshProfile();
       }
 
-      setCompletionOpen(false);
+      // Keep modal open until upload finishes so network drops leave a recoverable UI
+      // and listingSnapshotRef File objects stay reachable for retry.
       const snapshot = listingSnapshotRef.current;
+      if (!snapshot?.formData) {
+        setCompletionError('פרטי הכרטיס לא נשמרו. סגרו את החלון, בדקו שהקבצים עדיין נבחרו, ונסו שוב.');
+        return;
+      }
       await executeTicketUpload(snapshot);
+      if (listingSnapshotRef.current === null) {
+        setCompletionOpen(false);
+      } else {
+        setCompletionError('העלאת הכרטיס נכשלה. תוכלו לנסות שוב בלי למלא מחדש את פרטי הזיכוי.');
+      }
     } catch (err) {
       setCompletionError(parseApiMessage(err.response?.data, err.message || 'הפעולה נכשלה.'));
     } finally {

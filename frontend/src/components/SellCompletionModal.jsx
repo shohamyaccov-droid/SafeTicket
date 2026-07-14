@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import '../components/BecomeSellerModal.css';
 import './SellCompletionModal.css';
 
@@ -71,6 +71,20 @@ export default function SellCompletionModal({
     account_number: '',
   });
 
+  useEffect(() => {
+    if (!open) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !saving) onClose?.();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open, saving, onClose]);
+
   if (!open) return null;
 
   const setSellerBankField = (key, value) => {
@@ -84,6 +98,7 @@ export default function SellCompletionModal({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (saving) return;
     onSubmit({
       authMode,
       authForm,
@@ -95,9 +110,12 @@ export default function SellCompletionModal({
   };
 
   const showPayoutPhone = !needsAuth || authMode === 'login';
+  const handleOverlayClose = () => {
+    if (!saving) onClose?.();
+  };
 
   return (
-    <div className="sell-completion-overlay" role="presentation" onClick={onClose}>
+    <div className="sell-completion-overlay" role="presentation" onClick={handleOverlayClose}>
       <div
         className="sell-completion-modal"
         role="dialog"
@@ -105,7 +123,13 @@ export default function SellCompletionModal({
         aria-labelledby="sell-completion-title"
         onClick={(ev) => ev.stopPropagation()}
       >
-        <button type="button" className="sell-completion-close" onClick={onClose} aria-label="סגור">
+        <button
+          type="button"
+          className="sell-completion-close"
+          onClick={handleOverlayClose}
+          aria-label="סגור"
+          disabled={saving}
+        >
           ×
         </button>
         <h2 id="sell-completion-title" className="sell-completion-title">

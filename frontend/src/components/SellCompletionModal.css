@@ -52,6 +52,11 @@
   cursor: pointer;
 }
 
+.sell-completion-close:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .sell-completion-title {
   margin: 0 0 0.35rem;
   font-size: 1.35rem;
@@ -83,7 +88,21 @@
 .sell-completion-field input {
   min-height: 44px;
   padding: 0.55rem 0.7rem;
-  font-size: 1rem;
+  font-size: 16px; /* iOS Safari: avoid auto-zoom on focus */
+}
+
+.become-seller-payout-methods .become-seller-radio {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.25rem;
+  cursor: pointer;
+}
+
+.become-seller-check {
+  min-height: 44px;
+  align-items: flex-start;
 }
 
 .sell-completion-field .sell-password-field-wrap input {
