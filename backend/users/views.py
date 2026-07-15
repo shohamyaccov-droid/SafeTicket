@@ -360,6 +360,12 @@ def _order_pending_checkout_response(order, request):
 
 
 # Cart abandonment timeout (minutes)
+from users.ticket_status import (
+    HE_TICKET_TAKEN,
+    TICKET_STATUS_TAKEN,
+    assert_ticket_not_taken,
+)
+
 RESERVATION_TIMEOUT_MINUTES = 10
 HE_TICKET_HELD_BY_OTHER = 'הכרטיס כבר נתפס על ידי משתמש אחר. ניתן לנסות שוב בעוד כמה דקות.'
 HE_TICKET_NOT_AVAILABLE = 'הכרטיס אינו זמין יותר. אנא בחרו כרטיס אחר.'
@@ -367,6 +373,8 @@ HE_RESERVATION_RELEASE_FORBIDDEN = 'אין הרשאה לשחרר את השמיר
 HE_OFFER_NOT_PENDING = 'ההצעה כבר אינה זמינה. ייתכן שהיא טופלה על ידי משתמש אחר.'
 HE_OFFER_EXPIRED = 'פג תוקף ההצעה.'
 HE_OFFER_NOT_ENOUGH_TICKETS = 'אין מספיק כרטיסים זמינים עבור ההצעה הזו.'
+# Re-export for tests / API clients that import from views
+__all_ticket_status_exports = (HE_TICKET_TAKEN, TICKET_STATUS_TAKEN)
 
 
 def _find_existing_pending_checkout(*, ticket_ids, quantity, user=None, guest_email: str = ''):
@@ -1518,6 +1526,22 @@ def create_order(request):
                         )
 
                     logger.debug(f"Reference ticket found: ID={reference_ticket.id}, status={reference_ticket.status}, price={reference_ticket.original_price}")
+                    # Permanent taken lock: block when the group has no purchasable rows
+                    has_purchasable = Ticket.objects.filter(
+                        listing_group_id=listing_group_id,
+                        status='active',
+                        available_quantity__gt=0,
+                    ).exists()
+                    if not has_purchasable and Ticket.objects.filter(
+                        listing_group_id=listing_group_id,
+                        status=TICKET_STATUS_TAKEN,
+                    ).exists():
+                        return assert_ticket_not_taken(
+                            Ticket.objects.filter(
+                                listing_group_id=listing_group_id,
+                                status=TICKET_STATUS_TAKEN,
+                            ).first()
+                        )
                     # Validate total_amount ONLY when NOT a negotiated offer (offer_id overrides ticket price)
                     if not negotiated_offer:
                         try:
@@ -1703,6 +1727,9 @@ def create_order(request):
 
                 _sync_expired_cart_reservation(ticket)
                 ticket.refresh_from_db()
+                taken_resp = assert_ticket_not_taken(ticket)
+                if taken_resp is not None:
+                    return taken_resp
                 if ticket.status == 'reserved':
                     if ticket.reserved_by_id and ticket.reserved_by_id != request.user.id:
                         return Response(
@@ -2163,6 +2190,10 @@ def payment_simulation(request):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
+            taken_resp = assert_ticket_not_taken(ticket)
+            if taken_resp is not None:
+                return taken_resp
+
             # Re-verify: ticket was just sold to someone else
             if ticket.status not in ['active', 'reserved']:
                 return Response(
@@ -2363,6 +2394,22 @@ def guest_checkout(request):
                             status=status.HTTP_400_BAD_REQUEST
                         )
 
+                    has_purchasable = Ticket.objects.filter(
+                        listing_group_id=listing_group_id,
+                        status='active',
+                        available_quantity__gt=0,
+                    ).exists()
+                    if not has_purchasable and Ticket.objects.filter(
+                        listing_group_id=listing_group_id,
+                        status=TICKET_STATUS_TAKEN,
+                    ).exists():
+                        return assert_ticket_not_taken(
+                            Ticket.objects.filter(
+                                listing_group_id=listing_group_id,
+                                status=TICKET_STATUS_TAKEN,
+                            ).first()
+                        )
+
                     logger.debug(f"Guest checkout - IGNORING ticket_id {ticket_id}, looking for active tickets in group {listing_group_id}")
 
                     # Find all available tickets in the same listing group
@@ -2503,6 +2550,10 @@ def guest_checkout(request):
                         {'error': 'Tickets can only be bought in pairs'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
+
+                taken_resp = assert_ticket_not_taken(ticket)
+                if taken_resp is not None:
+                    return taken_resp
 
                 # Check if ticket is still available (only for single ticket purchases)
                 if ticket.status not in ['active', 'reserved']:
@@ -3264,6 +3315,10 @@ class TicketViewSet(viewsets.ModelViewSet):
                 ticket = Ticket.objects.select_for_update().get(pk=pk)
                 _sync_expired_cart_reservation(ticket)
 
+                taken_resp = assert_ticket_not_taken(ticket)
+                if taken_resp is not None:
+                    return taken_resp
+
                 if ticket.status == 'reserved':
                     if ticket.reserved_at:
                         expires_at = ticket.reserved_at + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
@@ -3572,13 +3627,16 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
         )
         # Lazy cart abandonment cleanup
         release_abandoned_carts()
-        # Public marketplace: only listable inventory (active + qty > 0)
+        # Public marketplace: active inventory + permanently taken (נתפס) for disabled UI
+        from django.db.models import Q
+
         tickets = ticket_queryset_defer_event_rollout_columns(
-            Ticket.objects.filter(
-                event=event,
-                status='active',
-                available_quantity__gt=0,
-            ).select_related('event', 'event__venue_place', 'seller', 'venue_section')
+            Ticket.objects.filter(event=event)
+            .filter(
+                Q(status='active', available_quantity__gt=0)
+                | Q(status=TICKET_STATUS_TAKEN)
+            )
+            .select_related('event', 'event__venue_place', 'seller', 'venue_section')
         )
         
         # Filtering

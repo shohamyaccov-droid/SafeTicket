@@ -43,6 +43,11 @@ import { Helmet } from 'react-helmet-async';
 import { BUYER_SERVICE_FEE_PERCENT } from '../constants/pricing';
 import EventJsonLd from '../components/EventJsonLd';
 import { eventHref } from '../utils/eventSeo';
+import {
+  filterMarketplaceTickets,
+  isListingGroupTaken,
+} from '../utils/ticketAvailability';
+import TakenBuyButton from '../components/TakenBuyButton';
 import './EventDetailsPage.css';
 
 /** Absolute URL for OG/Twitter when the SPA has no event image yet. */
@@ -161,12 +166,16 @@ const EventDetailsPage = () => {
       }
       
       groups[groupKey].tickets.push(ticket);
-      // FIX: Count by number of tickets in group, not by available_quantity
-      // Each ticket has available_quantity=1, so we just count tickets
-      groups[groupKey].available_count += 1; // Count tickets, not quantity
+      // Count only purchasable seats; permanently taken (נתפס) stay visible but unavailable
+      if (ticket.status !== 'taken') {
+        groups[groupKey].available_count += 1;
+      }
     });
-    
-    const grouped = Object.values(groups);
+
+    const grouped = Object.values(groups).map((g) => ({
+      ...g,
+      is_taken: isListingGroupTaken(g),
+    }));
 
     return grouped;
   };
@@ -330,14 +339,8 @@ const EventDetailsPage = () => {
           }
         }
         const raw = Array.isArray(ticketsData) ? ticketsData : [];
-        // Defense in depth: never show sold or zero-qty rows if API/cache is stale
-        const ticketsArray = raw.filter(
-          (t) =>
-            t &&
-            t.status !== 'sold' &&
-            t.status !== 'pending_payout' &&
-            Number(t.available_quantity) > 0
-        );
+        // Defense in depth: drop sold/zero-qty; keep permanently taken (נתפס) for disabled UI
+        const ticketsArray = filterMarketplaceTickets(raw);
         setTickets(ticketsArray);
         return ticketsArray;
       } catch (e) {
@@ -658,6 +661,13 @@ const EventDetailsPage = () => {
     if (!ticketGroup) {
       return;
     }
+    if (isListingGroupTaken(ticketGroup)) {
+      setToast({
+        message: 'הכרטיס נתפס ואינו זמין לרכישה.',
+        type: 'error',
+      });
+      return;
+    }
     if (buyOpeningRef.current) return;
     buyOpeningRef.current = true;
     setBuyOpeningKey(stableListingGroupKey(ticketGroup));
@@ -679,8 +689,13 @@ const EventDetailsPage = () => {
         (g) => stableListingGroupKey(g) === targetKey && (g.available_count || 0) > 0
       );
       if (!matchingFresh) {
+        const takenMatch = freshGroups.find(
+          (g) => stableListingGroupKey(g) === targetKey && isListingGroupTaken(g)
+        );
         setToast({
-          message: 'הכרטיס נמכר ברגע זה. ריעננו את הרשימה – נסה כרטיס אחר.',
+          message: takenMatch
+            ? 'הכרטיס נתפס ואינו זמין לרכישה.'
+            : 'הכרטיס נמכר ברגע זה. ריעננו את הרשימה – נסה כרטיס אחר.',
           type: 'error',
         });
         return;
@@ -1598,6 +1613,11 @@ const EventDetailsPage = () => {
                           <div className="your-listing-banner" role="status">
                             <span className="your-listing-icon" aria-hidden="true">📌</span>
                             <span>זה המודעה שלך - לא ניתן לרכוש או להציע</span>
+                          </div>
+                        ) : isListingGroupTaken(group) ? (
+                          <div className="buy-button-wrapper">
+                            <TakenBuyButton />
+                            <span className="micro-trust-text">כרטיס זה כבר אינו זמין לרכישה</span>
                           </div>
                         ) : (
                           <>

@@ -370,6 +370,8 @@ class Ticket(models.Model):
         ('pending_approval', 'Pending Approval'),
         ('active', 'Active'),
         ('reserved', 'Reserved'),
+        # Permanent marketplace lock (demo/QA inventory) — distinct from cart "reserved".
+        ('taken', 'Taken'),
         ('sold', 'Sold'),
         ('pending_payout', 'Pending Payout'),
         ('paid_out', 'Paid Out'),

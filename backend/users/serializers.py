@@ -1094,6 +1094,7 @@ class TicketListSerializer(serializers.ModelSerializer):
     split_type = serializers.CharField(required=False, allow_blank=True, allow_null=True, read_only=True)
     has_pdf_file = serializers.SerializerMethodField()
     is_reserved_slot = serializers.SerializerMethodField()
+    is_taken = serializers.SerializerMethodField()
     currency = serializers.SerializerMethodField()
     # Event data
     event_name = serializers.SerializerMethodField()
@@ -1112,7 +1113,7 @@ class TicketListSerializer(serializers.ModelSerializer):
             'row_number', 'seat_number', 'listing_group_id',
             'original_price', 'asking_price', 'currency', 'delivery_method',
             'is_together', 'available_quantity', 'split_type', 'status', 'has_pdf_file',
-            'is_reserved_slot', 'created_at'
+            'is_reserved_slot', 'is_taken', 'created_at'
         )
         read_only_fields = fields
 
@@ -1121,6 +1122,9 @@ class TicketListSerializer(serializers.ModelSerializer):
 
     def get_is_reserved_slot(self, obj):
         return obj.status == 'reserved'
+
+    def get_is_taken(self, obj):
+        return obj.status == 'taken'
     
     def get_event_name(self, obj):
         return obj.event.name if obj.event else (obj.event_name or '')

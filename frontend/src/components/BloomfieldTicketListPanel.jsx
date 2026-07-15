@@ -320,6 +320,23 @@ export default function BloomfieldTicketListPanel({
                       >
                         זה המודעה שלך — לא ניתן לרכוש או להציע
                       </div>
+                    ) : group.is_taken || (group.tickets || []).every((t) => t?.status === 'taken') ? (
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          className="min-h-[44px] rounded-lg bg-slate-300 px-5 py-2.5 text-sm font-bold text-slate-600 cursor-not-allowed"
+                          disabled
+                          aria-disabled="true"
+                          tabIndex={-1}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                        >
+                          נתפס
+                        </button>
+                        <p className="text-xs text-slate-500">כרטיס זה כבר אינו זמין לרכישה</p>
+                      </div>
                     ) : (
                       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                         <button

@@ -19,6 +19,9 @@ import {
   BUYER_FEE_PERCENT_WITH_COUPON,
   BUYER_SERVICE_FEE_PERCENT,
 } from '../constants/pricing';
+import CheckoutLegalAcceptance, {
+  validateLegalAcceptance,
+} from './CheckoutLegalAcceptance';
 import './CheckoutModal.css';
 
 /** Buy Now: server cart hold (see TicketViewSet reserve). Negotiation: post-accept checkout window. */
@@ -194,6 +197,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const [appliedCoupon, setAppliedCoupon] = useState(null); // server preview payload
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponError, setCouponError] = useState('');
+  const [legalAccepted, setLegalAccepted] = useState(false);
+  const [legalError, setLegalError] = useState('');
   const couponApplyLockRef = useRef(false);
   const timerRef = useRef(null);
   const reservationRef = useRef(false); // Track if reservation was made
@@ -538,6 +543,13 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     if (loading) {
       return;
     }
+    const legalMsg = validateLegalAcceptance(legalAccepted);
+    if (legalMsg) {
+      setLegalError(legalMsg);
+      setError(legalMsg);
+      return;
+    }
+    setLegalError('');
     if (!skipCartReserveForNegotiatedOffer && !reservationActive) {
       setError(reservationInitializing ? 'שומרים את הכרטיס עבורך… נסה שוב בעוד רגע.' : 'הכרטיס עדיין לא נשמר. נסה שוב בעוד רגע.');
       return;
@@ -1107,7 +1119,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const waitingForReservation =
     !skipCartReserveForNegotiatedOffer && !reservationActive && step === 'payment';
   const paymentSubmitDisabled =
-    loading || checkoutSucceeded || timeRemaining === 0 || waitingForReservation || reservationInitializing;
+    loading ||
+    checkoutSucceeded ||
+    timeRemaining === 0 ||
+    waitingForReservation ||
+    reservationInitializing ||
+    !legalAccepted;
 
   const handleClose = async () => {
     if (pdfUrl) {
@@ -1635,6 +1652,15 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 {error || 'שגיאה לא ידועה'}
               </div>
             )}
+
+            <CheckoutLegalAcceptance
+              checked={legalAccepted}
+              onChange={(next) => {
+                setLegalAccepted(next);
+                if (next) setLegalError('');
+              }}
+              error={legalError}
+            />
             
             <div className="button-group checkout-buttons-row modal-actions">
               <button
