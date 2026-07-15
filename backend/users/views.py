@@ -3524,6 +3524,12 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
 
         return event_queryset_defer_rollout_columns(queryset)
     
+    def get_object(self):
+        from users.seo import resolve_event_by_identifier
+
+        queryset = self.filter_queryset(self.get_queryset())
+        return resolve_event_by_identifier(self.kwargs.get('pk'), queryset)
+
     def retrieve(self, request, *args, **kwargs):
         """Override retrieve to increment view_count"""
         instance = self.get_object()
@@ -3536,12 +3542,20 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
             logger.warning('Event.retrieve: refresh view_count skipped', exc_info=True)
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
-    
+
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
-    
+
+    @action(detail=True, methods=['get'], url_path='seo')
+    def seo(self, request, pk=None):
+        """Public SEO payload for SPA inject servers / validators."""
+        from users.seo import build_event_seo_payload
+
+        event = self.get_object()
+        return Response(build_event_seo_payload(event, request=request))
+
     @action(detail=True, methods=['get'])
     def tickets(self, request, pk=None):
         """
@@ -3550,7 +3564,12 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
         import logging
         from django.db.models import F
         logger = logging.getLogger(__name__)
-        event = get_object_or_404(event_queryset_defer_rollout_columns(Event.objects.all()), pk=pk)
+        from users.seo import resolve_event_by_identifier
+
+        event = resolve_event_by_identifier(
+            pk,
+            event_queryset_defer_rollout_columns(Event.objects.all()),
+        )
         # Lazy cart abandonment cleanup
         release_abandoned_carts()
         # Public marketplace: only listable inventory (active + qty > 0)

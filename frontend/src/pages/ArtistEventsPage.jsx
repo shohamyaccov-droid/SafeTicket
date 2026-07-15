@@ -9,6 +9,7 @@ import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import { toastError } from '../utils/toast';
 import { formatArtistEventRowDate, displayEventVenueName } from '../utils/eventLocalTime';
 import { pickMostSupplyEventId } from '../utils/artistEventSupply';
+import { eventHref } from '../utils/eventSeo';
 import './ArtistEventsPage.css';
 
 const ArtistEventsPage = () => {
@@ -106,8 +107,12 @@ const ArtistEventsPage = () => {
   );
 
   const openEvent = useCallback(
-    (eventId) => {
-      navigate(`/event/${eventId}`);
+    (eventOrId) => {
+      if (eventOrId && typeof eventOrId === 'object') {
+        navigate(eventHref(eventOrId));
+        return;
+      }
+      navigate(`/event/${eventOrId}`);
     },
     [navigate]
   );
@@ -180,11 +185,11 @@ const ArtistEventsPage = () => {
                   className="event-row"
                   role="link"
                   tabIndex={0}
-                  onClick={() => openEvent(event.id)}
+                  onClick={() => openEvent(event)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      openEvent(event.id);
+                      openEvent(event);
                     }
                   }}
                 >

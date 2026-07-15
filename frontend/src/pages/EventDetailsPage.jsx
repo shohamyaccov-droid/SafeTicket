@@ -41,6 +41,8 @@ import { apiErrorMessageHe } from '../utils/apiErrors';
 import { formatEventDateTimeWithLocality, formatEventLocation } from '../utils/eventLocalTime';
 import { Helmet } from 'react-helmet-async';
 import { BUYER_SERVICE_FEE_PERCENT } from '../constants/pricing';
+import EventJsonLd from '../components/EventJsonLd';
+import { eventHref } from '../utils/eventSeo';
 import './EventDetailsPage.css';
 
 /** Absolute URL for OG/Twitter when the SPA has no event image yet. */
@@ -77,7 +79,8 @@ function stableListingGroupKey(group) {
 }
 
 const EventDetailsPage = () => {
-  const { eventId } = useParams();
+  const { eventSlug, eventId } = useParams();
+  const eventKey = eventSlug || eventId;
   const navigate = useNavigate();
   const { user } = useAuth();
   const [event, setEvent] = useState(null);
@@ -317,7 +320,7 @@ const EventDetailsPage = () => {
         if (filters.maxPrice) params.max_price = filters.maxPrice;
         if (filters.minQuantity) params.min_quantity = filters.minQuantity;
         params.sort = sortBy;
-        const ticketsResponse = await eventAPI.getEventTickets(eventId, params);
+        const ticketsResponse = await eventAPI.getEventTickets(eventKey, params);
         let ticketsData = [];
         if (ticketsResponse.data) {
           if (Array.isArray(ticketsResponse.data)) {
@@ -342,7 +345,7 @@ const EventDetailsPage = () => {
         return null;
       }
     },
-    [eventId, filters.minPrice, filters.maxPrice, filters.minQuantity, sortBy]
+    [eventKey, filters.minPrice, filters.maxPrice, filters.minQuantity, sortBy]
   );
 
   const fetchTicketsRef = useRef(fetchTickets);
@@ -352,9 +355,13 @@ const EventDetailsPage = () => {
   useEffect(() => {
     const fetchEventData = async () => {
       try {
-        const eventResponse = await eventAPI.getEvent(eventId);
+        const eventResponse = await eventAPI.getEvent(eventKey);
         setEvent(eventResponse.data);
-        Analytics.ticketViewed(eventId);
+        const resolvedSlug = (eventResponse.data?.slug || '').trim();
+        if (resolvedSlug && String(eventKey) !== resolvedSlug) {
+          navigate(`/event/${encodeURIComponent(resolvedSlug)}`, { replace: true });
+        }
+        Analytics.ticketViewed(eventResponse.data?.id ?? eventKey);
         await fetchTicketsRef.current();
       } catch (error) {
         toastError('לא ניתן לטעון את האירוע. בדקו את החיבור או חזרו לדף הבית.');
@@ -363,26 +370,26 @@ const EventDetailsPage = () => {
       }
     };
 
-    if (eventId) {
+    if (eventKey) {
       fetchEventData();
     }
-  }, [eventId]);
+  }, [eventKey, navigate]);
 
   // Polling: refresh tickets every 15 seconds to hide sold tickets (prevent stale UI)
   useEffect(() => {
-    if (!eventId) return;
+    if (!eventKey) return;
     const pollInterval = setInterval(() => {
       fetchTicketsRef.current();
     }, 15000);
     return () => clearInterval(pollInterval);
-  }, [eventId]);
+  }, [eventKey]);
 
   // Refetch tickets when filters or sort change
   useEffect(() => {
-    if (eventId) {
+    if (eventKey) {
       fetchTickets();
     }
-  }, [eventId, filters, sortBy, fetchTickets]);
+  }, [eventKey, filters, sortBy, fetchTickets]);
 
   // Fetch artists for fallback image matching
   useEffect(() => {
@@ -882,7 +889,7 @@ const EventDetailsPage = () => {
   useEffect(() => {
     setRamatGanSectionFilter(null);
     setRamatGanSelectedSectionId(null);
-  }, [eventId]);
+  }, [eventKey]);
 
   const ramatGanActiveListingsSummary = useMemo(
     () => (isRamatGanVenue ? buildRamatGanActiveListingsSummary(ticketGroups) : {}),
@@ -1080,16 +1087,23 @@ const EventDetailsPage = () => {
     (event.venue_detail?.name && String(event.venue_detail.name).trim()) ||
     '';
   const venueForSeo = venueFromEvent || (event.city && String(event.city).trim()) || '';
-  const documentTitle = venueForSeo
-    ? `${eventName} ב-${venueForSeo} - כרטיסים | TradeTix`
-    : `${eventName} - כרטיסים | TradeTix`;
-  const metaDescription = venueForSeo
-    ? `קנו או מכרו כרטיסים ל-${eventName} ב-${venueForSeo}. תשלום מאובטח והגנה מלאה על הכסף.`
-    : `קנו או מכרו כרטיסים ל-${eventName}. תשלום מאובטח והגנה מלאה על הכסף.`;
+  const documentTitle =
+    (event.seo_title && String(event.seo_title).trim()) ||
+    (venueForSeo
+      ? `${eventName} ב-${venueForSeo} - כרטיסים | TradeTix`
+      : `${eventName} - כרטיסים | TradeTix`);
+  const metaDescription =
+    (event.seo_description && String(event.seo_description).trim()) ||
+    (venueForSeo
+      ? `קנו או מכרו כרטיסים ל-${eventName} ב-${venueForSeo}. תשלום מאובטח והגנה מלאה על הכסף.`
+      : `קנו או מכרו כרטיסים ל-${eventName}. תשלום מאובטח והגנה מלאה על הכסף.`);
 
   const pageCanonical =
-    typeof window !== 'undefined' && eventId ? `${window.location.origin}/event/${eventId}` : '';
-  const ogImageAbsolute = heroImageRaw ? heroImageSrc : defaultOgImageUrl();
+    (event.canonical_url && String(event.canonical_url).trim()) ||
+    (typeof window !== 'undefined' ? `${window.location.origin}${eventHref(event)}` : '');
+  const ogImageAbsolute =
+    (event.og_image && String(event.og_image).trim()) ||
+    (heroImageRaw ? heroImageSrc : defaultOgImageUrl());
 
   return (
     <div className="event-details-container">
@@ -1109,6 +1123,7 @@ const EventDetailsPage = () => {
         <meta name="twitter:description" content={metaDescription} />
         <meta name="twitter:image" content={ogImageAbsolute} />
       </Helmet>
+      <EventJsonLd jsonLd={event.json_ld} />
       <div className="event-header">
         <button type="button" onClick={() => navigate(-1)} className="back-button">
           ← חזרה

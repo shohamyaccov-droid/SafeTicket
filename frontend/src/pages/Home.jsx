@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
+import { eventHref } from '../utils/eventSeo';
 import { artistAPI, eventAPI } from '../services/api';
 import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
@@ -250,7 +251,7 @@ const Home = () => {
       }
       if (!group?.events?.length) return;
       if (group.eventCount <= 1) {
-        navigate(`/event/${group.events[0].id}`);
+        navigate(eventHref(group.events[0]));
         return;
       }
       setDatePickGroup({
@@ -422,7 +423,7 @@ const Home = () => {
                       event={ev}
                       formatEventDateHe={formatEventDateHe}
                       variant={kind === 'lastMinute' ? 'lastMinute' : 'default'}
-                      onNavigate={() => navigate(`/event/${ev.id}`)}
+                      onNavigate={() => navigate(eventHref(ev))}
                     />
                   </div>
                 ))}
@@ -592,7 +593,7 @@ const Home = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      navigate(`/event/${ev.id}`);
+                      navigate(eventHref(ev));
                       setDatePickGroup(null);
                     }}
                   >

@@ -302,7 +302,17 @@ class Event(models.Model):
         default=False,
         help_text='Show high-demand urgency badge on discovery (e.g. official launch headliners).',
     )
-    
+
+    slug = models.SlugField(
+        max_length=220,
+        unique=True,
+        blank=True,
+        null=True,
+        db_index=True,
+        allow_unicode=True,
+        help_text='URL-friendly unique slug for programmatic SEO (auto-generated).',
+    )
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -318,7 +328,23 @@ class Event(models.Model):
         if raw in ('אחר', 'ישראל', ''):
             return 'ישראל'
         return raw
-    
+
+    def save(self, *args, **kwargs):
+        # Ensure slug exists before first insert; refresh uniqueness after PK assigned.
+        creating = self.pk is None
+        if not (self.slug or '').strip():
+            from users.seo import build_event_slug_base, ensure_unique_event_slug
+
+            self.slug = ensure_unique_event_slug(self, build_event_slug_base(self))
+        super().save(*args, **kwargs)
+        if creating and self.pk:
+            from users.seo import build_event_slug_base, ensure_unique_event_slug
+
+            desired = ensure_unique_event_slug(self, build_event_slug_base(self))
+            if desired != self.slug:
+                Event.objects.filter(pk=self.pk).update(slug=desired)
+                self.slug = desired
+
     def __str__(self):
         # For sports events with teams, show team matchup
         if self.category == 'sport':

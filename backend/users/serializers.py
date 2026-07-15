@@ -662,30 +662,49 @@ class EventSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializer):
     artist = ArtistSerializer(read_only=True)
     artist_id = serializers.PrimaryKeyRelatedField(queryset=Artist.objects.all(), source='artist', write_only=True, required=False, allow_null=True)
     venue_detail = VenueDetailSerializer(source='venue_place', read_only=True)
+    seo_title = serializers.SerializerMethodField()
+    seo_description = serializers.SerializerMethodField()
+    canonical_url = serializers.SerializerMethodField()
+    canonical_path = serializers.SerializerMethodField()
+    json_ld = serializers.SerializerMethodField()
+    og_image = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
         fields = (
-            'id', 'artist', 'artist_id', 'name', 'date', 'ends_at', 'venue', 'venue_detail', 'city', 'country',
+            'id', 'slug', 'artist', 'artist_id', 'name', 'date', 'ends_at', 'venue', 'venue_detail', 'city', 'country',
             'currency', 'currency_symbol',
             'image', 'image_url',
             'tickets_count', 'view_count', 'category', 'home_team', 'away_team', 'tournament', 'high_demand',
-            'created_at', 'updated_at'
+            'seo_title', 'seo_description', 'canonical_url', 'canonical_path', 'og_image', 'json_ld',
+            'created_at', 'updated_at',
         )
         read_only_fields = (
-            'id', 'created_at', 'updated_at', 'tickets_count', 'view_count', 'currency', 'currency_symbol',
-            'venue_detail',
+            'id', 'slug', 'created_at', 'updated_at', 'tickets_count', 'view_count', 'currency', 'currency_symbol',
+            'venue_detail', 'seo_title', 'seo_description', 'canonical_url', 'canonical_path', 'og_image', 'json_ld',
         )
-    
+
+    def _seo(self, obj):
+        cached = getattr(self, '_seo_cache', None)
+        if cached is None:
+            self._seo_cache = {}
+            cached = self._seo_cache
+        key = obj.pk
+        if key not in cached:
+            from users.seo import build_event_seo_payload
+
+            cached[key] = build_event_seo_payload(obj, request=self.context.get('request'))
+        return cached[key]
+
     def get_currency(self, obj):
         return iso4217_for_country(getattr(obj, 'country', None))
-    
+
     def get_currency_symbol(self, obj):
         return currency_symbol(iso4217_for_country(getattr(obj, 'country', None)))
-    
+
     def get_image_url(self, obj):
         return first_resolved_image_url_for_event(self.context.get('request'), obj)
-    
+
     def get_tickets_count(self, obj):
         ann = getattr(obj, '_active_tickets_total', None)
         if ann is not None:
@@ -695,6 +714,24 @@ class EventSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializer):
 
     def get_high_demand(self, obj):
         return safe_event_high_demand_bool(obj)
+
+    def get_seo_title(self, obj):
+        return self._seo(obj)['seo_title']
+
+    def get_seo_description(self, obj):
+        return self._seo(obj)['seo_description']
+
+    def get_canonical_url(self, obj):
+        return self._seo(obj)['canonical_url']
+
+    def get_canonical_path(self, obj):
+        return self._seo(obj)['canonical_path']
+
+    def get_og_image(self, obj):
+        return self._seo(obj)['og_image']
+
+    def get_json_ld(self, obj):
+        return self._seo(obj)['json_ld']
 
 
 class EventListSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializer):
@@ -707,27 +744,30 @@ class EventListSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializ
     artist_name = serializers.CharField(source='artist.name', read_only=True)
     artist_detail = ArtistCardSerializer(source='artist', read_only=True)
     venue_detail = VenueDetailSerializer(source='venue_place', read_only=True)
+    seo_title = serializers.SerializerMethodField()
+    canonical_path = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
         fields = (
-            'id', 'artist', 'artist_detail', 'artist_name', 'name', 'date', 'venue', 'venue_detail', 'city', 'country',
+            'id', 'slug', 'artist', 'artist_detail', 'artist_name', 'name', 'date', 'venue', 'venue_detail', 'city', 'country',
             'currency', 'currency_symbol',
             'image_url',
             'tickets_count',
             'category', 'home_team', 'away_team', 'tournament', 'high_demand',
+            'seo_title', 'canonical_path',
         )
         read_only_fields = fields
-    
+
     def get_currency(self, obj):
         return iso4217_for_country(getattr(obj, 'country', None))
-    
+
     def get_currency_symbol(self, obj):
         return currency_symbol(iso4217_for_country(getattr(obj, 'country', None)))
-    
+
     def get_image_url(self, obj):
         return first_resolved_image_url_for_event(self.context.get('request'), obj)
-    
+
     def get_tickets_count(self, obj):
         ann = getattr(obj, '_active_tickets_total', None)
         if ann is not None:
@@ -737,6 +777,17 @@ class EventListSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializ
 
     def get_high_demand(self, obj):
         return safe_event_high_demand_bool(obj)
+
+    def get_seo_title(self, obj):
+        from users.seo import build_seo_title
+
+        return build_seo_title(obj)
+
+    def get_canonical_path(self, obj):
+        from users.seo import event_path
+
+        key = (getattr(obj, 'slug', None) or '').strip() or str(obj.pk)
+        return event_path(key)
 
 
 class GuestCheckoutSerializer(serializers.Serializer):
