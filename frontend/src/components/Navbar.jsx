@@ -147,8 +147,20 @@ const Navbar = () => {
       <Link to="/terms" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
         תקנון
       </Link>
+      <Link to="/privacy" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
+        פרטיות
+      </Link>
       <Link to="/refunds" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
         ביטולים והחזרים
+      </Link>
+      <Link to="/buyer-guarantee" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
+        הגנת הקונה
+      </Link>
+      <Link to="/about" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
+        אודות
+      </Link>
+      <Link to="/accessibility" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
+        נגישות
       </Link>
     </>
   );

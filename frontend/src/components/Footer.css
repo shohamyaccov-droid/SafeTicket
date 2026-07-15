@@ -64,6 +64,31 @@
   margin: 0;
 }
 
+.footer-entity {
+  margin-top: 0.75rem;
+  font-size: 0.82rem !important;
+}
+
+.footer-entity a {
+  color: #93c5fd;
+  text-decoration: underline;
+}
+
+.footer-legal-links {
+  margin-top: 0.75rem !important;
+  line-height: 1.7;
+}
+
+.footer-legal-links a {
+  color: #d1d5db;
+  text-decoration: none;
+}
+
+.footer-legal-links a:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
 @media (max-width: 768px) {
   .footer-container {
     padding: 2rem 1rem 1rem;

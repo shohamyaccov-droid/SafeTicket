@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import './BuyerGuarantee.css';
 
 function IconRefundCard() {
@@ -83,7 +84,8 @@ const FEATURES = [
     id: 'refund',
     icon: IconRefundCard,
     headline: 'אחריות כספית מלאה',
-    exactDesktop: 'אחריות כספית מלאה: אנחנו מגבים כל עסקה. גיבוי כספי מלא לכל כרטיס שנקנה בפלטפורמה.',
+    exactDesktop:
+      'נאמנות כספית: כסף הקונה מוגן אצלנו ומשוחרר למוכר רק 36 שעות לאחר האירוע — לפי הגנת הקונה והתקנון.',
   },
   {
     id: 'community',
@@ -101,7 +103,7 @@ const FEATURES = [
 
 const TRUST_TITLE = 'קונים ומוכרים בראש שקט';
 const TRUST_SUBTITLE =
-  'ביטחון מלא לשני הצדדים: הכסף מוגן אצלנו ומועבר למוכר רק לאחר שהאירוע הסתיים בהצלחה.';
+  'הכסף בנאמנות עד לאחר האירוע. ביטול סופי או כרטיס לא תקף — לפי מדיניות ההחזרים והגנת הקונה.';
 
 export default function BuyerGuarantee() {
   return (
@@ -134,6 +136,11 @@ export default function BuyerGuarantee() {
             </li>
           ))}
         </ul>
+        <p className="buyer-guarantee__legal-link">
+          <Link to="/buyer-guarantee">לתנאי הגנת הקונה המלאים</Link>
+          {' · '}
+          <Link to="/refunds">ביטולים והחזרים</Link>
+        </p>
       </div>
     </section>
   );
