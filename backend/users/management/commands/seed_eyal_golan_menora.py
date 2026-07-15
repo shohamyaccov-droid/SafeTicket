@@ -28,12 +28,13 @@ VENUE_CHOICE = 'היכל מנורה מבטחים'
 VENUE_PLACE_NAME = 'היכל מנורה מבטחים'
 VENUE_CITY = 'תל אביב'
 
-# (year, month, day, hour, minute) — Israel local time
+# (year, month, day, hour, minute[, optional_title]) — Israel local time
 SHOWS_2026 = (
     (2026, 9, 6, 20, 45),
     (2026, 9, 7, 20, 45),
     (2026, 9, 8, 20, 45),
     (2026, 9, 10, 20, 45),
+    (2026, 9, 15, 20, 45, 'אייל גולן - 30'),
 )
 
 
@@ -41,7 +42,9 @@ def _dt(y: int, m: int, d: int, h: int, minute: int) -> datetime:
     return datetime(y, m, d, h, minute, 0, tzinfo=TZ_IL)
 
 
-def _event_title(when: datetime) -> str:
+def _event_title(when: datetime, custom_title: str | None = None) -> str:
+    if custom_title:
+        return custom_title
     return f'{EVENT_NAME_BASE} — {when.strftime("%d.%m.%Y")}'
 
 
@@ -59,9 +62,11 @@ class Command(BaseCommand):
         dry_run = options['dry_run']
 
         planned = []
-        for y, m, d, h, minute in SHOWS_2026:
+        for row in SHOWS_2026:
+            y, m, d, h, minute = row[:5]
+            custom_title = row[5] if len(row) > 5 else None
             when = _dt(y, m, d, h, minute)
-            planned.append({'name': _event_title(when), 'date': when})
+            planned.append({'name': _event_title(when, custom_title), 'date': when})
 
         if dry_run:
             self.stdout.write(self.style.WARNING('DRY RUN — no database changes.'))
@@ -105,13 +110,17 @@ class Command(BaseCommand):
                 event_ids.append(ev.pk)
                 if was_created:
                     created += 1
-                    self.stdout.write(self.style.SUCCESS(f'Created: {ev.name} (id={ev.pk})'))
+                    self.stdout.write(
+                        self.style.SUCCESS(f'Created event id={ev.pk} date={row["date"].isoformat()}')
+                    )
                 else:
                     updated += 1
-                    self.stdout.write(self.style.NOTICE(f'Updated: {ev.name} (id={ev.pk})'))
+                    self.stdout.write(
+                        self.style.NOTICE(f'Updated event id={ev.pk} date={row["date"].isoformat()}')
+                    )
 
         if artist_created:
-            self.stdout.write(self.style.SUCCESS(f'Created artist: {artist.name} (id={artist.pk})'))
+            self.stdout.write(self.style.SUCCESS(f'Created artist id={artist.pk}'))
 
         self.stdout.write(
             self.style.SUCCESS(

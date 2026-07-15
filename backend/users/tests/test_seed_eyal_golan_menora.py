@@ -13,25 +13,28 @@ SHOWS = (
     datetime(2026, 9, 7, 20, 45, tzinfo=TZ_IL),
     datetime(2026, 9, 8, 20, 45, tzinfo=TZ_IL),
     datetime(2026, 9, 10, 20, 45, tzinfo=TZ_IL),
+    datetime(2026, 9, 15, 20, 45, tzinfo=TZ_IL),
 )
 
 
 class SeedEyalGolanMenoraTests(TestCase):
-    def test_seed_creates_four_menora_shows(self):
+    def test_seed_creates_five_menora_shows(self):
         call_command('seed_eyal_golan_menora')
         artist = Artist.objects.get(name='אייל גולן')
         events = Event.objects.filter(artist=artist, venue='היכל מנורה מבטחים', status='פעיל').order_by('date')
-        self.assertEqual(events.count(), 4)
+        self.assertEqual(events.count(), 5)
         for ev, when in zip(events, SHOWS, strict=True):
             self.assertEqual(ev.date, when)
-            self.assertIn('אייל גולן במנורה', ev.name)
             self.assertEqual(ev.venue_place.name, 'היכל מנורה מבטחים')
             self.assertTrue(ev.high_demand)
+        self.assertEqual(events[4].name, 'אייל גולן - 30')
+        for ev in events[:4]:
+            self.assertIn('אייל גולן במנורה', ev.name)
 
     def test_seed_is_idempotent(self):
         call_command('seed_eyal_golan_menora')
         call_command('seed_eyal_golan_menora')
         self.assertEqual(
             Event.objects.filter(artist__name='אייל גולן', venue='היכל מנורה מבטחים').count(),
-            4,
+            5,
         )
