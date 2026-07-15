@@ -4,7 +4,7 @@ from users.coupons import seed_demo_affiliate_coupon
 
 
 class Command(BaseCommand):
-    help = 'Create/update demo affiliate partner + AFFILIATE5 coupon (5/5/5 fee split).'
+    help = 'Create/update demo affiliate partner + AFFILIATE5 coupon (rates from GlobalFeeSettings).'
 
     def handle(self, *args, **options):
         coupon = seed_demo_affiliate_coupon()

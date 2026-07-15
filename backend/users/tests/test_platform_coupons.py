@@ -1,5 +1,5 @@
 """
-Platform-owned coupons (TRADETIX5): zero affiliate, 10/0/10 fee split.
+Platform-owned coupons (TRADETIX5) against GlobalFeeSettings defaults (12% → 7/0/7).
 """
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.core.exceptions import ValidationError
+from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -18,44 +19,62 @@ from users.coupons import (
     preview_coupon_for_base,
     seed_platform_coupon,
 )
-from users.models import Artist, Coupon, CouponRedemption, Event, Order, Ticket
+from users.fee_settings import checkout_split_rates_for_coupon, clear_fee_settings_cache
+from users.models import Artist, Coupon, CouponRedemption, Event, GlobalFeeSettings, Order, Ticket
 from users.pricing import affiliate_checkout_amounts
 
 User = get_user_model()
 
 
-@override_settings(PLATFORM_BUYER_SERVICE_FEE_RATE=Decimal('0.15'))
+def _reset_default_fees():
+    clear_fee_settings_cache()
+    settings = GlobalFeeSettings.load()
+    settings.base_buyer_fee_percent = Decimal('12.00')
+    settings.base_seller_fee_percent = Decimal('0.00')
+    settings.buyer_coupon_discount_percent = Decimal('5.00')
+    settings.affiliate_commission_percent = Decimal('5.00')
+    settings.save()
+    clear_fee_settings_cache()
+
+
 class PlatformPricingMathTests(TestCase):
-    def test_platform_split_is_exactly_10_0_10(self):
-        """Buyer fee 10%, affiliate 0%, platform net 10% of base."""
+    def setUp(self):
+        _reset_default_fees()
+
+    def test_platform_split_is_exactly_7_0_7(self):
+        """Buyer fee 7%, affiliate 0%, platform net 7% of base."""
+        coupon = seed_platform_coupon(code='TRADETIX5')
+        disc, aff, plat = checkout_split_rates_for_coupon(coupon)
         amounts = affiliate_checkout_amounts(
             Decimal('100'),
-            buyer_discount_rate=Decimal('0.05'),
-            affiliate_rate=Decimal('0.00'),
-            platform_rate=Decimal('0.10'),
+            buyer_discount_rate=disc,
+            affiliate_rate=aff,
+            platform_rate=plat,
         )
-        self.assertEqual(amounts['buyer_fee'], Decimal('10.00'))
+        self.assertEqual(amounts['buyer_fee'], Decimal('7.00'))
         self.assertEqual(amounts['buyer_discount'], Decimal('5.00'))
         self.assertEqual(amounts['affiliate_commission'], Decimal('0.00'))
-        self.assertEqual(amounts['platform_net_fee'], Decimal('10.00'))
-        self.assertEqual(amounts['total'], Decimal('110.00'))
+        self.assertEqual(amounts['platform_net_fee'], Decimal('7.00'))
+        self.assertEqual(amounts['total'], Decimal('107.00'))
         self.assertEqual(
             amounts['buyer_discount']
             + amounts['affiliate_commission']
             + amounts['platform_net_fee'],
-            Decimal('15.00'),
+            Decimal('12.00'),
         )
 
 
-@override_settings(PLATFORM_BUYER_SERVICE_FEE_RATE=Decimal('0.15'))
 class PlatformCouponModelTests(TestCase):
+    def setUp(self):
+        _reset_default_fees()
+
     def test_seed_tradetix5_has_no_affiliate(self):
         coupon = seed_platform_coupon(code='TRADETIX5')
         self.assertEqual(coupon.code, 'TRADETIX5')
         self.assertEqual(coupon.coupon_type, Coupon.TYPE_PLATFORM)
         self.assertIsNone(coupon.affiliate_id)
         self.assertEqual(coupon.affiliate_commission_rate, Decimal('0.0000'))
-        self.assertEqual(coupon.platform_net_rate, Decimal('0.1000'))
+        self.assertEqual(coupon.platform_net_rate, Decimal('0.0700'))
         self.assertEqual(coupon.buyer_discount_rate, Decimal('0.0500'))
 
     def test_get_active_platform_coupon_without_affiliate(self):
@@ -65,8 +84,6 @@ class PlatformCouponModelTests(TestCase):
         self.assertIsNone(coupon.affiliate_id)
 
     def test_db_rejects_platform_with_non_zero_affiliate_rate(self):
-        from django.core.exceptions import ValidationError
-
         coupon = Coupon(
             code='BADPLATFORM',
             coupon_type=Coupon.TYPE_PLATFORM,
@@ -91,9 +108,9 @@ class PlatformCouponModelTests(TestCase):
             coupon.save()
 
 
-@override_settings(PLATFORM_BUYER_SERVICE_FEE_RATE=Decimal('0.15'))
 class PlatformCouponFlowApiTests(TestCase):
     def setUp(self):
+        _reset_default_fees()
         self.client = APIClient()
         self.seller = User.objects.create_user(
             username='plat_seller',
@@ -130,7 +147,7 @@ class PlatformCouponFlowApiTests(TestCase):
         )
         self.coupon = seed_platform_coupon(code='TRADETIX5')
 
-    def test_validate_preview_is_10_0_10(self):
+    def test_validate_preview_is_7_0_7(self):
         self.client.force_authenticate(user=self.buyer)
         res = self.client.post(
             '/api/users/coupons/validate/',
@@ -139,26 +156,26 @@ class PlatformCouponFlowApiTests(TestCase):
         )
         self.assertEqual(res.status_code, 200, res.data)
         self.assertEqual(res.data.get('coupon_type'), 'platform')
-        self.assertEqual(Decimal(res.data['buyer_service_fee']), Decimal('10.00'))
+        self.assertEqual(Decimal(res.data['buyer_service_fee']), Decimal('7.00'))
         self.assertEqual(Decimal(res.data['buyer_fee_discount']), Decimal('5.00'))
         self.assertEqual(Decimal(res.data['affiliate_commission']), Decimal('0.00'))
-        self.assertEqual(Decimal(res.data['platform_net_fee']), Decimal('10.00'))
-        self.assertEqual(Decimal(res.data['total_amount']), Decimal('110.00'))
+        self.assertEqual(Decimal(res.data['platform_net_fee']), Decimal('7.00'))
+        self.assertEqual(Decimal(res.data['total_amount']), Decimal('107.00'))
         self.assertEqual(res.data.get('affiliate_percent'), '0')
-        self.assertEqual(res.data.get('platform_percent'), '10')
+        self.assertEqual(res.data.get('platform_percent'), '7')
         self.assertEqual(res.data.get('discount_percent'), '5')
-        self.assertEqual(res.data.get('fee_percent_charged'), '10')
+        self.assertEqual(res.data.get('fee_percent_charged'), '7')
         self.assertEqual(res.data.get('affiliate_name'), 'TradeTix')
 
     def test_validate_then_already_used(self):
         preview = preview_coupon_for_base('TRADETIX5', Decimal('100'), user=self.buyer)
         self.assertEqual(preview.affiliate_commission, Decimal('0.00'))
-        self.assertEqual(preview.platform_net_fee, Decimal('10.00'))
+        self.assertEqual(preview.platform_net_fee, Decimal('7.00'))
 
         order = Order.objects.create(
             user=self.buyer,
             ticket=self.ticket,
-            total_amount=Decimal('110.00'),
+            total_amount=Decimal('107.00'),
             quantity=1,
             status='pending_payment',
             event_name=self.event.name,
@@ -184,7 +201,7 @@ class PlatformCouponFlowApiTests(TestCase):
             '/api/users/orders/',
             {
                 'ticket': self.ticket.id,
-                'total_amount': '110.00',
+                'total_amount': '107.00',
                 'quantity': 1,
                 'event_name': self.event.name,
                 'coupon_code': 'TRADETIX5',
@@ -193,18 +210,18 @@ class PlatformCouponFlowApiTests(TestCase):
         )
         self.assertEqual(res.status_code, 201, res.data)
         order = Order.objects.get(pk=res.data['id'])
-        self.assertEqual(order.total_amount, Decimal('110.00'))
+        self.assertEqual(order.total_amount, Decimal('107.00'))
         self.assertEqual(order.coupon_code_snapshot, 'TRADETIX5')
-        self.assertEqual(order.buyer_service_fee, Decimal('10.00'))
+        self.assertEqual(order.buyer_service_fee, Decimal('7.00'))
         self.assertEqual(order.buyer_fee_discount, Decimal('5.00'))
         self.assertEqual(order.affiliate_commission, Decimal('0.00'))
-        self.assertEqual(order.platform_net_fee, Decimal('10.00'))
+        self.assertEqual(order.platform_net_fee, Decimal('7.00'))
         self.assertEqual(order.coupon.coupon_type, Coupon.TYPE_PLATFORM)
         self.assertIsNone(order.coupon.affiliate_id)
         redemption = CouponRedemption.objects.get(order=order)
         self.assertEqual(redemption.status, CouponRedemption.STATUS_PENDING)
         self.assertEqual(redemption.affiliate_commission, Decimal('0.00'))
-        self.assertEqual(redemption.platform_net_fee, Decimal('10.00'))
+        self.assertEqual(redemption.platform_net_fee, Decimal('7.00'))
         self.assertEqual(redemption.buyer_key, f'user:{self.buyer.id}')
 
     def test_create_order_rejects_wrong_total_with_platform_coupon(self):
@@ -213,7 +230,7 @@ class PlatformCouponFlowApiTests(TestCase):
             '/api/users/orders/',
             {
                 'ticket': self.ticket.id,
-                'total_amount': '115.00',
+                'total_amount': '112.00',
                 'quantity': 1,
                 'event_name': self.event.name,
                 'coupon_code': 'TRADETIX5',
@@ -223,9 +240,9 @@ class PlatformCouponFlowApiTests(TestCase):
         self.assertEqual(res.status_code, 400)
 
 
-@override_settings(PLATFORM_BUYER_SERVICE_FEE_RATE=Decimal('0.15'))
 class PlatformCouponOneUseTests(TestCase):
     def setUp(self):
+        _reset_default_fees()
         self.seller = User.objects.create_user(
             username='plat_race_seller',
             email='plat_race_seller@example.test',
@@ -263,7 +280,7 @@ class PlatformCouponOneUseTests(TestCase):
         order1 = Order.objects.create(
             user=self.buyer,
             ticket=self.ticket,
-            total_amount=Decimal('220.00'),
+            total_amount=Decimal('214.00'),
             quantity=1,
             status='pending_payment',
             event_name='Plat Race Show',
@@ -271,7 +288,7 @@ class PlatformCouponOneUseTests(TestCase):
         order2 = Order.objects.create(
             user=self.buyer,
             ticket=self.ticket,
-            total_amount=Decimal('220.00'),
+            total_amount=Decimal('214.00'),
             quantity=1,
             status='pending_payment',
             event_name='Plat Race Show',
@@ -284,7 +301,8 @@ class PlatformCouponOneUseTests(TestCase):
         )
         order1.refresh_from_db()
         self.assertEqual(order1.affiliate_commission, Decimal('0.00'))
-        self.assertEqual(order1.platform_net_fee, Decimal('20.00'))
+        self.assertEqual(order1.platform_net_fee, Decimal('14.00'))
+        self.assertEqual(order1.buyer_service_fee, Decimal('14.00'))
 
         with self.assertRaises(CouponError) as ctx:
             claim_coupon_for_order(
@@ -302,3 +320,28 @@ class PlatformCouponOneUseTests(TestCase):
             ).count(),
             1,
         )
+
+
+class GlobalFeeSettingsAdminMathTests(TestCase):
+    def setUp(self):
+        _reset_default_fees()
+
+    def test_admin_change_updates_checkout_math(self):
+        from users.pricing import buyer_charge_from_base_amount
+
+        settings = GlobalFeeSettings.load()
+        settings.base_buyer_fee_percent = Decimal('15.00')
+        settings.buyer_coupon_discount_percent = Decimal('5.00')
+        settings.affiliate_commission_percent = Decimal('5.00')
+        settings.save()
+        clear_fee_settings_cache()
+
+        _base, fee, total = buyer_charge_from_base_amount(Decimal('100'))
+        self.assertEqual(fee, Decimal('15.00'))
+        self.assertEqual(total, Decimal('115.00'))
+
+        amounts = affiliate_checkout_amounts(Decimal('100'))
+        self.assertEqual(amounts['buyer_fee'], Decimal('10.00'))
+        self.assertEqual(amounts['affiliate_commission'], Decimal('5.00'))
+        self.assertEqual(amounts['platform_net_fee'], Decimal('5.00'))
+        self.assertEqual(amounts['total'], Decimal('110.00'))

@@ -11,6 +11,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 from users.models import Artist, Event, Order, Ticket
 from users.payme_views import payme_webhook
+from users.pricing import expected_buy_now_total
 from users.views import TicketViewSet, create_order
 
 
@@ -188,10 +189,10 @@ class PaymentScaryCaseTests(TestCase):
 
     def test_checkout_double_click_reuses_existing_pending_order(self):
         ticket = self._ticket()
-        # 100 base + 5% buyer service fee = 115.00
+        total = str(expected_buy_now_total(ticket.asking_price, 1))
         payload = {
             'ticket': ticket.id,
-            'total_amount': '115.00',
+            'total_amount': total,
             'quantity': 1,
         }
 

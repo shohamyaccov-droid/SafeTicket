@@ -16,6 +16,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 
+from users.fee_settings import checkout_split_rates_for_coupon
 from users.models import Coupon, CouponRedemption, Order, User
 from users.pricing import (
     QUANT,
@@ -137,11 +138,12 @@ def preview_coupon_for_base(
     b = decimal_money(base)
     if b <= 0:
         raise CouponError('invalid_base', 'סכום בסיס לא תקין לקופון.')
+    disc, aff, plat = checkout_split_rates_for_coupon(coupon)
     amounts = affiliate_checkout_amounts(
         b,
-        buyer_discount_rate=coupon.buyer_discount_rate,
-        affiliate_rate=coupon.affiliate_commission_rate,
-        platform_rate=coupon.platform_net_rate,
+        buyer_discount_rate=disc,
+        affiliate_rate=aff,
+        platform_rate=plat,
     )
     if coupon.coupon_type == Coupon.TYPE_PLATFORM:
         affiliate_name = 'TradeTix'
@@ -157,9 +159,9 @@ def preview_coupon_for_base(
         total=amounts['total'],
         affiliate_name=affiliate_name,
         coupon_type=coupon.coupon_type,
-        buyer_discount_rate=coupon.buyer_discount_rate,
-        affiliate_commission_rate=coupon.affiliate_commission_rate,
-        platform_net_rate=coupon.platform_net_rate,
+        buyer_discount_rate=disc,
+        affiliate_commission_rate=aff,
+        platform_net_rate=plat,
     )
 
 
@@ -176,11 +178,12 @@ def expected_total_with_optional_coupon(
         _, _, total = buyer_charge_from_base_amount(base)
         return total
     coupon = get_active_coupon(coupon_code)
+    disc, aff, plat = checkout_split_rates_for_coupon(coupon)
     amounts = affiliate_checkout_amounts(
         base,
-        buyer_discount_rate=coupon.buyer_discount_rate,
-        affiliate_rate=coupon.affiliate_commission_rate,
-        platform_rate=coupon.platform_net_rate,
+        buyer_discount_rate=disc,
+        affiliate_rate=aff,
+        platform_rate=plat,
     )
     return amounts['total']
 
@@ -207,11 +210,12 @@ def claim_coupon_for_order(
     if coupon.max_redemptions_total is not None and coupon.redemption_count >= coupon.max_redemptions_total:
         raise CouponError('exhausted', 'הגיעו למכסת השימוש של קוד זה.')
 
+    disc, aff, plat = checkout_split_rates_for_coupon(coupon)
     amounts = affiliate_checkout_amounts(
         base_amount,
-        buyer_discount_rate=coupon.buyer_discount_rate,
-        affiliate_rate=coupon.affiliate_commission_rate,
-        platform_rate=coupon.platform_net_rate,
+        buyer_discount_rate=disc,
+        affiliate_rate=aff,
+        platform_rate=plat,
     )
     try:
         redemption = CouponRedemption.objects.create(
@@ -299,8 +303,10 @@ def seed_demo_affiliate_coupon(
     code: str = 'AFFILIATE5',
     partner_name: str = 'TradeTix Demo Affiliate',
 ) -> Coupon:
+    from users.fee_settings import get_fee_rates
     from users.models import AffiliatePartner
 
+    fees = get_fee_rates()
     partner, _ = AffiliatePartner.objects.get_or_create(
         name=partner_name,
         defaults={'email': 'affiliate@tradetix.local', 'is_active': True},
@@ -311,9 +317,9 @@ def seed_demo_affiliate_coupon(
             'coupon_type': Coupon.TYPE_AFFILIATE,
             'affiliate': partner,
             'is_active': True,
-            'buyer_discount_rate': Decimal('0.0500'),
-            'affiliate_commission_rate': Decimal('0.0500'),
-            'platform_net_rate': Decimal('0.0500'),
+            'buyer_discount_rate': fees.buyer_coupon_discount_rate,
+            'affiliate_commission_rate': fees.affiliate_commission_rate,
+            'platform_net_rate': fees.affiliate_platform_net_rate,
         },
     )
     return coupon
@@ -324,18 +330,21 @@ def seed_platform_coupon(
     code: str = 'TRADETIX5',
 ) -> Coupon:
     """
-    Platform-owned promo: buyer pays 10% fee (5% off the 15% base),
-    affiliate commission 0%, platform retains 10% net.
+    Platform-owned promo: buyer pays (base_fee − discount); affiliate 0%;
+    platform retains the remainder (defaults: 7% / 0% / 7%).
     """
+    from users.fee_settings import get_fee_rates
+
+    fees = get_fee_rates()
     coupon, _ = Coupon.objects.update_or_create(
         code=normalize_coupon_code(code),
         defaults={
             'coupon_type': Coupon.TYPE_PLATFORM,
             'affiliate': None,
             'is_active': True,
-            'buyer_discount_rate': Decimal('0.0500'),
+            'buyer_discount_rate': fees.buyer_coupon_discount_rate,
             'affiliate_commission_rate': Decimal('0.0000'),
-            'platform_net_rate': Decimal('0.1000'),
+            'platform_net_rate': fees.platform_coupon_platform_net_rate,
         },
     )
     return coupon

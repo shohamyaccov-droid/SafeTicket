@@ -6,7 +6,7 @@ from users.coupons import seed_platform_coupon
 class Command(BaseCommand):
     help = (
         'Create/update platform-owned TRADETIX5 coupon '
-        '(buyer 10% fee / affiliate 0% / platform 10% net).'
+        '(buyer fee = base − discount; affiliate 0%; platform remainder).'
     )
 
     def add_arguments(self, parser):

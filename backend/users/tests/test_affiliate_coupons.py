@@ -1,9 +1,5 @@
 """
-Affiliate coupon + 15% fee model tests:
-- percentage math
-- one-time use UniqueConstraint
-- concurrent claim race
-- invalid codes
+Affiliate coupon + dynamic GlobalFeeSettings (defaults: 12% base, 7/5/2 with coupon).
 """
 from __future__ import annotations
 
@@ -11,7 +7,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -20,38 +16,51 @@ from users.coupons import (
     claim_coupon_for_order,
     seed_demo_affiliate_coupon,
 )
-from users.models import Artist, CouponRedemption, Event, Order, Ticket
+from users.fee_settings import clear_fee_settings_cache
+from users.models import Artist, CouponRedemption, Event, GlobalFeeSettings, Order, Ticket
 from users.pricing import affiliate_checkout_amounts, buyer_charge_from_base_amount, expected_buy_now_total
 
 User = get_user_model()
 
 
-@override_settings(PLATFORM_BUYER_SERVICE_FEE_RATE=Decimal('0.15'))
+def _reset_default_fees():
+    clear_fee_settings_cache()
+    settings = GlobalFeeSettings.load()
+    settings.base_buyer_fee_percent = Decimal('12.00')
+    settings.base_seller_fee_percent = Decimal('0.00')
+    settings.buyer_coupon_discount_percent = Decimal('5.00')
+    settings.affiliate_commission_percent = Decimal('5.00')
+    settings.save()
+    clear_fee_settings_cache()
+
+
 class AffiliatePricingMathTests(TestCase):
-    def test_base_fee_is_fifteen_percent(self):
+    def setUp(self):
+        _reset_default_fees()
+
+    def test_base_fee_is_twelve_percent(self):
         base, fee, total = buyer_charge_from_base_amount(Decimal('100'))
         self.assertEqual(base, Decimal('100.00'))
-        self.assertEqual(fee, Decimal('15.00'))
-        self.assertEqual(total, Decimal('115.00'))
-        self.assertEqual(expected_buy_now_total(Decimal('100'), 1), Decimal('115.00'))
+        self.assertEqual(fee, Decimal('12.00'))
+        self.assertEqual(total, Decimal('112.00'))
+        self.assertEqual(expected_buy_now_total(Decimal('100'), 1), Decimal('112.00'))
 
-    def test_affiliate_split_is_exactly_5_5_5(self):
+    def test_affiliate_split_is_exactly_7_5_2(self):
         amounts = affiliate_checkout_amounts(Decimal('100'))
-        self.assertEqual(amounts['buyer_fee'], Decimal('10.00'))
+        self.assertEqual(amounts['buyer_fee'], Decimal('7.00'))
         self.assertEqual(amounts['buyer_discount'], Decimal('5.00'))
         self.assertEqual(amounts['affiliate_commission'], Decimal('5.00'))
-        self.assertEqual(amounts['platform_net_fee'], Decimal('5.00'))
-        self.assertEqual(amounts['total'], Decimal('110.00'))
-        # Conserved: discount + affiliate + platform + ... wait: buyer pays base+10; platform net 5, affiliate 5; unpaid 5 is buyer discount
+        self.assertEqual(amounts['platform_net_fee'], Decimal('2.00'))
+        self.assertEqual(amounts['total'], Decimal('107.00'))
         self.assertEqual(
             amounts['buyer_discount'] + amounts['affiliate_commission'] + amounts['platform_net_fee'],
-            Decimal('15.00'),
+            Decimal('12.00'),
         )
 
 
-@override_settings(PLATFORM_BUYER_SERVICE_FEE_RATE=Decimal('0.15'))
 class CouponFlowApiTests(TestCase):
     def setUp(self):
+        _reset_default_fees()
         self.client = APIClient()
         self.seller = User.objects.create_user(
             username='coupon_seller',
@@ -106,12 +115,15 @@ class CouponFlowApiTests(TestCase):
             format='json',
         )
         self.assertEqual(ok.status_code, 200)
-        self.assertEqual(Decimal(ok.data['total_amount']), Decimal('110.00'))
+        self.assertEqual(Decimal(ok.data['total_amount']), Decimal('107.00'))
+        self.assertEqual(ok.data.get('affiliate_percent'), '5')
+        self.assertEqual(ok.data.get('platform_percent'), '2')
+        self.assertEqual(ok.data.get('fee_percent_charged'), '7')
 
         order = Order.objects.create(
             user=self.buyer,
             ticket=self.ticket,
-            total_amount=Decimal('110.00'),
+            total_amount=Decimal('107.00'),
             quantity=1,
             status='pending_payment',
             event_name=self.event.name,
@@ -132,12 +144,11 @@ class CouponFlowApiTests(TestCase):
 
     def test_create_order_with_coupon_total(self):
         self.client.force_authenticate(user=self.buyer)
-        # Reserve first path may be required — buy-now create_order still works for active
         res = self.client.post(
             '/api/users/orders/',
             {
                 'ticket': self.ticket.id,
-                'total_amount': '110.00',
+                'total_amount': '107.00',
                 'quantity': 1,
                 'event_name': self.event.name,
                 'coupon_code': 'PARTNER15',
@@ -146,11 +157,12 @@ class CouponFlowApiTests(TestCase):
         )
         self.assertEqual(res.status_code, 201, res.data)
         order = Order.objects.get(pk=res.data['id'])
-        self.assertEqual(order.total_amount, Decimal('110.00'))
+        self.assertEqual(order.total_amount, Decimal('107.00'))
         self.assertEqual(order.coupon_code_snapshot, 'PARTNER15')
         self.assertEqual(order.affiliate_commission, Decimal('5.00'))
         self.assertEqual(order.buyer_fee_discount, Decimal('5.00'))
-        self.assertEqual(order.platform_net_fee, Decimal('5.00'))
+        self.assertEqual(order.platform_net_fee, Decimal('2.00'))
+        self.assertEqual(order.buyer_service_fee, Decimal('7.00'))
         self.assertTrue(
             CouponRedemption.objects.filter(
                 order=order,
@@ -165,7 +177,7 @@ class CouponFlowApiTests(TestCase):
             '/api/users/orders/',
             {
                 'ticket': self.ticket.id,
-                'total_amount': '115.00',  # full fee — should fail when coupon present
+                'total_amount': '112.00',  # full fee — should fail when coupon present
                 'quantity': 1,
                 'event_name': self.event.name,
                 'coupon_code': 'PARTNER15',
@@ -175,9 +187,9 @@ class CouponFlowApiTests(TestCase):
         self.assertEqual(res.status_code, 400)
 
 
-@override_settings(PLATFORM_BUYER_SERVICE_FEE_RATE=Decimal('0.15'))
 class CouponRaceConditionTests(TestCase):
     def setUp(self):
+        _reset_default_fees()
         self.seller = User.objects.create_user(
             username='race_seller',
             email='race_seller@example.test',
@@ -215,7 +227,7 @@ class CouponRaceConditionTests(TestCase):
         order1 = Order.objects.create(
             user=self.buyer,
             ticket=self.ticket,
-            total_amount=Decimal('220.00'),
+            total_amount=Decimal('214.00'),
             quantity=1,
             status='pending_payment',
             event_name='Race Show',
@@ -223,7 +235,7 @@ class CouponRaceConditionTests(TestCase):
         order2 = Order.objects.create(
             user=self.buyer,
             ticket=self.ticket,
-            total_amount=Decimal('220.00'),
+            total_amount=Decimal('214.00'),
             quantity=1,
             status='pending_payment',
             event_name='Race Show',

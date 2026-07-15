@@ -125,7 +125,8 @@ export function buyerChargeFromBase(baseInput) {
 }
 
 /**
- * Affiliate coupon checkout: buyer pays base + 10% fee (5% discount vs standard 15%).
+ * Coupon checkout using GlobalFeeSettings client defaults
+ * (buyer pays base + BUYER_FEE_PERCENT_WITH_COUPON).
  * @param {number|string} baseInput
  * @returns {{
  *   baseAmount: number,

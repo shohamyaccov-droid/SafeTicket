@@ -67,10 +67,10 @@ else:
         'SECRET_KEY environment variable must be set when DEBUG=False.'
     )
 
-# Platform commission rates (Decimal).
-# Base: buyers pay 15% service fee; sellers pay 0%. Affiliate coupon splits fee as 5%+5%+5%.
+# Platform commission rates — fallback only when GlobalFeeSettings table is unavailable.
+# Live source of truth: Django Admin → Global fee settings (defaults 12% / 0% / 5% / 5%).
 PLATFORM_BUYER_SERVICE_FEE_RATE = Decimal(
-    str(os.environ.get('PLATFORM_BUYER_SERVICE_FEE_RATE', '0.15'))
+    str(os.environ.get('PLATFORM_BUYER_SERVICE_FEE_RATE', '0.12'))
 )
 PLATFORM_SELLER_SERVICE_FEE_RATE = Decimal(
     str(os.environ.get('PLATFORM_SELLER_SERVICE_FEE_RATE', '0.00'))
@@ -82,7 +82,7 @@ AFFILIATE_COMMISSION_RATE = Decimal(
     str(os.environ.get('AFFILIATE_COMMISSION_RATE', '0.05'))
 )
 AFFILIATE_PLATFORM_NET_RATE = Decimal(
-    str(os.environ.get('AFFILIATE_PLATFORM_NET_RATE', '0.05'))
+    str(os.environ.get('AFFILIATE_PLATFORM_NET_RATE', '0.02'))
 )
 
 # When True: looser PDF MIME checks (%PDF magic bytes), non-strict PyPDF, optional fallbacks for testing.

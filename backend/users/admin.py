@@ -20,6 +20,7 @@ from .models import (
     CouponRedemption,
     Event,
     EventRequest,
+    GlobalFeeSettings,
     Offer,
     Order,
     SellerPayout,
@@ -595,6 +596,56 @@ class AffiliatePartnerAdmin(admin.ModelAdmin):
     list_display = ['id', 'name', 'email', 'is_active', 'commission_rate', 'created_at']
     list_filter = ['is_active']
     search_fields = ['name', 'email']
+
+
+@admin.register(GlobalFeeSettings)
+class GlobalFeeSettingsAdmin(admin.ModelAdmin):
+    """Singleton: one row editable in Admin — drives live checkout fees."""
+
+    list_display = [
+        'base_buyer_fee_percent',
+        'base_seller_fee_percent',
+        'buyer_coupon_discount_percent',
+        'affiliate_commission_percent',
+        'updated_at',
+    ]
+    readonly_fields = ['updated_at']
+    fieldsets = (
+        (
+            'Base fees',
+            {
+                'fields': (
+                    'base_buyer_fee_percent',
+                    'base_seller_fee_percent',
+                ),
+                'description': (
+                    'Buyer fee applies with no coupon. Seller fee is withheld from listing base. '
+                    'With a coupon: buyer pays (base buyer − coupon discount); affiliate gets '
+                    'affiliate commission (0% for platform coupons); platform keeps the remainder.'
+                ),
+            },
+        ),
+        (
+            'Coupon split',
+            {
+                'fields': (
+                    'buyer_coupon_discount_percent',
+                    'affiliate_commission_percent',
+                ),
+            },
+        ),
+        ('Meta', {'fields': ('updated_at',)}),
+    )
+
+    def has_add_permission(self, request):
+        return not GlobalFeeSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        obj = GlobalFeeSettings.load()
+        return redirect(reverse('admin:users_globalfeesettings_change', args=[obj.pk]))
 
 
 @admin.register(Coupon)

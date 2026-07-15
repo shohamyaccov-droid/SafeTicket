@@ -1238,6 +1238,122 @@ class AffiliatePartner(models.Model):
         return self.name
 
 
+class GlobalFeeSettings(models.Model):
+    """
+    Singleton admin-editable fee configuration.
+
+    Percents are whole numbers (e.g. 12.0 = 12%). Checkout math converts to rates (/100).
+    Coupon splits: buyer pays (base_buyer - buyer_coupon_discount); affiliate gets
+    affiliate_commission (0 for platform coupons); platform keeps the remainder.
+    """
+
+    base_buyer_fee_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal('12.00'),
+        help_text='Buyer service fee with no coupon (default 12%).',
+    )
+    base_seller_fee_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text='Seller-side fee withheld from listing base (default 0%).',
+    )
+    buyer_coupon_discount_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal('5.00'),
+        help_text='Fee reduction for the buyer when any coupon applies (default 5%).',
+    )
+    affiliate_commission_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal('5.00'),
+        help_text='Affiliate share of listing base when an affiliate coupon applies (default 5%).',
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Global fee settings'
+        verbose_name_plural = 'Global fee settings'
+
+    def __str__(self):
+        return (
+            f'Fees: buyer {self.base_buyer_fee_percent}% / '
+            f'seller {self.base_seller_fee_percent}% / '
+            f'coupon −{self.buyer_coupon_discount_percent}% / '
+            f'affiliate {self.affiliate_commission_percent}%'
+        )
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        errors = {}
+        for field in (
+            'base_buyer_fee_percent',
+            'base_seller_fee_percent',
+            'buyer_coupon_discount_percent',
+            'affiliate_commission_percent',
+        ):
+            val = getattr(self, field)
+            if val is None or val < 0:
+                errors[field] = 'Must be zero or greater.'
+            elif val > 100:
+                errors[field] = 'Must be at most 100.'
+        if not errors:
+            if self.buyer_coupon_discount_percent > self.base_buyer_fee_percent:
+                errors['buyer_coupon_discount_percent'] = (
+                    'Coupon discount cannot exceed the base buyer fee.'
+                )
+            remaining = self.base_buyer_fee_percent - self.buyer_coupon_discount_percent
+            if self.affiliate_commission_percent > remaining:
+                errors['affiliate_commission_percent'] = (
+                    'Affiliate commission plus buyer discount cannot exceed the base buyer fee.'
+                )
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        self.full_clean()
+        super().save(*args, **kwargs)
+        try:
+            from users.fee_settings import clear_fee_settings_cache
+
+            clear_fee_settings_cache()
+        except Exception:
+            pass
+
+    def delete(self, *args, **kwargs):
+        # Singleton: never remove the row.
+        return
+
+    @classmethod
+    def load(cls) -> 'GlobalFeeSettings':
+        obj, _created = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def as_rates(self) -> dict[str, Decimal]:
+        """Fractional rates (0.12 for 12%) for checkout math."""
+        q = Decimal('0.0001')
+
+        def pct_to_rate(p: Decimal) -> Decimal:
+            return (Decimal(str(p)) / Decimal('100')).quantize(q)
+
+        buyer = pct_to_rate(self.base_buyer_fee_percent)
+        seller = pct_to_rate(self.base_seller_fee_percent)
+        discount = pct_to_rate(self.buyer_coupon_discount_percent)
+        affiliate = pct_to_rate(self.affiliate_commission_percent)
+        return {
+            'base_buyer_fee_rate': buyer,
+            'base_seller_fee_rate': seller,
+            'buyer_coupon_discount_rate': discount,
+            'affiliate_commission_rate': affiliate,
+            'affiliate_platform_net_rate': max(buyer - discount - affiliate, Decimal('0.0000')),
+            'platform_coupon_platform_net_rate': max(buyer - discount, Decimal('0.0000')),
+        }
+
+
 class Coupon(models.Model):
     """
     Discount / promo code. Supports:

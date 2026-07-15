@@ -248,7 +248,7 @@ class UserWalletApiTests(PayoutApiTestBase):
         self.assertEqual(res.data['summary']['total_earned'], '100.00')
         self.assertEqual(res.data['transactions'][0]['display_status'], 'paid')
 
-    def test_wallet_15_percent_fee_on_transaction(self):
+    def test_wallet_platform_fee_matches_order_breakdown(self):
         payout = self._create_paid_order()
         self.client.force_authenticate(user=self.seller)
         res = self.client.get('/api/users/me/wallet/')
@@ -257,7 +257,9 @@ class UserWalletApiTests(PayoutApiTestBase):
         fee = Decimal(tx['platform_fee'])
         net = Decimal(tx['net_earnings'])
         self.assertEqual(total, fee + net)
-        self.assertEqual(fee, (net * Decimal('0.05')).quantize(Decimal('0.01')))
+        # Fixture order: ₦115 total / ₦15 buyer fee / ₦100 seller net
+        self.assertEqual(fee, Decimal('15.00'))
+        self.assertEqual(net, Decimal('100.00'))
 
     def test_wallet_does_not_release_before_36_hours_even_with_stale_24h_date(self):
         ticket = self._ticket_for_event_offset(hours_from_now=-35)

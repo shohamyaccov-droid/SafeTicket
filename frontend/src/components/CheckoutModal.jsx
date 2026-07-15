@@ -511,7 +511,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         buyer_fee_discount: data.buyer_fee_discount,
         affiliate_name: data.affiliate_name,
       });
-      toastSuccess('הקופון הוחל בהצלחה — דמי השירות ירדו ל-10%.');
+      toastSuccess('הקופון הוחל בהצלחה — דמי השירות עודכנו.');
     } catch (err) {
       setAppliedCoupon(null);
       const msg =

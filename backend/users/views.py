@@ -92,11 +92,14 @@ def _checkout_expected_total(*, ticket, order_quantity, negotiated_offer=None, c
         coupon = get_active_coupon(code)
     except CouponError:
         raise
+    from users.fee_settings import checkout_split_rates_for_coupon
+
+    disc, aff, plat = checkout_split_rates_for_coupon(coupon)
     return affiliate_checkout_amounts(
         base,
-        buyer_discount_rate=coupon.buyer_discount_rate,
-        affiliate_rate=coupon.affiliate_commission_rate,
-        platform_rate=coupon.platform_net_rate,
+        buyer_discount_rate=disc,
+        affiliate_rate=aff,
+        platform_rate=plat,
     )['total']
 
 
