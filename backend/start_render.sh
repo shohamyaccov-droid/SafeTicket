@@ -41,8 +41,8 @@ echo "[start_render] High-demand Menora events (Odiya & Osher Cohen, Eyal Golan 
 python manage.py seed_odiya_osher_hope_event || true
 python manage.py seed_eyal_golan_menora || true
 
-echo "[start_render] Demo affiliate coupon AFFILIATE5 (global fee split)..."
-python manage.py seed_affiliate_coupon || true
+echo "[start_render] Deactivate demo coupon AFFILIATE5 (no longer offered)..."
+python manage.py deactivate_affiliate5_coupon || true
 
 echo "[start_render] Platform coupon TRADETIX5 (global fee split, affiliate 0%)..."
 python manage.py seed_platform_coupon || true

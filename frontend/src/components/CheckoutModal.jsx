@@ -1525,7 +1525,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   type="text"
                   value={couponInput}
                   onChange={(e) => setCouponInput(e.target.value)}
-                  placeholder="לדוגמה AFFILIATE5"
+                  placeholder="הזן קוד קופון"
                   disabled={Boolean(appliedCoupon) || couponBusy}
                   autoComplete="off"
                   dir="ltr"
@@ -1857,7 +1857,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   type="text"
                   value={couponInput}
                   onChange={(e) => setCouponInput(e.target.value)}
-                  placeholder="לדוגמה AFFILIATE5"
+                  placeholder="הזן קוד קופון"
                   disabled={Boolean(appliedCoupon) || couponBusy}
                   autoComplete="off"
                   dir="ltr"
