@@ -68,12 +68,21 @@ else:
     )
 
 # Platform commission rates (Decimal).
-# New model: sellers pay 0% (cold-start subsidy); buyers pay 5% service fee added at checkout.
+# Base: buyers pay 15% service fee; sellers pay 0%. Affiliate coupon splits fee as 5%+5%+5%.
 PLATFORM_BUYER_SERVICE_FEE_RATE = Decimal(
-    str(os.environ.get('PLATFORM_BUYER_SERVICE_FEE_RATE', '0.05'))
+    str(os.environ.get('PLATFORM_BUYER_SERVICE_FEE_RATE', '0.15'))
 )
 PLATFORM_SELLER_SERVICE_FEE_RATE = Decimal(
     str(os.environ.get('PLATFORM_SELLER_SERVICE_FEE_RATE', '0.00'))
+)
+AFFILIATE_BUYER_DISCOUNT_RATE = Decimal(
+    str(os.environ.get('AFFILIATE_BUYER_DISCOUNT_RATE', '0.05'))
+)
+AFFILIATE_COMMISSION_RATE = Decimal(
+    str(os.environ.get('AFFILIATE_COMMISSION_RATE', '0.05'))
+)
+AFFILIATE_PLATFORM_NET_RATE = Decimal(
+    str(os.environ.get('AFFILIATE_PLATFORM_NET_RATE', '0.05'))
 )
 
 # When True: looser PDF MIME checks (%PDF magic bytes), non-strict PyPDF, optional fallbacks for testing.

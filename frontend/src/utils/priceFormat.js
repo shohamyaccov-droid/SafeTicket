@@ -3,7 +3,13 @@
  * Currency follows Event.country → ISO 4217 (same mapping as backend users/currency.py).
  */
 
-import { BUYER_SERVICE_FEE_PERCENT } from '../constants/pricing';
+import {
+  AFFILIATE_BUYER_DISCOUNT_PERCENT,
+  AFFILIATE_COMMISSION_PERCENT,
+  AFFILIATE_PLATFORM_NET_PERCENT,
+  BUYER_FEE_PERCENT_WITH_COUPON,
+  BUYER_SERVICE_FEE_PERCENT,
+} from '../constants/pricing';
 
 /** @param {string|null|undefined} countryCode */
 export function iso4217FromCountry(countryCode) {
@@ -115,6 +121,46 @@ export function buyerChargeFromBase(baseInput) {
     baseAmount: baseAg / 100,
     serviceFee: feeAg / 100,
     totalAmount: totalAg / 100,
+  };
+}
+
+/**
+ * Affiliate coupon checkout: buyer pays base + 10% fee (5% discount vs standard 15%).
+ * @param {number|string} baseInput
+ * @returns {{
+ *   baseAmount: number,
+ *   serviceFee: number,
+ *   buyerDiscount: number,
+ *   affiliateCommission: number,
+ *   platformNetFee: number,
+ *   totalAmount: number,
+ * }}
+ */
+export function buyerChargeFromBaseWithAffiliateCoupon(baseInput) {
+  const raw = parseFloat(String(baseInput ?? 0));
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return {
+      baseAmount: 0,
+      serviceFee: 0,
+      buyerDiscount: 0,
+      affiliateCommission: 0,
+      platformNetFee: 0,
+      totalAmount: 0,
+    };
+  }
+  const base = Math.round(raw * 100) / 100;
+  const baseAg = Math.round(base * 100);
+  const feeAg = Math.round((baseAg * BUYER_FEE_PERCENT_WITH_COUPON) / 100);
+  const discountAg = Math.round((baseAg * AFFILIATE_BUYER_DISCOUNT_PERCENT) / 100);
+  const affiliateAg = Math.round((baseAg * AFFILIATE_COMMISSION_PERCENT) / 100);
+  const platformAg = Math.round((baseAg * AFFILIATE_PLATFORM_NET_PERCENT) / 100);
+  return {
+    baseAmount: baseAg / 100,
+    serviceFee: feeAg / 100,
+    buyerDiscount: discountAg / 100,
+    affiliateCommission: affiliateAg / 100,
+    platformNetFee: platformAg / 100,
+    totalAmount: (baseAg + feeAg) / 100,
   };
 }
 

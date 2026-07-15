@@ -1556,3 +1556,60 @@
   opacity: 0.85;
 }
 
+
+.checkout-coupon-box {
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px dashed #94a3b8;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+.checkout-coupon-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  color: #334155;
+}
+.checkout-coupon-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+.checkout-coupon-row input {
+  flex: 1;
+  min-height: 44px;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 16px;
+}
+.checkout-coupon-btn {
+  min-height: 44px;
+  min-width: 72px;
+  padding: 0 1rem;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.checkout-coupon-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.checkout-coupon-error {
+  margin: 0.45rem 0 0;
+  color: #b91c1c;
+  font-size: 0.9rem;
+}
+.checkout-coupon-ok {
+  margin: 0.45rem 0 0;
+  color: #047857;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.coupon-applied-row {
+  color: #047857;
+  font-weight: 600;
+}

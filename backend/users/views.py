@@ -73,6 +73,56 @@ def _purchase_orders_for_user(user):
     return Order.objects.filter(scope, status__in=['paid', 'completed'])
 
 
+def _checkout_expected_total(*, ticket, order_quantity, negotiated_offer=None, coupon_code: str = ''):
+    """Server-authoritative checkout total, including optional affiliate coupon."""
+    from users.coupons import CouponError, get_active_coupon
+    from users.pricing import affiliate_checkout_amounts, expected_negotiated_total_from_offer_base
+
+    if negotiated_offer is not None:
+        base = decimal_money(negotiated_offer.amount)
+    else:
+        unit = decimal_money(ticket.asking_price)
+        base = (unit * Decimal(max(1, int(order_quantity or 1)))).quantize(Decimal('0.01'))
+    code = (coupon_code or '').strip()
+    if not code:
+        if negotiated_offer is not None:
+            return expected_negotiated_total_from_offer_base(negotiated_offer.amount)
+        return expected_buy_now_total(ticket.asking_price, order_quantity)
+    try:
+        coupon = get_active_coupon(code)
+    except CouponError:
+        raise
+    return affiliate_checkout_amounts(
+        base,
+        buyer_discount_rate=coupon.buyer_discount_rate,
+        affiliate_rate=coupon.affiliate_commission_rate,
+        platform_rate=coupon.platform_net_rate,
+    )['total']
+
+
+def _maybe_claim_coupon_on_order(order, *, coupon_code, user=None, guest_email='', ticket=None, order_quantity=1, negotiated_offer=None):
+    code = (coupon_code or '').strip()
+    if not code:
+        return None
+    from users.coupons import CouponError, claim_coupon_for_order
+
+    if negotiated_offer is not None:
+        base = decimal_money(negotiated_offer.amount)
+    else:
+        unit = decimal_money(ticket.asking_price)
+        base = (unit * Decimal(max(1, int(order_quantity or 1)))).quantize(Decimal('0.01'))
+    try:
+        return claim_coupon_for_order(
+            order=order,
+            coupon_code=code,
+            user=user,
+            guest_email=guest_email or '',
+            base_amount=base,
+        )
+    except CouponError as exc:
+        raise ValueError(f'coupon:{exc.code}:{exc.message}') from exc
+
+
 def _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity):
     """Persist breakdown after order row exists (create_order / guest_checkout)."""
     from users.currency import iso4217_for_ticket_listing
@@ -1469,7 +1519,22 @@ def create_order(request):
                     if not negotiated_offer:
                         try:
                             sent_total = decimal_money(request.data.get('total_amount', 0))
-                            expected_total = expected_buy_now_total(reference_ticket.asking_price, order_quantity)
+                            coupon_code = (request.data.get('coupon_code') or '').strip()
+                            try:
+                                expected_total = _checkout_expected_total(
+                                    ticket=reference_ticket,
+                                    order_quantity=order_quantity,
+                                    negotiated_offer=None,
+                                    coupon_code=coupon_code,
+                                )
+                            except Exception as ce:
+                                from users.coupons import CouponError
+                                if isinstance(ce, CouponError):
+                                    return Response(
+                                        {'error': ce.message, 'code': ce.code},
+                                        status=status.HTTP_400_BAD_REQUEST,
+                                    )
+                                raise
                             if not payment_amounts_match(sent_total, expected_total):
                                 return Response(
                                     {'error': f'Invalid total amount. Expected {expected_total}, got {sent_total}'},
@@ -1605,7 +1670,20 @@ def create_order(request):
                     if not negotiated_offer:
                         try:
                             sent_total = decimal_money(request.data.get('total_amount', 0))
-                            expected_total = expected_buy_now_total(ticket.asking_price, order_quantity)
+                            coupon_code = (request.data.get('coupon_code') or '').strip()
+                            from users.coupons import CouponError
+                            try:
+                                expected_total = _checkout_expected_total(
+                                    ticket=ticket,
+                                    order_quantity=order_quantity,
+                                    negotiated_offer=None,
+                                    coupon_code=coupon_code,
+                                )
+                            except CouponError as ce:
+                                return Response(
+                                    {'error': ce.message, 'code': ce.code},
+                                    status=status.HTTP_400_BAD_REQUEST,
+                                )
                             if not payment_amounts_match(sent_total, expected_total):
                                 return Response(
                                     {'error': f'Invalid total amount. Expected {expected_total}, got {sent_total}'},
@@ -1726,10 +1804,20 @@ def create_order(request):
                             status=status.HTTP_400_BAD_REQUEST,
                         )
 
-            if negotiated_offer:
-                server_total = expected_negotiated_total_from_offer_base(negotiated_offer.amount)
-            else:
-                server_total = expected_buy_now_total(ticket.asking_price, order_quantity)
+            coupon_code = (request.data.get('coupon_code') or '').strip()
+            from users.coupons import CouponError
+            try:
+                server_total = _checkout_expected_total(
+                    ticket=ticket,
+                    order_quantity=order_quantity,
+                    negotiated_offer=negotiated_offer,
+                    coupon_code=coupon_code,
+                )
+            except CouponError as ce:
+                return Response(
+                    {'error': ce.message, 'code': ce.code},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             existing_order = _find_existing_pending_checkout(
                 ticket_ids=ticket_ids,
                 quantity=order_quantity,
@@ -1764,6 +1852,26 @@ def create_order(request):
                     'updated_at',
                 ]
             )
+            if coupon_code:
+                try:
+                    _maybe_claim_coupon_on_order(
+                        order,
+                        coupon_code=coupon_code,
+                        user=request.user,
+                        ticket=ticket,
+                        order_quantity=order_quantity,
+                        negotiated_offer=negotiated_offer,
+                    )
+                except ValueError as ve:
+                    msg = str(ve)
+                    if msg.startswith('coupon:'):
+                        transaction.set_rollback(True)
+                        parts = msg.split(':', 2)
+                        return Response(
+                            {'error': parts[2] if len(parts) > 2 else msg, 'code': parts[1] if len(parts) > 1 else 'coupon'},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    raise
 
         order.refresh_from_db()
         return _order_pending_checkout_response(order, request)
@@ -1907,6 +2015,9 @@ def confirm_order_payment(request, order_id):
             order.payment_confirm_token = None
             order.save(update_fields=['status', 'payment_confirm_token', 'updated_at'])
             _apply_order_pricing_fields(order, negotiated_offer, ticket_ref, order.quantity)
+            from users.coupons import finalize_coupon_redemption
+
+            finalize_coupon_redemption(order)
     except ValueError as e:
         msg = str(e)
         if msg == 'checkout_expired':
@@ -2454,23 +2565,32 @@ def guest_checkout(request):
                         )
 
             # SECURITY: Never trust client total for buy-now — must match server-computed checkout total.
+            coupon_code = (order_data.get('coupon_code') or '').strip()
+            from users.coupons import CouponError
+            try:
+                server_total = _checkout_expected_total(
+                    ticket=ticket,
+                    order_quantity=order_quantity,
+                    negotiated_offer=negotiated_offer,
+                    coupon_code=coupon_code,
+                )
+            except CouponError as ce:
+                return Response(
+                    {'error': ce.message, 'code': ce.code},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             if not negotiated_offer:
                 sent_total = decimal_money(order_data.get('total_amount', 0))
-                expected_total = expected_buy_now_total(ticket.asking_price, order_quantity)
-                if not payment_amounts_match(sent_total, expected_total):
+                if not payment_amounts_match(sent_total, server_total):
                     return Response(
                         {
                             'error': (
-                                f'Invalid total amount. Expected {expected_total}, got {sent_total}'
+                                f'Invalid total amount. Expected {server_total}, got {sent_total}'
                             )
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-            if negotiated_offer:
-                server_total = expected_negotiated_total_from_offer_base(negotiated_offer.amount)
-            else:
-                server_total = expected_buy_now_total(ticket.asking_price, order_quantity)
             event_name = order_data.get('event_name', ticket.event_name)
 
             from users.currency import iso4217_for_ticket_listing
@@ -2504,6 +2624,29 @@ def guest_checkout(request):
                 held_quantity=(held_qty if (not listing_group_id and order_quantity > 1) else 0),
                 payment_confirm_token=secrets.token_urlsafe(32),
             )
+            if coupon_code:
+                try:
+                    _maybe_claim_coupon_on_order(
+                        order,
+                        coupon_code=coupon_code,
+                        guest_email=order_data.get('guest_email', ''),
+                        ticket=ticket,
+                        order_quantity=order_quantity,
+                        negotiated_offer=negotiated_offer,
+                    )
+                except ValueError as ve:
+                    msg = str(ve)
+                    if msg.startswith('coupon:'):
+                        transaction.set_rollback(True)
+                        parts = msg.split(':', 2)
+                        return Response(
+                            {
+                                'error': parts[2] if len(parts) > 2 else msg,
+                                'code': parts[1] if len(parts) > 1 else 'coupon',
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    raise
 
         order.refresh_from_db()
         return _order_pending_checkout_response(order, request)
@@ -4032,6 +4175,9 @@ def admin_cancel_order(request, order_id):
 
             order.status = 'cancelled'
             order.payout_status = 'locked'
+            from users.coupons import release_coupon_redemption
+
+            release_coupon_redemption(order)
             order.payout_eligible_date = None
             order.payment_confirm_token = None
             order.save(

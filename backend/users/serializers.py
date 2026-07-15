@@ -749,6 +749,7 @@ class GuestCheckoutSerializer(serializers.Serializer):
     quantity = serializers.IntegerField(required=True, min_value=1, max_value=10)
     event_name = serializers.CharField(max_length=255, required=False)
     listing_group_id = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    coupon_code = serializers.CharField(required=False, allow_blank=True, max_length=40)
 
 
 class TicketSerializer(serializers.ModelSerializer):

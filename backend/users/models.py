@@ -670,7 +670,7 @@ class Order(models.Model):
         max_digits=10,
         decimal_places=2,
         default=0,
-        help_text='15% buyer-side service fee (added on top of final_negotiated_price)',
+        help_text='Buyer-side service fee added on top of final_negotiated_price (base 15%, or 10% with affiliate coupon)',
     )
     seller_service_fee = models.DecimalField(
         max_digits=10,
@@ -747,6 +747,34 @@ class Order(models.Model):
         blank=True,
         null=True,
         help_text='Last known Payme payment status (webhook / API)',
+    )
+
+    # Affiliate coupon applied at checkout (redemption row owns uniqueness).
+    coupon = models.ForeignKey(
+        'Coupon',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='orders',
+    )
+    coupon_code_snapshot = models.CharField(max_length=40, blank=True, default='')
+    buyer_fee_discount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text='Amount of buyer fee waived by affiliate coupon (5% of base when applied)',
+    )
+    affiliate_commission = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text='Affiliate payout share of base (5% when coupon applied)',
+    )
+    platform_net_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text='Platform keep after affiliate split (15% without coupon; 5% with coupon)',
     )
 
     def covers_ticket(self, ticket_id):
@@ -1177,3 +1205,150 @@ class AnalyticsEvent(models.Model):
 
     def __str__(self):
         return f'{self.event_type} {self.path} @ {self.timestamp:%Y-%m-%d %H:%M}'
+
+
+class AffiliatePartner(models.Model):
+    """Affiliate / influencer partner who earns commission on referred checkouts."""
+
+    name = models.CharField(max_length=200)
+    email = models.EmailField(blank=True)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='affiliate_profiles',
+        help_text='Optional linked TradeTix user for payout attribution',
+    )
+    is_active = models.BooleanField(default=True)
+    commission_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=4,
+        default=Decimal('0.0500'),
+        help_text='Default affiliate share of listing base when their coupon is used (0.05 = 5%)',
+    )
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class Coupon(models.Model):
+    """
+    Affiliate coupon code. Industry pattern: campaign rules on Coupon;
+    per-user uniqueness enforced via CouponRedemption UniqueConstraint.
+    """
+
+    code = models.CharField(max_length=40, unique=True, db_index=True)
+    affiliate = models.ForeignKey(
+        AffiliatePartner,
+        on_delete=models.PROTECT,
+        related_name='coupons',
+    )
+    is_active = models.BooleanField(default=True)
+    starts_at = models.DateTimeField(null=True, blank=True)
+    ends_at = models.DateTimeField(null=True, blank=True)
+    max_redemptions_total = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='Global cap across all users; null = unlimited',
+    )
+    # Split of PLATFORM_BUYER_SERVICE_FEE_RATE when coupon applies (must sum to base rate).
+    buyer_discount_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=4,
+        default=Decimal('0.0500'),
+        help_text='Buyer saves this rate off listing base (fee drops from 15% → 10%)',
+    )
+    affiliate_commission_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=4,
+        default=Decimal('0.0500'),
+    )
+    platform_net_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=4,
+        default=Decimal('0.0500'),
+    )
+    redemption_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['code']
+
+    def __str__(self):
+        return self.code
+
+    def normalized_code(self) -> str:
+        return (self.code or '').strip().upper()
+
+
+class CouponRedemption(models.Model):
+    """
+    Ledger of coupon claims. UNIQUE(coupon, buyer_key) is the concurrency seatbelt:
+    only one successful claim per user (or guest email) per coupon code.
+    """
+
+    STATUS_PENDING = 'pending'
+    STATUS_REDEEMED = 'redeemed'
+    STATUS_RELEASED = 'released'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending checkout'),
+        (STATUS_REDEEMED, 'Redeemed'),
+        (STATUS_RELEASED, 'Released'),
+    ]
+
+    coupon = models.ForeignKey(Coupon, on_delete=models.PROTECT, related_name='redemptions')
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='coupon_redemptions',
+    )
+    guest_email = models.EmailField(blank=True, default='')
+    buyer_key = models.CharField(
+        max_length=180,
+        db_index=True,
+        help_text='Stable identity: user:<id> or guest:<email> — uniqueness anchor',
+    )
+    order = models.OneToOneField(
+        'Order',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='coupon_redemption',
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    affiliate_commission = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    platform_net_fee = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    buyer_fee_paid = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    redeemed_at = models.DateTimeField(null=True, blank=True)
+    released_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            # Active claim: one pending/redeemed row per coupon+buyer (released rows free the slot).
+            models.UniqueConstraint(
+                fields=['coupon', 'buyer_key'],
+                condition=models.Q(status__in=['pending', 'redeemed']),
+                name='users_couponredemption_unique_active_buyer',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['coupon', 'status']),
+            models.Index(fields=['buyer_key', 'status']),
+        ]
+
+    def __str__(self):
+        return f'{self.coupon_id}:{self.buyer_key}:{self.status}'

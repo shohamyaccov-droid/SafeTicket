@@ -575,6 +575,9 @@ def finalize_pending_order_to_paid(order_id: int, source: str = 'payme') -> tupl
             order.payment_confirm_token = None
             order.save(update_fields=['status', 'payment_confirm_token', 'updated_at'])
             _apply_order_pricing_fields(order, negotiated_offer, ticket_ref, order.quantity)
+            from users.coupons import finalize_coupon_redemption
+
+            finalize_coupon_redemption(order)
 
             from users.payout_ledger import ensure_seller_payout_for_order
 

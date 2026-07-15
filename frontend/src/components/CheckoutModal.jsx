@@ -3,18 +3,22 @@ import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
 import { authAPI, orderAPI, paymentAPI, ticketAPI, ensureCsrfToken, getEffectiveBearerAccess, syncAxiosDefaultAuthHeader, notifySessionExpired } from '../services/api';
 import {
-  getTicketPrice,
-  formatPrice,
   buyerChargeFromBase,
+  buyerChargeFromBaseWithAffiliateCoupon,
   resolveTicketCurrency,
   currencySymbol,
   formatAmountForCurrency,
   getTicketBaseNumeric,
+  getTicketPrice,
+  formatPrice,
 } from '../utils/priceFormat';
 import { toastError, toastSuccess } from '../utils/toast';
 import { Analytics } from '../utils/analytics';
 import { downloadTicketFromAxiosBlob, ticketFileMimeFromAxiosHeaders } from '../utils/ticketDownload';
-import { BUYER_SERVICE_FEE_PERCENT } from '../constants/pricing';
+import {
+  BUYER_FEE_PERCENT_WITH_COUPON,
+  BUYER_SERVICE_FEE_PERCENT,
+} from '../constants/pricing';
 import './CheckoutModal.css';
 
 /** Buy Now: server cart hold (see TicketViewSet reserve). Negotiation: post-accept checkout window. */
@@ -186,6 +190,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const [reservationInitializing, setReservationInitializing] = useState(false);
   const [paidAmounts, setPaidAmounts] = useState(null); // Store actual paid amounts: { baseAmount, serviceFee, totalAmount }
   const [checkoutSucceeded, setCheckoutSucceeded] = useState(false); // Completed purchase — never return to payment for this session
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null); // server preview payload
+  const [couponBusy, setCouponBusy] = useState(false);
+  const [couponError, setCouponError] = useState('');
+  const couponApplyLockRef = useRef(false);
   const timerRef = useRef(null);
   const reservationRef = useRef(false); // Track if reservation was made
   const transactionCompleteRef = useRef(false); // Prevents timer/cleanup from reverting UI after successful order
@@ -316,20 +325,26 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const basePriceNum = negotiatedUnitBase != null ? negotiatedUnitBase : listUnitFace;
   const listBaseSubtotalShekels =
     !isNegotiatedPrice && listUnitFace > 0 ? listUnitFace * quantity : 0;
+  const chargeFn = appliedCoupon ? buyerChargeFromBaseWithAffiliateCoupon : buyerChargeFromBase;
   const negotiatedBundleBreakdown =
     isNegotiatedPrice && negotiatedBaseTotal != null && negotiatedBaseTotal > 0
-      ? buyerChargeFromBase(negotiatedBaseTotal)
+      ? chargeFn(negotiatedBaseTotal)
       : null;
   const listBreakdown =
-    !isNegotiatedPrice && listBaseSubtotalShekels > 0 ? buyerChargeFromBase(listBaseSubtotalShekels) : null;
+    !isNegotiatedPrice && listBaseSubtotalShekels > 0 ? chargeFn(listBaseSubtotalShekels) : null;
   const unitDisplayPrice =
-    !isNaN(basePriceNum) && basePriceNum > 0 ? buyerChargeFromBase(basePriceNum).totalAmount : 0;
+    !isNaN(basePriceNum) && basePriceNum > 0 ? chargeFn(basePriceNum).totalAmount : 0;
   const effectivePrice = String(negotiatedBaseTotal != null ? negotiatedBaseTotal : listUnitFace);
   const effectiveUnitPrice = negotiatedUnitBase != null ? negotiatedUnitBase : listUnitFace;
   const unitPriceForDisplay = unitDisplayPrice;
   const standardReceiptBaseTotal = listBreakdown?.baseAmount ?? 0;
   const standardReceiptTotalPay = listBreakdown?.totalAmount ?? 0;
   const standardReceiptFeeTotal = listBreakdown?.serviceFee ?? 0;
+  const feePercentLabel = appliedCoupon ? BUYER_FEE_PERCENT_WITH_COUPON : BUYER_SERVICE_FEE_PERCENT;
+  const checkoutBaseForCoupon =
+    isNegotiatedPrice && negotiatedBaseTotal != null && negotiatedBaseTotal > 0
+      ? negotiatedBaseTotal
+      : listBaseSubtotalShekels;
 
   // Update quantity when initialQuantity prop changes
   useEffect(() => {
@@ -461,6 +476,59 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     setError('');
     setStep('payment');
     setInfoStepBusy(false);
+  };
+
+  const handleApplyCoupon = async () => {
+    if (couponApplyLockRef.current || couponBusy) return;
+    const code = (couponInput || '').trim();
+    if (!code) {
+      setCouponError('נא להזין קוד קופון.');
+      return;
+    }
+    if (!checkoutBaseForCoupon || checkoutBaseForCoupon <= 0) {
+      setCouponError('לא ניתן להחיל קופון לפני בחירת כרטיסים.');
+      return;
+    }
+    if (!user && !(guestForm.email || '').trim()) {
+      setCouponError('לאורחים נדרש אימייל לפני החלת קופון (שימוש חד-פעמי).');
+      return;
+    }
+    couponApplyLockRef.current = true;
+    setCouponBusy(true);
+    setCouponError('');
+    try {
+      const payload = {
+        code,
+        base_amount: String(checkoutBaseForCoupon),
+      };
+      if (!user) payload.guest_email = guestForm.email.trim();
+      const res = await orderAPI.validateCoupon(payload);
+      const data = res.data || {};
+      setAppliedCoupon({
+        code: data.code || code.toUpperCase(),
+        total_amount: data.total_amount,
+        buyer_service_fee: data.buyer_service_fee,
+        buyer_fee_discount: data.buyer_fee_discount,
+        affiliate_name: data.affiliate_name,
+      });
+      toastSuccess('הקופון הוחל בהצלחה — דמי השירות ירדו ל-10%.');
+    } catch (err) {
+      setAppliedCoupon(null);
+      const msg =
+        err?.response?.data?.error ||
+        err?.message ||
+        'לא ניתן להחיל את הקופון.';
+      setCouponError(String(msg));
+    } finally {
+      setCouponBusy(false);
+      couponApplyLockRef.current = false;
+    }
+  };
+
+  const handleClearCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setCouponError('');
   };
 
   const executeCheckout = async (mockBypass = false) => {
@@ -617,6 +685,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         if (listing_group_id) {
           orderData.listing_group_id = listing_group_id;
         }
+        if (appliedCoupon?.code) {
+          orderData.coupon_code = appliedCoupon.code;
+        }
 
         await ensureCsrfToken();
         orderResponse = await orderAPI.createOrder(orderData);
@@ -641,6 +712,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         // Only add listing_group_id if it exists
         if (listing_group_id) {
           orderData.listing_group_id = listing_group_id;
+        }
+        if (appliedCoupon?.code) {
+          orderData.coupon_code = appliedCoupon.code;
         }
 
         await ensureCsrfToken();
@@ -1399,7 +1473,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.baseAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
-                    <span>דמי שירות ותפעול ({BUYER_SERVICE_FEE_PERCENT}%)</span>
+                    <span>דמי שירות ותפעול ({feePercentLabel}%)</span>
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.serviceFee, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row total-row">
@@ -1424,15 +1498,59 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   )}
                   <div className="price-row">
-                    <span>דמי שירות ותפעול ({BUYER_SERVICE_FEE_PERCENT}%)</span>
+                    <span>דמי שירות ותפעול ({feePercentLabel}%)</span>
                     <span>{curSym}{formatAmountForCurrency(standardReceiptFeeTotal, checkoutCurrency)}</span>
                   </div>
+                  {appliedCoupon ? (
+                    <div className="price-row coupon-applied-row">
+                      <span>הנחת קופון שותפים ({appliedCoupon.code})</span>
+                      <span>−{curSym}{formatAmountForCurrency(listBreakdown?.buyerDiscount ?? 0, checkoutCurrency)}</span>
+                    </div>
+                  ) : null}
                   <div className="price-row total-row">
                     <span>סך הכל לתשלום:</span>
                     <span>{curSym}{formatAmountForCurrency(standardReceiptTotalPay, checkoutCurrency)}</span>
                   </div>
                 </>
               )}
+            </div>
+
+            <div className="checkout-coupon-box" dir="rtl">
+              <label htmlFor="checkout-coupon-input" className="checkout-coupon-label">
+                קוד קופון שותפים
+              </label>
+              <div className="checkout-coupon-row">
+                <input
+                  id="checkout-coupon-input"
+                  type="text"
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value)}
+                  placeholder="לדוגמה AFFILIATE5"
+                  disabled={Boolean(appliedCoupon) || couponBusy}
+                  autoComplete="off"
+                  dir="ltr"
+                />
+                {appliedCoupon ? (
+                  <button type="button" className="checkout-coupon-btn" onClick={handleClearCoupon}>
+                    הסר
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="checkout-coupon-btn"
+                    onClick={handleApplyCoupon}
+                    disabled={couponBusy}
+                  >
+                    {couponBusy ? 'בודק…' : 'החל'}
+                  </button>
+                )}
+              </div>
+              {couponError ? <p className="checkout-coupon-error" role="alert">{couponError}</p> : null}
+              {appliedCoupon ? (
+                <p className="checkout-coupon-ok">
+                  קופון פעיל — דמי שירות {BUYER_FEE_PERCENT_WITH_COUPON}% (הנחה 5% לקונה, 5% לשותף, 5% לפלטפורמה).
+                </p>
+              ) : null}
             </div>
           </div>
           
@@ -1687,7 +1805,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.baseAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
-                    <span>דמי שירות ותפעול ({BUYER_SERVICE_FEE_PERCENT}%)</span>
+                    <span>דמי שירות ותפעול ({feePercentLabel}%)</span>
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.serviceFee, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row total-row">
@@ -1712,15 +1830,59 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   )}
                   <div className="price-row">
-                    <span>דמי שירות ותפעול ({BUYER_SERVICE_FEE_PERCENT}%)</span>
+                    <span>דמי שירות ותפעול ({feePercentLabel}%)</span>
                     <span>{curSym}{formatAmountForCurrency(standardReceiptFeeTotal, checkoutCurrency)}</span>
                   </div>
+                  {appliedCoupon ? (
+                    <div className="price-row coupon-applied-row">
+                      <span>הנחת קופון שותפים ({appliedCoupon.code})</span>
+                      <span>−{curSym}{formatAmountForCurrency(listBreakdown?.buyerDiscount ?? 0, checkoutCurrency)}</span>
+                    </div>
+                  ) : null}
                   <div className="price-row total-row">
                     <span>סך הכל לתשלום:</span>
                     <span>{curSym}{formatAmountForCurrency(standardReceiptTotalPay, checkoutCurrency)}</span>
                   </div>
                 </>
               )}
+            </div>
+
+            <div className="checkout-coupon-box" dir="rtl">
+              <label htmlFor="checkout-coupon-input-info" className="checkout-coupon-label">
+                קוד קופון שותפים
+              </label>
+              <div className="checkout-coupon-row">
+                <input
+                  id="checkout-coupon-input-info"
+                  type="text"
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value)}
+                  placeholder="לדוגמה AFFILIATE5"
+                  disabled={Boolean(appliedCoupon) || couponBusy}
+                  autoComplete="off"
+                  dir="ltr"
+                />
+                {appliedCoupon ? (
+                  <button type="button" className="checkout-coupon-btn" onClick={handleClearCoupon}>
+                    הסר
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="checkout-coupon-btn"
+                    onClick={handleApplyCoupon}
+                    disabled={couponBusy}
+                  >
+                    {couponBusy ? 'בודק…' : 'החל'}
+                  </button>
+                )}
+              </div>
+              {couponError ? <p className="checkout-coupon-error" role="alert">{couponError}</p> : null}
+              {appliedCoupon ? (
+                <p className="checkout-coupon-ok">
+                  קופון פעיל — דמי שירות {BUYER_FEE_PERCENT_WITH_COUPON}% (הנחה 5% לקונה).
+                </p>
+              ) : null}
             </div>
           </div>
 

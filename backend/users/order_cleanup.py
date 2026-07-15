@@ -150,6 +150,9 @@ def cancel_abandoned_pending_payment_orders(
                     'updated_at',
                 ]
             )
+            from users.coupons import release_coupon_redemption
+
+            release_coupon_redemption(order)
             cancelled += 1
             logger.info('Cancelled abandoned pending_payment order %s and released held inventory', order.id)
 

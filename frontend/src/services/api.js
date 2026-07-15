@@ -537,6 +537,14 @@ export const orderAPI = {
       params: guestEmail ? { email: guestEmail } : {},
       skipAuth: Boolean(guestEmail),
     }),
+  validateCoupon: async (data) => {
+    await ensureCsrfToken();
+    const bearer = getEffectiveBearerAccess();
+    const config = bearer
+      ? { headers: { Authorization: `Bearer ${bearer}` } }
+      : { skipAuth: true };
+    return api.post('/users/coupons/validate/', data, config);
+  },
 };
 
 /**

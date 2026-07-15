@@ -12,9 +12,12 @@ from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from .models import (
+    AffiliatePartner,
     AnalyticsEvent,
     Artist,
     ContactMessage,
+    Coupon,
+    CouponRedemption,
     Event,
     EventRequest,
     Offer,
@@ -570,10 +573,62 @@ class EventAdmin(admin.ModelAdmin):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ['id', 'user', 'guest_email', 'status', 'total_amount', 'currency', 'event_name', 'created_at']
+    list_display = [
+        'id',
+        'user',
+        'guest_email',
+        'status',
+        'total_amount',
+        'coupon_code_snapshot',
+        'affiliate_commission',
+        'currency',
+        'event_name',
+        'created_at',
+    ]
     list_filter = ['status', 'created_at']
-    search_fields = ['user__username', 'guest_email', 'event_name']
+    search_fields = ['user__username', 'guest_email', 'event_name', 'coupon_code_snapshot']
     readonly_fields = ['created_at', 'updated_at', 'payment_confirm_token']
+
+
+@admin.register(AffiliatePartner)
+class AffiliatePartnerAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name', 'email', 'is_active', 'commission_rate', 'created_at']
+    list_filter = ['is_active']
+    search_fields = ['name', 'email']
+
+
+@admin.register(Coupon)
+class CouponAdmin(admin.ModelAdmin):
+    list_display = [
+        'code',
+        'affiliate',
+        'is_active',
+        'redemption_count',
+        'max_redemptions_total',
+        'buyer_discount_rate',
+        'affiliate_commission_rate',
+        'platform_net_rate',
+    ]
+    list_filter = ['is_active', 'affiliate']
+    search_fields = ['code', 'affiliate__name']
+
+
+@admin.register(CouponRedemption)
+class CouponRedemptionAdmin(admin.ModelAdmin):
+    list_display = [
+        'id',
+        'coupon',
+        'buyer_key',
+        'status',
+        'discount_amount',
+        'affiliate_commission',
+        'platform_net_fee',
+        'order',
+        'created_at',
+    ]
+    list_filter = ['status', 'coupon']
+    search_fields = ['buyer_key', 'guest_email', 'coupon__code']
+    readonly_fields = ['created_at', 'updated_at', 'redeemed_at', 'released_at']
 
 
 @admin.register(SellerPayout)

@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
+from users.coupon_views import validate_coupon
 from .payme_views import payme_init_checkout
 from .payout_views import admin_payout_mark_paid, admin_payouts_list, user_wallet
 from .views import (
@@ -75,6 +76,7 @@ urlpatterns = [
     path('admin/tickets/<int:ticket_id>/approve/', admin_approve_ticket, name='admin_approve_ticket'),
     path('admin/tickets/<int:ticket_id>/reject/', admin_reject_ticket, name='admin_reject_ticket'),
     path('analytics/track/', track_analytics_event, name='track_analytics_event'),
+    path('coupons/validate/', validate_coupon, name='validate_coupon'),
     path('', include(router.urls)),
 ]
 
