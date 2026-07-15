@@ -32,6 +32,7 @@ import Footer from './components/Footer';
 import ScrollToTop from './components/ScrollToTop';
 import { toastError } from './utils/toast';
 import { Analytics } from './utils/analytics';
+import { trackGa4Pageview } from './utils/ga4';
 import './App.css';
 
 function safeReturnTo(value) {
@@ -39,12 +40,13 @@ function safeReturnTo(value) {
   return raw.startsWith('/login') ? '/' : raw;
 }
 
-/** Fires a page_view analytics event on every route change. */
+/** Backend funnel analytics + GA4 pageviews on every React Router navigation. */
 function PageTracker() {
   const location = useLocation();
   useEffect(() => {
     Analytics.pageView(location.pathname);
-  }, [location.pathname]);
+    trackGa4Pageview(location.pathname, location.search);
+  }, [location.pathname, location.search]);
   return null;
 }
 
