@@ -24,6 +24,9 @@ import Contact from './pages/Contact';
 import TermsPage from './pages/TermsPage';
 import RefundsPage from './pages/RefundsPage';
 import PrivacyPage from './pages/PrivacyPage';
+import AboutPage from './pages/AboutPage';
+import BuyerGuaranteePage from './pages/BuyerGuaranteePage';
+import AccessibilityPage from './pages/AccessibilityPage';
 import NotFoundPage from './pages/NotFoundPage';
 import PaymeCheckoutSuccess from './pages/PaymeCheckoutSuccess';
 import PaymeCheckoutFailure from './pages/PaymeCheckoutFailure';
@@ -145,6 +148,9 @@ function App() {
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/refunds" element={<RefundsPage />} />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/buyer-guarantee" element={<BuyerGuaranteePage />} />
+              <Route path="/accessibility" element={<AccessibilityPage />} />
               <Route path="/checkout/payme/success" element={<PaymeCheckoutSuccess />} />
               <Route path="/checkout/payme/failure" element={<PaymeCheckoutFailure />} />
               <Route path="*" element={<NotFoundPage />} />
