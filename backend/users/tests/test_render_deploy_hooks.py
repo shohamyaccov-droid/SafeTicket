@@ -16,3 +16,5 @@ class RenderDeployHooksTests(SimpleTestCase):
         self.assertIn('python manage.py migrate --noinput', text)
         self.assertIn('python manage.py seed_odiya_osher_hope_event', text)
         self.assertIn('python manage.py seed_eyal_golan_menora', text)
+        self.assertIn('python manage.py seed_affiliate_coupon', text)
+        self.assertIn('python manage.py seed_platform_coupon', text)

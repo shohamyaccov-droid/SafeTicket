@@ -601,6 +601,7 @@ class AffiliatePartnerAdmin(admin.ModelAdmin):
 class CouponAdmin(admin.ModelAdmin):
     list_display = [
         'code',
+        'coupon_type',
         'affiliate',
         'is_active',
         'redemption_count',
@@ -609,7 +610,7 @@ class CouponAdmin(admin.ModelAdmin):
         'affiliate_commission_rate',
         'platform_net_rate',
     ]
-    list_filter = ['is_active', 'affiliate']
+    list_filter = ['is_active', 'coupon_type', 'affiliate']
     search_fields = ['code', 'affiliate__name']
 
 

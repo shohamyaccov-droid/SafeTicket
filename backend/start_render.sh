@@ -44,6 +44,9 @@ python manage.py seed_eyal_golan_menora || true
 echo "[start_render] Demo affiliate coupon AFFILIATE5 (15% fee → 5/5/5 split)..."
 python manage.py seed_affiliate_coupon || true
 
+echo "[start_render] Platform coupon TRADETIX5 (15% fee → 5/0/10 split)..."
+python manage.py seed_platform_coupon || true
+
 echo "[start_render] Ramat Gan Stadium venue sections (Sell page dropdown)..."
 python manage.py seed_ramat_gan_sections || true
 

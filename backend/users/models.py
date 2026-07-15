@@ -1240,15 +1240,35 @@ class AffiliatePartner(models.Model):
 
 class Coupon(models.Model):
     """
-    Affiliate coupon code. Industry pattern: campaign rules on Coupon;
-    per-user uniqueness enforced via CouponRedemption UniqueConstraint.
+    Discount / promo code. Supports:
+      - AFFILIATE: requires AffiliatePartner; typical split 5% buyer / 5% partner / 5% platform
+      - PLATFORM: TradeTix-owned; affiliate FK null; commission forced to 0% (e.g. 5/0/10)
+
+    Per-buyer one-time use is enforced via CouponRedemption UniqueConstraint.
     """
 
+    TYPE_AFFILIATE = 'affiliate'
+    TYPE_PLATFORM = 'platform'
+    COUPON_TYPE_CHOICES = [
+        (TYPE_AFFILIATE, 'Affiliate'),
+        (TYPE_PLATFORM, 'Platform'),
+    ]
+
     code = models.CharField(max_length=40, unique=True, db_index=True)
+    coupon_type = models.CharField(
+        max_length=20,
+        choices=COUPON_TYPE_CHOICES,
+        default=TYPE_AFFILIATE,
+        db_index=True,
+        help_text='affiliate = partner-owned; platform = TradeTix-owned (no affiliate commission)',
+    )
     affiliate = models.ForeignKey(
         AffiliatePartner,
         on_delete=models.PROTECT,
         related_name='coupons',
+        null=True,
+        blank=True,
+        help_text='Required for affiliate coupons; must be null for platform coupons',
     )
     is_active = models.BooleanField(default=True)
     starts_at = models.DateTimeField(null=True, blank=True)
@@ -1258,22 +1278,24 @@ class Coupon(models.Model):
         blank=True,
         help_text='Global cap across all users; null = unlimited',
     )
-    # Split of PLATFORM_BUYER_SERVICE_FEE_RATE when coupon applies (must sum to base rate).
+    # Split of PLATFORM_BUYER_SERVICE_FEE_RATE when coupon applies (buyer_discount + affiliate + platform ≈ full fee).
     buyer_discount_rate = models.DecimalField(
         max_digits=5,
         decimal_places=4,
         default=Decimal('0.0500'),
-        help_text='Buyer saves this rate off listing base (fee drops from 15% → 10%)',
+        help_text='Buyer saves this rate off listing base (fee drops from 15% by this amount)',
     )
     affiliate_commission_rate = models.DecimalField(
         max_digits=5,
         decimal_places=4,
         default=Decimal('0.0500'),
+        help_text='Affiliate share of base; must be 0 for platform coupons',
     )
     platform_net_rate = models.DecimalField(
         max_digits=5,
         decimal_places=4,
         default=Decimal('0.0500'),
+        help_text='Platform keep of base when coupon applies (affiliate: 5%; platform coupon: typically 10%)',
     )
     redemption_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1281,13 +1303,60 @@ class Coupon(models.Model):
 
     class Meta:
         ordering = ['code']
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(coupon_type='affiliate', affiliate__isnull=False)
+                    | models.Q(coupon_type='platform', affiliate__isnull=True)
+                ),
+                name='users_coupon_type_affiliate_fk_consistency',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(coupon_type='platform')
+                    | models.Q(affiliate_commission_rate=Decimal('0.0000'))
+                ),
+                name='users_coupon_platform_zero_affiliate_rate',
+            ),
+        ]
 
     def __str__(self):
         return self.code
 
+    @property
+    def is_platform(self) -> bool:
+        return self.coupon_type == self.TYPE_PLATFORM
+
+    @property
+    def is_affiliate(self) -> bool:
+        return self.coupon_type == self.TYPE_AFFILIATE
+
     def normalized_code(self) -> str:
         return (self.code or '').strip().upper()
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.coupon_type == self.TYPE_PLATFORM:
+            if self.affiliate_id is not None:
+                raise ValidationError({'affiliate': 'Platform coupons must not link an affiliate partner.'})
+            rate = Decimal(str(self.affiliate_commission_rate or 0)).quantize(Decimal('0.0001'))
+            if rate != Decimal('0.0000'):
+                raise ValidationError(
+                    {'affiliate_commission_rate': 'Platform coupons must have affiliate commission rate of 0.'}
+                )
+            self.affiliate = None
+            self.affiliate_commission_rate = Decimal('0.0000')
+        elif self.coupon_type == self.TYPE_AFFILIATE:
+            if self.affiliate_id is None and self.affiliate is None:
+                raise ValidationError({'affiliate': 'Affiliate coupons require an affiliate partner.'})
+
+    def save(self, *args, **kwargs):
+        # Validate first so invalid platform + non-zero affiliate rate is rejected (not silently coerced).
+        if self.coupon_type == self.TYPE_PLATFORM:
+            self.affiliate = None
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 class CouponRedemption(models.Model):
     """

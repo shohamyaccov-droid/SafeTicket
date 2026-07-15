@@ -1,8 +1,8 @@
 """
-Affiliate coupon apply/redeem service.
+Coupon apply/redeem service (affiliate + platform-owned).
 
 Industry pattern:
-- Coupon holds campaign rates / windows
+- Coupon holds campaign rates / windows / type
 - CouponRedemption is the ledger with UNIQUE(coupon, buyer_key) WHERE status IN (pending, redeemed)
 - Claim uses transaction.atomic + IntegrityError catch (DB is the referee under race)
 """
@@ -16,8 +16,9 @@ from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 
-from users.models import AffiliatePartner, Coupon, CouponRedemption, Order, User
+from users.models import Coupon, CouponRedemption, Order, User
 from users.pricing import (
+    QUANT,
     affiliate_checkout_amounts,
     buyer_charge_from_base_amount,
     decimal_money,
@@ -44,6 +45,12 @@ def buyer_key_for(*, user: Optional[User] = None, guest_email: str = '') -> str:
     return f'guest:{email}'
 
 
+def _rate_to_percent_label(rate: Decimal) -> str:
+    """0.0500 → '5', 0.1000 → '10', 0 → '0'."""
+    pct = (Decimal(str(rate)) * Decimal('100')).quantize(Decimal('1'))
+    return str(int(pct))
+
+
 def get_active_coupon(code: str) -> Coupon:
     normalized = normalize_coupon_code(code)
     if not normalized:
@@ -55,8 +62,11 @@ def get_active_coupon(code: str) -> Coupon:
     )
     if coupon is None:
         raise CouponError('invalid_code', 'קוד קופון לא נמצא.')
-    if not coupon.is_active or not coupon.affiliate.is_active:
+    if not coupon.is_active:
         raise CouponError('inactive', 'קוד הקופון אינו פעיל.')
+    if coupon.coupon_type == Coupon.TYPE_AFFILIATE:
+        if coupon.affiliate_id is None or not coupon.affiliate.is_active:
+            raise CouponError('inactive', 'קוד הקופון אינו פעיל.')
     now = timezone.now()
     if coupon.starts_at and now < coupon.starts_at:
         raise CouponError('not_started', 'קוד הקופון עדיין לא בתוקף.')
@@ -85,10 +95,20 @@ class CouponPreview:
     platform_net_fee: Decimal
     total: Decimal
     affiliate_name: str
+    coupon_type: str
+    buyer_discount_rate: Decimal
+    affiliate_commission_rate: Decimal
+    platform_net_rate: Decimal
 
     def as_dict(self) -> dict:
+        fee_charged_rate = (
+            Decimal(str(self.buyer_fee)) / Decimal(str(self.base))
+            if self.base
+            else Decimal('0')
+        )
         return {
             'code': self.code,
+            'coupon_type': self.coupon_type,
             'base_amount': str(self.base),
             'buyer_service_fee': str(self.buyer_fee),
             'buyer_fee_discount': str(self.buyer_discount),
@@ -96,10 +116,10 @@ class CouponPreview:
             'platform_net_fee': str(self.platform_net_fee),
             'total_amount': str(self.total),
             'affiliate_name': self.affiliate_name,
-            'fee_percent_charged': '10',
-            'discount_percent': '5',
-            'affiliate_percent': '5',
-            'platform_percent': '5',
+            'fee_percent_charged': _rate_to_percent_label(fee_charged_rate),
+            'discount_percent': _rate_to_percent_label(self.buyer_discount_rate),
+            'affiliate_percent': _rate_to_percent_label(self.affiliate_commission_rate),
+            'platform_percent': _rate_to_percent_label(self.platform_net_rate),
         }
 
 
@@ -123,6 +143,10 @@ def preview_coupon_for_base(
         affiliate_rate=coupon.affiliate_commission_rate,
         platform_rate=coupon.platform_net_rate,
     )
+    if coupon.coupon_type == Coupon.TYPE_PLATFORM:
+        affiliate_name = 'TradeTix'
+    else:
+        affiliate_name = coupon.affiliate.name if coupon.affiliate_id else ''
     return CouponPreview(
         code=coupon.code.upper(),
         base=amounts['base'],
@@ -131,7 +155,11 @@ def preview_coupon_for_base(
         affiliate_commission=amounts['affiliate_commission'],
         platform_net_fee=amounts['platform_net_fee'],
         total=amounts['total'],
-        affiliate_name=coupon.affiliate.name,
+        affiliate_name=affiliate_name,
+        coupon_type=coupon.coupon_type,
+        buyer_discount_rate=coupon.buyer_discount_rate,
+        affiliate_commission_rate=coupon.affiliate_commission_rate,
+        platform_net_rate=coupon.platform_net_rate,
     )
 
 
@@ -271,6 +299,8 @@ def seed_demo_affiliate_coupon(
     code: str = 'AFFILIATE5',
     partner_name: str = 'TradeTix Demo Affiliate',
 ) -> Coupon:
+    from users.models import AffiliatePartner
+
     partner, _ = AffiliatePartner.objects.get_or_create(
         name=partner_name,
         defaults={'email': 'affiliate@tradetix.local', 'is_active': True},
@@ -278,11 +308,34 @@ def seed_demo_affiliate_coupon(
     coupon, _ = Coupon.objects.update_or_create(
         code=normalize_coupon_code(code),
         defaults={
+            'coupon_type': Coupon.TYPE_AFFILIATE,
             'affiliate': partner,
             'is_active': True,
             'buyer_discount_rate': Decimal('0.0500'),
             'affiliate_commission_rate': Decimal('0.0500'),
             'platform_net_rate': Decimal('0.0500'),
+        },
+    )
+    return coupon
+
+
+def seed_platform_coupon(
+    *,
+    code: str = 'TRADETIX5',
+) -> Coupon:
+    """
+    Platform-owned promo: buyer pays 10% fee (5% off the 15% base),
+    affiliate commission 0%, platform retains 10% net.
+    """
+    coupon, _ = Coupon.objects.update_or_create(
+        code=normalize_coupon_code(code),
+        defaults={
+            'coupon_type': Coupon.TYPE_PLATFORM,
+            'affiliate': None,
+            'is_active': True,
+            'buyer_discount_rate': Decimal('0.0500'),
+            'affiliate_commission_rate': Decimal('0.0000'),
+            'platform_net_rate': Decimal('0.1000'),
         },
     )
     return coupon
