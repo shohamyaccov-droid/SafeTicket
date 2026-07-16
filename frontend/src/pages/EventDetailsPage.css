@@ -562,19 +562,25 @@
 /* Sticky Map Container — default order map-first for single-column (mobile/tablet); desktop overrides below */
 .venue-map-sticky-container {
   order: -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   max-width: 100%;
   margin-bottom: var(--spacing-lg);
   grid-column: 1 / -1;
   /* flex: do not grow/shrink with sibling list — required for position:sticky in a column flex stack */
   flex: 0 0 auto;
-  align-self: flex-start;
+  align-self: stretch;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 /* Venue Map Card - Clean Professional Look */
 .venue-map-card {
   background: white;
+  width: 100%;
+  max-width: 100%;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   overflow: hidden;
@@ -614,8 +620,13 @@
   min-height: 300px;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   background: white;
   position: relative;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .venue-map-card-content .venue-map-container {
@@ -630,15 +641,16 @@
 
 /* Let vertical page scroll pass through the concert SVG map on touch devices */
 .bloomfield-concert-map-scroll-wrapper {
-  touch-action: pan-x pan-y;
+  touch-action: pan-y pinch-zoom;
   flex: 1;
   min-height: 0;
   display: flex;
+  align-items: center;
+  justify-content: center;
   flex-direction: column;
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -647,9 +659,12 @@
   flex: 1;
   min-height: 0;
   display: flex;
+  align-items: center;
+  justify-content: center;
   flex-direction: column;
   width: 100%;
-  overflow: visible;
+  max-width: 100%;
+  overflow: hidden;
   background: #ffffff;
 }
 
@@ -722,9 +737,12 @@
   .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__svg {
     min-height: min(60vh, 700px);
     min-height: min(60dvh, 700px);
-    max-height: none;
+    max-height: 100%;
     width: 100%;
-    height: 100%;
+    height: auto;
+    max-width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
   }
 }
 
@@ -1917,7 +1935,7 @@
   }
 
   .venue-map-sticky-container .venue-map-card-content {
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: hidden;
     border-radius: 0 0 8px 8px;
     -webkit-overflow-scrolling: touch;
@@ -1973,11 +1991,12 @@
 
   .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__svg {
     width: 100% !important;
-    height: 100% !important;
+    height: auto !important;
     min-height: 0;
     max-width: 100%;
     max-height: 100%;
-    aspect-ratio: unset;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
   }
 
   /* Interactive Menora map — room to read full court/stage */
@@ -2076,7 +2095,7 @@
   .tickets-split-container.tickets-split-container--ramat-gan .venue-map-card {
     min-height: 0;
     max-height: none;
-    overflow: visible;
+    overflow: hidden;
     background: #ffffff;
   }
 
@@ -2108,7 +2127,7 @@
     min-height: 0;
     height: auto;
     max-height: none;
-    overflow: visible;
+    overflow: hidden;
     background: #ffffff;
   }
 
@@ -2141,7 +2160,7 @@
 
   .tickets-split-container.tickets-split-container--ramat-gan .interactive-stadium-map__svg {
     width: 100% !important;
-    height: 100% !important;
+    height: auto !important;
     min-height: 0 !important;
     max-width: 100%;
     max-height: 100%;
@@ -2196,7 +2215,7 @@
   }
 
   .venue-map-sticky-container .venue-map-card-content {
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: hidden;
     border-radius: 0 0 8px 8px;
     -webkit-overflow-scrolling: touch;

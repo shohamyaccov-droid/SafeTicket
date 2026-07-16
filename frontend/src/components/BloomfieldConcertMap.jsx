@@ -227,12 +227,13 @@ export default function BloomfieldConcertMap({
         role="application"
         aria-label="מפת הושבה — הופעה בבלומפילד — גרירה להזזה, פלוס ומינוס לזום"
       >
-        <div className="h-full w-full will-change-transform" style={panZoom.transformStyle}>
+        <div className="flex h-full w-full items-center justify-center will-change-transform" style={panZoom.transformStyle}>
           <svg
             viewBox={viewBoxStr}
             width="100%"
-            height="100%"
-            className="block h-full w-full select-none overflow-visible"
+            height="auto"
+            className="block h-auto w-full max-h-full max-w-full select-none"
+            preserveAspectRatio="xMidYMid meet"
             role="img"
             aria-label="מפת הושבה — אצטדיון בלומפילד — הופעה"
           >

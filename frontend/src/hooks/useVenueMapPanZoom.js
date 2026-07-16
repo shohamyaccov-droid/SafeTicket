@@ -8,7 +8,7 @@ function pointerDistance(a, b) {
  * Pan + zoom for venue SVG viewports (drag, pinch, +/- step zoom).
  */
 export function useVenueMapPanZoom(options = {}) {
-  const { minScale = 0.55, maxScale = 2.6, zoomStep = 0.16 } = options;
+  const { minScale = 0.55, maxScale = 2.6, zoomStep = 0.16, panBoundary = 220 } = options;
   const [scale, setScale] = useState(1);
   const [tx, setTx] = useState(0);
   const [ty, setTy] = useState(0);
@@ -26,13 +26,32 @@ export function useVenueMapPanZoom(options = {}) {
     [minScale, maxScale]
   );
 
+  const clampPan = useCallback(
+    (value, nextScale = scaleRef.current) => {
+      if (nextScale <= 1.01) return 0;
+      const bound = panBoundary * nextScale;
+      return Math.min(bound, Math.max(-bound, value));
+    },
+    [panBoundary]
+  );
+
   const zoomIn = useCallback(() => {
-    setScale((s) => clampScale(s + zoomStep));
-  }, [clampScale, zoomStep]);
+    setScale((s) => {
+      const next = clampScale(s + zoomStep);
+      setTx((x) => clampPan(x, next));
+      setTy((y) => clampPan(y, next));
+      return next;
+    });
+  }, [clampPan, clampScale, zoomStep]);
 
   const zoomOut = useCallback(() => {
-    setScale((s) => clampScale(s - zoomStep));
-  }, [clampScale, zoomStep]);
+    setScale((s) => {
+      const next = clampScale(s - zoomStep);
+      setTx((x) => clampPan(x, next));
+      setTy((y) => clampPan(y, next));
+      return next;
+    });
+  }, [clampPan, clampScale, zoomStep]);
 
   const onPointerDown = useCallback((e) => {
     if (!e.currentTarget) return;
@@ -72,7 +91,12 @@ export function useVenueMapPanZoom(options = {}) {
           pinchRef.current = { startDist: dist, startScale: scaleRef.current };
         }
         const ratio = dist / pinchRef.current.startDist;
-        setScale(clampScale(pinchRef.current.startScale * ratio));
+        setScale(() => {
+          const next = clampScale(pinchRef.current.startScale * ratio);
+          setTx((x) => clampPan(x, next));
+          setTy((y) => clampPan(y, next));
+          return next;
+        });
         return;
       }
 
@@ -82,10 +106,10 @@ export function useVenueMapPanZoom(options = {}) {
       const dy = e.clientY - d.lastY;
       d.lastX = e.clientX;
       d.lastY = e.clientY;
-      setTx((t) => t + dx);
-      setTy((t) => t + dy);
+      setTx((t) => clampPan(t + dx));
+      setTy((t) => clampPan(t + dy));
     },
-    [clampScale]
+    [clampPan, clampScale]
   );
 
   const onPointerUp = useCallback((e) => {

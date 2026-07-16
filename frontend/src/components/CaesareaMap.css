@@ -6,6 +6,13 @@
 
 .caesarea-map-container .svg-map-wrapper {
   background: #ffffff;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
 .sr-only {
@@ -22,6 +29,11 @@
 
 .caesarea-stadium-svg {
   background: #ffffff;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: 100%;
+  object-fit: contain;
 }
 
 /* Hover only for empty (no-ticket) sections — keep green available & dark active fills. */

@@ -250,7 +250,8 @@ export default function JerusalemArenaMap({
         >
           <svg
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-            className="h-full w-full max-h-[540px] select-none overflow-visible"
+            className="h-auto w-full max-h-full max-w-full select-none"
+            preserveAspectRatio="xMidYMid meet"
             role="img"
             aria-label="Pais Arena Jerusalem seating map"
           >

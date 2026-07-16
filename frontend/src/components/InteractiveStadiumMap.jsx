@@ -579,7 +579,7 @@ export default function InteractiveStadiumMap({
             <svg
               viewBox={VIEWBOX}
               width="100%"
-              height="100%"
+              height="auto"
               preserveAspectRatio="xMidYMid meet"
               className="interactive-stadium-map__svg"
               role="img"
