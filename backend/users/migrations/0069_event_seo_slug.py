@@ -75,6 +75,12 @@ class Migration(migrations.Migration):
             ),
         ),
         migrations.RunPython(backfill_slugs, noop_reverse),
+        # Postgres may already have the varchar_pattern_ops index from AddField(db_index=True);
+        # AlterField(unique=True) tries to recreate it and crashes without this drop.
+        migrations.RunSQL(
+            sql='DROP INDEX IF EXISTS users_event_slug_697e89ba_like;',
+            reverse_sql=migrations.RunSQL.noop,
+        ),
         migrations.AlterField(
             model_name='event',
             name='slug',
