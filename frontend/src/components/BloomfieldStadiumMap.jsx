@@ -19,11 +19,19 @@ import {
 } from '../utils/bloomfieldSectionGeometry';
 import './BloomfieldStadiumMap.css';
 import BloomfieldMapPriceTag, { menoraPriceTagMetrics } from './BloomfieldMapPriceTag';
+import {
+  MAP_FILL_AVAILABLE,
+  MAP_FILL_TAKEN,
+  MAP_TAKEN_BUBBLE_LABEL,
+  classifyMapBlockRows,
+  mapRowIsBuyable,
+} from '../utils/mapSectionStatus';
 
 const FILL_DEFAULT = '#dbe4f3';
-const FILL_HOVER = '#a5b4fc';
+const FILL_HOVER = '#86efac';
 const STROKE_SECTION = '#ffffff';
-const FILL_ACTIVE = '#60a5fa';
+const FILL_ACTIVE = MAP_FILL_AVAILABLE;
+const FILL_TAKEN = MAP_FILL_TAKEN;
 const PITCH_GRASS = '#2f855a';
 const LINE_WHITE = '#ffffff';
 /** Muted labels (Viagogo reference); active listings on green use dark text for contrast */
@@ -44,12 +52,13 @@ function isRenderableWedge(sec) {
   );
 }
 
-/** One listing per block for map affordances: lowest displayed price wins. */
-function pickCheapestRow(list) {
-  if (!list.length) return null;
-  let best = list[0];
+/** One listing per block for map affordances: buyable listings win; else taken. */
+function pickCheapestRow(list, { buyableOnly = false } = {}) {
+  const pool = buyableOnly ? list.filter(mapRowIsBuyable) : list;
+  if (!pool.length) return null;
+  let best = pool[0];
   let bestP = Infinity;
-  for (const row of list) {
+  for (const row of pool) {
     const raw = parseFloat(getTicketPrice(row.firstTicket));
     const p = Number.isFinite(raw) ? raw : Infinity;
     if (p < bestP) {
@@ -60,17 +69,18 @@ function pickCheapestRow(list) {
   return best;
 }
 
-/** Lowest price across all visible rows (for “best price” pin badge). */
+/** Lowest price across buyable rows only (for “best price” pin badge). */
 function globalMinListingPrice(rows) {
   let minP = Infinity;
   for (const row of rows) {
+    if (!mapRowIsBuyable(row)) continue;
     const raw = parseFloat(getTicketPrice(row.firstTicket));
     if (Number.isFinite(raw) && raw < minP) minP = raw;
   }
   return minP;
 }
 
-/** One pin per map block: price is the minimum among listings in that section only. */
+/** One pin per map block: price for available, נתפס for taken-only. */
 function layoutPins(rows) {
   const floorPrice = globalMinListingPrice(rows);
   const byBlock = {};
@@ -84,12 +94,29 @@ function layoutPins(rows) {
   const pins = [];
   for (const bid of Object.keys(byBlock)) {
     const list = byBlock[bid];
-    const rep = pickCheapestRow(list);
-    if (!rep) continue;
+    const status = classifyMapBlockRows(list);
+    if (status === 'empty') continue;
     const sid = String(bid);
     const w = SECTION_WEDGES.find((x) => String(x.id) === sid);
     const cx0 = w?.cx ?? CX;
     const cy0 = w?.cy ?? CY;
+
+    if (status === 'taken') {
+      pins.push({
+        stableId: list[0]?.stableId,
+        blockId: sid,
+        x: cx0,
+        y: cy0 - 6,
+        priceLine: MAP_TAKEN_BUBBLE_LABEL,
+        urgency: null,
+        isBestPrice: false,
+        isTaken: true,
+      });
+      continue;
+    }
+
+    const rep = pickCheapestRow(list, { buyableOnly: true }) || pickCheapestRow(list);
+    if (!rep) continue;
     const t = rep.firstTicket;
     const raw = parseFloat(getTicketPrice(t));
     const cur = resolveTicketCurrency(t);
@@ -107,6 +134,7 @@ function layoutPins(rows) {
       priceLine: priceLabel,
       urgency: n > 0 && n < 5 ? `${n} left` : null,
       isBestPrice,
+      isTaken: false,
     });
   }
   return pins;
@@ -121,14 +149,31 @@ export default function BloomfieldStadiumMap({
   const [hoverBlockId, setHoverBlockId] = useState(null);
   const panZoom = useVenueMapPanZoom({ minScale: 0.65, maxScale: 2.8, zoomStep: 0.14 });
 
-  const blocksWithListings = useMemo(() => {
-    const s = new Set();
+  const blockStatusById = useMemo(() => {
+    const byBlock = {};
     for (const r of rows) {
       const bid = r.bloomfield?.blockId;
-      if (bid != null && bid !== '') s.add(String(bid));
+      if (bid == null || bid === '') continue;
+      const k = String(bid);
+      if (!byBlock[k]) byBlock[k] = [];
+      byBlock[k].push(r);
     }
-    return s;
+    const status = {};
+    for (const [k, list] of Object.entries(byBlock)) {
+      status[k] = classifyMapBlockRows(list);
+    }
+    return status;
   }, [rows]);
+
+  const blocksWithListings = useMemo(
+    () => new Set(Object.keys(blockStatusById).filter((k) => blockStatusById[k] !== 'empty')),
+    [blockStatusById]
+  );
+
+  const blocksAvailable = useMemo(
+    () => new Set(Object.keys(blockStatusById).filter((k) => blockStatusById[k] === 'available')),
+    [blockStatusById]
+  );
 
   const safeSectionWedges = useMemo(
     () => (Array.isArray(SECTION_WEDGES) ? SECTION_WEDGES.filter(isRenderableWedge) : []),
@@ -153,12 +198,11 @@ export default function BloomfieldStadiumMap({
   const firstRowInBlock = useCallback((blockId) => {
     const b = String(blockId);
     const list = rows.filter((r) => String(r.bloomfield?.blockId ?? '') === b);
-    return pickCheapestRow(list) ?? undefined;
+    return pickCheapestRow(list, { buyableOnly: true }) ?? pickCheapestRow(list) ?? undefined;
   }, [rows]);
 
   const handleBlockEnter = (blockId) => {
-    const has = blocksWithListings.has(String(blockId));
-    if (!has) return;
+    if (!blocksAvailable.has(String(blockId))) return;
     setHoverBlockId(String(blockId));
     const first = firstRowInBlock(blockId);
     onHoverGroup?.(first?.stableId ?? null);
@@ -170,7 +214,7 @@ export default function BloomfieldStadiumMap({
   };
 
   const handleBlockClick = (blockId) => {
-    if (!blocksWithListings.has(String(blockId))) return;
+    if (!blocksAvailable.has(String(blockId))) return;
     const first = firstRowInBlock(blockId);
     if (first) onSelectGroup?.(first.stableId);
   };
@@ -237,10 +281,17 @@ export default function BloomfieldStadiumMap({
             {safeSectionWedges.map((sec) => {
               if (!isRenderableWedge(sec)) return null;
               const sid = String(sec.id);
-              const has = blocksWithListings.has(sid);
-              const isHi = highlightBlockId === sid;
-              const isHover = hoverBlockId === sid;
-              const fill = has ? (isHover ? FILL_HOVER : FILL_ACTIVE) : FILL_DEFAULT;
+              const status = blockStatusById[sid] || 'empty';
+              const has = status !== 'empty';
+              const isTaken = status === 'taken';
+              const isAvailable = status === 'available';
+              const isHi = highlightBlockId === sid && isAvailable;
+              const isHover = hoverBlockId === sid && isAvailable;
+              const fill = isTaken
+                ? FILL_TAKEN
+                : isAvailable
+                  ? (isHover ? FILL_HOVER : FILL_ACTIVE)
+                  : FILL_DEFAULT;
               return (
                 <path
                   key={sid}
@@ -249,14 +300,14 @@ export default function BloomfieldStadiumMap({
                   fill={fill}
                   fillOpacity={1}
                   shapeRendering="geometricPrecision"
-                  stroke={isHi || isHover ? '#1d4ed8' : STROKE_SECTION}
+                  stroke={isHi || isHover ? '#16a34a' : STROKE_SECTION}
                   strokeWidth={isHi || isHover ? STROKE_HIGHLIGHT_W : STROKE_INACTIVE_W}
                   strokeLinejoin={isHi ? 'round' : 'miter'}
-                  className={`bloomfield-stadium-section transition-[stroke,fill-opacity,transform] duration-150 ease-out${isHover ? ' is-hover' : ''}${isHi ? ' is-active' : ''}`}
-                  style={{ cursor: has ? 'pointer' : 'default' }}
-                  onMouseEnter={() => handleBlockEnter(sid)}
-                  onMouseLeave={handleBlockLeave}
-                  onClick={() => handleBlockClick(sid)}
+                  className={`bloomfield-stadium-section transition-[stroke,fill-opacity,transform] duration-150 ease-out${isHover ? ' is-hover' : ''}${isHi ? ' is-active' : ''}${isTaken ? ' is-taken' : ''}`}
+                  style={{ cursor: isTaken ? 'not-allowed' : isAvailable ? 'pointer' : 'default' }}
+                  onMouseEnter={isAvailable ? () => handleBlockEnter(sid) : undefined}
+                  onMouseLeave={isAvailable ? handleBlockLeave : undefined}
+                  onClick={isAvailable ? () => handleBlockClick(sid) : undefined}
                 />
               );
             })}
@@ -264,7 +315,8 @@ export default function BloomfieldStadiumMap({
             {safeSectionWedges.map((sec) => {
               if (!isRenderableWedge(sec)) return null;
               const sid = String(sec.id);
-              const has = blocksWithListings.has(sid);
+              const status = blockStatusById[sid] || 'empty';
+              const has = status !== 'empty';
               const pin = pinsByBlock[sid];
               const priceLine = pin?.priceLine ?? '';
 
@@ -278,6 +330,7 @@ export default function BloomfieldStadiumMap({
                     metrics={menoraPriceTagMetrics(100, 38, priceLine)}
                     offsetX={14}
                     offsetY={-14}
+                    variant={pin.isTaken || status === 'taken' ? 'taken' : 'available'}
                   />
                 );
               }

@@ -16,10 +16,16 @@ import {
   ARENA_FLOOR_RX,
   ARENA_FLOOR_RY,
 } from '../utils/jerusalemArenaGeometry';
+import {
+  MAP_TAKEN_BUBBLE_LABEL,
+  classifyMapBlockRows,
+  mapRowIsBuyable,
+} from '../utils/mapSectionStatus';
 
 const FILL_DEFAULT = '#f3f4f6';
 const STROKE_SECTION = '#ffffff';
-const FILL_ACTIVE = '#a3e635';
+const FILL_ACTIVE = '#4ade80';
+const FILL_TAKEN = '#d1d5db';
 const COURT_WOOD = '#d4a574';
 const COURT_STROKE = '#b88652';
 const LINE_COURT = '#92400e';
@@ -44,11 +50,12 @@ function isRenderableWedge(sec) {
   );
 }
 
-function pickCheapestRow(list) {
-  if (!list.length) return null;
-  let best = list[0];
+function pickCheapestRow(list, { buyableOnly = false } = {}) {
+  const pool = buyableOnly ? list.filter(mapRowIsBuyable) : list;
+  if (!pool.length) return null;
+  let best = pool[0];
   let bestP = Infinity;
-  for (const row of list) {
+  for (const row of pool) {
     const raw = parseFloat(getTicketPrice(row.firstTicket));
     const p = Number.isFinite(raw) ? raw : Infinity;
     if (p < bestP) {
@@ -62,6 +69,7 @@ function pickCheapestRow(list) {
 function globalMinListingPrice(rows) {
   let minP = Infinity;
   for (const row of rows) {
+    if (!mapRowIsBuyable(row)) continue;
     const raw = parseFloat(getTicketPrice(row.firstTicket));
     if (Number.isFinite(raw) && raw < minP) minP = raw;
   }
@@ -81,12 +89,29 @@ function layoutPins(rows) {
   const pins = [];
   for (const bid of Object.keys(byBlock)) {
     const list = byBlock[bid];
-    const rep = pickCheapestRow(list);
-    if (!rep) continue;
+    const status = classifyMapBlockRows(list);
+    if (status === 'empty') continue;
     const sid = String(bid);
     const w = SECTION_WEDGES.find((x) => String(x.id) === sid);
     const cx0 = w?.cx ?? CX;
     const cy0 = w?.cy ?? CY;
+
+    if (status === 'taken') {
+      pins.push({
+        stableId: list[0]?.stableId,
+        blockId: sid,
+        x: cx0,
+        y: cy0 - 6,
+        priceLine: MAP_TAKEN_BUBBLE_LABEL,
+        urgency: null,
+        isBestPrice: false,
+        isTaken: true,
+      });
+      continue;
+    }
+
+    const rep = pickCheapestRow(list, { buyableOnly: true }) || pickCheapestRow(list);
+    if (!rep) continue;
     const t = rep.firstTicket;
     const raw = parseFloat(getTicketPrice(t));
     const cur = resolveTicketCurrency(t);
@@ -104,6 +129,7 @@ function layoutPins(rows) {
       priceLine: priceLabel,
       urgency: n > 0 && n < 5 ? `${n} left` : null,
       isBestPrice,
+      isTaken: false,
     });
   }
   return pins;
@@ -118,14 +144,31 @@ export default function JerusalemArenaMap({
   const [pinHoverId, setPinHoverId] = useState(null);
   const panZoom = useVenueMapPanZoom({ minScale: 0.65, maxScale: 2.8, zoomStep: 0.14 });
 
-  const blocksWithListings = useMemo(() => {
-    const s = new Set();
+  const blockStatusById = useMemo(() => {
+    const byBlock = {};
     for (const r of rows) {
       const bid = r.jerusalem?.blockId;
-      if (bid != null && bid !== '') s.add(String(bid));
+      if (bid == null || bid === '') continue;
+      const k = String(bid);
+      if (!byBlock[k]) byBlock[k] = [];
+      byBlock[k].push(r);
     }
-    return s;
+    const status = {};
+    for (const [k, list] of Object.entries(byBlock)) {
+      status[k] = classifyMapBlockRows(list);
+    }
+    return status;
   }, [rows]);
+
+  const blocksWithListings = useMemo(
+    () => new Set(Object.keys(blockStatusById).filter((k) => blockStatusById[k] !== 'empty')),
+    [blockStatusById]
+  );
+
+  const blocksAvailable = useMemo(
+    () => new Set(Object.keys(blockStatusById).filter((k) => blockStatusById[k] === 'available')),
+    [blockStatusById]
+  );
 
   const safeSectionWedges = useMemo(
     () => (Array.isArray(SECTION_WEDGES) ? SECTION_WEDGES.filter(isRenderableWedge) : []),
@@ -144,12 +187,11 @@ export default function JerusalemArenaMap({
   const firstRowInBlock = useCallback((blockId) => {
     const b = String(blockId);
     const list = rows.filter((r) => String(r.jerusalem?.blockId ?? '') === b);
-    return pickCheapestRow(list) ?? undefined;
+    return pickCheapestRow(list, { buyableOnly: true }) ?? pickCheapestRow(list) ?? undefined;
   }, [rows]);
 
   const handleBlockEnter = (blockId) => {
-    const has = blocksWithListings.has(String(blockId));
-    if (!has) return;
+    if (!blocksAvailable.has(String(blockId))) return;
     const first = firstRowInBlock(blockId);
     onHoverGroup?.(first?.stableId ?? null);
   };
@@ -159,7 +201,7 @@ export default function JerusalemArenaMap({
   };
 
   const handleBlockClick = (blockId) => {
-    if (!blocksWithListings.has(String(blockId))) return;
+    if (!blocksAvailable.has(String(blockId))) return;
     const first = firstRowInBlock(blockId);
     if (first) onSelectGroup?.(first.stableId);
   };
@@ -283,9 +325,12 @@ export default function JerusalemArenaMap({
             {safeSectionWedges.map((sec) => {
               if (!isRenderableWedge(sec)) return null;
               const sid = String(sec.id);
-              const has = blocksWithListings.has(sid);
-              const isHi = highlightBlockId === sid;
-              const fill = has ? FILL_ACTIVE : FILL_DEFAULT;
+              const status = blockStatusById[sid] || 'empty';
+              const has = status !== 'empty';
+              const isTaken = status === 'taken';
+              const isAvailable = status === 'available';
+              const isHi = highlightBlockId === sid && isAvailable;
+              const fill = isTaken ? FILL_TAKEN : isAvailable ? FILL_ACTIVE : FILL_DEFAULT;
               return (
                 <path
                   key={sid}
@@ -294,14 +339,14 @@ export default function JerusalemArenaMap({
                   fill={fill}
                   fillOpacity={1}
                   shapeRendering="geometricPrecision"
-                  stroke={isHi ? '#0ea5e9' : STROKE_SECTION}
+                  stroke={isHi ? '#16a34a' : STROKE_SECTION}
                   strokeWidth={isHi ? STROKE_HIGHLIGHT_W : STROKE_INACTIVE_W}
                   strokeLinejoin={isHi ? 'round' : 'miter'}
                   className="transition-[stroke,fill-opacity] duration-150 ease-out"
-                  style={{ cursor: has ? 'pointer' : 'default' }}
-                  onMouseEnter={() => handleBlockEnter(sid)}
-                  onMouseLeave={handleBlockLeave}
-                  onClick={() => handleBlockClick(sid)}
+                  style={{ cursor: isTaken ? 'not-allowed' : isAvailable ? 'pointer' : 'default' }}
+                  onMouseEnter={isAvailable ? () => handleBlockEnter(sid) : undefined}
+                  onMouseLeave={isAvailable ? handleBlockLeave : undefined}
+                  onClick={isAvailable ? () => handleBlockClick(sid) : undefined}
                 />
               );
             })}
@@ -309,7 +354,8 @@ export default function JerusalemArenaMap({
             {safeSectionWedges.map((sec) => {
               if (!isRenderableWedge(sec)) return null;
               const sid = String(sec.id);
-              const has = blocksWithListings.has(sid);
+              const status = blockStatusById[sid] || 'empty';
+              const has = status === 'available';
               return (
                 <text
                   key={`lbl-${sid}`}
@@ -329,15 +375,15 @@ export default function JerusalemArenaMap({
             })}
 
             {pins.map((p) => {
-              const hasUrgency = Boolean(p.urgency);
+              const hasUrgency = Boolean(p.urgency) && !p.isTaken;
               const bodyH = hasUrgency ? 34 : 26;
-              const bodyW = p.isBestPrice ? 118 : 100;
+              const bodyW = p.isTaken ? 88 : p.isBestPrice ? 118 : 100;
               const pillR = bodyH / 2;
               const bodyTop = -bodyH - 4;
-              const inverted = pinInverted(p.stableId);
-              const bg = inverted ? PIN_INVERTED : '#ffffff';
-              const stroke = inverted ? '#404040' : '#f3f4f6';
-              const lineFill = inverted ? '#ffffff' : '#000000';
+              const inverted = !p.isTaken && pinInverted(p.stableId);
+              const bg = p.isTaken ? '#e5e7eb' : inverted ? PIN_INVERTED : '#ffffff';
+              const stroke = p.isTaken ? '#9ca3af' : inverted ? '#404040' : '#f3f4f6';
+              const lineFill = p.isTaken ? '#6b7280' : inverted ? '#ffffff' : '#000000';
               const urgentFill = inverted ? '#fda4af' : ROSE_600;
               const priceY = hasUrgency ? bodyTop + 12 : bodyTop + bodyH / 2;
               const urgentY = bodyTop + 24;
@@ -346,19 +392,31 @@ export default function JerusalemArenaMap({
                 <g
                   key={p.blockId}
                   transform={`translate(${p.x}, ${p.y})`}
-                  style={{ cursor: 'pointer' }}
-                  onMouseEnter={() => {
-                    setPinHoverId(p.stableId);
-                    onHoverGroup?.(p.stableId);
-                  }}
-                  onMouseLeave={() => {
-                    setPinHoverId(null);
-                    onHoverGroup?.(null);
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectGroup?.(p.stableId);
-                  }}
+                  style={{ cursor: p.isTaken ? 'not-allowed' : 'pointer' }}
+                  onMouseEnter={
+                    p.isTaken
+                      ? undefined
+                      : () => {
+                          setPinHoverId(p.stableId);
+                          onHoverGroup?.(p.stableId);
+                        }
+                  }
+                  onMouseLeave={
+                    p.isTaken
+                      ? undefined
+                      : () => {
+                          setPinHoverId(null);
+                          onHoverGroup?.(null);
+                        }
+                  }
+                  onClick={
+                    p.isTaken
+                      ? undefined
+                      : (e) => {
+                          e.stopPropagation();
+                          onSelectGroup?.(p.stableId);
+                        }
+                  }
                 >
                   <g filter="url(#ja-pin-shadow)">
                     <rect

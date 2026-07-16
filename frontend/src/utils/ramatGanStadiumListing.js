@@ -1,4 +1,6 @@
 import { INTERACTIVE_STADIUM_SECTION_IDS } from './ramatGanStadiumGeometry.generated.js';
+import { isListingGroupTaken } from './ticketAvailability.js';
+import { isListingGroupBuyable } from './mapSectionStatus.js';
 
 const SECTION_ID_SET = new Set(INTERACTIVE_STADIUM_SECTION_IDS);
 
@@ -32,26 +34,44 @@ export function ramatGanSectionIdFromTicket(ticket) {
 }
 
 /**
- * @param {Array<{ tickets: object[], price: number|string, available_count?: number }>} ticketGroups
- * @returns {Record<string, { ticketsLeft: number, minPrice: number }>}
+ * @param {Array<{ tickets: object[], price: number|string, available_count?: number, is_taken?: boolean }>} ticketGroups
+ * @returns {Record<string, { ticketsLeft: number, minPrice: number|null, status: 'available'|'taken' }>}
  */
 export function buildRamatGanActiveListingsSummary(ticketGroups) {
-  /** @type {Record<string, { ticketsLeft: number, minPrice: number }>} */
+  /** @type {Record<string, { ticketsLeft: number, minPrice: number|null, status: 'available'|'taken' }>} */
   const summary = {};
   for (const group of ticketGroups || []) {
     const first = group.tickets?.[0];
     const sectionId = ramatGanSectionIdFromTicket(first);
     if (!sectionId) continue;
-    const qty = Number(group.available_count) || group.tickets?.length || 0;
     const price = parseFloat(group.price);
-    if (!qty || Number.isNaN(price)) continue;
+    const buyable = isListingGroupBuyable(group);
+    const taken = isListingGroupTaken(group);
+    if (!buyable && !taken) continue;
+    if (buyable && Number.isNaN(price)) continue;
+
     const prev = summary[sectionId];
-    if (!prev) {
-      summary[sectionId] = { ticketsLeft: qty, minPrice: price };
-    } else {
+    if (buyable) {
+      const qty = Number(group.available_count) || 0;
+      if (qty <= 0) continue;
+      if (!prev || prev.status !== 'available') {
+        summary[sectionId] = {
+          ticketsLeft: qty,
+          minPrice: price,
+          status: 'available',
+        };
+      } else {
+        summary[sectionId] = {
+          ticketsLeft: prev.ticketsLeft + qty,
+          minPrice: Math.min(prev.minPrice, price),
+          status: 'available',
+        };
+      }
+    } else if (taken && (!prev || prev.status !== 'available')) {
       summary[sectionId] = {
-        ticketsLeft: prev.ticketsLeft + qty,
-        minPrice: Math.min(prev.minPrice, price),
+        ticketsLeft: 0,
+        minPrice: Number.isFinite(price) ? price : prev?.minPrice ?? null,
+        status: 'taken',
       };
     }
   }

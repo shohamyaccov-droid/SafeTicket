@@ -25,7 +25,7 @@ function getDisplayName(svgPathId) {
 
 export { INTERACTIVE_STADIUM_SECTION_IDS };
 
-/** @typedef {'available' | 'unavailable' | 'stage'} SectionStatus */
+/** @typedef {'available' | 'unavailable' | 'taken' | 'stage'} SectionStatus */
 
 /**
  * @typedef {object} SectionGeometry
@@ -42,6 +42,7 @@ export { INTERACTIVE_STADIUM_SECTION_IDS };
  * @typedef {object} ListingSummary
  * @property {number} [ticketsLeft]
  * @property {number} [minPrice]
+ * @property {'available'|'taken'} [status]
  */
 
 /**
@@ -51,14 +52,15 @@ export { INTERACTIVE_STADIUM_SECTION_IDS };
 const VIEWBOX = RAMAT_GAN_STADIUM_VIEWBOX;
 const SECTIONS_BASE = RAMAT_GAN_STADIUM_SECTIONS_BASE;
 
-/** TRADETIX brand — soft teal base, orange on hover/available. */
+/** Available = green; taken = gray; empty = soft sky. */
 const COLORS = {
   stroke: '#ffffff',
   unavailable: '#bae6fd',
-  unavailableHover: '#ea580c',
-  available: '#ea580c',
-  availableHover: '#c2410c',
-  selected: '#9a3412',
+  unavailableHover: '#bae6fd',
+  available: '#4ade80',
+  availableHover: '#22c55e',
+  selected: '#16a34a',
+  taken: '#d1d5db',
   stage: '#1e293b',
   stageHover: '#334155',
   stageStroke: '#64748b',
@@ -295,6 +297,7 @@ function PriceBubble({
   isBestDeal,
   isSelected,
   isHover,
+  isTaken = false,
   onActivate,
   onMouseEnter,
   onMouseLeave,
@@ -302,8 +305,9 @@ function PriceBubble({
 }) {
   const bubbleH = 26;
   const pinH = 7;
-  const iconW = isBestDeal ? 18 : 0;
-  const textW = Math.max(44, priceLabel.length * 9.5);
+  const showDeal = isBestDeal && !isTaken;
+  const iconW = showDeal ? 18 : 0;
+  const textW = Math.max(44, String(priceLabel || '').length * 9.5);
   const bubbleW = textW + iconW + 16;
   const bx = x - bubbleW / 2;
   const by = y - bubbleH - pinH;
@@ -312,24 +316,38 @@ function PriceBubble({
   return (
     <g
       className={`interactive-stadium-map__price-bubble${
-        isSelected ? ' is-selected' : ''
-      }${isHover ? ' is-hover' : ''}${isBestDeal ? ' is-best-deal' : ''}`}
-      style={{ animationDelay: `${animationDelay}ms` }}
-      onClick={(e) => {
-        e.stopPropagation();
-        onActivate();
+        isSelected && !isTaken ? ' is-selected' : ''
+      }${isHover && !isTaken ? ' is-hover' : ''}${showDeal ? ' is-best-deal' : ''}${
+        isTaken ? ' is-taken' : ''
+      }`}
+      style={{
+        animationDelay: `${animationDelay}ms`,
+        cursor: isTaken ? 'not-allowed' : 'pointer',
       }}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onActivate();
-        }
-      }}
-      role="button"
-      tabIndex={0}
-      aria-label={`מחיר מ-${priceLabel}`}
+      onClick={
+        isTaken
+          ? undefined
+          : (e) => {
+              e.stopPropagation();
+              onActivate();
+            }
+      }
+      onMouseEnter={isTaken ? undefined : onMouseEnter}
+      onMouseLeave={isTaken ? undefined : onMouseLeave}
+      onKeyDown={
+        isTaken
+          ? undefined
+          : (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onActivate();
+              }
+            }
+      }
+      role={isTaken ? undefined : 'button'}
+      tabIndex={isTaken ? undefined : 0}
+      aria-label={isTaken ? 'נתפס' : `מחיר מ-${priceLabel}`}
+      aria-disabled={isTaken ? true : undefined}
     >
       <rect
         x={bx}
@@ -339,7 +357,7 @@ function PriceBubble({
         rx={13}
         className="interactive-stadium-map__price-bubble-bg"
       />
-      {isBestDeal ? (
+      {showDeal ? (
         <text
           x={bx + 12}
           y={by + bubbleH / 2 + 1}
@@ -352,7 +370,7 @@ function PriceBubble({
         </text>
       ) : null}
       <text
-        x={bx + bubbleW / 2 + (isBestDeal ? 8 : 0)}
+        x={bx + bubbleW / 2 + (showDeal ? 8 : 0)}
         y={by + bubbleH / 2 + 1}
         textAnchor="middle"
         dominantBaseline="middle"
@@ -380,12 +398,14 @@ function resolveSectionFill(section, isSelected, isHover) {
     if (isHover) return COLORS.stageHover;
     return COLORS.stage;
   }
+  if (section.status === 'taken') {
+    return COLORS.taken;
+  }
   if (section.status === 'available') {
     if (isSelected) return COLORS.selected;
     if (isHover) return COLORS.availableHover;
     return COLORS.available;
   }
-  if (isHover) return COLORS.unavailableHover;
   return COLORS.unavailable;
 }
 
@@ -400,9 +420,19 @@ function mergeSectionWithListings(base, activeListingsSummary) {
   }
 
   const listing = activeListingsSummary?.[getDbId(base.id)];
+  if (listing?.status === 'taken') {
+    return {
+      ...base,
+      status: 'taken',
+      price: 'נתפס',
+      ticketsLeft: 0,
+    };
+  }
+
   const ticketsLeft = listing?.ticketsLeft ?? 0;
   const hasStock =
     listing != null &&
+    listing.status !== 'taken' &&
     Number.isFinite(ticketsLeft) &&
     ticketsLeft > 0 &&
     listing.minPrice != null &&
@@ -462,22 +492,24 @@ export default function InteractiveStadiumMap({
     return m;
   }, [sections]);
 
-  /** Lowest listing price across the whole stadium (for "best deal" badge). */
+  /** Lowest listing price across buyable sections only (for "best deal" badge). */
   const stadiumMinPrice = useMemo(() => {
     let min = Infinity;
     for (const entry of Object.values(activeListingsSummary || {})) {
+      if (entry?.status === 'taken') continue;
       const p = Number(entry?.minPrice);
       if (Number.isFinite(p) && p > 0) min = Math.min(min, p);
     }
     return min === Infinity ? null : min;
   }, [activeListingsSummary]);
 
-  /** One bubble per dbId — skip duplicates if geometry splits a section. */
+  /** One bubble per dbId — available price or taken נתפס (keeps map populated). */
   const priceBubbleSections = useMemo(() => {
     const seen = new Set();
     const rows = [];
     for (const section of sections) {
-      if (section.status !== 'available' || !section.price) continue;
+      if (section.status !== 'available' && section.status !== 'taken') continue;
+      if (!section.price) continue;
       const dbId = getDbId(section.id);
       if (seen.has(dbId)) continue;
       seen.add(dbId);
@@ -568,37 +600,36 @@ export default function InteractiveStadiumMap({
             const isHover = hoverId === section.id;
             const fill = resolveSectionFill(section, isSelected, isHover);
             const clickable = section.status === 'available';
+            const isTaken = section.status === 'taken';
             const isStage = section.status === 'stage';
-            const interactive = !isStage;
+            const interactive = clickable;
 
             const commonHandlers = interactive
               ? {
                   onMouseEnter: () => setHoverId(section.id),
                   onMouseLeave: () => setHoverId(null),
-                  ...(clickable
-                    ? {
-                        onClick: () => handleSectionActivate(section),
-                        onKeyDown: (e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            handleSectionActivate(section);
-                          }
-                        },
-                        role: 'button',
-                        tabIndex: 0,
-                      }
-                    : {}),
+                  onClick: () => handleSectionActivate(section),
+                  onKeyDown: (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSectionActivate(section);
+                    }
+                  },
+                  role: 'button',
+                  tabIndex: 0,
                   style: { cursor: 'pointer' },
                 }
-              : { style: { cursor: 'default' } };
+              : {
+                  style: { cursor: isTaken ? 'not-allowed' : 'default' },
+                };
 
             const shapeProps = {
               fill,
               stroke: isStage ? COLORS.stageStroke : COLORS.stroke,
-              strokeWidth: isSelected ? STROKE_WIDTH_SELECTED : STROKE_WIDTH,
+              strokeWidth: isSelected && clickable ? STROKE_WIDTH_SELECTED : STROKE_WIDTH,
               className: `interactive-stadium-map__section interactive-stadium-map__section--${section.status}${
-                isSelected ? ' is-selected' : ''
-              }${isHover ? ' is-hover' : ''}${clickable ? ' is-clickable' : ''}${interactive && !clickable ? ' is-interactive' : ''}`,
+                isSelected && clickable ? ' is-selected' : ''
+              }${isHover && clickable ? ' is-hover' : ''}${clickable ? ' is-clickable' : ''}${isTaken ? ' is-taken' : ''}`,
               ...commonHandlers,
             };
 
@@ -677,6 +708,7 @@ export default function InteractiveStadiumMap({
           <g className="interactive-stadium-map__price-bubbles-layer" aria-hidden={false}>
             {priceBubbleSections.map((section, bubbleIndex) => {
               const sectionDbId = getDbId(section.id);
+              const isTaken = section.status === 'taken';
               const isSelected = selectedSectionId === sectionDbId;
               const isHover = hoverId === section.id;
               const placement = placementById[section.id];
@@ -684,6 +716,7 @@ export default function InteractiveStadiumMap({
               const listing = activeListingsSummary?.[sectionDbId];
               const minPrice = Math.round(Number(listing?.minPrice));
               const isBestDeal =
+                !isTaken &&
                 stadiumMinPrice != null &&
                 Number.isFinite(minPrice) &&
                 minPrice === Math.round(stadiumMinPrice);
@@ -697,6 +730,7 @@ export default function InteractiveStadiumMap({
                   isBestDeal={isBestDeal}
                   isSelected={isSelected}
                   isHover={isHover}
+                  isTaken={isTaken}
                   onActivate={() => handleSectionActivate(section)}
                   onMouseEnter={() => setHoverId(section.id)}
                   onMouseLeave={() => setHoverId(null)}

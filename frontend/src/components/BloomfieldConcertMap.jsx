@@ -14,6 +14,13 @@ import {
 import './BloomfieldStadiumMap.css';
 import './BloomfieldConcertMap.css';
 import BloomfieldMapPriceTag from './BloomfieldMapPriceTag';
+import {
+  MAP_FILL_AVAILABLE,
+  MAP_FILL_TAKEN,
+  MAP_TAKEN_BUBBLE_LABEL,
+  classifyMapBlockRows,
+  mapRowIsBuyable,
+} from '../utils/mapSectionStatus';
 
 const FILL_EMPTY = '#dbe4f3';
 const FILL_EMPTY_HOVER = '#a5b4fc';
@@ -26,11 +33,12 @@ function blockCenter(b) {
   return { cx: b.x + b.w / 2, cy: b.y + b.h / 2 };
 }
 
-function pickCheapestRow(list) {
-  if (!list.length) return null;
-  let best = list[0];
+function pickCheapestRow(list, { buyableOnly = false } = {}) {
+  const pool = buyableOnly ? list.filter(mapRowIsBuyable) : list;
+  if (!pool.length) return null;
+  let best = pool[0];
   let bestP = Infinity;
-  for (const row of list) {
+  for (const row of pool) {
     const raw = parseFloat(getTicketPrice(row.firstTicket));
     const p = Number.isFinite(raw) ? raw : Infinity;
     if (p < bestP) {
@@ -44,6 +52,7 @@ function pickCheapestRow(list) {
 function globalMinListingPrice(rows) {
   let minP = Infinity;
   for (const row of rows) {
+    if (!mapRowIsBuyable(row)) continue;
     const raw = parseFloat(getTicketPrice(row.firstTicket));
     if (Number.isFinite(raw) && raw < minP) minP = raw;
   }
@@ -53,16 +62,17 @@ function globalMinListingPrice(rows) {
 function globalMaxListingPrice(rows) {
   let maxP = -Infinity;
   for (const row of rows) {
+    if (!mapRowIsBuyable(row)) continue;
     const raw = parseFloat(getTicketPrice(row.firstTicket));
     if (Number.isFinite(raw) && raw > maxP) maxP = raw;
   }
   return maxP;
 }
 
-/** Higher price → deeper green (HSL). */
+/** Higher price → deeper green (HSL). Taken sections use flat gray. */
 function fillForPriceTier(minP, maxP, price) {
   if (!Number.isFinite(price)) {
-    return { fill: '#d1d5db', tier: 0 };
+    return { fill: MAP_FILL_AVAILABLE, tier: 0 };
   }
   const lo = Number.isFinite(minP) ? minP : price;
   const hi = Number.isFinite(maxP) ? maxP : price;
@@ -119,25 +129,6 @@ export default function BloomfieldConcertMap({
 
   const { viewBoxStr, vbX, vbY, vbW, vbH } = useMemo(() => computeTightViewBox(), []);
 
-  const blocksWithListings = useMemo(() => {
-    const s = new Set();
-    for (const r of rows) {
-      const bid = r.bloomfield?.blockId;
-      if (bid != null && bid !== '') s.add(String(bid));
-    }
-    return s;
-  }, [rows]);
-
-  const highlightBlockId = useMemo(() => {
-    if (highlightStableId == null || highlightStableId === '') return null;
-    const hit = rows.find((r) => String(r.stableId) === String(highlightStableId));
-    const raw = hit?.bloomfield?.blockId;
-    return raw != null && raw !== '' ? String(raw) : null;
-  }, [rows, highlightStableId]);
-
-  const minP = useMemo(() => globalMinListingPrice(rows), [rows]);
-  const maxP = useMemo(() => globalMaxListingPrice(rows), [rows]);
-
   const blockRowsById = useMemo(() => {
     const m = {};
     for (const r of rows) {
@@ -150,18 +141,45 @@ export default function BloomfieldConcertMap({
     return m;
   }, [rows]);
 
+  const blockStatusById = useMemo(() => {
+    const status = {};
+    for (const [k, list] of Object.entries(blockRowsById)) {
+      status[k] = classifyMapBlockRows(list);
+    }
+    return status;
+  }, [blockRowsById]);
+
+  const blocksWithListings = useMemo(
+    () => new Set(Object.keys(blockStatusById).filter((k) => blockStatusById[k] !== 'empty')),
+    [blockStatusById]
+  );
+
+  const blocksAvailable = useMemo(
+    () => new Set(Object.keys(blockStatusById).filter((k) => blockStatusById[k] === 'available')),
+    [blockStatusById]
+  );
+
+  const highlightBlockId = useMemo(() => {
+    if (highlightStableId == null || highlightStableId === '') return null;
+    const hit = rows.find((r) => String(r.stableId) === String(highlightStableId));
+    const raw = hit?.bloomfield?.blockId;
+    return raw != null && raw !== '' ? String(raw) : null;
+  }, [rows, highlightStableId]);
+
+  const minP = useMemo(() => globalMinListingPrice(rows), [rows]);
+  const maxP = useMemo(() => globalMaxListingPrice(rows), [rows]);
+
   const firstRowInBlock = useCallback(
     (blockId) => {
       const list = blockRowsById[String(blockId)] ?? [];
-      return pickCheapestRow(list) ?? undefined;
+      return pickCheapestRow(list, { buyableOnly: true }) ?? pickCheapestRow(list) ?? undefined;
     },
     [blockRowsById]
   );
 
   const handleBlockEnter = (blockId) => {
+    if (!blocksAvailable.has(String(blockId))) return;
     setHoverBlockId(String(blockId));
-    const has = blocksWithListings.has(String(blockId));
-    if (!has) return;
     const first = firstRowInBlock(blockId);
     onHoverGroup?.(first?.stableId ?? null);
   };
@@ -172,7 +190,7 @@ export default function BloomfieldConcertMap({
   };
 
   const handleBlockClick = (blockId) => {
-    if (!blocksWithListings.has(String(blockId))) return;
+    if (!blocksAvailable.has(String(blockId))) return;
     const first = firstRowInBlock(blockId);
     if (first) onSelectGroup?.(first.stableId);
   };
@@ -285,17 +303,25 @@ export default function BloomfieldConcertMap({
 
             {CONCERT_BLOCKS.map((b) => {
               const sid = String(b.id);
-              const has = blocksWithListings.has(sid);
-              const isHi = highlightBlockId === sid;
-              const isHover = hoverBlockId === sid;
-              const rep = has ? firstRowInBlock(sid) : undefined;
+              const status = blockStatusById[sid] || 'empty';
+              const has = status !== 'empty';
+              const isTaken = status === 'taken';
+              const isAvailable = status === 'available';
+              const isHi = highlightBlockId === sid && isAvailable;
+              const isHover = hoverBlockId === sid && isAvailable;
+              const rep = isAvailable ? firstRowInBlock(sid) : undefined;
               const raw = rep ? parseFloat(getTicketPrice(rep.firstTicket)) : NaN;
-              const { fill } = has
-                ? fillForPriceTier(minP, maxP, raw)
-                : { fill: isHover ? FILL_EMPTY_HOVER : FILL_EMPTY, tier: 0 };
+              const { fill } = isTaken
+                ? { fill: MAP_FILL_TAKEN, tier: 0 }
+                : isAvailable
+                  ? fillForPriceTier(minP, maxP, raw)
+                  : { fill: isHover ? FILL_EMPTY_HOVER : FILL_EMPTY, tier: 0 };
               const cur = rep ? resolveTicketCurrency(rep.firstTicket) : 'ILS';
-              const priceLine =
-                has && Number.isFinite(raw) ? formatMoney(raw, cur) : '';
+              const priceLine = isTaken
+                ? MAP_TAKEN_BUBBLE_LABEL
+                : has && Number.isFinite(raw)
+                  ? formatMoney(raw, cur)
+                  : '';
               const pts = concertBlockPolygonPoints(b);
               const { cx, cy } = blockCenter(b);
 
@@ -305,26 +331,40 @@ export default function BloomfieldConcertMap({
                     data-section-id={sid}
                     points={pts}
                     fill={fill}
-                    stroke={isHi ? '#0ea5e9' : has ? STROKE_SECTION : STROKE_EMPTY}
+                    stroke={isHi ? '#16a34a' : has ? STROKE_SECTION : STROKE_EMPTY}
                     strokeWidth={isHi ? STROKE_HIGHLIGHT_W : STROKE_INACTIVE_W}
-                    filter={has ? 'url(#bfc-seat-soft)' : undefined}
-                    className={`bloomfield-concert-map__seat${has ? ' bloomfield-concert-map__seat--listed' : ''}${
-                      isHi ? ' bloomfield-concert-map__seat--active' : ''
-                    }${isHover ? ' bloomfield-concert-map__seat--hover' : ''}`}
-                    style={{ transition: 'stroke 0.15s ease, stroke-width 0.15s ease' }}
-                    onMouseEnter={() => handleBlockEnter(sid)}
-                    onMouseLeave={handleBlockLeave}
-                    onClick={() => handleBlockClick(sid)}
-                    role={has ? 'button' : undefined}
-                    tabIndex={has ? 0 : undefined}
-                    onKeyDown={(e) => {
-                      if (!has) return;
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        handleBlockClick(sid);
-                      }
+                    filter={isAvailable ? 'url(#bfc-seat-soft)' : undefined}
+                    className={`bloomfield-concert-map__seat${isAvailable ? ' bloomfield-concert-map__seat--listed' : ''}${
+                      isTaken ? ' bloomfield-concert-map__seat--taken' : ''
+                    }${isHi ? ' bloomfield-concert-map__seat--active' : ''}${
+                      isHover ? ' bloomfield-concert-map__seat--hover' : ''
+                    }`}
+                    style={{
+                      transition: 'stroke 0.15s ease, stroke-width 0.15s ease',
+                      cursor: isTaken ? 'not-allowed' : isAvailable ? 'pointer' : 'default',
                     }}
-                    aria-label={has ? `${b.label}, ${priceLine}` : b.label}
+                    onMouseEnter={isAvailable ? () => handleBlockEnter(sid) : undefined}
+                    onMouseLeave={isAvailable ? handleBlockLeave : undefined}
+                    onClick={isAvailable ? () => handleBlockClick(sid) : undefined}
+                    role={isAvailable ? 'button' : undefined}
+                    tabIndex={isAvailable ? 0 : undefined}
+                    onKeyDown={
+                      isAvailable
+                        ? (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleBlockClick(sid);
+                            }
+                          }
+                        : undefined
+                    }
+                    aria-label={
+                      isTaken
+                        ? `${b.label}, נתפס`
+                        : isAvailable
+                          ? `${b.label}, ${priceLine}`
+                          : b.label
+                    }
                   />
                   <text
                     className="bloomfield-concert-map__seat-label"
@@ -336,6 +376,7 @@ export default function BloomfieldConcertMap({
                     fontSize={sid.length > 3 ? 28 : 32}
                     fontWeight="800"
                     fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+                    style={{ pointerEvents: 'none' }}
                   >
                     {b.label}
                   </text>
@@ -348,6 +389,7 @@ export default function BloomfieldConcertMap({
                       height={b.h}
                       offsetX={Math.min(40, b.w * 0.34)}
                       offsetY={-Math.min(36, b.h * 0.42)}
+                      variant={isTaken ? 'taken' : 'available'}
                     />
                   ) : null}
                 </g>

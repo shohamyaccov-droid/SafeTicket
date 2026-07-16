@@ -188,7 +188,34 @@
 }
 
 .interactive-stadium-map__section--unavailable.is-hover {
-  filter: drop-shadow(0 2px 8px rgba(234, 88, 12, 0.35));
+  filter: none;
+}
+
+.interactive-stadium-map__section--taken,
+.interactive-stadium-map__section.is-taken {
+  cursor: not-allowed !important;
+}
+
+.interactive-stadium-map__section--taken.is-hover {
+  filter: none !important;
+}
+
+.interactive-stadium-map__price-bubble.is-taken {
+  cursor: not-allowed !important;
+}
+
+.interactive-stadium-map__price-bubble.is-taken .interactive-stadium-map__price-bubble-bg {
+  fill: #e5e7eb;
+  stroke: #9ca3af;
+}
+
+.interactive-stadium-map__price-bubble.is-taken .interactive-stadium-map__price-bubble-text {
+  fill: #6b7280;
+}
+
+.interactive-stadium-map__price-bubble.is-taken .interactive-stadium-map__price-bubble-pin {
+  fill: #e5e7eb;
+  stroke: #9ca3af;
 }
 
 .interactive-stadium-map__section.is-hover.is-clickable {

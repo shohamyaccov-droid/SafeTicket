@@ -1,12 +1,19 @@
 /* eslint-disable react/prop-types */
 import { useState, useCallback } from 'react';
 import { currencySymbol, formatAmountForCurrency } from '../utils/priceFormat';
+import {
+  MAP_FILL_AVAILABLE,
+  MAP_FILL_TAKEN,
+  MAP_FILL_EMPTY,
+  MAP_TAKEN_BUBBLE_LABEL,
+} from '../utils/mapSectionStatus';
 import './InteractiveMenoraMap.css';
 
 const InteractiveMenoraMap = ({
   activeSection,
   onSectionClick,
   lowestPrices = {},
+  sectionMapStatus = {},
   currencyIso = 'ILS',
   // Accept legacy props (e.g. sectionPrices) without unused-var warnings.
   ..._legacyProps
@@ -22,7 +29,8 @@ const InteractiveMenoraMap = ({
     setZoomLevel(prev => Math.max(prev - 0.2, 0.5));
   }, []);
 
-  const handleSectionClick = useCallback((sectionId) => {
+  const handleSectionClick = useCallback((sectionId, isTaken) => {
+    if (isTaken) return;
     if (onSectionClick) {
       onSectionClick(sectionId);
     }
@@ -217,31 +225,33 @@ const InteractiveMenoraMap = ({
 
           {/* Seating Sections - Lower, Upper, VIP */}
           {allSections.map((section) => {
-            // STRICT MATCHING: Must match EXACT string ID ('5 Lower' !== '5 Upper')
             const isActive = activeSectionId !== null && activeSectionId === section.id;
-
-            // Lowest seller asking price (base, before buyer fee) for this section
-            const rawPrice = lowestPrices[section.id];
+            const meta = sectionMapStatus[section.id];
+            const isTaken = meta?.status === 'taken';
+            const rawPrice =
+              meta?.status === 'available' ? meta.minPrice : lowestPrices[section.id];
             const price = rawPrice !== undefined && rawPrice !== null ? Number(rawPrice) : null;
-            const hasPrice = price !== null && !Number.isNaN(price);
-            
-            // Viagogo color logic: green if has price, gray if not; VIP uses gold
+            const hasPrice = !isTaken && price !== null && !Number.isNaN(price);
+            const showBubble = (hasPrice || isTaken) && !isActive;
+
             let fillColor;
-            if (isActive) {
+            if (isActive && !isTaken) {
               fillColor = section.tier === 'VIP' ? '#d97706' : '#1f2937';
+            } else if (isTaken) {
+              fillColor = MAP_FILL_TAKEN;
             } else if (section.tier === 'VIP') {
               fillColor = hasPrice ? '#fde68a' : '#fef3c7';
             } else if (hasPrice) {
-              fillColor = '#4ade80';
+              fillColor = MAP_FILL_AVAILABLE;
             } else {
-              fillColor = '#f3f4f6';
+              fillColor = MAP_FILL_EMPTY;
             }
 
             return (
-              <g 
+              <g
                 key={section.id}
-                onClick={() => handleSectionClick(section.id)}
-                style={{ cursor: 'pointer' }}
+                onClick={() => handleSectionClick(section.id, isTaken)}
+                style={{ cursor: isTaken ? 'not-allowed' : 'pointer' }}
               >
                 <path
                   d={section.path}
@@ -250,16 +260,14 @@ const InteractiveMenoraMap = ({
                   strokeWidth="1.5"
                   strokeLinejoin="round"
                   strokeLinecap="round"
-                  className={`section-path${section.tier === 'VIP' ? ' vip-section' : ''}`}
+                  className={`section-path${section.tier === 'VIP' ? ' vip-section' : ''}${isTaken ? ' section-path--taken' : ''}`}
                   style={{
                     transition: 'all 0.2s ease',
-                    filter: isActive ? 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))' : 'none',
+                    filter: isActive && !isTaken ? 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))' : 'none',
                   }}
                 />
-                
-                {/* CRITICAL FIX: Section label MUST be visible even when price tag appears */}
-                {/* Position label above the price tag when price exists, otherwise at normal position */}
-                {hasPrice && !isActive ? (
+
+                {showBubble ? (
                   <text
                     x={section.textX}
                     y={section.centerY - 20}
@@ -289,41 +297,38 @@ const InteractiveMenoraMap = ({
                   </text>
                 )}
 
-                {/* Viagogo-style price tag (inside green sections) - Speech bubble with arrow */}
-                {hasPrice && !isActive && (
-                  <g transform={`translate(${section.centerX}, ${section.centerY})`}>
-                    {/* White rounded rectangle with sharp corners (rx="4" or "6" max) */}
+                {showBubble && (
+                  <g transform={`translate(${section.centerX}, ${section.centerY})`} pointerEvents="none">
                     <rect
                       x="-35"
                       y="-12"
                       width="70"
                       height="24"
                       rx="4"
-                      fill="white"
-                      stroke="#e5e7eb"
+                      fill={isTaken ? '#e5e7eb' : 'white'}
+                      stroke={isTaken ? '#9ca3af' : '#e5e7eb'}
                       strokeWidth="1"
-                      className="price-tag-bg"
+                      className={`price-tag-bg${isTaken ? ' price-tag-bg--taken' : ''}`}
                     />
-                    {/* Price text - Bold black */}
                     <text
                       x="0"
                       y="6"
                       textAnchor="middle"
                       dominantBaseline="middle"
-                      fill="#1f2937"
+                      fill={isTaken ? '#6b7280' : '#1f2937'}
                       fontSize="13"
                       fontWeight="700"
                       pointerEvents="none"
-                      className="price-tag-text"
+                      className={`price-tag-text${isTaken ? ' price-tag-text--taken' : ''}`}
                     >
-                      {currencySymbol(currencyIso)}
-                      {formatAmountForCurrency(price, currencyIso)}
+                      {isTaken
+                        ? MAP_TAKEN_BUBBLE_LABEL
+                        : `${currencySymbol(currencyIso)}${formatAmountForCurrency(price, currencyIso)}`}
                     </text>
-                    {/* Downward-pointing arrow (speech bubble pin) */}
                     <polygon
                       points="0,12 -6,18 6,18"
-                      fill="white"
-                      stroke="#e5e7eb"
+                      fill={isTaken ? '#e5e7eb' : 'white'}
+                      stroke={isTaken ? '#9ca3af' : '#e5e7eb'}
                       strokeWidth="1"
                       pointerEvents="none"
                     />

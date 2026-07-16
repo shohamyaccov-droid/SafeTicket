@@ -50,6 +50,7 @@ import {
   isListingUnavailableForBuyer,
   sortListingGroupsForBuyer,
 } from '../utils/ticketAvailability';
+import { buildSectionMapStatus } from '../utils/mapSectionStatus';
 import TakenBuyButton from '../components/TakenBuyButton';
 import './EventDetailsPage.css';
 
@@ -499,26 +500,29 @@ const EventDetailsPage = () => {
     }
   }, [ticketGroups, getSectionNameForMap]);
 
-  // Lowest seller asking price (base) per section — matches ticket cards and negotiation
+  // Per-section map status: available (green + price) vs taken-only (gray + נתפס)
+  const sectionMapStatus = useMemo(() => {
+    try {
+      return buildSectionMapStatus(ticketGroups, (ticket) => getSectionNameForMap(ticket));
+    } catch {
+      return {};
+    }
+  }, [ticketGroups, getSectionNameForMap]);
+
+  // Lowest seller asking price (base) per *available* section — matches ticket cards
   const lowestPricesPerSection = useMemo(() => {
     const prices = {};
     try {
-      ticketGroups.forEach(group => {
-        const firstTicket = group.tickets?.[0];
-        if (!firstTicket) return;
-        const sectionId = getSectionNameForMap(firstTicket);
-        if (!sectionId) return;
-        const base = parseFloat(group.price);
-        if (isNaN(base)) return;
-        if (prices[sectionId] === undefined || base < prices[sectionId]) {
-          prices[sectionId] = base;
+      Object.entries(sectionMapStatus).forEach(([sectionId, meta]) => {
+        if (meta?.status === 'available' && meta.minPrice != null) {
+          prices[sectionId] = meta.minPrice;
         }
       });
     } catch {
       /* ignore map price aggregation errors */
     }
     return prices;
-  }, [ticketGroups, getSectionNameForMap]);
+  }, [sectionMapStatus]);
 
   /** Scroll active ticket row to top of viewport (below navbar). Must be declared before handlers that depend on it. */
   const scrollTicketRowIntoTopView = useCallback((groupId) => {
@@ -937,7 +941,10 @@ const EventDetailsPage = () => {
 
   const bloomfieldFilteredGroups = useMemo(() => {
     if (!isBloomfieldVenue) return ticketGroups;
-    return ticketGroups.filter((g) => groupMatchesTicketQuantity(g, listingQuantityFilter));
+    // Keep taken listings on the map for social proof (gray + נתפס), even when qty filter would hide them
+    return ticketGroups.filter(
+      (g) => isListingGroupTaken(g) || groupMatchesTicketQuantity(g, listingQuantityFilter)
+    );
   }, [isBloomfieldVenue, ticketGroups, listingQuantityFilter]);
 
   const bloomfieldRows = useMemo(() => {
@@ -1358,6 +1365,7 @@ const EventDetailsPage = () => {
                             onSectionClick={handleSectionClick || (() => {})}
                             sectionPrices={sectionPrices || {}}
                             lowestPrices={lowestPricesPerSection || {}}
+                            sectionMapStatus={sectionMapStatus || {}}
                             currencyIso={listingCurrency}
                           />
                       );
@@ -1369,6 +1377,7 @@ const EventDetailsPage = () => {
                           activeSection={activeSectionName || null}
                           onSectionClick={handleSectionClick || (() => {})}
                           lowestPrices={lowestPricesPerSection || {}}
+                          sectionMapStatus={sectionMapStatus || {}}
                           currencyIso={listingCurrency}
                         />
                       );

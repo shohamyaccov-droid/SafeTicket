@@ -37,6 +37,15 @@
   stroke-width: 2.5 !important;
 }
 
+.caesarea-section-path.caesarea-section--taken,
+.caesarea-section-path.caesarea-section--taken:hover {
+  fill: #d1d5db !important;
+  stroke: #ffffff !important;
+  stroke-width: 2 !important;
+  filter: none !important;
+  cursor: not-allowed !important;
+}
+
 .caesarea-section-path.caesarea-section--active:hover {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
 }

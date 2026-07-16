@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types -- internal map helper */
 /**
- * Map price pill — white rounded rect, bold price, designed to stay readable while SVG scales.
+ * Map price pill — white/green for available, gray "נתפס" for taken (keeps map populated).
  */
 export function menoraPriceTagMetrics(width, height, priceLine) {
   const w = Math.max(1, Number(width) || 1);
@@ -30,16 +30,19 @@ export default function BloomfieldMapPriceTag({
   metrics: metricsOverride,
   offsetX = 0,
   offsetY = 0,
+  variant = 'available',
 }) {
   const metrics = metricsOverride ?? menoraPriceTagMetrics(width, height, priceLine);
   const { fontSize, tagW, tagH } = metrics;
   const rx = Math.min(12, tagH / 2);
+  const isTaken = variant === 'taken';
 
   return (
     <g
       pointerEvents="none"
-      className="bloomfield-map-price-tag"
+      className={`bloomfield-map-price-tag${isTaken ? ' bloomfield-map-price-tag--taken' : ''}`}
       transform={`translate(${cx + offsetX}, ${cy + offsetY})`}
+      style={isTaken ? { cursor: 'not-allowed' } : undefined}
     >
       <rect
         x={-tagW / 2 + 1.5}
@@ -48,7 +51,7 @@ export default function BloomfieldMapPriceTag({
         height={tagH}
         rx={rx}
         fill="#0f172a"
-        opacity="0.14"
+        opacity={isTaken ? 0.08 : 0.14}
       />
       <rect
         x={-tagW / 2}
@@ -56,8 +59,8 @@ export default function BloomfieldMapPriceTag({
         width={tagW}
         height={tagH}
         rx={rx}
-        fill="#ffffff"
-        stroke="#bfdbfe"
+        fill={isTaken ? '#e5e7eb' : '#ffffff'}
+        stroke={isTaken ? '#9ca3af' : '#bfdbfe'}
         strokeWidth="1.6"
       />
       <text
@@ -65,7 +68,7 @@ export default function BloomfieldMapPriceTag({
         y={0}
         textAnchor="middle"
         dominantBaseline="middle"
-        fill="#075985"
+        fill={isTaken ? '#6b7280' : '#075985'}
         fontSize={fontSize}
         fontWeight="900"
         fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"

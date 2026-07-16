@@ -8,13 +8,16 @@ import {
   CAESAREA_SECTIONS,
   CAESAREA_SELECTABLE_COUNT,
 } from '../utils/caesareaGeometry';
+import {
+  MAP_FILL_AVAILABLE,
+  MAP_FILL_TAKEN,
+  MAP_TAKEN_BUBBLE_LABEL,
+} from '../utils/mapSectionStatus';
 import './InteractiveMenoraMap.css';
 import './CaesareaMap.css';
 
 /** Empty-section fills by tier (premium sky depth). Ticket / active colors stay elsewhere. */
 function emptyTierFill() {
-  // Premium uniform fill for ALL empty/unselected sections.
-  // Ticket availability (green) and active selection (dark) are handled separately.
   return '#bae6fd'; // sky-200
 }
 
@@ -22,6 +25,7 @@ const CaesareaMap = ({
   activeSection,
   onSectionClick,
   lowestPrices = {},
+  sectionMapStatus = {},
   currencyIso = 'ILS',
 }) => {
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -36,7 +40,8 @@ const CaesareaMap = ({
   }, []);
 
   const handleSectionClick = useCallback(
-    (sectionId) => {
+    (sectionId, isTaken) => {
+      if (isTaken) return;
       if (onSectionClick) onSectionClick(sectionId);
     },
     [onSectionClick]
@@ -44,7 +49,7 @@ const CaesareaMap = ({
 
   return (
     <div className="interactive-map-container caesarea-map-container">
-      <div className="map-zoom-controls">
+      <div className="zoom-controls">
         <button type="button" className="zoom-btn zoom-in" onClick={handleZoomIn} aria-label="Zoom in">
           +
         </button>
@@ -62,19 +67,26 @@ const CaesareaMap = ({
 
           {CAESAREA_SECTIONS.map((section) => {
             const isActive = activeSectionId !== null && activeSectionId === section.id;
-            const rawPrice = lowestPrices[section.id];
+            const meta = sectionMapStatus[section.id];
+            const isTaken = meta?.status === 'taken';
+            const rawPrice =
+              meta?.status === 'available' ? meta.minPrice : lowestPrices[section.id];
             const price = rawPrice !== undefined && rawPrice !== null ? Number(rawPrice) : null;
-            const hasPrice = price !== null && !Number.isNaN(price);
+            const hasPrice = !isTaken && price !== null && !Number.isNaN(price);
+            const showBubble = (hasPrice || isTaken) && !isActive;
             const isOrchestra = section.id === 'אורקסטרה';
             const labelText = section.displayLabel || section.id;
 
             let fillColor;
             let sectionToneClass = 'caesarea-section--empty';
-            if (isActive) {
+            if (isTaken) {
+              fillColor = MAP_FILL_TAKEN;
+              sectionToneClass = 'caesarea-section--taken';
+            } else if (isActive) {
               fillColor = '#1f2937';
               sectionToneClass = 'caesarea-section--active';
             } else if (hasPrice) {
-              fillColor = '#b2d982';
+              fillColor = MAP_FILL_AVAILABLE;
               sectionToneClass = 'caesarea-section--available';
             } else {
               fillColor = emptyTierFill();
@@ -86,49 +98,70 @@ const CaesareaMap = ({
             return (
               <g
                 key={section.id}
-                onClick={() => handleSectionClick(section.id)}
-                style={{ cursor: 'pointer' }}
-                role="button"
-                tabIndex={0}
-                aria-label={section.id}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleSectionClick(section.id);
-                  }
-                }}
+                onClick={() => handleSectionClick(section.id, isTaken)}
+                style={{ cursor: isTaken ? 'not-allowed' : 'pointer' }}
+                role={isTaken ? undefined : 'button'}
+                tabIndex={isTaken ? undefined : 0}
+                aria-label={isTaken ? `${section.id} — נתפס` : section.id}
+                aria-disabled={isTaken ? true : undefined}
+                onKeyDown={
+                  isTaken
+                    ? undefined
+                    : (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleSectionClick(section.id, false);
+                        }
+                      }
+                }
               >
                 <path
                   d={section.d}
                   fill={fillColor}
                   stroke="#ffffff"
-                  strokeWidth={isActive ? 2.5 : 2}
+                  strokeWidth={isActive && !isTaken ? 2.5 : 2}
                   strokeLinejoin="round"
                   strokeLinecap="round"
-                  className={`section-path caesarea-section-path ${sectionToneClass}`}
+                  className={`section-path caesarea-section-path ${sectionToneClass}${isTaken ? ' section-path--taken' : ''}`}
                   style={{
                     transition: 'all 0.2s ease',
-                    filter: isActive ? 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))' : 'none',
+                    filter: isActive && !isTaken ? 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))' : 'none',
                   }}
                 />
 
-                {hasPrice && !isActive && (
-                  <g transform={`translate(${section.labelX}, ${priceTagY})`}>
-                    <rect x="-34" y="-11" width="68" height="22" rx="4" fill="white" stroke="#e5e7eb" strokeWidth="1" />
+                {showBubble && (
+                  <g transform={`translate(${section.labelX}, ${priceTagY})`} pointerEvents="none">
+                    <rect
+                      x="-34"
+                      y="-11"
+                      width="68"
+                      height="22"
+                      rx="4"
+                      fill={isTaken ? '#e5e7eb' : 'white'}
+                      stroke={isTaken ? '#9ca3af' : '#e5e7eb'}
+                      strokeWidth="1"
+                    />
                     <text
                       x="0"
                       y="0"
                       textAnchor="middle"
                       dominantBaseline="middle"
-                      fill="#1f2937"
+                      fill={isTaken ? '#6b7280' : '#1f2937'}
                       fontSize="12"
                       fontWeight="700"
                       pointerEvents="none"
                     >
-                      {currencySymbol(currencyIso)}
-                      {formatAmountForCurrency(price, currencyIso)}
+                      {isTaken
+                        ? MAP_TAKEN_BUBBLE_LABEL
+                        : `${currencySymbol(currencyIso)}${formatAmountForCurrency(price, currencyIso)}`}
                     </text>
-                    <polygon points="0,11 -5,16 5,16" fill="white" stroke="#e5e7eb" strokeWidth="1" pointerEvents="none" />
+                    <polygon
+                      points="0,11 -5,16 5,16"
+                      fill={isTaken ? '#e5e7eb' : 'white'}
+                      stroke={isTaken ? '#9ca3af' : '#e5e7eb'}
+                      strokeWidth="1"
+                      pointerEvents="none"
+                    />
                   </g>
                 )}
 
@@ -137,7 +170,7 @@ const CaesareaMap = ({
                   y={labelY}
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  fill={isActive ? '#f9fafb' : '#6b7280'}
+                  fill={isActive && !isTaken ? '#f9fafb' : '#6b7280'}
                   fontSize={isOrchestra ? 12 : 14}
                   fontWeight={isOrchestra ? 600 : 500}
                   pointerEvents="none"
