@@ -186,6 +186,9 @@ function normalizeApiBase(url) {
   if (!base.endsWith('/api')) {
     base = `${base}/api`;
   }
+  if (import.meta.env.PROD && /localhost|127\.0\.0\.1/i.test(base)) {
+    throw new Error('VITE_API_URL must not point at localhost in production builds');
+  }
   return base;
 }
 

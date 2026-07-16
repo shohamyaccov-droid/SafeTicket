@@ -110,15 +110,25 @@ USE_CLOUDINARY = _cld_url_set or _cld_split_complete
 
 # Host header must match for Django to serve the request; mismatch -> fast 400 (DisallowedHost), not a hang.
 # Not involved in TLS redirects (that would be SECURE_SSL_REDIRECT + proxy headers).
+_PROD_ALLOWED_HOSTS_DEFAULT = (
+    'safeticket-api.onrender.com,tradetix.co.il,www.tradetix.co.il'
+)
+_DEV_ALLOWED_HOSTS_DEFAULT = (
+    'localhost,127.0.0.1,safeticket-api.onrender.com,tradetix.co.il,www.tradetix.co.il'
+)
 ALLOWED_HOSTS = [
-    h.strip() for h in os.environ.get(
+    h.strip()
+    for h in os.environ.get(
         'ALLOWED_HOSTS',
-        'safeticket-api.onrender.com,localhost,127.0.0.1,tradetix.co.il,www.tradetix.co.il',
+        _DEV_ALLOWED_HOSTS_DEFAULT if DEBUG else _PROD_ALLOWED_HOSTS_DEFAULT,
     ).split(',')
     if h.strip()
 ]
-# Always accept production custom-domain Host headers (defense in depth if env list is truncated).
-for _host in ('tradetix.co.il', 'www.tradetix.co.il', 'safeticket-api.onrender.com', 'safeticket-web.onrender.com'):
+# Production custom domain + API hostname (Render) — required for Host header routing.
+_REQUIRED_HOSTS = ('tradetix.co.il', 'www.tradetix.co.il', 'safeticket-api.onrender.com')
+if DEBUG:
+    _REQUIRED_HOSTS = _REQUIRED_HOSTS + ('localhost', '127.0.0.1')
+for _host in _REQUIRED_HOSTS:
     if _host not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(_host)
 
@@ -469,59 +479,57 @@ if DEBUG:
         CSRF_TRUSTED_ORIGINS = _merge_unique_origins(
             CSRF_TRUSTED_ORIGINS, _FRONTEND_FROM_ENV
         )
+    # Dev convenience: also allow production + Render origins for mixed local/prod testing.
+    CORS_ALLOWED_ORIGINS = _merge_unique_origins(
+        CORS_ALLOWED_ORIGINS,
+        _RENDER_WEB_ORIGIN,
+        _RENDER_API_ORIGIN,
+        _PROD_WEB_ORIGIN,
+        _PROD_WEB_WWW_ORIGIN,
+    )
+    CSRF_TRUSTED_ORIGINS = _merge_unique_origins(
+        CSRF_TRUSTED_ORIGINS,
+        _RENDER_WEB_ORIGIN,
+        _RENDER_API_ORIGIN,
+        _PROD_WEB_ORIGIN,
+        _PROD_WEB_WWW_ORIGIN,
+    )
 else:
+    # STRICT PRODUCTION: custom domain + Render service hosts only (no localhost).
     CORS_ALLOWED_ORIGINS = _env_origin_list(
         'CORS_ALLOWED_ORIGINS',
-        f'{_RENDER_WEB_ORIGIN},{_RENDER_API_ORIGIN}',
+        f'{_PROD_WEB_ORIGIN},{_PROD_WEB_WWW_ORIGIN},{_RENDER_WEB_ORIGIN},{_RENDER_API_ORIGIN}',
     )
     CSRF_TRUSTED_ORIGINS = _env_origin_list(
         'CSRF_TRUSTED_ORIGINS',
-        f'{_RENDER_WEB_ORIGIN},{_RENDER_API_ORIGIN}',
+        f'{_PROD_WEB_ORIGIN},{_PROD_WEB_WWW_ORIGIN},{_RENDER_WEB_ORIGIN},{_RENDER_API_ORIGIN}',
     )
-    # Always trust the SPA origin: env FRONTEND_ORIGIN or the known Render web URL (lists stay aligned).
-    _fe_trust = _FRONTEND_FROM_ENV or _RENDER_WEB_ORIGIN
-    CORS_ALLOWED_ORIGINS = _merge_unique_origins(CORS_ALLOWED_ORIGINS, _fe_trust)
-    CSRF_TRUSTED_ORIGINS = _merge_unique_origins(CSRF_TRUSTED_ORIGINS, _fe_trust)
-
-# Always merge canonical browser origins — not only when RENDER env is set.
-# DEBUG=True on the API previously combined with missing RENDER allowed only localhost CORS; the SPA
-# then saw "blocked by CORS" (same symptom as a 502 with no ACAO header).
-CORS_ALLOWED_ORIGINS = _merge_unique_origins(
-    CORS_ALLOWED_ORIGINS,
-    _RENDER_WEB_ORIGIN,
-    _RENDER_API_ORIGIN,
-    _PROD_WEB_ORIGIN,
-    _PROD_WEB_WWW_ORIGIN,
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    *([_FRONTEND_FROM_ENV] if _FRONTEND_FROM_ENV else []),
-)
-CSRF_TRUSTED_ORIGINS = _merge_unique_origins(
-    CSRF_TRUSTED_ORIGINS,
-    _RENDER_WEB_ORIGIN,
-    _RENDER_API_ORIGIN,
-    _PROD_WEB_ORIGIN,
-    _PROD_WEB_WWW_ORIGIN,
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    *([_FRONTEND_FROM_ENV] if _FRONTEND_FROM_ENV else []),
-)
-
-# Explicit production origins (defense in depth if env lists are truncated).
-CSRF_TRUSTED_ORIGINS = _merge_unique_origins(
-    CSRF_TRUSTED_ORIGINS,
-    'https://safeticket-web.onrender.com',
-    'https://safeticket-api.onrender.com',
-    'https://tradetix.co.il',
-    'https://www.tradetix.co.il',
-)
-CORS_ALLOWED_ORIGINS = _merge_unique_origins(
-    CORS_ALLOWED_ORIGINS,
-    'https://safeticket-web.onrender.com',
-    'https://safeticket-api.onrender.com',
-    'https://tradetix.co.il',
-    'https://www.tradetix.co.il',
-)
+    _fe_trust = _FRONTEND_FROM_ENV or _PROD_WEB_ORIGIN
+    CORS_ALLOWED_ORIGINS = _merge_unique_origins(
+        CORS_ALLOWED_ORIGINS,
+        _fe_trust,
+        _PROD_WEB_ORIGIN,
+        _PROD_WEB_WWW_ORIGIN,
+        _RENDER_WEB_ORIGIN,
+        _RENDER_API_ORIGIN,
+    )
+    CSRF_TRUSTED_ORIGINS = _merge_unique_origins(
+        CSRF_TRUSTED_ORIGINS,
+        _fe_trust,
+        _PROD_WEB_ORIGIN,
+        _PROD_WEB_WWW_ORIGIN,
+        _RENDER_WEB_ORIGIN,
+        _RENDER_API_ORIGIN,
+    )
+    # Drop accidental localhost entries if an env list included them.
+    CORS_ALLOWED_ORIGINS = [
+        o for o in CORS_ALLOWED_ORIGINS
+        if 'localhost' not in o.lower() and '127.0.0.1' not in o
+    ]
+    CSRF_TRUSTED_ORIGINS = [
+        o for o in CSRF_TRUSTED_ORIGINS
+        if 'localhost' not in o.lower() and '127.0.0.1' not in o
+    ]
 
 # JWT HttpOnly cookie names
 JWT_ACCESS_COOKIE_NAME = 'access_token'
@@ -559,37 +567,46 @@ else:
         '(public HTTPS URL of this API service, no trailing slash).'
     )
 
-# Payme.io — keys from environment only (sandbox: PAYME_API_URL test host).
-# Sandbox dashboard login (NOT production): tradetix.support+1@gmail.com
+# Payme.io — keys from environment only. Production must never default to sandbox hosts.
 PAYME_SANDBOX_ACCOUNT_EMAIL = (
     os.environ.get('PAYME_SANDBOX_ACCOUNT_EMAIL') or 'tradetix.support+1@gmail.com'
 ).strip().lower()
 PAYME_SELLER_ID = (os.environ.get('PAYME_SELLER_ID') or '').strip()
-PAYME_API_URL = (
-    os.environ.get('PAYME_API_URL') or 'https://testpay.payme.io/api'
-).strip().rstrip('/')
 _PAYME_SANDBOX_HOSTS = ('testpay.payme.io', 'preprod.paymeservice.com', 'sandbox.payme.io')
-PAYME_IS_SANDBOX = any(host in PAYME_API_URL for host in _PAYME_SANDBOX_HOSTS)
+_raw_payme_api_url = (os.environ.get('PAYME_API_URL') or '').strip().rstrip('/')
+if not DEBUG:
+    if _raw_payme_api_url and any(host in _raw_payme_api_url for host in _PAYME_SANDBOX_HOSTS):
+        raise ImproperlyConfigured(
+            'PAYME_API_URL points at a sandbox/test host while DEBUG=False. '
+            'Set the live PayMe API URL for production.'
+        )
+    PAYME_API_URL = _raw_payme_api_url
+else:
+    PAYME_API_URL = _raw_payme_api_url or 'https://testpay.payme.io/api'
+PAYME_IS_SANDBOX = bool(PAYME_API_URL) and any(
+    host in PAYME_API_URL for host in _PAYME_SANDBOX_HOSTS
+)
 PAYME_MERCHANT_ID = (os.environ.get('PAYME_MERCHANT_ID') or PAYME_SELLER_ID).strip()
 PAYME_API_KEY = (os.environ.get('PAYME_API_KEY') or '').strip()
 PAYME_API_SECRET = (os.environ.get('PAYME_API_SECRET') or '').strip()
 PAYME_GENERATE_SALE_URL = (
-    os.environ.get('PAYME_GENERATE_SALE_URL') or f'{PAYME_API_URL}/generate-sale'
+    os.environ.get('PAYME_GENERATE_SALE_URL')
+    or (f'{PAYME_API_URL}/generate-sale' if PAYME_API_URL else '')
 ).strip()
 PAYME_WEBHOOK_SECRET = (os.environ.get('PAYME_WEBHOOK_SECRET') or '').strip()
 PAYME_SUB_SELLER_PAYEE_ID = (os.environ.get('PAYME_SUB_SELLER_PAYEE_ID') or '').strip()
 _VITE_USE_PAYME = (os.environ.get('VITE_USE_PAYME') or '').strip().lower() in ('1', 'true', 'yes')
 _PAYME_CONFIGURED = bool(PAYME_SELLER_ID or PAYME_API_KEY or PAYME_MERCHANT_ID)
-# Production payment authority: when PayMe is enabled/configured, only a verified PayMe webhook may
-# finalize inventory. Local/dev can still use the mock confirm endpoint unless explicitly disabled.
+# Production: only a verified PayMe webhook may finalize inventory (never client mock ack).
 PAYME_REQUIRE_WEBHOOK_CONFIRMATION = (
-    os.environ.get(
-        'PAYME_REQUIRE_WEBHOOK_CONFIRMATION',
-        'true' if (not DEBUG and (_VITE_USE_PAYME or _PAYME_CONFIGURED)) else 'false',
+    True
+    if not DEBUG
+    else (
+        os.environ.get('PAYME_REQUIRE_WEBHOOK_CONFIRMATION', 'false')
+        .strip()
+        .lower()
+        in ('1', 'true', 'yes')
     )
-    .strip()
-    .lower()
-    in ('1', 'true', 'yes')
 )
 try:
     PAYME_EXTRA_BODY_JSON = json.loads(os.environ.get('PAYME_EXTRA_BODY_JSON', '{}') or '{}')

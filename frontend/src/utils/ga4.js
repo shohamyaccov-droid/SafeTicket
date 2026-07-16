@@ -16,9 +16,8 @@ let initialized = false;
 export function isGa4ProductionHost(hostname = typeof window !== 'undefined' ? window.location.hostname : '') {
   const host = String(hostname || '').toLowerCase().trim();
   if (!host) return false;
-  if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0') return false;
-  if (host === '::1' || host.endsWith('.local')) return false;
-  return true;
+  // Strict allowlist — never track on Render staging or localhost.
+  return host === 'tradetix.co.il' || host === 'www.tradetix.co.il';
 }
 
 /**

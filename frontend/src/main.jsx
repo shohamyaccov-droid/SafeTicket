@@ -4,6 +4,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { Toaster } from 'react-hot-toast';
 import { PostHogProvider } from 'posthog-js/react';
 import App from './App.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 import './index.css';
 
 const options = {
@@ -12,18 +13,20 @@ const options = {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <PostHogProvider apiKey={import.meta.env.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN} options={options}>
-      <HelmetProvider>
-        <App />
-        <Toaster
-          position="top-center"
-          toastOptions={{
-            duration: 4000,
-            style: { direction: 'rtl' },
-          }}
-        />
-      </HelmetProvider>
-    </PostHogProvider>
+    <ErrorBoundary>
+      <PostHogProvider apiKey={import.meta.env.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN} options={options}>
+        <HelmetProvider>
+          <App />
+          <Toaster
+            position="top-center"
+            toastOptions={{
+              duration: 4000,
+              style: { direction: 'rtl' },
+            }}
+          />
+        </HelmetProvider>
+      </PostHogProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );
 

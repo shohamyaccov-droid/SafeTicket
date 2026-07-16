@@ -1440,9 +1440,11 @@ const Sell = () => {
             <h2>תהליך הצעת כרטיס מאובטח</h2>
           </div>
           <p className="listing-subtitle">הצע את הכרטיס שלך בצורה בטוחה ומאובטחת</p>
-          <p className="listing-build-id" dir="ltr" style={{ fontSize: '0.72rem', opacity: 0.75, marginTop: '0.35rem' }}>
-            Frontend build: {SELL_PAGE_BUILD_TAG}
-          </p>
+          {import.meta.env.DEV ? (
+            <p className="listing-build-id" dir="ltr" style={{ fontSize: '0.72rem', opacity: 0.75, marginTop: '0.35rem' }}>
+              Frontend build: {SELL_PAGE_BUILD_TAG}
+            </p>
+          ) : null}
         </div>
         {error && <div className="error-message">{error}</div>}
         {Object.keys(fieldErrors).length > 0 && (

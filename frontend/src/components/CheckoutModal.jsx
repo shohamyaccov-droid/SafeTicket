@@ -207,13 +207,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   /** Synchronous snapshot so success UI never waits on PDF download or lost React state */
   const successSnapshotRef = useRef(null);
   const navigate = useNavigate();
-  /** Set `VITE_USE_PAYME=true` in frontend env to send buyers to Payme hosted checkout (test/sandbox). */
-  const usePayme = import.meta.env.VITE_USE_PAYME === 'true';
-  /** Always on in local dev (Vite dev server or localhost) — bypasses PayMe for E2E testing. */
-  const isLocalDev =
-    import.meta.env.DEV ||
-    (typeof window !== 'undefined' &&
-      /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname));
+  /** Production builds always use PayMe. Local Vite DEV may opt in via VITE_USE_PAYME. */
+  const usePayme = import.meta.env.PROD ? true : import.meta.env.VITE_USE_PAYME === 'true';
+  /** Mock/simulate checkout UI — Vite DEV only (never hostname-based; prod builds must not expose this). */
+  const isLocalDev = import.meta.env.DEV === true;
   const stepRef = useRef(step);
   stepRef.current = step;
   const guestEmailRef = useRef('');
@@ -799,14 +796,21 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       setPaymentPhase('confirming_payment');
       await authAPI.getCsrf().catch(() => {});
 
+      if (import.meta.env.PROD) {
+        throw new Error('תשלום חייב לעבור דרך PayMe. רעננו את העמוד ונסו שוב.');
+      }
+
       const confirmPayload = { mock_payment_ack: true };
       const orderTok = pendingOrder?.payment_confirm_token;
       if (orderTok) {
         confirmPayload.payment_confirm_token = String(orderTok);
       }
-      const vitePaySecret = import.meta.env.VITE_MOCK_PAYMENT_WEBHOOK_SECRET;
-      if (vitePaySecret != null && String(vitePaySecret).trim() !== '') {
-        confirmPayload.payment_secret = String(vitePaySecret).trim();
+      // DEV only — never ship webhook secrets in production bundles.
+      if (import.meta.env.DEV) {
+        const vitePaySecret = import.meta.env.VITE_MOCK_PAYMENT_WEBHOOK_SECRET;
+        if (vitePaySecret != null && String(vitePaySecret).trim() !== '') {
+          confirmPayload.payment_secret = String(vitePaySecret).trim();
+        }
       }
       if (!user && guestForm?.email?.trim()) {
         confirmPayload.guest_email = guestForm.email.trim();

@@ -120,7 +120,6 @@ def _extract_payme_transaction_references(payload: dict[str, Any]) -> tuple[list
 
 def _log_payme_webhook_rejection(reason: str, *, order_id: int | None = None, payload: dict[str, Any] | None = None):
     logger.warning('PayMe webhook rejection reason: %s order_id=%s payload=%s', reason, order_id, payload)
-    print(f'PayMe webhook rejection reason: {reason} order_id={order_id} payload={payload}')
     log_payme('webhook_rejected', order_id=order_id, payload={'reason': reason, 'payload': payload or {}})
 
 
@@ -137,16 +136,17 @@ def payme_webhook(request):
             incoming_for_log = request.POST if getattr(request, 'POST', None) else getattr(request, 'data', {})
         except Exception as exc:
             logger.warning('PayMe webhook incoming payload parse error: %s', exc)
-            print(f'PayMe webhook incoming payload parse error: {exc}')
             _log_payme_webhook_rejection('payload_parse_error', payload={'error': str(exc)})
             return Response({'error': 'empty payload', 'reason': 'payload_parse_error'}, status=status.HTTP_400_BAD_REQUEST)
 
-        logger.info('PayMe webhook incoming payload=%s content_type=%s', incoming_for_log, request.content_type)
-        print(f'PayMe webhook incoming payload={incoming_for_log} content_type={request.content_type}')
         logger.info(
             'PayMe webhook incoming content_type=%s remote_addr=%s',
             request.content_type,
             request.META.get('REMOTE_ADDR'),
+        )
+        log_payme(
+            'webhook_incoming',
+            payload={'content_type': request.content_type, 'raw': incoming_for_log},
         )
 
         payload = _parse_payme_webhook_payload(request)
@@ -170,12 +170,6 @@ def payme_webhook(request):
             oid_raw,
             oid_source,
             list(payload.keys()),
-        )
-        print(
-            f'PayMe webhook extracted payme reference={payme_ref_raw} source={payme_ref_source} '
-            f'possible_payme_refs={possible_payme_refs} '
-            f'merchant_order_reference={oid_raw} merchant_source={oid_source} '
-            f'payload_keys={list(payload.keys())}'
         )
 
         log_payme(
@@ -214,10 +208,6 @@ def payme_webhook(request):
             possible_payme_refs,
             payme_ref_sources,
         )
-        print(
-            f'PayMe webhook looking up Order by payme_transaction_id__in={possible_payme_refs} '
-            f'sources={payme_ref_sources}'
-        )
         order = Order.objects.filter(payme_transaction_id__in=possible_payme_refs).first()
         if not order:
             _log_payme_webhook_rejection(
@@ -242,10 +232,6 @@ def payme_webhook(request):
                 'PayMe webhook normalized merchant_order_id=%s after payme_transaction_id lookup=%s',
                 order_id,
                 payme_ref,
-            )
-            print(
-                f'PayMe webhook normalized merchant_order_id={order_id} '
-                f'after payme_transaction_id lookup={payme_ref}'
             )
             payload['merchant_order_id'] = str(order_id)
         if not payload.get('transaction_id'):
@@ -281,7 +267,6 @@ def payme_webhook(request):
             ok, err = finalize_pending_order_to_paid(order_id, source='payme_webhook_idempotent_reconcile')
             if not ok:
                 logger.warning('PayMe webhook rejection reason: paid_reconcile_failed:%s order_id=%s', err, order_id)
-                print(f'PayMe webhook rejection reason: paid_reconcile_failed:{err} order_id={order_id}')
                 return Response(
                     {'received': True, 'finalized': False, 'reason': err or 'paid_reconcile_failed'},
                     status=status.HTTP_409_CONFLICT,
@@ -317,7 +302,6 @@ def payme_webhook(request):
             )
             if not ok:
                 logger.warning('PayMe webhook rejection reason: finalize_failed:%s order_id=%s', err, order_id)
-                print(f'PayMe webhook rejection reason: finalize_failed:{err} order_id={order_id}')
                 return Response(
                     {'received': True, 'finalized': False, 'reason': err or 'finalize_failed'},
                     status=status.HTTP_409_CONFLICT,
@@ -363,7 +347,6 @@ def payme_webhook(request):
         )
     except Exception as exc:
         logger.exception('PayMe webhook failed unexpectedly: %s', exc)
-        print(f'PayMe webhook failed unexpectedly: {exc}')
         _log_payme_webhook_rejection('unexpected_exception', payload={'error': str(exc)})
         reason = str(exc) if settings.DEBUG else 'internal_error'
         return Response({'error': 'webhook failed', 'reason': reason}, status=status.HTTP_400_BAD_REQUEST)

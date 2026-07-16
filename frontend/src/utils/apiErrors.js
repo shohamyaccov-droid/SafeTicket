@@ -53,6 +53,18 @@ function translateText(raw) {
   for (const [pattern, he] of COMMON_TRANSLATIONS) {
     if (pattern.test(text)) return he;
   }
+  // Never surface stack traces / English crash dumps to buyers.
+  if (
+    /traceback|server crash|exception|integrityerror|operationalerror|at 0x|django\.|psycopg|cloudinary/i.test(
+      text
+    )
+  ) {
+    return '';
+  }
+  // Long untranslated ASCII → hide (prefer Hebrew fallback at call site).
+  if (text.length > 120 && /^[\x20-\x7E]+$/.test(text) && !/[\u0590-\u05FF]/.test(text)) {
+    return '';
+  }
   return text;
 }
 

@@ -14,9 +14,10 @@ describe('GA4 production host gate', () => {
     expect(isGa4ProductionHost('app.local')).toBe(false);
   });
 
-  it('allows production hosts', () => {
-    expect(isGa4ProductionHost('safeticket-web.onrender.com')).toBe(true);
+  it('allows only tradetix production hosts', () => {
+    expect(isGa4ProductionHost('safeticket-web.onrender.com')).toBe(false);
     expect(isGa4ProductionHost('tradetix.co.il')).toBe(true);
+    expect(isGa4ProductionHost('www.tradetix.co.il')).toBe(true);
   });
 
   it('init and pageview no-op without throwing on localhost hostname', () => {

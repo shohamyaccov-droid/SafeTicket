@@ -127,13 +127,17 @@ def _venue_section_model():
 
 
 ADMIN_EMAIL = 'shohamyaccov@gmail.com'
-# Temporary login for /admin after seed — rotate after first sign-in.
-ADMIN_TEMP_PASSWORD = 'Shoham2026!'
+# Passwords MUST come from env — never hardcode production credentials in the repo.
+ADMIN_TEMP_PASSWORD = (os.environ.get('SEED_ADMIN_TEMP_PASSWORD') or '').strip()
 
-# Dedicated QA account for automated E2E (Django admin + API); idempotent — password reset each run.
+# Dedicated QA account for automated E2E (Django admin + API); idempotent when password env is set.
 QA_USER_EMAIL = 'qa_bot@safeticket.com'
 QA_USER_USERNAME = 'qa_bot'
-QA_USER_PASSWORD = 'SafeTicketQA2026!'
+QA_USER_PASSWORD = (
+    os.environ.get('SEED_QA_PASSWORD')
+    or os.environ.get('QA_PASSWORD')
+    or ''
+).strip()
 
 IL_TZ = ZoneInfo('Asia/Jerusalem')
 
@@ -392,18 +396,25 @@ def seed_admin() -> None:
         _seed_log(f'[seed] WARNING: no user {ADMIN_EMAIL!r} — register first, then re-run seed.')
         return
     u = qs.first()
-    u.password = make_password(ADMIN_TEMP_PASSWORD)
+    update_fields = ['is_superuser', 'is_staff', 'role']
+    if ADMIN_TEMP_PASSWORD:
+        u.password = make_password(ADMIN_TEMP_PASSWORD)
+        update_fields.insert(0, 'password')
+    else:
+        _seed_log(
+            '[seed] admin password unchanged (set SEED_ADMIN_TEMP_PASSWORD to reset)'
+        )
     u.is_superuser = True
     u.is_staff = True
     u.role = 'seller'
-    u.save(update_fields=['password', 'is_superuser', 'is_staff', 'role'])
-    _seed_log(f'[seed] admin OK: {u.username} (password reset, staff, superuser, seller)')
+    u.save(update_fields=update_fields)
+    _seed_log(f'[seed] admin OK: {u.username} (staff, superuser, seller)')
 
 
 def seed_qa_user() -> None:
     """
-    Ensure QA bot user exists with staff/superuser; password set to QA_USER_PASSWORD (not logged).
-    Role seller so ticket upload E2E works without role changes.
+    Ensure QA bot user exists with staff/superuser.
+    Password is set only when SEED_QA_PASSWORD / QA_PASSWORD is present in the environment.
     """
     u, created = _user_model().objects.update_or_create(
         username=QA_USER_USERNAME,
@@ -415,8 +426,13 @@ def seed_qa_user() -> None:
             'is_email_verified': True,
         },
     )
-    u.password = make_password(QA_USER_PASSWORD)
-    u.save(update_fields=['password'])
+    if QA_USER_PASSWORD:
+        u.password = make_password(QA_USER_PASSWORD)
+        u.save(update_fields=['password'])
+    elif created:
+        _seed_log(
+            '[seed] QA user created without password — set SEED_QA_PASSWORD and re-run seed'
+        )
     action = 'created' if created else 'updated'
     _seed_log(
         f'[seed] QA user {action}: {QA_USER_USERNAME} <{QA_USER_EMAIL}> (staff, superuser, seller; password not printed)'

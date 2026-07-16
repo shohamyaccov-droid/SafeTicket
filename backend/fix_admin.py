@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 """
-Bootstrap for production (no shell on Render free tier): grant staff/superuser/seller
-to known accounts. Idempotent — safe on every boot.
+Optional boot hook: grant staff/superuser/seller to known accounts.
 
-- Primary admin by email (TARGET_EMAIL)
-- QA bot (qa_bot@safeticket.com) if present — fixes buyer-only self-registration before seed
+Disabled by default. Set ALLOW_BOOT_ADMIN_PROMOTE=true on Render only when needed.
 """
 import os
 import sys
@@ -35,6 +33,18 @@ def _promote(user, label: str) -> None:
 
 
 def main() -> int:
+    allowed = (os.environ.get('ALLOW_BOOT_ADMIN_PROMOTE') or '').strip().lower() in (
+        '1',
+        'true',
+        'yes',
+    )
+    if not allowed:
+        print(
+            '[fix_admin] skipped (set ALLOW_BOOT_ADMIN_PROMOTE=true to enable)',
+            flush=True,
+        )
+        return 0
+
     try:
         qs = User.objects.filter(email__iexact=TARGET_EMAIL)
         if not qs.exists():

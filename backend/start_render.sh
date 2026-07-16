@@ -53,13 +53,15 @@ python manage.py seed_ramat_gan_sections || true
 echo "[start_render] Caesarea Amphitheater venue sections (Sell page dropdown)..."
 python manage.py seed_caesarea_sections || true
 
-echo "[start_render] Anchor-priced dummy tickets + checkout test artist scrub..."
-python manage.py seed_dummy_tickets || true
-
-# MUST run after seed_dummy_tickets: that command re-creates active inventory every deploy.
-# Mark seed/test listings (system_seed_user, Event 83 / Eden Ben Zaken, אזור בדיקה) as Taken.
-echo "[start_render] Mark seed/test marketplace tickets as taken (נתפס)..."
-python manage.py mark_tickets_taken || true
+# Dummy/test marketplace inventory — OFF by default in production. Enable with RUN_DUMMY_SEED=true.
+if [ "${RUN_DUMMY_SEED:-}" = "true" ]; then
+  echo "[start_render] RUN_DUMMY_SEED=true — seeding dummy tickets..."
+  python manage.py seed_dummy_tickets || true
+  echo "[start_render] Mark seed/test marketplace tickets as taken (נתפס)..."
+  python manage.py mark_tickets_taken || true
+else
+  echo "[start_render] Skipping seed_dummy_tickets (set RUN_DUMMY_SEED=true only for non-prod)."
+fi
 
 echo "[start_render] Admin promotion hook..."
 python fix_admin.py

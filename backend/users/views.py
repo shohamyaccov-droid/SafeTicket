@@ -948,8 +948,10 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             return response
         except Exception as e:
             traceback.print_exc()
+            logger.exception('CookieTokenObtainPairView unhandled error: %s', e)
+            detail = f'Server Crash: {str(e)}' if settings.DEBUG else 'Internal server error'
             return Response(
-                {'detail': f'Server Crash: {str(e)}'},
+                {'detail': detail},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -2113,11 +2115,13 @@ def confirm_order_payment(request, order_id):
 @throttle_classes([CheckoutMutationScopedThrottle])
 def payment_simulation(request):
     """
-    Simulate payment processing (for development).
-    Accepts payment details and returns success/failure.
+    Simulate payment processing (for development only).
     Pre-production: no PAN/Luhn validation here — the mock gateway always succeeds once amount checks pass.
     CRITICAL: Must handle listing_group_id like create_order does
     """
+    if not settings.DEBUG:
+        return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+
     ticket_id = request.data.get('ticket_id')
     amount = request.data.get('amount')
     
@@ -3021,12 +3025,13 @@ class TicketViewSet(viewsets.ModelViewSet):
                     ticket = serializer.save(seller=request.user)
                 except Exception as e:
                     _log_cloudinary_or_storage_error(e, 'ticket_create_auto_split')
-                    detail = (str(e) or repr(e))[:500]
+                    payload = {
+                        'error': 'Failed to store ticket PDF (Cloudinary/storage). See server logs for full traceback.',
+                    }
+                    if settings.DEBUG:
+                        payload['detail'] = (str(e) or repr(e))[:500]
                     return Response(
-                        {
-                            'error': 'Failed to store ticket PDF (Cloudinary/storage). See server logs for full traceback.',
-                            'detail': detail,
-                        },
+                        payload,
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     )
 
@@ -3076,12 +3081,13 @@ class TicketViewSet(viewsets.ModelViewSet):
                     ticket = serializer.save(seller=request.user)
                 except Exception as e:
                     _log_cloudinary_or_storage_error(e, 'ticket_create_multi_pdf')
-                    detail = (str(e) or repr(e))[:500]
+                    payload = {
+                        'error': 'Failed to store ticket PDF (Cloudinary/storage). See server logs for full traceback.',
+                    }
+                    if settings.DEBUG:
+                        payload['detail'] = (str(e) or repr(e))[:500]
                     return Response(
-                        {
-                            'error': 'Failed to store ticket PDF (Cloudinary/storage). See server logs for full traceback.',
-                            'detail': detail,
-                        },
+                        payload,
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     )
 
@@ -3990,12 +3996,15 @@ create_ticket_alert = subscribe_ticket_alert
 @permission_classes([AllowAny])
 def secret_run_seed_dummy_tickets(request):
     """
-    Temporary hidden hook to trigger `seed_dummy_tickets` in environments without shell access.
-
-    WARNING: This endpoint is intentionally undocumented and should be removed after use.
-    Open in a browser: GET /api/secret-run-seed-9988/
+    Dev-only hook to trigger `seed_dummy_tickets`. Disabled when DEBUG=False.
+    Requires SEED_ENDPOINT_SECRET + matching X-Seed-Secret header even in DEBUG.
     """
-    # Synchronous execution; request will block until the command finishes.
+    if not settings.DEBUG:
+        return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+    expected = (os.environ.get('SEED_ENDPOINT_SECRET') or '').strip()
+    provided = (request.headers.get('X-Seed-Secret') or '').strip()
+    if not expected or not provided or not secrets.compare_digest(expected, provided):
+        return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
     call_command('seed_dummy_tickets')
     return Response(
         {'status': 'success', 'message': 'Dummy tickets seeded successfully'},
@@ -4452,8 +4461,9 @@ class OfferViewSet(viewsets.ModelViewSet):
         except Exception as e:
             traceback.print_exc()
             logger.exception('OfferViewSet.create unhandled error: %s', e)
+            detail = f'SERVER CRASH: {str(e)}' if settings.DEBUG else 'Internal server error'
             return Response(
-                {'detail': f'SERVER CRASH: {str(e)}'},
+                {'detail': detail},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
