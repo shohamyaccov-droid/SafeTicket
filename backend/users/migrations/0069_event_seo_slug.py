@@ -61,22 +61,31 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='event',
-            name='slug',
-            field=models.SlugField(
-                allow_unicode=True,
-                blank=True,
-                db_index=True,
-                help_text='URL-friendly unique slug for programmatic SEO (auto-generated).',
-                max_length=220,
-                null=True,
-                unique=False,
-            ),
+        # The slug column and its indexes (incl. the varchar_pattern_ops
+        # "users_event_slug_697e89ba_like" index created by db_index=True) already
+        # exist on production — the DB schema is out of sync with migration history.
+        # Register the field in Django's state ONLY; emit no DDL so the deploy stops
+        # crashing with DuplicateTable on the "_like" relation.
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.AddField(
+                    model_name='event',
+                    name='slug',
+                    field=models.SlugField(
+                        allow_unicode=True,
+                        blank=True,
+                        db_index=True,
+                        help_text='URL-friendly unique slug for programmatic SEO (auto-generated).',
+                        max_length=220,
+                        null=True,
+                        unique=False,
+                    ),
+                ),
+            ],
+            database_operations=[],
         ),
         migrations.RunPython(backfill_slugs, noop_reverse),
-        # Schema already has the unique slug indexes on production (out of sync with
-        # migration history). Update Django's model state only — do not emit SQL.
+        # Promote to unique in state only; the unique index already exists in the DB.
         migrations.SeparateDatabaseAndState(
             state_operations=[
                 migrations.AlterField(
