@@ -18,4 +18,10 @@ class RenderDeployHooksTests(SimpleTestCase):
         self.assertIn('python manage.py seed_eyal_golan_menora', text)
         self.assertIn('python manage.py deactivate_affiliate5_coupon', text)
         self.assertIn('python manage.py seed_platform_coupon', text)
+        self.assertIn('python manage.py seed_dummy_tickets', text)
+        self.assertIn('python manage.py mark_tickets_taken', text)
         self.assertNotIn('python manage.py seed_affiliate_coupon', text)
+        # taken lock must run after dummy seed re-creates active inventory
+        seed_idx = text.index('python manage.py seed_dummy_tickets')
+        taken_idx = text.index('python manage.py mark_tickets_taken')
+        self.assertGreater(taken_idx, seed_idx)
