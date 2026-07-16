@@ -43,6 +43,7 @@ import { Helmet } from 'react-helmet-async';
 import { BUYER_SERVICE_FEE_PERCENT } from '../constants/pricing';
 import EventJsonLd from '../components/EventJsonLd';
 import { eventHref } from '../utils/eventSeo';
+import { PUBLIC_SITE_ORIGIN, toPublicAbsoluteUrl } from '../utils/publicSite';
 import {
   filterMarketplaceTickets,
   isCurrentUserOwnListing,
@@ -55,8 +56,7 @@ import TakenBuyButton from '../components/TakenBuyButton';
 import './EventDetailsPage.css';
 
 /** Absolute URL for OG/Twitter when the SPA has no event image yet. */
-const defaultOgImageUrl = () =>
-  typeof window !== 'undefined' ? `${window.location.origin}/og-share.svg` : '';
+const defaultOgImageUrl = () => `${PUBLIC_SITE_ORIGIN}/og-share.svg`;
 
 /** Seller id from API may be a numeric PK or nested object — compare robustly to current user. */
 const isCurrentUserSellerOfTicket = isCurrentUserOwnListing;
@@ -1032,6 +1032,7 @@ const EventDetailsPage = () => {
       <div className="event-details-container">
         <Helmet>
           <title>טוען אירוע | TradeTix</title>
+          <meta name="robots" content="index, follow" />
           <meta
             name="description"
             content="קנו או מכרו כרטיסים לאירועים בישראל ב-TradeTix. תשלום מאובטח והגנה מלאה על הכסף."
@@ -1049,7 +1050,7 @@ const EventDetailsPage = () => {
       <div className="event-details-container">
         <Helmet>
           <title>אירוע לא נמצא | TradeTix</title>
-          <meta name="robots" content="noindex, nofollow" />
+          <meta name="robots" content="index, follow" />
         </Helmet>
         <div className="empty-state">
           <p>אירוע לא נמצא</p>
@@ -1101,17 +1102,19 @@ const EventDetailsPage = () => {
       ? `קנו או מכרו כרטיסים ל-${eventName} ב-${venueForSeo}. תשלום מאובטח והגנה מלאה על הכסף.`
       : `קנו או מכרו כרטיסים ל-${eventName}. תשלום מאובטח והגנה מלאה על הכסף.`);
 
-  const pageCanonical =
-    (event.canonical_url && String(event.canonical_url).trim()) ||
-    (typeof window !== 'undefined' ? `${window.location.origin}${eventHref(event)}` : '');
-  const ogImageAbsolute =
+  const pageCanonical = toPublicAbsoluteUrl(
+    (event.canonical_url && String(event.canonical_url).trim()) || eventHref(event)
+  );
+  const ogImageAbsolute = toPublicAbsoluteUrl(
     (event.og_image && String(event.og_image).trim()) ||
-    (heroImageRaw ? heroImageSrc : defaultOgImageUrl());
+      (heroImageRaw ? heroImageSrc : defaultOgImageUrl())
+  );
 
   return (
     <div className="event-details-container">
       <Helmet>
         <title>{documentTitle}</title>
+        <meta name="robots" content="index, follow" />
         <meta name="description" content={metaDescription} />
         <link rel="canonical" href={pageCanonical || undefined} />
         <meta property="og:site_name" content="TradeTix" />

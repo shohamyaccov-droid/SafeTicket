@@ -278,6 +278,7 @@ const Home = () => {
       <div className="home-container home-container--loading">
         <Helmet>
           <title>{HOME_PAGE_TITLE}</title>
+          <meta name="robots" content="index, follow" />
           <meta name="description" content={HOME_PAGE_DESCRIPTION} />
         </Helmet>
         <EventsPageSkeleton variant="home" />
@@ -437,6 +438,7 @@ const Home = () => {
     <div className="home-container">
       <Helmet>
         <title>{HOME_PAGE_TITLE}</title>
+        <meta name="robots" content="index, follow" />
         <meta name="description" content={HOME_PAGE_DESCRIPTION} />
       </Helmet>
       {loadError && (

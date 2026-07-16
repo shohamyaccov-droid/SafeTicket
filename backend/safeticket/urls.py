@@ -22,6 +22,36 @@ def health_check(_request):
     return JsonResponse({'status': 'ok'})
 
 
+def robots_txt(_request):
+    from users.seo import frontend_origin
+
+    origin = frontend_origin()
+    body = f'User-agent: *\nAllow: /\nSitemap: {origin}/sitemap.xml\n'
+    return HttpResponse(body, content_type='text/plain; charset=utf-8')
+
+
+def sitemap_xml(_request):
+    from users.models import Event
+    from users.seo import event_canonical_url, frontend_origin
+
+    origin = frontend_origin()
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        f'  <url><loc>{origin}/</loc><changefreq>daily</changefreq></url>',
+    ]
+    qs = (
+        Event.objects.exclude(status='בוטל')
+        .only('id', 'slug')
+        .order_by('-id')[:5000]
+    )
+    for event in qs:
+        loc = event_canonical_url(event)
+        lines.append(f'  <url><loc>{loc}</loc><changefreq>daily</changefreq></url>')
+    lines.append('</urlset>')
+    return HttpResponse('\n'.join(lines), content_type='application/xml; charset=utf-8')
+
+
 def _load_spa_index_html() -> str:
     index = Path(settings.STATIC_ROOT) / 'index.html'
     if not index.is_file():
@@ -63,6 +93,8 @@ urlpatterns = [
         apple_pay_domain_association,
         name='apple_pay_domain_association',
     ),
+    path('robots.txt', robots_txt, name='robots_txt'),
+    path('sitemap.xml', sitemap_xml, name='sitemap_xml'),
     path('admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls')),
     path('api/health/', health_check, name='health_check'),

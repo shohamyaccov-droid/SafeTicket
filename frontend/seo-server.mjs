@@ -21,6 +21,12 @@ const API = (process.env.VITE_API_URL || process.env.API_URL || 'https://safetic
   ''
 );
 const PORT = Number(process.env.PORT || 3000);
+/** Public apex for robots/sitemap — never the Render staging hostname. */
+const PUBLIC_ORIGIN = (
+  process.env.PUBLIC_SITE_ORIGIN ||
+  process.env.VITE_PUBLIC_SITE_ORIGIN ||
+  'https://tradetix.co.il'
+).replace(/\/$/, '');
 
 function esc(value) {
   return String(value ?? '')
@@ -39,12 +45,14 @@ function injectSeo(html, seo) {
 
   html = html.replace(/<title>[^<]*<\/title>/i, `<title>${title}</title>`);
   html = html.replace(/<meta\s+name=["']description["'][^>]*>/gi, '');
+  html = html.replace(/<meta\s+name=["']robots["'][^>]*>/gi, '');
   html = html.replace(/<link\s+rel=["']canonical["'][^>]*>/gi, '');
   html = html.replace(/<meta\s+property=["']og:[^"']+["'][^>]*>/gi, '');
   html = html.replace(/<meta\s+name=["']twitter:[^"']+["'][^>]*>/gi, '');
 
   const block = `
     <!-- TradeTix event SEO (Node inject; crawler-visible) -->
+    <meta name="robots" content="index, follow" />
     <meta name="description" content="${description}" />
     <link rel="canonical" href="${canonical}" />
     <meta property="og:type" content="website" />
@@ -73,6 +81,45 @@ function readIndex() {
 }
 
 const app = express();
+
+app.get('/robots.txt', (_req, res) => {
+  res
+    .type('text/plain')
+    .set('Cache-Control', 'public, max-age=3600')
+    .send(`User-agent: *\nAllow: /\nSitemap: ${PUBLIC_ORIGIN}/sitemap.xml\n`);
+});
+
+app.get('/sitemap.xml', async (_req, res) => {
+  const urls = [`${PUBLIC_ORIGIN}/`];
+  try {
+    const response = await fetch(`${API}/api/users/events/?page_size=500`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (response.ok) {
+      const payload = await response.json();
+      const rows = Array.isArray(payload) ? payload : payload.results || [];
+      for (const row of rows) {
+        const key = (row.slug && String(row.slug).trim()) || row.id;
+        if (key) urls.push(`${PUBLIC_ORIGIN}/event/${key}`);
+      }
+    }
+  } catch (err) {
+    console.warn('[seo-server] sitemap fetch failed:', err?.message || err);
+  }
+  const body = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls
+  .map(
+    (loc) => `  <url>
+    <loc>${esc(loc)}</loc>
+    <changefreq>daily</changefreq>
+  </url>`
+  )
+  .join('\n')}
+</urlset>
+`;
+  res.type('application/xml').set('Cache-Control', 'public, max-age=300').send(body);
+});
 
 app.get('/.well-known/apple-developer-merchantid-domain-association', async (_req, res) => {
   try {

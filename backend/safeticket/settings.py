@@ -113,10 +113,14 @@ USE_CLOUDINARY = _cld_url_set or _cld_split_complete
 ALLOWED_HOSTS = [
     h.strip() for h in os.environ.get(
         'ALLOWED_HOSTS',
-        'safeticket-api.onrender.com,localhost,127.0.0.1',
+        'safeticket-api.onrender.com,localhost,127.0.0.1,tradetix.co.il,www.tradetix.co.il',
     ).split(',')
     if h.strip()
 ]
+# Always accept production custom-domain Host headers (defense in depth if env list is truncated).
+for _host in ('tradetix.co.il', 'www.tradetix.co.il', 'safeticket-api.onrender.com', 'safeticket-web.onrender.com'):
+    if _host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_host)
 
 
 # Application definition
@@ -595,7 +599,14 @@ except json.JSONDecodeError:
 FRONTEND_ORIGIN = (
     _FRONTEND_FROM_ENV
     if _FRONTEND_FROM_ENV
-    else ('http://localhost:3000' if DEBUG else _RENDER_WEB_ORIGIN)
+    else ('http://localhost:3000' if DEBUG else _PROD_WEB_ORIGIN)
+).rstrip('/')
+# Canonical public hostname for SEO (meta canonical, JSON-LD, sitemaps). Prefer custom domain.
+# Even if FRONTEND_ORIGIN still points at Render staging, SEO helpers use this (or skip onrender).
+_PUBLIC_FROM_ENV = os.environ.get('PUBLIC_SITE_ORIGIN', '').strip().rstrip('/')
+PUBLIC_SITE_ORIGIN = (
+    _PUBLIC_FROM_ENV
+    or ('' if DEBUG else _PROD_WEB_ORIGIN)
 ).rstrip('/')
 # Transactional templates: users/templates/emails/*.html (+ .txt); sent via users.notifications.
 

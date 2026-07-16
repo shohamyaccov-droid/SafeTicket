@@ -20,7 +20,10 @@ from users.seo import (
 User = get_user_model()
 
 
-@override_settings(FRONTEND_ORIGIN='https://safeticket-web.onrender.com')
+@override_settings(
+    FRONTEND_ORIGIN='https://tradetix.co.il',
+    PUBLIC_SITE_ORIGIN='https://tradetix.co.il',
+)
 class EventSlugAndSeoTests(TestCase):
     def setUp(self):
         self.artist = Artist.objects.create(name='Eyal Golan')
@@ -110,7 +113,9 @@ class EventSlugAndSeoTests(TestCase):
     def test_inject_html_includes_json_ld_script(self):
         seo = build_event_seo_payload(self.event)
         html = inject_seo_into_html(
-            '<html><head><title>Old</title><meta name="description" content="x"></head>'
+            '<html><head><title>Old</title>'
+            '<meta name="robots" content="noindex, nofollow">'
+            '<meta name="description" content="x"></head>'
             '<body><div id="root"></div></body></html>',
             seo,
         )
@@ -119,6 +124,21 @@ class EventSlugAndSeoTests(TestCase):
         self.assertIn('"@type": "Event"', html)
         self.assertIn('AggregateOffer', html)
         self.assertIn('rel="canonical"', html)
+        self.assertIn('https://tradetix.co.il/event/', seo['canonical_url'])
+        self.assertIn('name="robots" content="index, follow"', html)
+        self.assertNotIn('noindex', html)
+
+    def test_staging_frontend_origin_never_used_for_canonical(self):
+        from users.seo import event_canonical_url, frontend_origin
+
+        with self.settings(
+            FRONTEND_ORIGIN='https://safeticket-web.onrender.com',
+            PUBLIC_SITE_ORIGIN='',
+        ):
+            self.assertEqual(frontend_origin(), 'https://tradetix.co.il')
+            self.assertTrue(
+                event_canonical_url(self.event).startswith('https://tradetix.co.il/event/')
+            )
 
     def test_api_retrieve_by_slug_and_seo_action(self):
         client = APIClient()

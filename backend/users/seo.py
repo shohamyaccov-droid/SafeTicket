@@ -21,9 +21,28 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 
+_STAGING_WEB_HOST = 'safeticket-web.onrender.com'
+_PUBLIC_SITE_DEFAULT = 'https://tradetix.co.il'
+
+
 def frontend_origin() -> str:
-    origin = getattr(settings, 'FRONTEND_ORIGIN', None) or 'https://safeticket-web.onrender.com'
-    return str(origin).rstrip('/')
+    """
+    Public site origin for canonical URLs, Open Graph, JSON-LD, and sitemaps.
+
+    Never emit the Render staging hostname — Google Search Console must see
+    https://tradetix.co.il even if FRONTEND_ORIGIN is still set to onrender.com.
+    """
+    for raw in (
+        getattr(settings, 'PUBLIC_SITE_ORIGIN', None),
+        getattr(settings, 'FRONTEND_ORIGIN', None),
+    ):
+        origin = str(raw or '').strip().rstrip('/')
+        if not origin:
+            continue
+        if _STAGING_WEB_HOST in origin.lower():
+            continue
+        return origin
+    return _PUBLIC_SITE_DEFAULT
 
 
 def api_public_origin() -> str:
@@ -316,6 +335,7 @@ def inject_seo_into_html(html: str, seo: dict[str, Any]) -> str:
 
     meta_block = f'''
     <!-- TradeTix event SEO (server-injected for crawlers) -->
+    <meta name="robots" content="index, follow" />
     <meta name="description" content="{_xml_attr(description)}" />
     <link rel="canonical" href="{_xml_attr(canonical)}" />
     <meta property="og:type" content="website" />
@@ -332,13 +352,14 @@ def inject_seo_into_html(html: str, seo: dict[str, Any]) -> str:
     <script type="application/ld+json" id="tradetix-event-jsonld">{ld_text}</script>
     '''
 
-    # Drop conflicting default description/canonical/og tags from static shell (first-pass).
+    # Drop conflicting default description/canonical/og/robots tags from static shell (first-pass).
     html = re.sub(
         r'<meta\s+name=["\']description["\'][^>]*>',
         '',
         html,
         flags=re.I,
     )
+    html = re.sub(r'<meta\s+name=["\']robots["\'][^>]*>', '', html, flags=re.I)
     html = re.sub(r'<link\s+rel=["\']canonical["\'][^>]*>', '', html, flags=re.I)
     html = re.sub(r'<meta\s+property=["\']og:[^"\']+["\'][^>]*>', '', html, flags=re.I)
     html = re.sub(r'<meta\s+name=["\']twitter:[^"\']+["\'][^>]*>', '', html, flags=re.I)
