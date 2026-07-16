@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   filterMarketplaceTickets,
   isListingGroupTaken,
+  isListingUnavailableForBuyer,
   isTicketTaken,
+  sortListingGroupsForBuyer,
 } from './ticketAvailability';
 
 describe('ticketAvailability', () => {
@@ -42,5 +44,41 @@ describe('ticketAvailability', () => {
       ],
     };
     expect(isListingGroupTaken(group)).toBe(false);
+  });
+
+  it('pushes taken and own listings below buyable ones while keeping price order', () => {
+    const user = { id: 9, username: 'me' };
+    const groups = [
+      {
+        id: 'taken',
+        price: 10,
+        available_count: 0,
+        tickets: [{ id: 1, status: 'taken', seller_id: 1 }],
+      },
+      {
+        id: 'cheap',
+        price: 50,
+        available_count: 2,
+        tickets: [{ id: 2, status: 'active', seller_id: 1 }],
+      },
+      {
+        id: 'own',
+        price: 20,
+        available_count: 1,
+        tickets: [{ id: 3, status: 'active', seller_id: 9 }],
+      },
+      {
+        id: 'pricey',
+        price: 100,
+        available_count: 1,
+        tickets: [{ id: 4, status: 'active', seller_id: 2 }],
+      },
+    ];
+    const sorted = sortListingGroupsForBuyer(groups, user, (a, b) =>
+      parseFloat(a.price) - parseFloat(b.price)
+    );
+    expect(sorted.map((g) => g.id)).toEqual(['cheap', 'pricey', 'taken', 'own']);
+    expect(isListingUnavailableForBuyer(sorted[2], user)).toBe(true);
+    expect(isListingUnavailableForBuyer(sorted[3], user)).toBe(true);
   });
 });

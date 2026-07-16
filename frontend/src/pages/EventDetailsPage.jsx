@@ -45,7 +45,10 @@ import EventJsonLd from '../components/EventJsonLd';
 import { eventHref } from '../utils/eventSeo';
 import {
   filterMarketplaceTickets,
+  isCurrentUserOwnListing,
   isListingGroupTaken,
+  isListingUnavailableForBuyer,
+  sortListingGroupsForBuyer,
 } from '../utils/ticketAvailability';
 import TakenBuyButton from '../components/TakenBuyButton';
 import './EventDetailsPage.css';
@@ -55,25 +58,7 @@ const defaultOgImageUrl = () =>
   typeof window !== 'undefined' ? `${window.location.origin}/og-share.svg` : '';
 
 /** Seller id from API may be a numeric PK or nested object — compare robustly to current user. */
-function isCurrentUserSellerOfTicket(user, ticket, group) {
-  if (!user || !ticket) return false;
-  const uid = Number(user.id);
-  const sidRaw = ticket.seller_id ?? ticket.seller;
-  const sid =
-    sidRaw != null && typeof sidRaw === 'object'
-      ? Number(sidRaw.id)
-      : Number(sidRaw);
-  if (!Number.isNaN(sid) && sid === uid) return true;
-  if (ticket.seller_username && user.username && ticket.seller_username === user.username) return true;
-  const gid = group?.seller_id ?? group?.seller;
-  const gsid =
-    gid != null && typeof gid === 'object'
-      ? Number(gid.id)
-      : Number(gid);
-  if (!Number.isNaN(gsid) && gsid === uid) return true;
-  if (group?.seller_username && user.username && group.seller_username === user.username) return true;
-  return false;
-}
+const isCurrentUserSellerOfTicket = isCurrentUserOwnListing;
 
 /** Stable id for matching listing groups after refetch (avoids 5 === "5" false negatives). */
 function stableListingGroupKey(group) {
@@ -412,34 +397,30 @@ const EventDetailsPage = () => {
   const ticketGroups = useMemo(() => {
     const grouped = groupTicketsByListing(tickets);
 
-    // Apply client-side filtering (additional to backend filtering)
-    let filtered = grouped;
-    
-    // Sort groups
+    let primaryCompare = null;
     if (sortBy === 'price_asc') {
-      filtered = filtered.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+      primaryCompare = (a, b) => parseFloat(a.price) - parseFloat(b.price);
     } else if (sortBy === 'price_desc') {
-      filtered = filtered.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
+      primaryCompare = (a, b) => parseFloat(b.price) - parseFloat(a.price);
     } else if (sortBy === 'quantity_desc') {
-      filtered = filtered.sort((a, b) => b.available_count - a.available_count);
+      primaryCompare = (a, b) => b.available_count - a.available_count;
     } else if (sortBy === 'newest') {
-      // Sort by first ticket's created_at if available
-      filtered = filtered.sort((a, b) => {
+      primaryCompare = (a, b) => {
         const aDate = a.tickets[0]?.created_at || '';
         const bDate = b.tickets[0]?.created_at || '';
         return bDate.localeCompare(aDate);
-      });
+      };
     } else if (sortBy === 'best_seats') {
-      // Best seats = lowest price with highest quantity
-      filtered = filtered.sort((a, b) => {
+      primaryCompare = (a, b) => {
         const priceDiff = parseFloat(a.price) - parseFloat(b.price);
         if (priceDiff !== 0) return priceDiff;
         return b.available_count - a.available_count;
-      });
+      };
     }
-    
-    return filtered;
-  }, [tickets, sortBy]);
+
+    // Available listings first; taken (נתפס) and the user's own listings last
+    return sortListingGroupsForBuyer(grouped, user, primaryCompare);
+  }, [tickets, sortBy, user]);
 
   // Find cheapest ticket group for premium badge
   const cheapestTicketPrice = useMemo(() => {
@@ -1526,6 +1507,14 @@ const EventDetailsPage = () => {
               const groupId = group.listing_group_id || group.id;
               const isExpanded = activeTicketId === groupId;
               const isBuyOpening = buyOpeningKey === stableListingGroupKey(group);
+              const isOwnListing = Boolean(
+                user && isCurrentUserSellerOfTicket(user, firstTicket, group)
+              );
+              const isTakenListing = isListingGroupTaken(group);
+              const isUnavailableListing =
+                isOwnListing || isTakenListing || isListingUnavailableForBuyer(group, user);
+              // Taken / own CTAs stay visible without expand; buy/offer still expand
+              const showActions = isExpanded || isUnavailableListing;
               
               
               // Handle click to toggle expansion and update map
@@ -1561,7 +1550,7 @@ const EventDetailsPage = () => {
                   key={group.id}
                   data-ticket-group-id={groupId}
                   data-e2e-ticket-id={firstTicket?.id}
-                  className={`viagogo-ticket-row ${isExpanded ? 'expanded' : ''} ${isActive ? 'active' : ''}`}
+                  className={`viagogo-ticket-row ${isExpanded ? 'expanded' : ''} ${isActive ? 'active' : ''} ${isUnavailableListing ? 'unavailable' : ''}`}
                   style={isActive ? { backgroundColor: '#e0f2fe', border: '2px solid #0284c7', color: '#1e293b' } : {}}
                   onClick={handleTicketClick}
                   onMouseEnter={handleTicketHover}
@@ -1605,15 +1594,15 @@ const EventDetailsPage = () => {
                     </div>
                   </div>
                   
-                  {/* Expanded State - Action Buttons */}
-                  {isExpanded && (
+                  {/* Action Buttons — always visible for taken/own; expand for buyable */}
+                  {showActions && (
                     <div className="ticket-row-expanded">
                       <div className="ticket-actions-row">
-                        {user && isCurrentUserSellerOfTicket(user, firstTicket, group) ? (
+                        {isOwnListing ? (
                           <div className="buy-button-wrapper">
                             <TakenBuyButton label="הכרטיס שלך" variant="own" />
                           </div>
-                        ) : isListingGroupTaken(group) ? (
+                        ) : isTakenListing ? (
                           <div className="buy-button-wrapper">
                             <TakenBuyButton label="נתפס" variant="taken" />
                             <span className="micro-trust-text">כרטיס זה כבר אינו זמין לרכישה</span>

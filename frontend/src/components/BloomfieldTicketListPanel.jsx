@@ -8,6 +8,7 @@ import {
   currencySymbol,
   formatAmountForCurrency,
 } from '../utils/priceFormat';
+import { isListingGroupTaken } from '../utils/ticketAvailability';
 import TakenBuyButton from './TakenBuyButton';
 
 const ZONE_HE = {
@@ -154,6 +155,9 @@ export default function BloomfieldTicketListPanel({
             const isBuying =
               buyingStableId != null && String(buyingStableId) === String(stableId);
             const sellerOwns = isSellerFn(user, firstTicket, group);
+            const isTakenListing = isListingGroupTaken(group);
+            const isUnavailableListing = sellerOwns || isTakenListing;
+            const showActions = isExpanded || isUnavailableListing;
             const hasPdf = (group.tickets || []).some((t) => t.has_pdf_file || t.pdf_file_url);
             const groupPrice = parseFloat(group.price);
             const isBestValue =
@@ -311,14 +315,14 @@ export default function BloomfieldTicketListPanel({
                 </div>
                 {/* ── END HORIZONTAL ROW ─────────────────────────────────── */}
 
-                {/* Expanded: buy / offer actions — always render a CTA (never empty) */}
-                {isExpanded ? (
+                {/* Actions: always visible for taken/own; expand for buyable */}
+                {showActions ? (
                   <div className="border-t border-slate-100 px-4 pb-4 pt-3" dir="rtl">
                     {sellerOwns ? (
                       <div className="buy-button-wrapper flex flex-col gap-2">
                         <TakenBuyButton label="הכרטיס שלך" variant="own" />
                       </div>
-                    ) : group.is_taken || (group.tickets || []).every((t) => t?.status === 'taken') ? (
+                    ) : isTakenListing ? (
                       <div className="buy-button-wrapper flex flex-col gap-2">
                         <TakenBuyButton label="נתפס" variant="taken" />
                         <p className="text-xs text-slate-500">כרטיס זה כבר אינו זמין לרכישה</p>
