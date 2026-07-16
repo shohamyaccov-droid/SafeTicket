@@ -1610,13 +1610,12 @@ const EventDetailsPage = () => {
                     <div className="ticket-row-expanded">
                       <div className="ticket-actions-row">
                         {user && isCurrentUserSellerOfTicket(user, firstTicket, group) ? (
-                          <div className="your-listing-banner" role="status">
-                            <span className="your-listing-icon" aria-hidden="true">📌</span>
-                            <span>זה המודעה שלך - לא ניתן לרכוש או להציע</span>
+                          <div className="buy-button-wrapper">
+                            <TakenBuyButton label="הכרטיס שלך" variant="own" />
                           </div>
                         ) : isListingGroupTaken(group) ? (
                           <div className="buy-button-wrapper">
-                            <TakenBuyButton />
+                            <TakenBuyButton label="נתפס" variant="taken" />
                             <span className="micro-trust-text">כרטיס זה כבר אינו זמין לרכישה</span>
                           </div>
                         ) : (

@@ -8,6 +8,7 @@ import {
   currencySymbol,
   formatAmountForCurrency,
 } from '../utils/priceFormat';
+import TakenBuyButton from './TakenBuyButton';
 
 const ZONE_HE = {
   north: 'טריבונה צפון',
@@ -310,31 +311,16 @@ export default function BloomfieldTicketListPanel({
                 </div>
                 {/* ── END HORIZONTAL ROW ─────────────────────────────────── */}
 
-                {/* Expanded: buy / offer actions */}
+                {/* Expanded: buy / offer actions — always render a CTA (never empty) */}
                 {isExpanded ? (
                   <div className="border-t border-slate-100 px-4 pb-4 pt-3" dir="rtl">
                     {sellerOwns ? (
-                      <div
-                        className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900"
-                        role="status"
-                      >
-                        זה המודעה שלך — לא ניתן לרכוש או להציע
+                      <div className="buy-button-wrapper flex flex-col gap-2">
+                        <TakenBuyButton label="הכרטיס שלך" variant="own" />
                       </div>
                     ) : group.is_taken || (group.tickets || []).every((t) => t?.status === 'taken') ? (
-                      <div className="flex flex-col gap-2">
-                        <button
-                          type="button"
-                          className="min-h-[44px] rounded-lg bg-slate-300 px-5 py-2.5 text-sm font-bold text-slate-600 cursor-not-allowed"
-                          disabled
-                          aria-disabled="true"
-                          tabIndex={-1}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                          }}
-                        >
-                          נתפס
-                        </button>
+                      <div className="buy-button-wrapper flex flex-col gap-2">
+                        <TakenBuyButton label="נתפס" variant="taken" />
                         <p className="text-xs text-slate-500">כרטיס זה כבר אינו זמין לרכישה</p>
                       </div>
                     ) : (
