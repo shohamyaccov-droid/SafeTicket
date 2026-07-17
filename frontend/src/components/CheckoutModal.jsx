@@ -908,20 +908,22 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       })();
     } catch (err) {
       const status = err.response?.status;
+      const res = err.response;
+      // Must run before the generic 403→session-expired branch: Shabbat returns 403
+      // with code SHABBAT_RESTRICTION for authenticated buyers too.
+      if (res?.status === 403 && res?.data?.code === 'SHABBAT_RESTRICTION') {
+        openShabbatRestrictionModal(res.data);
+        setLoading(false);
+        setPaymentPhase('idle');
+        paymentSubmittingRef.current = false;
+        return;
+      }
       if (user && (status === 401 || status === 403)) {
         const authMsg = 'החיבור שלך פג תוקף. אנא התחבר מחדש.';
         setError(authMsg);
         toastError(authMsg);
         onClose?.();
         notifySessionExpired();
-        return;
-      }
-      const res = err.response;
-      if (res?.status === 403 && res?.data?.code === 'SHABBAT_RESTRICTION') {
-        openShabbatRestrictionModal(res.data);
-        setLoading(false);
-        setPaymentPhase('idle');
-        paymentSubmittingRef.current = false;
         return;
       }
       const formatted = formatCheckoutBackendError(err);

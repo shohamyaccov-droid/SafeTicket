@@ -3327,6 +3327,10 @@ class TicketViewSet(viewsets.ModelViewSet):
         the same time, one transaction commits first and the loser sees a clean Hebrew
         "already held" response instead of both receiving success.
         """
+        blocked = shabbat_forbidden_response()
+        if blocked is not None:
+            return blocked
+
         guest_email = (request.data.get('email') or '').strip().lower()
 
         try:
