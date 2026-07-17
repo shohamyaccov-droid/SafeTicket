@@ -287,6 +287,7 @@ from .models import (
     VenueSection,
 )
 from .schema_compat import event_queryset_defer_rollout_columns, ticket_queryset_defer_event_rollout_columns
+from .shabbat import shabbat_forbidden_response
 from .pricing import (
     buyer_charge_from_base_amount,
     compute_order_price_breakdown,
@@ -1429,6 +1430,10 @@ def create_order(request):
     Create order for authenticated user after payment.
     CSRF exempt: same rationale as OfferViewSet (SPA + API on separate Render hosts).
     """
+    blocked = shabbat_forbidden_response()
+    if blocked is not None:
+        return blocked
+
     # Include user in the data so serializer validation passes
     order_data = request.data.copy()
     order_data['user'] = request.user.id
@@ -2119,6 +2124,10 @@ def payment_simulation(request):
     Pre-production: no PAN/Luhn validation here — the mock gateway always succeeds once amount checks pass.
     CRITICAL: Must handle listing_group_id like create_order does
     """
+    blocked = shabbat_forbidden_response()
+    if blocked is not None:
+        return blocked
+
     if not settings.DEBUG:
         return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -2292,6 +2301,10 @@ def guest_checkout(request):
     """
     Create order for guest (non-authenticated) user after payment
     """
+    blocked = shabbat_forbidden_response()
+    if blocked is not None:
+        return blocked
+
     offer_id = request.data.get('offer_id')
     negotiated_offer = None
     if offer_id not in (None, '', []):

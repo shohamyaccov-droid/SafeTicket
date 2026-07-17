@@ -30,6 +30,7 @@ from .payments import (
     normalize_payme_webhook_status,
     verify_payme_webhook_request,
 )
+from .shabbat import shabbat_forbidden_response
 
 logger = logging.getLogger(__name__)
 
@@ -360,6 +361,10 @@ def payme_init_checkout(request):
     Create Payme hosted session for an existing pending_payment order.
     Auth: logged-in owner OR guest_email matching order.
     """
+    blocked = shabbat_forbidden_response()
+    if blocked is not None:
+        return blocked
+
     if not PayMeSettings.from_django().is_configured:
         return Response(
             {'error': 'Payme is not configured (set PAYME_SELLER_ID).'},

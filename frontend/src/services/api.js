@@ -152,6 +152,7 @@ function isPublicGuestEndpoint(url = '') {
   return (
     path.includes('/users/csrf/') ||
     path.includes('/users/orders/guest/') ||
+    path.includes('/users/shabbat/status/') ||
     /\/users\/tickets\/\d+\/reserve\//.test(path) ||
     /\/users\/tickets\/\d+\/release_reservation\//.test(path) ||
     path.includes('/users/payments/payme/init/')
@@ -489,6 +490,9 @@ export async function ensureCsrfToken() {
 }
 
 export const paymentAPI = {
+  getShabbatStatus: async () => {
+    return api.get('/users/shabbat/status/', { skipAuth: true });
+  },
   simulatePayment: async (data) => {
     await ensureCsrfToken();
     syncAxiosDefaultAuthHeader();

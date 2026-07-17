@@ -22,6 +22,7 @@ import {
 import CheckoutLegalAcceptance, {
   validateLegalAcceptance,
 } from './CheckoutLegalAcceptance';
+import ShabbatModal from './ShabbatModal';
 import './CheckoutModal.css';
 
 /** Buy Now: server cart hold (see TicketViewSet reserve). Negotiation: post-accept checkout window. */
@@ -90,6 +91,9 @@ function formatCheckoutBackendError(err) {
 function toFriendlyCheckoutMessage(detail) {
   const text = String(detail || '').trim();
   if (!text) return 'לא הצלחנו להשלים את הפעולה כרגע. נסו שוב בעוד רגע.';
+  if (/בצאת שבת|שבת|SHABBAT/i.test(text)) {
+    return 'בצאת שבת תתחדש האפשרות לתשלום';
+  }
   if (/authentication credentials were not provided|not authenticated|unauthorized|forbidden/i.test(text)) {
     return 'החיבור שלך פג תוקף. אנא התחבר מחדש.';
   }
@@ -199,6 +203,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const [couponError, setCouponError] = useState('');
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [legalError, setLegalError] = useState('');
+  const [shabbatOpen, setShabbatOpen] = useState(false);
+  const [shabbatHavdalah, setShabbatHavdalah] = useState(null);
+  const [shabbatMessage, setShabbatMessage] = useState('בצאת שבת תתחדש האפשרות לתשלום');
   const couponApplyLockRef = useRef(false);
   const timerRef = useRef(null);
   const reservationRef = useRef(false); // Track if reservation was made
@@ -475,6 +482,13 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         /* reserve/order calls will surface a concrete API error if CSRF is unavailable */
       }
     }
+
+    // Shomer Shabbat: intercept "המשך לתשלום" before opening the payment step
+    if (await guardShabbatBeforePayment()) {
+      setInfoStepBusy(false);
+      return;
+    }
+
     setError('');
     setStep('payment');
     setInfoStepBusy(false);
@@ -533,6 +547,36 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     setCouponError('');
   };
 
+  const openShabbatRestrictionModal = (payload = {}) => {
+    const havdalah =
+      payload?.havdalah_time ||
+      payload?.havdalahTime ||
+      null;
+    const msg =
+      payload?.message ||
+      payload?.error ||
+      'בצאת שבת תתחדש האפשרות לתשלום';
+    setShabbatHavdalah(havdalah);
+    setShabbatMessage(String(msg));
+    setShabbatOpen(true);
+  };
+
+  /** Returns true when payment must be blocked (modal opened). */
+  const guardShabbatBeforePayment = async () => {
+    try {
+      const res = await paymentAPI.getShabbatStatus();
+      const data = res?.data || {};
+      if (data.is_shabbat) {
+        openShabbatRestrictionModal(data);
+        return true;
+      }
+      return false;
+    } catch {
+      // If status check fails, allow the click — backend payment endpoints still enforce Shabbat.
+      return false;
+    }
+  };
+
   const executeCheckout = async (mockBypass = false) => {
     if (checkoutSucceeded || transactionCompleteRef.current) {
       return;
@@ -552,6 +596,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       return;
     }
     setError('');
+
+    // Belt-and-suspenders: block payment submit during Shabbat even if user reached this step
+    if (await guardShabbatBeforePayment()) {
+      return;
+    }
+
     if (!mockBypass && !usePayme) {
       const payErr = validateMockPaymentFields(paymentForm);
       if (payErr) {
@@ -867,6 +917,13 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         return;
       }
       const res = err.response;
+      if (res?.status === 403 && res?.data?.code === 'SHABBAT_RESTRICTION') {
+        openShabbatRestrictionModal(res.data);
+        setLoading(false);
+        setPaymentPhase('idle');
+        paymentSubmittingRef.current = false;
+        return;
+      }
       const formatted = formatCheckoutBackendError(err);
       const detail =
         formatted ||
@@ -1158,6 +1215,18 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   };
 
   // Success screen — must win over payment step if checkoutSucceeded (PDF no longer blocks transition)
+  const renderWithShabbatModal = (node) => (
+    <>
+      {node}
+      <ShabbatModal
+        open={shabbatOpen}
+        onClose={() => setShabbatOpen(false)}
+        havdalahTime={shabbatHavdalah}
+        message={shabbatMessage}
+      />
+    </>
+  );
+
   if (checkoutSucceeded || step === 'success') {
     const snap = successSnapshotRef.current;
     const resolvedOrderId = orderId ?? snap?.orderId;
@@ -1167,7 +1236,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       resolvedOrderData?.currency || acceptedOffer?.currency || resolveTicketCurrency(ticket)
     ).toUpperCase();
     const paySym = currencySymbol(payIso);
-    return portalCheckoutRoot(
+    return renderWithShabbatModal(portalCheckoutRoot(
       <div className="success-overlay" onClick={handleClose}>
         <div className="success-celebration" onClick={(e) => e.stopPropagation()}>
           <div className="success-celebration-content">
@@ -1329,12 +1398,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           </div>
         </div>
       </div>
-    );
+    ));
   }
 
   // Payment screen — never after a completed checkout (even if step lags)
   if (step === 'payment' && !checkoutSucceeded) {
-    return portalCheckoutRoot(
+    return renderWithShabbatModal(portalCheckoutRoot(
       <div className="modal-overlay checkout-modal-overlay" onClick={handleClose}>
         <div className="modal-content checkout-modal-shell checkout-modal-shell--payment" onClick={(e) => e.stopPropagation()}>
           <button type="button" className="close-button" onClick={handleClose} aria-label="סגירה">×</button>
@@ -1730,11 +1799,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           </form>
         </div>
       </div>
-    );
+    ));
   }
 
   // Info screen (initial)
-  return portalCheckoutRoot(
+  return renderWithShabbatModal(portalCheckoutRoot(
     <div className="modal-overlay checkout-modal-overlay" onClick={handleClose}>
       <div className="modal-content checkout-modal-shell checkout-modal-shell--info" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="close-button" onClick={handleClose} aria-label="סגירה">×</button>
@@ -2024,7 +2093,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         )}
       </div>
     </div>
-  );
+  ));
 };
 
 export default CheckoutModal;

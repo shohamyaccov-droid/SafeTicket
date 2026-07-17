@@ -1,0 +1,128 @@
+.shabbat-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.shabbat-modal {
+  position: relative;
+  width: min(100%, 420px);
+  border-radius: 18px;
+  background: linear-gradient(165deg, #fffdf8 0%, #f8fafc 55%, #eef2ff 100%);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+  padding: 1.75rem 1.5rem 1.5rem;
+  text-align: center;
+  direction: rtl;
+  color: #0f172a;
+}
+
+.shabbat-modal-close {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.75rem;
+  border: none;
+  background: transparent;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.shabbat-modal-icon-wrap {
+  width: 72px;
+  height: 72px;
+  margin: 0.25rem auto 1rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 30% 30%, #fef3c7, #e0e7ff);
+  border: 1px solid #e2e8f0;
+}
+
+.shabbat-modal-clock {
+  width: 36px;
+  height: 36px;
+  color: #334155;
+}
+
+.shabbat-modal-title {
+  margin: 0 0 0.65rem;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.shabbat-modal-message {
+  margin: 0 0 1.25rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.55;
+}
+
+.shabbat-modal-countdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 1rem 0.85rem;
+  margin-bottom: 1.25rem;
+  border-radius: 14px;
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+.shabbat-modal-countdown-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.shabbat-modal-countdown-digits {
+  font-variant-numeric: tabular-nums;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.shabbat-modal-havdalah-hint {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 0.15rem;
+}
+
+.shabbat-modal-ok {
+  width: 100%;
+  min-height: 48px;
+  border: none;
+  border-radius: 12px;
+  background: #1e293b;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.shabbat-modal-ok:hover {
+  background: #0f172a;
+}
+
+@media (max-width: 480px) {
+  .shabbat-modal {
+    padding: 1.5rem 1.15rem 1.25rem;
+  }
+
+  .shabbat-modal-countdown-digits {
+    font-size: 1.7rem;
+  }
+}

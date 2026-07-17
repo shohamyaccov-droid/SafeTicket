@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from users.coupon_views import validate_coupon
 from .payme_views import payme_init_checkout
 from .payout_views import admin_payout_mark_paid, admin_payouts_list, user_wallet
+from .shabbat import shabbat_status_view
 from .views import (
     RegisterView,
     verify_email,
@@ -63,6 +64,7 @@ urlpatterns = [
     path('tickets/<int:ticket_id>/update-price/', update_ticket_price, name='update_ticket_price'),
     path('payments/simulate/', payment_simulation, name='payment_simulation'),
     path('payments/payme/init/', payme_init_checkout, name='payme_init_checkout'),
+    path('shabbat/status/', shabbat_status_view, name='shabbat_status'),
     path('orders/', create_order, name='create_order'),
     path('orders/guest/', guest_checkout, name='guest_checkout'),
     path('orders/<int:order_id>/confirm-payment/', confirm_order_payment, name='confirm_order_payment'),
@@ -79,4 +81,3 @@ urlpatterns = [
     path('coupons/validate/', validate_coupon, name='validate_coupon'),
     path('', include(router.urls)),
 ]
-
