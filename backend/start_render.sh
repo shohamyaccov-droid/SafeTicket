@@ -63,6 +63,10 @@ else
   echo "[start_render] Skipping seed_dummy_tickets (set RUN_DUMMY_SEED=true only for non-prod)."
 fi
 
+# FOMO / map QA: taken-only listings for empty active events (never touches stocked events).
+echo "[start_render] Seed taken FOMO tickets for empty active events..."
+python manage.py seed_taken_tickets || true
+
 echo "[start_render] Admin promotion hook..."
 python fix_admin.py
 
