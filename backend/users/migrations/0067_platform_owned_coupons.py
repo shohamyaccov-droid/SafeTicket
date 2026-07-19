@@ -69,8 +69,8 @@ class Migration(migrations.Migration):
             model_name='coupon',
             constraint=models.CheckConstraint(
                 condition=(
-                    models.Q(('coupon_type', 'affiliate'), ('affiliate__isnull', False))
-                    | models.Q(('coupon_type', 'platform'), ('affiliate__isnull', True))
+                    models.Q(('affiliate__isnull', False), ('coupon_type', 'affiliate'))
+                    | models.Q(('affiliate__isnull', True), ('coupon_type', 'platform'))
                 ),
                 name='users_coupon_type_affiliate_fk_consistency',
             ),

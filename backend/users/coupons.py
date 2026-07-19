@@ -100,6 +100,7 @@ class CouponPreview:
     buyer_discount_rate: Decimal
     affiliate_commission_rate: Decimal
     platform_net_rate: Decimal
+    fixed_discount_amount: Decimal
 
     def as_dict(self) -> dict:
         fee_charged_rate = (
@@ -121,7 +122,39 @@ class CouponPreview:
             'discount_percent': _rate_to_percent_label(self.buyer_discount_rate),
             'affiliate_percent': _rate_to_percent_label(self.affiliate_commission_rate),
             'platform_percent': _rate_to_percent_label(self.platform_net_rate),
+            'discount_amount': str(self.buyer_discount),
+            'fixed_discount_amount': str(self.fixed_discount_amount),
+            'discount_type': 'fixed' if self.fixed_discount_amount > 0 else 'percentage',
         }
+
+
+def checkout_amounts_for_coupon(coupon: Coupon, base: Any) -> dict[str, Decimal]:
+    """Return authoritative checkout amounts for percentage or fixed coupons."""
+    b = decimal_money(base)
+    fixed = decimal_money(coupon.discount_amount or 0)
+    if fixed > 0:
+        _base, standard_fee, standard_total = buyer_charge_from_base_amount(b)
+        applied_discount = min(fixed, standard_total)
+        total = max(standard_total - applied_discount, Decimal('0.00')).quantize(QUANT)
+        buyer_fee = (total - b).quantize(QUANT)
+        return {
+            'base': b,
+            'buyer_fee': buyer_fee,
+            'buyer_discount': applied_discount,
+            'affiliate_commission': Decimal('0.00'),
+            # A fixed campaign can exceed the normal service fee; a negative value
+            # accurately records the platform-funded subsidy while seller base stays intact.
+            'platform_net_fee': buyer_fee,
+            'total': total,
+        }
+
+    disc, aff, plat = checkout_split_rates_for_coupon(coupon)
+    return affiliate_checkout_amounts(
+        b,
+        buyer_discount_rate=disc,
+        affiliate_rate=aff,
+        platform_rate=plat,
+    )
 
 
 def preview_coupon_for_base(
@@ -139,12 +172,7 @@ def preview_coupon_for_base(
     if b <= 0:
         raise CouponError('invalid_base', 'סכום בסיס לא תקין לקופון.')
     disc, aff, plat = checkout_split_rates_for_coupon(coupon)
-    amounts = affiliate_checkout_amounts(
-        b,
-        buyer_discount_rate=disc,
-        affiliate_rate=aff,
-        platform_rate=plat,
-    )
+    amounts = checkout_amounts_for_coupon(coupon, b)
     if coupon.coupon_type == Coupon.TYPE_PLATFORM:
         affiliate_name = 'TradeTix'
     else:
@@ -162,6 +190,7 @@ def preview_coupon_for_base(
         buyer_discount_rate=disc,
         affiliate_commission_rate=aff,
         platform_net_rate=plat,
+        fixed_discount_amount=decimal_money(coupon.discount_amount or 0),
     )
 
 
@@ -178,13 +207,7 @@ def expected_total_with_optional_coupon(
         _, _, total = buyer_charge_from_base_amount(base)
         return total
     coupon = get_active_coupon(coupon_code)
-    disc, aff, plat = checkout_split_rates_for_coupon(coupon)
-    amounts = affiliate_checkout_amounts(
-        base,
-        buyer_discount_rate=disc,
-        affiliate_rate=aff,
-        platform_rate=plat,
-    )
+    amounts = checkout_amounts_for_coupon(coupon, base)
     return amounts['total']
 
 
@@ -210,13 +233,7 @@ def claim_coupon_for_order(
     if coupon.max_redemptions_total is not None and coupon.redemption_count >= coupon.max_redemptions_total:
         raise CouponError('exhausted', 'הגיעו למכסת השימוש של קוד זה.')
 
-    disc, aff, plat = checkout_split_rates_for_coupon(coupon)
-    amounts = affiliate_checkout_amounts(
-        base_amount,
-        buyer_discount_rate=disc,
-        affiliate_rate=aff,
-        platform_rate=plat,
-    )
+    amounts = checkout_amounts_for_coupon(coupon, base_amount)
     try:
         redemption = CouponRedemption.objects.create(
             coupon=coupon,

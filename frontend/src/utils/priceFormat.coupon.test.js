@@ -13,6 +13,7 @@ import {
 import {
   buyerChargeFromBase,
   buyerChargeFromBaseWithAffiliateCoupon,
+  buyerChargeFromBaseWithFixedCoupon,
 } from './priceFormat.js';
 
 describe('buyerChargeFromBase (12% fee)', () => {
@@ -22,6 +23,21 @@ describe('buyerChargeFromBase (12% fee)', () => {
     expect(r.baseAmount).toBe(100);
     expect(r.serviceFee).toBe(12);
     expect(r.totalAmount).toBe(112);
+  });
+});
+
+describe('buyerChargeFromBaseWithFixedCoupon', () => {
+  it('subtracts a fixed amount from the normal checkout total', () => {
+    const r = buyerChargeFromBaseWithFixedCoupon(100, 20);
+    expect(r.baseAmount).toBe(100);
+    expect(r.buyerDiscount).toBe(20);
+    expect(r.totalAmount).toBe(92);
+  });
+
+  it('never produces a negative total', () => {
+    const r = buyerChargeFromBaseWithFixedCoupon(5, 20);
+    expect(r.buyerDiscount).toBe(5.6);
+    expect(r.totalAmount).toBe(0);
   });
 });
 

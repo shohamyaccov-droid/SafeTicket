@@ -657,6 +657,7 @@ class CouponAdmin(admin.ModelAdmin):
         'is_active',
         'redemption_count',
         'max_redemptions_total',
+        'discount_amount',
         'buyer_discount_rate',
         'affiliate_commission_rate',
         'platform_net_rate',

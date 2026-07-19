@@ -5,6 +5,7 @@ import { authAPI, orderAPI, paymentAPI, ticketAPI, ensureCsrfToken, getEffective
 import {
   buyerChargeFromBase,
   buyerChargeFromBaseWithAffiliateCoupon,
+  buyerChargeFromBaseWithFixedCoupon,
   resolveTicketCurrency,
   currencySymbol,
   formatAmountForCurrency,
@@ -334,7 +335,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const basePriceNum = negotiatedUnitBase != null ? negotiatedUnitBase : listUnitFace;
   const listBaseSubtotalShekels =
     !isNegotiatedPrice && listUnitFace > 0 ? listUnitFace * quantity : 0;
-  const chargeFn = appliedCoupon ? buyerChargeFromBaseWithAffiliateCoupon : buyerChargeFromBase;
+  const chargeFn = appliedCoupon
+    ? appliedCoupon.discount_type === 'fixed'
+      ? (base) => buyerChargeFromBaseWithFixedCoupon(
+          base,
+          appliedCoupon.fixed_discount_amount
+        )
+      : buyerChargeFromBaseWithAffiliateCoupon
+    : buyerChargeFromBase;
   const negotiatedBundleBreakdown =
     isNegotiatedPrice && negotiatedBaseTotal != null && negotiatedBaseTotal > 0
       ? chargeFn(negotiatedBaseTotal)
@@ -522,12 +530,15 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       const data = res.data || {};
       setAppliedCoupon({
         code: data.code || code.toUpperCase(),
+        discount_type: data.discount_type || 'percentage',
+        discount_amount: data.discount_amount,
+        fixed_discount_amount: data.fixed_discount_amount,
         total_amount: data.total_amount,
         buyer_service_fee: data.buyer_service_fee,
         buyer_fee_discount: data.buyer_fee_discount,
         affiliate_name: data.affiliate_name,
       });
-      toastSuccess('הקופון הוחל בהצלחה — דמי השירות עודכנו.');
+      toastSuccess('הקופון הוחל בהצלחה — המחיר הכולל עודכן.');
     } catch (err) {
       setAppliedCoupon(null);
       const msg =
@@ -641,7 +652,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         if (isNaN(negotiatedBase) || negotiatedBase <= 0) {
           throw new Error('מחיר הצעה לא תקין');
         }
-        const ch = buyerChargeFromBase(negotiatedBase);
+        const ch = chargeFn(negotiatedBase);
         baseAmount = ch.baseAmount;
         serviceFee = ch.serviceFee;
         totalAmount = ch.totalAmount;
@@ -650,7 +661,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         if (!Number.isFinite(unitFace) || unitFace < 0) {
           throw new Error('מחיר כרטיס לא תקין');
         }
-        const ch = buyerChargeFromBase(unitFace * quantity);
+        const ch = chargeFn(unitFace * quantity);
         baseAmount = ch.baseAmount;
         serviceFee = ch.serviceFee;
         totalAmount = ch.totalAmount;
@@ -1595,7 +1606,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   </div>
                   {appliedCoupon ? (
                     <div className="price-row coupon-applied-row">
-                      <span>הנחת קופון שותפים ({appliedCoupon.code})</span>
+                      <span>הנחת קופון ({appliedCoupon.code})</span>
                       <span>−{curSym}{formatAmountForCurrency(listBreakdown?.buyerDiscount ?? 0, checkoutCurrency)}</span>
                     </div>
                   ) : null}
@@ -1609,7 +1620,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
             <div className="checkout-coupon-box" dir="rtl">
               <label htmlFor="checkout-coupon-input" className="checkout-coupon-label">
-                קוד קופון שותפים
+                יש לך קוד קופון?
               </label>
               <div className="checkout-coupon-row">
                 <input
@@ -1633,14 +1644,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     onClick={handleApplyCoupon}
                     disabled={couponBusy}
                   >
-                    {couponBusy ? 'בודק…' : 'החל'}
+                    {couponBusy ? 'בודק…' : 'הפעל'}
                   </button>
                 )}
               </div>
               {couponError ? <p className="checkout-coupon-error" role="alert">{couponError}</p> : null}
               {appliedCoupon ? (
                 <p className="checkout-coupon-ok">
-                  קופון פעיל — דמי שירות {BUYER_FEE_PERCENT_WITH_COUPON}% (הנחה 5% לקונה, 5% לשותף, 5% לפלטפורמה).
+                  הקופון הופעל בהצלחה — המחיר הכולל עודכן.
                 </p>
               ) : null}
             </div>
@@ -1936,7 +1947,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   </div>
                   {appliedCoupon ? (
                     <div className="price-row coupon-applied-row">
-                      <span>הנחת קופון שותפים ({appliedCoupon.code})</span>
+                      <span>הנחת קופון ({appliedCoupon.code})</span>
                       <span>−{curSym}{formatAmountForCurrency(listBreakdown?.buyerDiscount ?? 0, checkoutCurrency)}</span>
                     </div>
                   ) : null}
@@ -1950,7 +1961,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
             <div className="checkout-coupon-box" dir="rtl">
               <label htmlFor="checkout-coupon-input-info" className="checkout-coupon-label">
-                קוד קופון שותפים
+                יש לך קוד קופון?
               </label>
               <div className="checkout-coupon-row">
                 <input
@@ -1974,14 +1985,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     onClick={handleApplyCoupon}
                     disabled={couponBusy}
                   >
-                    {couponBusy ? 'בודק…' : 'החל'}
+                    {couponBusy ? 'בודק…' : 'הפעל'}
                   </button>
                 )}
               </div>
               {couponError ? <p className="checkout-coupon-error" role="alert">{couponError}</p> : null}
               {appliedCoupon ? (
                 <p className="checkout-coupon-ok">
-                  קופון פעיל — דמי שירות {BUYER_FEE_PERCENT_WITH_COUPON}% (הנחה 5% לקונה).
+                  הקופון הופעל בהצלחה — המחיר הכולל עודכן.
                 </p>
               ) : null}
             </div>

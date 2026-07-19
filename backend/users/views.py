@@ -74,9 +74,9 @@ def _purchase_orders_for_user(user):
 
 
 def _checkout_expected_total(*, ticket, order_quantity, negotiated_offer=None, coupon_code: str = ''):
-    """Server-authoritative checkout total, including optional affiliate coupon."""
-    from users.coupons import CouponError, get_active_coupon
-    from users.pricing import affiliate_checkout_amounts, expected_negotiated_total_from_offer_base
+    """Server-authoritative checkout total, including optional coupon."""
+    from users.coupons import CouponError, checkout_amounts_for_coupon, get_active_coupon
+    from users.pricing import expected_negotiated_total_from_offer_base
 
     if negotiated_offer is not None:
         base = decimal_money(negotiated_offer.amount)
@@ -92,15 +92,7 @@ def _checkout_expected_total(*, ticket, order_quantity, negotiated_offer=None, c
         coupon = get_active_coupon(code)
     except CouponError:
         raise
-    from users.fee_settings import checkout_split_rates_for_coupon
-
-    disc, aff, plat = checkout_split_rates_for_coupon(coupon)
-    return affiliate_checkout_amounts(
-        base,
-        buyer_discount_rate=disc,
-        affiliate_rate=aff,
-        platform_rate=plat,
-    )['total']
+    return checkout_amounts_for_coupon(coupon, base)['total']
 
 
 def _maybe_claim_coupon_on_order(order, *, coupon_code, user=None, guest_email='', ticket=None, order_quantity=1, negotiated_offer=None):

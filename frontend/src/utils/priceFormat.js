@@ -125,6 +125,26 @@ export function buyerChargeFromBase(baseInput) {
 }
 
 /**
+ * Deduct a fixed coupon amount from the normal buyer total. The server remains
+ * authoritative; this mirrors its calculation for immediate checkout feedback.
+ */
+export function buyerChargeFromBaseWithFixedCoupon(baseInput, discountInput) {
+  const standard = buyerChargeFromBase(baseInput);
+  const rawDiscount = parseFloat(String(discountInput ?? 0));
+  const configured = Number.isFinite(rawDiscount) ? Math.max(rawDiscount, 0) : 0;
+  const discountAg = Math.min(
+    Math.round(configured * 100),
+    Math.round(standard.totalAmount * 100)
+  );
+  return {
+    ...standard,
+    buyerDiscount: discountAg / 100,
+    serviceFee: (Math.round(standard.serviceFee * 100) - discountAg) / 100,
+    totalAmount: Math.max(0, Math.round(standard.totalAmount * 100) - discountAg) / 100,
+  };
+}
+
+/**
  * Coupon checkout using GlobalFeeSettings client defaults
  * (buyer pays base + BUYER_FEE_PERCENT_WITH_COUPON).
  * @param {number|string} baseInput

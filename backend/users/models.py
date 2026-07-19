@@ -1415,6 +1415,12 @@ class Coupon(models.Model):
         help_text='Required for affiliate coupons; must be null for platform coupons',
     )
     is_active = models.BooleanField(default=True)
+    discount_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text='Fixed amount deducted from checkout total; 0 keeps percentage-based coupon pricing.',
+    )
     starts_at = models.DateTimeField(null=True, blank=True)
     ends_at = models.DateTimeField(null=True, blank=True)
     max_redemptions_total = models.PositiveIntegerField(
@@ -1462,6 +1468,10 @@ class Coupon(models.Model):
                 ),
                 name='users_coupon_platform_zero_affiliate_rate',
             ),
+            models.CheckConstraint(
+                condition=models.Q(discount_amount__gte=Decimal('0.00')),
+                name='users_coupon_discount_amount_nonnegative',
+            ),
         ]
 
     def __str__(self):
@@ -1481,6 +1491,12 @@ class Coupon(models.Model):
     def clean(self):
         from django.core.exceptions import ValidationError
 
+        if self.discount_amount is not None and self.discount_amount < 0:
+            raise ValidationError({'discount_amount': 'Discount amount cannot be negative.'})
+        if self.discount_amount and self.coupon_type != self.TYPE_PLATFORM:
+            raise ValidationError(
+                {'discount_amount': 'Fixed-amount coupons must be platform coupons.'}
+            )
         if self.coupon_type == self.TYPE_PLATFORM:
             if self.affiliate_id is not None:
                 raise ValidationError({'affiliate': 'Platform coupons must not link an affiliate partner.'})
