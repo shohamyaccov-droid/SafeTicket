@@ -40,6 +40,34 @@ def _order_escrow_status(order: Order | None) -> str:
     return (order.payout_status or 'locked').strip()
 
 
+def _platform_fee_percent(payout: SellerPayout) -> str | None:
+    """
+    Historical fee percent applied to THIS order, derived from amounts frozen on
+    the order/payout rows at purchase time (never from live GlobalFeeSettings).
+
+    Base = listing amount the fee was charged on:
+      prefer order.final_negotiated_price (stored at checkout),
+      else total_paid − buyer_service_fee, else net_payout.
+    """
+    fee = _quantize(payout.platform_fee)
+    order = payout.order
+
+    base = None
+    if order is not None and order.final_negotiated_price is not None:
+        base = _quantize(order.final_negotiated_price)
+    if (base is None or base <= 0) and order is not None and order.buyer_service_fee is not None:
+        base = _quantize((payout.total_paid or 0) - order.buyer_service_fee)
+    if base is None or base <= 0:
+        base = _quantize(payout.net_payout)
+    if base <= 0:
+        return None
+
+    percent = (fee / base * Decimal('100')).quantize(Decimal('0.01'))
+    # Display-friendly: '15.00' → '15', '7.50' → '7.5'
+    text = format(percent, 'f').rstrip('0').rstrip('.')
+    return text or '0'
+
+
 def _promote_orders_past_escrow_threshold(*, seller=None) -> int:
     qs = (
         Order.objects.select_related('ticket__event')
@@ -104,6 +132,7 @@ def _serialize_admin_payout(payout: SellerPayout) -> dict:
         'seller_bank': _seller_bank_payload(seller) if seller else {},
         'total_paid': str(payout.total_paid),
         'platform_fee': str(payout.platform_fee),
+        'platform_fee_percent': _platform_fee_percent(payout),
         'net_payout': str(payout.net_payout),
         'payout_status': payout.payout_status,
         'created_at': payout.created_at.isoformat() if payout.created_at else None,

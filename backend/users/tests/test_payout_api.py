@@ -126,6 +126,15 @@ class AdminPayoutApiTests(PayoutApiTestBase):
         self.assertEqual(summary['total_pending_platform_fees'], '15.00')
         self.assertEqual(summary['total_platform_revenue'], '15.00')
 
+    def test_admin_payout_row_includes_historical_fee_percent(self):
+        """Percent is derived from amounts frozen on the order (15/100), not live settings."""
+        self._create_paid_order()
+        self.client.force_authenticate(user=self.admin)
+        res = self.client.get('/api/users/admin/payouts/')
+        row = res.data['payouts'][0]
+        self.assertEqual(row['platform_fee'], '15.00')
+        self.assertEqual(row['platform_fee_percent'], '15')
+
     def test_admin_mark_paid_updates_status(self):
         payout = self._create_paid_order(escrow='eligible')
         self.seller.wallet.refresh_from_db()
