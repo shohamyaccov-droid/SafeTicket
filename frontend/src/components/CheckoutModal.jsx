@@ -17,6 +17,9 @@ import { toastError, toastSuccess } from '../utils/toast';
 import { Analytics } from '../utils/analytics';
 import { downloadTicketFromAxiosBlob, ticketFileMimeFromAxiosHeaders } from '../utils/ticketDownload';
 import {
+  AFFILIATE_BUYER_DISCOUNT_PERCENT,
+  AFFILIATE_COMMISSION_PERCENT,
+  AFFILIATE_PLATFORM_NET_PERCENT,
   BUYER_FEE_PERCENT_WITH_COUPON,
   BUYER_SERVICE_FEE_PERCENT,
 } from '../constants/pricing';
@@ -207,6 +210,13 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const [shabbatOpen, setShabbatOpen] = useState(false);
   const [shabbatHavdalah, setShabbatHavdalah] = useState(null);
   const [shabbatMessage, setShabbatMessage] = useState('בצאת שבת תתחדש האפשרות לתשלום');
+  const [feeConfig, setFeeConfig] = useState({
+    serviceFeePercent: BUYER_SERVICE_FEE_PERCENT,
+    feeWithCouponPercent: BUYER_FEE_PERCENT_WITH_COUPON,
+    discountPercent: AFFILIATE_BUYER_DISCOUNT_PERCENT,
+    affiliatePercent: AFFILIATE_COMMISSION_PERCENT,
+    platformNetPercent: AFFILIATE_PLATFORM_NET_PERCENT,
+  });
   const couponApplyLockRef = useRef(false);
   const timerRef = useRef(null);
   const reservationRef = useRef(false); // Track if reservation was made
@@ -229,6 +239,57 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   useEffect(() => {
     // Keep mount effect for future diagnostics without noisy console logs in production.
   }, [ticket, ticketGroup]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await orderAPI.getPricingSettings();
+        const data = res?.data || {};
+        const serviceFeePercent = parseFloat(
+          data.service_fee_percentage ?? data.base_buyer_fee_percent ?? BUYER_SERVICE_FEE_PERCENT,
+        );
+        const discountPercent = parseFloat(
+          data.buyer_coupon_discount_percent ?? AFFILIATE_BUYER_DISCOUNT_PERCENT,
+        );
+        const affiliatePercent = parseFloat(
+          data.affiliate_commission_percent ?? AFFILIATE_COMMISSION_PERCENT,
+        );
+        const platformNetPercent = parseFloat(
+          data.affiliate_platform_net_percent ?? AFFILIATE_PLATFORM_NET_PERCENT,
+        );
+        const feeWithCouponPercent = parseFloat(
+          data.buyer_fee_percent_with_coupon ??
+            (Number.isFinite(serviceFeePercent) && Number.isFinite(discountPercent)
+              ? serviceFeePercent - discountPercent
+              : BUYER_FEE_PERCENT_WITH_COUPON),
+        );
+        if (cancelled) return;
+        setFeeConfig({
+          serviceFeePercent: Number.isFinite(serviceFeePercent)
+            ? serviceFeePercent
+            : BUYER_SERVICE_FEE_PERCENT,
+          feeWithCouponPercent: Number.isFinite(feeWithCouponPercent)
+            ? feeWithCouponPercent
+            : BUYER_FEE_PERCENT_WITH_COUPON,
+          discountPercent: Number.isFinite(discountPercent)
+            ? discountPercent
+            : AFFILIATE_BUYER_DISCOUNT_PERCENT,
+          affiliatePercent: Number.isFinite(affiliatePercent)
+            ? affiliatePercent
+            : AFFILIATE_COMMISSION_PERCENT,
+          platformNetPercent: Number.isFinite(platformNetPercent)
+            ? platformNetPercent
+            : AFFILIATE_PLATFORM_NET_PERCENT,
+        });
+      } catch {
+        /* Keep compile-time defaults if settings endpoint is unavailable. */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Get locked quantity from accepted offer if it exists (accepted_at = server truth after accept)
   const isNegotiatedPrice =
@@ -339,10 +400,16 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     ? appliedCoupon.discount_type === 'fixed'
       ? (base) => buyerChargeFromBaseWithFixedCoupon(
           base,
-          appliedCoupon.fixed_discount_amount
+          appliedCoupon.fixed_discount_amount,
+          feeConfig.serviceFeePercent,
         )
-      : buyerChargeFromBaseWithAffiliateCoupon
-    : buyerChargeFromBase;
+      : (base) => buyerChargeFromBaseWithAffiliateCoupon(base, {
+          feeWithCouponPercent: feeConfig.feeWithCouponPercent,
+          discountPercent: feeConfig.discountPercent,
+          affiliatePercent: feeConfig.affiliatePercent,
+          platformNetPercent: feeConfig.platformNetPercent,
+        })
+    : (base) => buyerChargeFromBase(base, feeConfig.serviceFeePercent);
   const negotiatedBundleBreakdown =
     isNegotiatedPrice && negotiatedBaseTotal != null && negotiatedBaseTotal > 0
       ? chargeFn(negotiatedBaseTotal)
@@ -357,7 +424,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const standardReceiptBaseTotal = listBreakdown?.baseAmount ?? 0;
   const standardReceiptTotalPay = listBreakdown?.totalAmount ?? 0;
   const standardReceiptFeeTotal = listBreakdown?.serviceFee ?? 0;
-  const feePercentLabel = appliedCoupon ? BUYER_FEE_PERCENT_WITH_COUPON : BUYER_SERVICE_FEE_PERCENT;
+  const feePercentLabel = appliedCoupon
+    ? (appliedCoupon.discount_type === 'fixed'
+      ? feeConfig.serviceFeePercent
+      : feeConfig.feeWithCouponPercent)
+    : feeConfig.serviceFeePercent;
   const checkoutBaseForCoupon =
     isNegotiatedPrice && negotiatedBaseTotal != null && negotiatedBaseTotal > 0
       ? negotiatedBaseTotal
@@ -513,10 +584,6 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       setCouponError('לא ניתן להחיל קופון לפני בחירת כרטיסים.');
       return;
     }
-    if (!user && !(guestForm.email || '').trim()) {
-      setCouponError('לאורחים נדרש אימייל לפני החלת קופון (שימוש חד-פעמי).');
-      return;
-    }
     couponApplyLockRef.current = true;
     setCouponBusy(true);
     setCouponError('');
@@ -525,7 +592,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         code,
         base_amount: String(checkoutBaseForCoupon),
       };
-      if (!user) payload.guest_email = guestForm.email.trim();
+      // Optional identity when already known (helps affiliate one-use preview); not required.
+      if (!user && (guestForm.email || '').trim()) {
+        payload.guest_email = guestForm.email.trim();
+      }
       const res = await orderAPI.validateCoupon(payload);
       const data = res.data || {};
       setAppliedCoupon({
@@ -1279,20 +1349,20 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                       <p><strong>מחיר מוסכם (למוכר):</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.final_negotiated_price, payIso)}</p>
                     )}
                     {resolvedOrderData?.buyer_service_fee != null && Number(resolvedOrderData.buyer_service_fee) > 0 && (
-                      <p><strong>דמי שירות ותפעול ({BUYER_SERVICE_FEE_PERCENT}%):</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.buyer_service_fee, payIso)}</p>
+                      <p><strong>דמי שירות ותפעול ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.buyer_service_fee, payIso)}</p>
                     )}
                     <p><strong>סה״כ שולם (לקונה):</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.total_paid_by_buyer ?? resolvedOrderData.total_amount, payIso)}</p>
                   </>
                 ) : resolvedPaid ? (
                   <>
                     <p><strong>מחיר כרטיסים:</strong> {paySym}{formatAmountForCurrency(resolvedPaid.baseAmount, payIso)}</p>
-                    <p><strong>דמי שירות ותפעול ({BUYER_SERVICE_FEE_PERCENT}%):</strong> {paySym}{formatAmountForCurrency(resolvedPaid.serviceFee, payIso)}</p>
+                    <p><strong>דמי שירות ותפעול ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(resolvedPaid.serviceFee, payIso)}</p>
                     <p><strong>סה"כ שולם:</strong> {paySym}{formatAmountForCurrency(resolvedPaid.totalAmount, payIso)}</p>
                   </>
                 ) : (
                   <>
                     <p><strong>מחיר כרטיסים:</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.baseAmount != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).baseAmount, payIso) : '—'}</p>
-                    <p><strong>דמי שירות ותפעול ({BUYER_SERVICE_FEE_PERCENT}%):</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.serviceFee != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).serviceFee, payIso) : '—'}</p>
+                    <p><strong>דמי שירות ותפעול ({feeConfig.serviceFeePercent}%):</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.serviceFee != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).serviceFee, payIso) : '—'}</p>
                     <p><strong>סה"כ שולם:</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.totalAmount != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).totalAmount, payIso) : '—'}</p>
                   </>
                 )}

@@ -153,6 +153,8 @@ function isPublicGuestEndpoint(url = '') {
     path.includes('/users/csrf/') ||
     path.includes('/users/orders/guest/') ||
     path.includes('/users/shabbat/status/') ||
+    path.includes('/users/pricing/settings/') ||
+    path.includes('/users/coupons/validate/') ||
     /\/users\/tickets\/\d+\/reserve\//.test(path) ||
     /\/users\/tickets\/\d+\/release_reservation\//.test(path) ||
     path.includes('/users/payments/payme/init/')
@@ -551,6 +553,9 @@ export const orderAPI = {
       ? { headers: { Authorization: `Bearer ${bearer}` } }
       : { skipAuth: true };
     return api.post('/users/coupons/validate/', data, config);
+  },
+  getPricingSettings: async () => {
+    return api.get('/users/pricing/settings/', { skipAuth: true });
   },
 };
 

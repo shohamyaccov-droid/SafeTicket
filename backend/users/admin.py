@@ -600,7 +600,10 @@ class AffiliatePartnerAdmin(admin.ModelAdmin):
 
 @admin.register(GlobalFeeSettings)
 class GlobalFeeSettingsAdmin(admin.ModelAdmin):
-    """Singleton: one row editable in Admin — drives live checkout fees."""
+    """
+    Singleton Platform Settings: one row editable in Admin — drives live checkout fees.
+    (service_fee_percentage ≡ base_buyer_fee_percent)
+    """
 
     list_display = [
         'base_buyer_fee_percent',
@@ -612,14 +615,15 @@ class GlobalFeeSettingsAdmin(admin.ModelAdmin):
     readonly_fields = ['updated_at']
     fieldsets = (
         (
-            'Base fees',
+            'Platform service fee',
             {
                 'fields': (
                     'base_buyer_fee_percent',
                     'base_seller_fee_percent',
                 ),
                 'description': (
-                    'Buyer fee applies with no coupon. Seller fee is withheld from listing base. '
+                    'base_buyer_fee_percent is the platform service/operation fee shown at checkout '
+                    '(e.g. 12.00 = 12%). Change it here — no code deploy required. '
                     'With a coupon: buyer pays (base buyer − coupon discount); affiliate gets '
                     'affiliate commission (0% for platform coupons); platform keeps the remainder.'
                 ),

@@ -106,16 +106,20 @@ export function formatOfferAmount(offer, fallbackCurrency = 'ILS') {
 
 /**
  * @param {number|string} baseInput - Seller-facing base (per unit or bundle) in listing currency
+ * @param {number} [serviceFeePercent=BUYER_SERVICE_FEE_PERCENT]
  * @returns {{ baseAmount: number, serviceFee: number, totalAmount: number }}
  */
-export function buyerChargeFromBase(baseInput) {
+export function buyerChargeFromBase(baseInput, serviceFeePercent = BUYER_SERVICE_FEE_PERCENT) {
   const raw = parseFloat(String(baseInput ?? 0));
   if (!Number.isFinite(raw) || raw <= 0) {
     return { baseAmount: 0, serviceFee: 0, totalAmount: 0 };
   }
+  const feePct = Number.isFinite(Number(serviceFeePercent))
+    ? Number(serviceFeePercent)
+    : BUYER_SERVICE_FEE_PERCENT;
   const base = Math.round(raw * 100) / 100;
   const baseAg = Math.round(base * 100);
-  const feeAg = Math.round((baseAg * BUYER_SERVICE_FEE_PERCENT) / 100);
+  const feeAg = Math.round((baseAg * feePct) / 100);
   const totalAg = baseAg + feeAg;
   return {
     baseAmount: baseAg / 100,
@@ -127,9 +131,16 @@ export function buyerChargeFromBase(baseInput) {
 /**
  * Deduct a fixed coupon amount from the normal buyer total. The server remains
  * authoritative; this mirrors its calculation for immediate checkout feedback.
+ * @param {number|string} baseInput
+ * @param {number|string} discountInput
+ * @param {number} [serviceFeePercent=BUYER_SERVICE_FEE_PERCENT]
  */
-export function buyerChargeFromBaseWithFixedCoupon(baseInput, discountInput) {
-  const standard = buyerChargeFromBase(baseInput);
+export function buyerChargeFromBaseWithFixedCoupon(
+  baseInput,
+  discountInput,
+  serviceFeePercent = BUYER_SERVICE_FEE_PERCENT,
+) {
+  const standard = buyerChargeFromBase(baseInput, serviceFeePercent);
   const rawDiscount = parseFloat(String(discountInput ?? 0));
   const configured = Number.isFinite(rawDiscount) ? Math.max(rawDiscount, 0) : 0;
   const discountAg = Math.min(
@@ -148,6 +159,12 @@ export function buyerChargeFromBaseWithFixedCoupon(baseInput, discountInput) {
  * Coupon checkout using GlobalFeeSettings client defaults
  * (buyer pays base + BUYER_FEE_PERCENT_WITH_COUPON).
  * @param {number|string} baseInput
+ * @param {{
+ *   feeWithCouponPercent?: number,
+ *   discountPercent?: number,
+ *   affiliatePercent?: number,
+ *   platformNetPercent?: number,
+ * }} [rates]
  * @returns {{
  *   baseAmount: number,
  *   serviceFee: number,
@@ -157,7 +174,7 @@ export function buyerChargeFromBaseWithFixedCoupon(baseInput, discountInput) {
  *   totalAmount: number,
  * }}
  */
-export function buyerChargeFromBaseWithAffiliateCoupon(baseInput) {
+export function buyerChargeFromBaseWithAffiliateCoupon(baseInput, rates = {}) {
   const raw = parseFloat(String(baseInput ?? 0));
   if (!Number.isFinite(raw) || raw <= 0) {
     return {
@@ -169,12 +186,28 @@ export function buyerChargeFromBaseWithAffiliateCoupon(baseInput) {
       totalAmount: 0,
     };
   }
+  const feeWithCoupon =
+    Number.isFinite(Number(rates.feeWithCouponPercent))
+      ? Number(rates.feeWithCouponPercent)
+      : BUYER_FEE_PERCENT_WITH_COUPON;
+  const discountPct =
+    Number.isFinite(Number(rates.discountPercent))
+      ? Number(rates.discountPercent)
+      : AFFILIATE_BUYER_DISCOUNT_PERCENT;
+  const affiliatePct =
+    Number.isFinite(Number(rates.affiliatePercent))
+      ? Number(rates.affiliatePercent)
+      : AFFILIATE_COMMISSION_PERCENT;
+  const platformPct =
+    Number.isFinite(Number(rates.platformNetPercent))
+      ? Number(rates.platformNetPercent)
+      : AFFILIATE_PLATFORM_NET_PERCENT;
   const base = Math.round(raw * 100) / 100;
   const baseAg = Math.round(base * 100);
-  const feeAg = Math.round((baseAg * BUYER_FEE_PERCENT_WITH_COUPON) / 100);
-  const discountAg = Math.round((baseAg * AFFILIATE_BUYER_DISCOUNT_PERCENT) / 100);
-  const affiliateAg = Math.round((baseAg * AFFILIATE_COMMISSION_PERCENT) / 100);
-  const platformAg = Math.round((baseAg * AFFILIATE_PLATFORM_NET_PERCENT) / 100);
+  const feeAg = Math.round((baseAg * feeWithCoupon) / 100);
+  const discountAg = Math.round((baseAg * discountPct) / 100);
+  const affiliateAg = Math.round((baseAg * affiliatePct) / 100);
+  const platformAg = Math.round((baseAg * platformPct) / 100);
   return {
     baseAmount: baseAg / 100,
     serviceFee: feeAg / 100,

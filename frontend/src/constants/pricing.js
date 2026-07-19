@@ -1,7 +1,8 @@
-/** Must match backend GlobalFeeSettings defaults (12% buyer fee; sellers 0%). */
+/** Must match backend GlobalFeeSettings defaults (12% buyer fee; sellers 0%).
+ * Live checkout loads current values from GET /users/pricing/settings/.
+ */
 
 export const BUYER_SERVICE_FEE_PERCENT = 12;
-
 /** Coupon splits: buyer discount 5% + affiliate 5% + platform remainder 2% (= 12%). */
 export const AFFILIATE_BUYER_DISCOUNT_PERCENT = 5;
 export const AFFILIATE_COMMISSION_PERCENT = 5;

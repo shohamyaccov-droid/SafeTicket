@@ -1,4 +1,4 @@
-"""HTTP endpoints for affiliate coupon preview / validation."""
+"""HTTP endpoints for coupon preview / validation and public pricing settings."""
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 from users.coupons import CouponError, preview_coupon_for_base
+from users.fee_settings import get_fee_rates
 
 
 def _csrf_passthrough(view):
@@ -32,29 +33,24 @@ class CouponValidateAnonThrottle(AnonRateThrottle):
 @throttle_classes([CouponValidateThrottle, CouponValidateAnonThrottle])
 def validate_coupon(request):
     """
-    Preview an affiliate coupon against a checkout base subtotal.
+    Preview a coupon against a checkout base subtotal.
+
     Does NOT redeem — redemption is atomic at order create.
-    Body: { "code": "AFFILIATE5", "base_amount": "100.00", "guest_email": "..."? }
+    Identity (user / guest_email) is optional so guests can preview before entering email.
+    Body: { "code": "SAFE20", "base_amount": "100.00", "guest_email": "..."? }
     """
     code = request.data.get('code') or request.data.get('coupon_code') or ''
     raw_base = request.data.get('base_amount', request.data.get('base'))
     try:
         base = Decimal(str(raw_base))
     except (InvalidOperation, TypeError, ValueError):
-        return Response({'error': 'סכום בסיס לא תקין.', 'code': 'invalid_base'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {'error': 'סכום בסיס לא תקין.', 'code': 'invalid_base'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
-    user = request.user if request.user.is_authenticated else None
-    guest_email = ''
-    if not user:
-        guest_email = (request.data.get('guest_email') or '').strip()
-        if not guest_email:
-            return Response(
-                {
-                    'error': 'לאורחים נדרש אימייל כדי לאמת קופון (שימוש חד-פעמי לכל קונה).',
-                    'code': 'identity_required',
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+    user = request.user if getattr(request.user, 'is_authenticated', False) else None
+    guest_email = (request.data.get('guest_email') or '').strip() if not user else ''
 
     try:
         preview = preview_coupon_for_base(code, base, user=user, guest_email=guest_email)
@@ -62,3 +58,38 @@ def validate_coupon(request):
         return Response({'error': exc.message, 'code': exc.code}, status=status.HTTP_400_BAD_REQUEST)
 
     return Response({'valid': True, **preview.as_dict()}, status=status.HTTP_200_OK)
+
+
+@_csrf_passthrough
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def pricing_settings_view(request):
+    """
+    Public platform fee settings for SPA checkout display.
+
+    Source of truth: GlobalFeeSettings singleton (Django Admin).
+    """
+    rates = get_fee_rates()
+
+    def rate_to_percent(rate: Decimal) -> str:
+        return str((Decimal(str(rate)) * Decimal('100')).quantize(Decimal('0.01')))
+
+    buyer_pct = rate_to_percent(rates.base_buyer_fee_rate)
+    discount_pct = rate_to_percent(rates.buyer_coupon_discount_rate)
+    affiliate_pct = rate_to_percent(rates.affiliate_commission_rate)
+    platform_aff_pct = rate_to_percent(rates.affiliate_platform_net_rate)
+    with_coupon_pct = rate_to_percent(
+        max(rates.base_buyer_fee_rate - rates.buyer_coupon_discount_rate, Decimal('0'))
+    )
+    return Response(
+        {
+            'service_fee_percentage': buyer_pct,
+            'base_buyer_fee_percent': buyer_pct,
+            'base_seller_fee_percent': rate_to_percent(rates.base_seller_fee_rate),
+            'buyer_coupon_discount_percent': discount_pct,
+            'affiliate_commission_percent': affiliate_pct,
+            'affiliate_platform_net_percent': platform_aff_pct,
+            'buyer_fee_percent_with_coupon': with_coupon_pct,
+        },
+        status=status.HTTP_200_OK,
+    )

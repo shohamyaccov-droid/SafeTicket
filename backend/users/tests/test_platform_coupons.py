@@ -13,7 +13,6 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from users.coupons import (
-    CouponError,
     claim_coupon_for_order,
     get_active_coupon,
     preview_coupon_for_base,
@@ -168,6 +167,7 @@ class PlatformCouponFlowApiTests(TestCase):
         self.assertEqual(res.data.get('affiliate_name'), 'TradeTix')
 
     def test_validate_then_already_used(self):
+        """Platform coupons are multi-use — preview stays valid after a prior claim."""
         preview = preview_coupon_for_base('TRADETIX5', Decimal('100'), user=self.buyer)
         self.assertEqual(preview.affiliate_commission, Decimal('0.00'))
         self.assertEqual(preview.platform_net_fee, Decimal('7.00'))
@@ -192,8 +192,9 @@ class PlatformCouponFlowApiTests(TestCase):
             {'code': 'TRADETIX5', 'base_amount': '100'},
             format='json',
         )
-        self.assertEqual(again.status_code, 400)
-        self.assertEqual(again.data.get('code'), 'already_used')
+        self.assertEqual(again.status_code, 200, again.data)
+        self.assertTrue(again.data.get('valid'))
+        self.assertEqual(Decimal(again.data['total_amount']), Decimal('107.00'))
 
     def test_create_order_with_platform_coupon_checkout(self):
         self.client.force_authenticate(user=self.buyer)
@@ -222,7 +223,7 @@ class PlatformCouponFlowApiTests(TestCase):
         self.assertEqual(redemption.status, CouponRedemption.STATUS_PENDING)
         self.assertEqual(redemption.affiliate_commission, Decimal('0.00'))
         self.assertEqual(redemption.platform_net_fee, Decimal('7.00'))
-        self.assertEqual(redemption.buyer_key, f'user:{self.buyer.id}')
+        self.assertEqual(redemption.buyer_key, f'order:{order.id}')
 
     def test_create_order_rejects_wrong_total_with_platform_coupon(self):
         self.client.force_authenticate(user=self.buyer)
@@ -276,7 +277,7 @@ class PlatformCouponOneUseTests(TestCase):
         )
         self.coupon = seed_platform_coupon(code='TRADETIX5')
 
-    def test_second_claim_same_buyer_fails(self):
+    def test_second_claim_same_buyer_allowed_for_platform(self):
         order1 = Order.objects.create(
             user=self.buyer,
             ticket=self.ticket,
@@ -304,21 +305,20 @@ class PlatformCouponOneUseTests(TestCase):
         self.assertEqual(order1.platform_net_fee, Decimal('14.00'))
         self.assertEqual(order1.buyer_service_fee, Decimal('14.00'))
 
-        with self.assertRaises(CouponError) as ctx:
-            claim_coupon_for_order(
-                order=order2,
-                coupon_code='TRADETIX5',
-                user=self.buyer,
-                base_amount=Decimal('200'),
-            )
-        self.assertEqual(ctx.exception.code, 'already_used')
+        claim_coupon_for_order(
+            order=order2,
+            coupon_code='TRADETIX5',
+            user=self.buyer,
+            base_amount=Decimal('200'),
+        )
+        order2.refresh_from_db()
+        self.assertEqual(order2.coupon_code_snapshot, 'TRADETIX5')
         self.assertEqual(
             CouponRedemption.objects.filter(
                 coupon=self.coupon,
-                buyer_key=f'user:{self.buyer.id}',
                 status__in=[CouponRedemption.STATUS_PENDING, CouponRedemption.STATUS_REDEEMED],
             ).count(),
-            1,
+            2,
         )
 
 

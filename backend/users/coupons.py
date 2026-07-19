@@ -86,6 +86,14 @@ def has_active_redemption(coupon: Coupon, buyer_key: str) -> bool:
     ).exists()
 
 
+def coupon_enforces_per_buyer_single_use(coupon: Coupon) -> bool:
+    """
+    Platform / marketing coupons are multi-use (global caps only).
+    Affiliate coupons keep one-use-per-buyer enforcement.
+    """
+    return getattr(coupon, 'coupon_type', None) != Coupon.TYPE_PLATFORM
+
+
 @dataclass(frozen=True)
 class CouponPreview:
     code: str
@@ -164,10 +172,24 @@ def preview_coupon_for_base(
     user: Optional[User] = None,
     guest_email: str = '',
 ) -> CouponPreview:
+    """
+    Preview discount math for checkout UI.
+
+    Identity (user / guest email) is optional: marketing flow allows applying a
+    code before the guest enters contact details. Per-buyer single-use is only
+    checked when identity is present AND the coupon type enforces it.
+    """
     coupon = get_active_coupon(code)
-    key = buyer_key_for(user=user, guest_email=guest_email)
-    if has_active_redemption(coupon, key):
-        raise CouponError('already_used', 'כבר השתמשת בקוד קופון זה. ניתן להשתמש בכל קוד פעם אחת בלבד.')
+    if coupon_enforces_per_buyer_single_use(coupon):
+        has_user = user is not None and getattr(user, 'pk', None)
+        has_guest = bool((guest_email or '').strip())
+        if has_user or has_guest:
+            key = buyer_key_for(user=user, guest_email=guest_email)
+            if has_active_redemption(coupon, key):
+                raise CouponError(
+                    'already_used',
+                    'כבר השתמשת בקוד קופון זה. ניתן להשתמש בכל קוד פעם אחת בלבד.',
+                )
     b = decimal_money(base)
     if b <= 0:
         raise CouponError('invalid_base', 'סכום בסיס לא תקין לקופון.')
@@ -221,15 +243,25 @@ def claim_coupon_for_order(
     base_amount: Any,
 ) -> CouponRedemption:
     """
-    Atomically claim a one-time coupon for this buyer on this order.
-    Relies on UniqueConstraint + IntegrityError under concurrent tabs.
+    Atomically attach a coupon to this order.
+
+    Affiliate coupons: one active claim per buyer (UniqueConstraint + IntegrityError).
+    Platform coupons: multi-use; only global max_redemptions_total / is_active apply.
     """
     coupon = get_active_coupon(coupon_code)
     # Serialize global count updates
     coupon = Coupon.objects.select_for_update().get(pk=coupon.pk)
-    key = buyer_key_for(user=user, guest_email=guest_email)
-    if has_active_redemption(coupon, key):
-        raise CouponError('already_used', 'כבר השתמשת בקוד קופון זה. ניתן להשתמש בכל קוד פעם אחת בלבד.')
+    enforce_single_use = coupon_enforces_per_buyer_single_use(coupon)
+    if enforce_single_use:
+        key = buyer_key_for(user=user, guest_email=guest_email)
+        if has_active_redemption(coupon, key):
+            raise CouponError(
+                'already_used',
+                'כבר השתמשת בקוד קופון זה. ניתן להשתמש בכל קוד פעם אחת בלבד.',
+            )
+    else:
+        # Avoid colliding with UniqueConstraint(coupon, buyer_key) for multi-use platform codes.
+        key = f'order:{int(order.pk)}'
     if coupon.max_redemptions_total is not None and coupon.redemption_count >= coupon.max_redemptions_total:
         raise CouponError('exhausted', 'הגיעו למכסת השימוש של קוד זה.')
 
@@ -248,10 +280,12 @@ def claim_coupon_for_order(
             buyer_fee_paid=amounts['buyer_fee'],
         )
     except IntegrityError as exc:
-        raise CouponError(
-            'already_used',
-            'כבר השתמשת בקוד קופון זה. ניתן להשתמש בכל קוד פעם אחת בלבד.',
-        ) from exc
+        if enforce_single_use:
+            raise CouponError(
+                'already_used',
+                'כבר השתמשת בקוד קופון זה. ניתן להשתמש בכל קוד פעם אחת בלבד.',
+            ) from exc
+        raise CouponError('claim_failed', 'לא ניתן להחיל את הקופון כרגע. נסה שוב.') from exc
 
     Coupon.objects.filter(pk=coupon.pk).update(redemption_count=F('redemption_count') + 1)
     order.coupon = coupon

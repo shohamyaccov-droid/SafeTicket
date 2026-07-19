@@ -1302,8 +1302,8 @@ class GlobalFeeSettings(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = 'Global fee settings'
-        verbose_name_plural = 'Global fee settings'
+        verbose_name = 'Platform settings (fees)'
+        verbose_name_plural = 'Platform settings (fees)'
 
     def __str__(self):
         return (

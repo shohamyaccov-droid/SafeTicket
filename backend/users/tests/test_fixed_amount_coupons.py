@@ -73,6 +73,24 @@ class FixedAmountCouponTests(TestCase):
         self.assertEqual(Decimal(response.data['discount_amount']), Decimal('20.00'))
         self.assertEqual(Decimal(response.data['total_amount']), Decimal('92.00'))
 
+    def test_guest_can_validate_without_email(self):
+        anon = APIClient()
+        response = anon.post(
+            '/api/users/coupons/validate/',
+            {'code': 'SAFE20', 'base_amount': '100.00'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertTrue(response.data['valid'])
+        self.assertEqual(Decimal(response.data['discount_amount']), Decimal('20.00'))
+
+    def test_pricing_settings_endpoint_exposes_service_fee(self):
+        anon = APIClient()
+        response = anon.get('/api/users/pricing/settings/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('service_fee_percentage', response.data)
+        self.assertEqual(Decimal(response.data['service_fee_percentage']), Decimal('12.00'))
+
     def test_create_order_recalculates_fixed_discount_on_server(self):
         response = self.client.post(
             '/api/users/orders/',
