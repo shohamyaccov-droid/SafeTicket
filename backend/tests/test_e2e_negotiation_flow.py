@@ -205,6 +205,7 @@ class NegotiatedOfferPayMeWalletE2ETests(TestCase):
                 'ticket': ticket.id,
                 'quantity': 1,
                 'total_amount': str(expected_total),
+                'accepted_terms': True,
                 'offer_id': offer.id,
             },
             format='json',

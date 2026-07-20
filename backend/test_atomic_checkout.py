@@ -185,6 +185,7 @@ def main():
             json={
                 'ticket': ticket.id,
                 'total_amount': total_amount,
+                'accepted_terms': True,
                 'quantity': PURCHASE_QUANTITY,
                 'event_name': event.name,
                 'listing_group_id': listing_group_id,

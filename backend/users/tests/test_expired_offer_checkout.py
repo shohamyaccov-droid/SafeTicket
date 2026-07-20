@@ -73,6 +73,7 @@ class ExpiredOfferCheckoutTests(TestCase):
                 'quantity': 1,
                 'offer_id': self.offer.id,
                 'total_amount': str(expected_total),
+                'accepted_terms': True,
             },
             format='json',
         )

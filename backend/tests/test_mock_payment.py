@@ -65,6 +65,7 @@ class MockPaymentSuccessTests(TestCase):
             {
                 'ticket': self.ticket.id,
                 'total_amount': float(self.checkout_total),
+                'accepted_terms': True,
                 'quantity': 1,
                 'event_name': self.ticket.event_name,
             },

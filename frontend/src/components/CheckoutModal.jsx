@@ -562,6 +562,16 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       }
     }
 
+    // TOS must be accepted before opening payment / locking inventory.
+    const legalMsg = validateLegalAcceptance(legalAccepted);
+    if (legalMsg) {
+      setLegalError(legalMsg);
+      setError(legalMsg);
+      setInfoStepBusy(false);
+      return;
+    }
+    setLegalError('');
+
     // Shomer Shabbat: intercept "המשך לתשלום" before opening the payment step
     if (await guardShabbatBeforePayment()) {
       setInfoStepBusy(false);
@@ -813,6 +823,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           total_amount: orderTotalAmount,
           quantity: orderQuantity,
           event_name: eventName,
+          accepted_terms: true,
         };
         
         // CRITICAL: If this is a negotiated price from an accepted offer, include offer_id
@@ -842,6 +853,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           total_amount: orderTotalAmount,
           quantity: orderQuantity,
           event_name: eventName,
+          accepted_terms: true,
         };
         
         // CRITICAL: If this is a negotiated price from an accepted offer, include offer_id
@@ -1066,13 +1078,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     }
   };
 
-  // Reserve once per ticket: logged-in users can hold on info step; guests only on payment step
-  // (email + CSRF warm — fixes mobile Safari generic "לא ניתן לשמור את הכרטיס").
+  // Reserve only after the buyer completes the info step (details + TOS) and
+  // enters payment — never lock inventory while they are still reviewing.
+  // Negotiated offers already hold inventory from accept; skip cart /reserve.
   useEffect(() => {
     const tid = ticket?.id;
     if (!tid) return undefined;
 
-    if (!user && step !== 'payment' && !skipCartReserveForNegotiatedOffer) {
+    if (step !== 'payment' && !skipCartReserveForNegotiatedOffer) {
       return undefined;
     }
 
@@ -1101,7 +1114,6 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         }
 
         const email = user ? null : guestEmailRef.current || null;
-        const listingGroupId = ticketGroup?.listing_group_id || ticket?.listing_group_id;
         await ensureCsrfToken();
         const response = await ticketAPI.reserveTicket(tid, email);
 
@@ -2072,6 +2084,18 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           <div className="user-checkout">
             <p>מחובר כ: <strong>{user.username}</strong></p>
             <p>אימייל: <strong>{user.email}</strong></p>
+            <CheckoutLegalAcceptance
+              id="checkout-legal-acceptance-info"
+              checked={legalAccepted}
+              onChange={(next) => {
+                setLegalAccepted(next);
+                if (next) {
+                  setLegalError('');
+                  setError('');
+                }
+              }}
+              error={legalError}
+            />
             {error && (
               <div className="error-message" role="alert" aria-live="polite">
                 {error || 'שגיאה לא ידועה'}
@@ -2080,7 +2104,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             <button
               type="button"
               onClick={handleInfoSubmit}
-              disabled={loading || infoStepBusy}
+              disabled={loading || infoStepBusy || !legalAccepted}
               className="checkout-button"
             >
               {infoStepBusy ? (
@@ -2153,6 +2177,18 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   autoComplete="tel"
                 />
               </div>
+              <CheckoutLegalAcceptance
+                id="checkout-legal-acceptance-info-guest"
+                checked={legalAccepted}
+                onChange={(next) => {
+                  setLegalAccepted(next);
+                  if (next) {
+                    setLegalError('');
+                    setError('');
+                  }
+                }}
+                error={legalError}
+              />
               {error && (
               <div className="error-message" role="alert" aria-live="polite">
                 {error || 'שגיאה לא ידועה'}
@@ -2160,7 +2196,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             )}
               <button
                 type="submit"
-                disabled={loading || infoStepBusy}
+                disabled={loading || infoStepBusy || !legalAccepted}
                 className="checkout-button"
               >
                 {infoStepBusy ? (

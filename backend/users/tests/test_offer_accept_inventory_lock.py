@@ -96,6 +96,7 @@ class OfferAcceptInventoryLockTests(TestCase):
             'listing_group_id': self.listing_group_id,
             'quantity': 2,
             'total_amount': str(expected_buy_now_total(self.t1.asking_price, 2)),
+            'accepted_terms': True,
         }
         buy_req = self.factory.post('/api/users/orders/', buy_payload, format='json')
         force_authenticate(buy_req, user=self.other_buyer)

@@ -81,10 +81,13 @@ class GuestCheckoutConcurrencyQATest(TestCase):
         base_payload = {
             "guest_email": "guest_a@marathon.test",
             "guest_phone": "0500000001",
+            "guest_first_name": "Guest",
+            "guest_last_name": "A",
             "ticket_id": self.ticket.id,
             "total_amount": "115.00",
             "quantity": 1,
             "event_name": self.event.name,
+            "accepted_terms": True,
         }
         r1 = self._csrf_post_guest(client, base_payload)
         self.assertEqual(r1.status_code, 201, r1.content.decode())
@@ -123,10 +126,13 @@ class GuestCheckoutConcurrencyQATest(TestCase):
             {
                 "guest_email": "guest_ok@marathon.test",
                 "guest_phone": "0500000003",
+                "guest_first_name": "Guest",
+                "guest_last_name": "Ok",
                 "ticket_id": self.ticket.id,
                 "total_amount": "115.00",
                 "quantity": 1,
                 "event_name": self.event.name,
+                "accepted_terms": True,
             },
         )
         self.assertEqual(r.status_code, 201, r.content.decode())

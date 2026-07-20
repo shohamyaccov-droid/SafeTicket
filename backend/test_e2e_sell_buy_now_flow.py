@@ -105,6 +105,7 @@ class SellBuyNowE2EFlowTest(TestCase):
             {
                 'ticket': tid,
                 'total_amount': str(expected_total),
+                'accepted_terms': True,
                 'quantity': 1,
                 'event_name': self.event.name,
             },

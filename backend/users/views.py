@@ -1429,6 +1429,13 @@ def create_order(request):
     if blocked is not None:
         return blocked
 
+    accepted_terms = request.data.get('accepted_terms')
+    if accepted_terms is not True and str(accepted_terms).lower() not in ('true', '1', 'yes'):
+        return Response(
+            {'error': 'יש לאשר את התקנון ומדיניות ההחזרים לפני המשך לתשלום.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     # Include user in the data so serializer validation passes
     order_data = request.data.copy()
     order_data['user'] = request.user.id

@@ -74,6 +74,7 @@ class TakenTicketPurchaseBlockTests(TestCase):
                 'ticket': self.ticket.id,
                 'quantity': 1,
                 'total_amount': '112.00',
+                'accepted_terms': True,
             },
             format='json',
         )
@@ -93,6 +94,7 @@ class TakenTicketPurchaseBlockTests(TestCase):
                 'guest_phone': '0501234567',
                 'guest_first_name': 'ישראל',
                 'guest_last_name': 'ישראלי',
+                'accepted_terms': True,
             },
             format='json',
         )
@@ -108,6 +110,7 @@ class TakenTicketPurchaseBlockTests(TestCase):
                 'listing_group_id': 'taken-group-1',
                 'quantity': 1,
                 'total_amount': '112.00',
+                'accepted_terms': True,
             },
             format='json',
         )

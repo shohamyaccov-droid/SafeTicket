@@ -180,6 +180,7 @@ def create_order_with_offer(buyer_token, ticket_id, total_amount, quantity, even
     data = {
         'ticket': ticket_id,
         'total_amount': total_amount,
+        'accepted_terms': True,
         'quantity': quantity,
         'event_name': event_name,
         'offer_id': offer_id  # CRITICAL: Backend uses offer.amount, not ticket.asking_price

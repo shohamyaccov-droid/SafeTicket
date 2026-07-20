@@ -12,6 +12,7 @@ import { isRamatGanVenueEvent, ramatGanSellSectionOptions } from '../utils/ramat
 import { isCaesareaVenueEvent, caesareaSellSectionOptions } from '../utils/caesareaSellSections';
 import { displayEventVenueName, formatEventLocation } from '../utils/eventLocalTime';
 import SellCompletionModal from '../components/SellCompletionModal';
+import TicketUploadWizard from '../components/TicketUploadWizard';
 import '../components/SellCompletionModal.css';
 import './Sell.css';
 
@@ -376,6 +377,7 @@ function TicketAttachmentPreview({ file }) {
 const Sell = () => {
   const sellDraft = useMemo(() => readSellListingDraft(), []);
   const { user, loading: authLoading, refreshProfile, login, register } = useAuth();
+  const [wizardStep, setWizardStep] = useState(1);
   const [formData, setFormData] = useState(() => {
     const base = defaultSellFormData();
     const draftForm = sellDraft?.formData;
@@ -1128,6 +1130,14 @@ const Sell = () => {
         setUploadProgress((prev) => Math.min(90, prev + 4));
       }, 700);
       await ticketAPI.createTicket(submitData);
+      if (typeof window !== 'undefined') {
+        try {
+          const { trackMetaLead } = await import('../utils/metaPixel');
+          trackMetaLead();
+        } catch {
+          /* analytics must not block listing success */
+        }
+      }
       setUploadProgress(100);
       setUploadPhase('הכרטיסים נשמרו בהצלחה.');
       submitAttemptedRef.current = false;
@@ -1405,6 +1415,12 @@ const Sell = () => {
 
   const ilSelected = isIsraelEvent(formData.selectedEvent);
   const feeBasis = parseFloat(String(formData.listing_price || 0)) || 0;
+  const advanceToPricing = () => {
+    const form = document.getElementById('sell-listing-form');
+    if (!form?.reportValidity()) return;
+    setWizardStep(2);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <div className="sell-container">
@@ -1430,6 +1446,7 @@ const Sell = () => {
           </div>
         </div>
       )}
+      <TicketUploadWizard step={completionOpen ? 3 : wizardStep}>
       <div className="listing-card sell-form-compact sell-listing-card--mobile-cta">
         <div className="listing-card-header">
           <div className="secure-listing-header">
@@ -1453,7 +1470,8 @@ const Sell = () => {
           </div>
         )}
         
-        <form id="sell-listing-form" onSubmit={handleSubmit} noValidate>
+        <form id="sell-listing-form" onSubmit={handleSubmit}>
+          <div className={wizardStep === 1 ? '' : 'sell-wizard-hidden'} aria-hidden={wizardStep !== 1}>
           {catalogError && (
             <div className="catalog-error-banner" role="alert">
               <p>
@@ -1897,6 +1915,7 @@ const Sell = () => {
                   name="single_multi_page_pdf"
                   onChange={handleChange}
                   accept={TICKET_FILE_INPUT_ACCEPT}
+                  required={wizardStep === 1}
                 />
                 {formData.singleMultiPagePdf ? (
                   <>
@@ -2054,6 +2073,14 @@ const Sell = () => {
             </div>
           )}
 
+          <div className="sell-wizard-actions">
+            <button type="button" className="sell-wizard-next" onClick={advanceToPricing}>
+              המשך למחיר ואישור
+            </button>
+          </div>
+          </div>
+
+          <div className={wizardStep === 2 ? '' : 'sell-wizard-hidden'} aria-hidden={wizardStep !== 2}>
           <div className="form-group sell-pricing-block">
             <label htmlFor="listing_price">מחיר מכירה לכרטיס בודד *</label>
             <input
@@ -2062,7 +2089,7 @@ const Sell = () => {
               name="listing_price"
               value={formData.listing_price}
               onChange={handleChange}
-              required
+              required={wizardStep === 2}
               min="1"
               step={sellCurrency === 'ILS' ? '1' : '0.01'}
               placeholder={sellSym}
@@ -2104,7 +2131,7 @@ const Sell = () => {
                   });
                 }}
                 className="terms-checkbox-input"
-                required
+                required={wizardStep === 2}
               />
               <span>
                 אני מאשר/ת את{' '}
@@ -2118,6 +2145,17 @@ const Sell = () => {
           </div>
           <SellFieldError message={fieldErrors.terms} />
 
+          <div className="sell-wizard-actions">
+            <button
+              type="button"
+              className="sell-wizard-back"
+              onClick={() => {
+                setWizardStep(1);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            >
+              חזרה לפרטי הכרטיס
+            </button>
           <button type="submit" disabled={loading || completionSaving} className="submit-button sell-submit--desktop-only">
             {loading ? (
               <>
@@ -2127,9 +2165,11 @@ const Sell = () => {
               'הצע כרטיס למכירה'
             )}
           </button>
+          </div>
+          </div>
         </form>
 
-        <div className="sell-submit-sticky-wrap">
+        {wizardStep === 2 ? <div className="sell-submit-sticky-wrap">
           <button
             type="submit"
             form="sell-listing-form"
@@ -2144,7 +2184,7 @@ const Sell = () => {
               'הצע כרטיס למכירה'
             )}
           </button>
-        </div>
+        </div> : null}
       </div>
 
       <SellCompletionModal
@@ -2158,6 +2198,7 @@ const Sell = () => {
         }}
         onSubmit={handleCompletionSubmit}
       />
+      </TicketUploadWizard>
     </div>
   );
 };

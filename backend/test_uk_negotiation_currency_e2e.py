@@ -133,6 +133,7 @@ class UkNegotiationCurrencyE2ETest(TestCase):
                 'ticket': tid,
                 'quantity': 1,
                 'total_amount': str(total),
+                'accepted_terms': True,
                 'event_name': self.event.name,
                 'offer_id': oid1,
             },

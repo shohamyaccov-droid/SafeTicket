@@ -143,6 +143,7 @@ class PayMeMarketplaceE2EBase(TestCase):
             {
                 'ticket': self.ticket.id,
                 'total_amount': str(self.checkout_total),
+                'accepted_terms': True,
                 'quantity': 1,
             },
             format='json',

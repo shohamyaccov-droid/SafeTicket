@@ -97,6 +97,7 @@ class FixedAmountCouponTests(TestCase):
             {
                 'ticket': self.ticket.id,
                 'total_amount': '92.00',
+                'accepted_terms': True,
                 'quantity': 1,
                 'event_name': self.ticket.event.name,
                 'coupon_code': 'SAFE20',
@@ -117,6 +118,7 @@ class FixedAmountCouponTests(TestCase):
             {
                 'ticket': self.ticket.id,
                 'total_amount': '1.00',
+                'accepted_terms': True,
                 'quantity': 1,
                 'event_name': self.ticket.event.name,
                 'coupon_code': 'SAFE20',

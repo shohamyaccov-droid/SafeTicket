@@ -801,6 +801,14 @@ class GuestCheckoutSerializer(serializers.Serializer):
     event_name = serializers.CharField(max_length=255, required=False)
     listing_group_id = serializers.CharField(required=False, allow_blank=True, max_length=120)
     coupon_code = serializers.CharField(required=False, allow_blank=True, max_length=40)
+    accepted_terms = serializers.BooleanField(required=True)
+
+    def validate_accepted_terms(self, value):
+        if value is not True:
+            raise serializers.ValidationError(
+                'יש לאשר את התקנון ומדיניות ההחזרים לפני המשך לתשלום.'
+            )
+        return value
 
 
 class TicketSerializer(serializers.ModelSerializer):

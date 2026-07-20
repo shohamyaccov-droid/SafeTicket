@@ -154,10 +154,13 @@ class OvernightE2EJourneyTest(TestCase):
                 {
                     "guest_email": "guest_overnight_e2e@test.local",
                     "guest_phone": "0501234567",
+                    "guest_first_name": "Guest",
+                    "guest_last_name": "Overnight",
                     "ticket_id": ticket_id,
                     "total_amount": "115.00",
                     "quantity": 1,
                     "event_name": self.event.name,
+                    "accepted_terms": True,
                 }
             ),
             content_type="application/json",

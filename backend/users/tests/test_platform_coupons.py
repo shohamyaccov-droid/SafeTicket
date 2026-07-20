@@ -203,6 +203,7 @@ class PlatformCouponFlowApiTests(TestCase):
             {
                 'ticket': self.ticket.id,
                 'total_amount': '107.00',
+                'accepted_terms': True,
                 'quantity': 1,
                 'event_name': self.event.name,
                 'coupon_code': 'TRADETIX5',
@@ -232,6 +233,7 @@ class PlatformCouponFlowApiTests(TestCase):
             {
                 'ticket': self.ticket.id,
                 'total_amount': '112.00',
+                'accepted_terms': True,
                 'quantity': 1,
                 'event_name': self.event.name,
                 'coupon_code': 'TRADETIX5',

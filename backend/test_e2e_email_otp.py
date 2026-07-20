@@ -164,6 +164,7 @@ class E2EEmailOTPTest(TransactionTestCase):
             {
                 'ticket': ticket.id,
                 'total_amount': str(expected_total_dec),
+                'accepted_terms': True,
                 'quantity': 1,
             },
             format='json',

@@ -90,6 +90,7 @@ class DeployReadinessSmokeTests(TestCase):
             {
                 'ticket': self.ticket.id,
                 'total_amount': str(checkout_total),
+                'accepted_terms': True,
                 'quantity': 1,
                 'event_name': self.event.name,
             },
@@ -119,6 +120,7 @@ class DeployReadinessSmokeTests(TestCase):
                 'total_amount': str(checkout_total),
                 'quantity': 1,
                 'event_name': self.event.name,
+                'accepted_terms': True,
             },
             format='json',
         )
@@ -166,6 +168,7 @@ class DeployReadinessSmokeTests(TestCase):
 
     def test_smoke_bad_input_does_not_500(self):
         missing_ticket = self.client.post('/api/users/orders/', {'total_amount': '100'}, format='json')
+        'accepted_terms': True,
         self.assertIn(missing_ticket.status_code, (400, 401))
 
         bad_guest = self.client.post(

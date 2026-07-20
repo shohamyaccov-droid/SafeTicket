@@ -146,6 +146,7 @@ class ProductionPurchaseLifecycleStressTests(TestCase):
         order_res = self.client.post(
             ORDERS_URL,
             {'ticket': ticket.id, 'total_amount': str(expected_total), 'quantity': 1},
+            'accepted_terms': True,
             format='json',
         )
         self.assertEqual(order_res.status_code, 201, order_res.data)

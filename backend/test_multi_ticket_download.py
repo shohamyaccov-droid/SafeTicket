@@ -163,6 +163,7 @@ def create_order(buyer_token, ticket_id, total_amount, quantity, event_name, lis
     data = {
         'ticket': ticket_id,
         'total_amount': total_amount,
+        'accepted_terms': True,
         'quantity': quantity,
         'event_name': event_name,
         'listing_group_id': listing_group_id

@@ -149,6 +149,7 @@ class CouponFlowApiTests(TestCase):
             {
                 'ticket': self.ticket.id,
                 'total_amount': '107.00',
+                'accepted_terms': True,
                 'quantity': 1,
                 'event_name': self.event.name,
                 'coupon_code': 'PARTNER15',
@@ -178,6 +179,7 @@ class CouponFlowApiTests(TestCase):
             {
                 'ticket': self.ticket.id,
                 'total_amount': '112.00',  # full fee — should fail when coupon present
+                'accepted_terms': True,
                 'quantity': 1,
                 'event_name': self.event.name,
                 'coupon_code': 'PARTNER15',

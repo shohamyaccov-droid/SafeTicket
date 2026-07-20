@@ -262,6 +262,7 @@ def main():
     order_data = {
         'ticket': ref_ticket.id,
         'total_amount': total_amount,
+        'accepted_terms': True,
         'quantity': PURCHASE_QUANTITY,
         'event_name': ref_ticket.event_name or 'Test Event',
         'listing_group_id': listing_group_id,

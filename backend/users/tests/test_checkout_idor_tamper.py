@@ -77,6 +77,7 @@ class CheckoutPriceTamperTests(TestCase):
                 'ticket_id': self.ticket.pk,
                 'quantity': 1,
                 'total_amount': str(under),
+                'accepted_terms': True,
             },
             format='json',
         )
@@ -91,6 +92,7 @@ class CheckoutPriceTamperTests(TestCase):
         res = self.api.post(
             '/api/users/orders/',
             {'ticket_id': self.ticket.pk, 'quantity': 1, 'total_amount': ['not', 'a', 'number']},
+            'accepted_terms': True,
             format='json',
         )
         self.assertIn(res.status_code, (400, 403, 415))

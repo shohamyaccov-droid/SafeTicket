@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import api, { authAPI, SESSION_EXPIRED_EVENT } from './services/api';
@@ -12,6 +12,7 @@ import ArtistEventsPage from './pages/ArtistEventsPage';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Sell from './pages/Sell';
+import SellLandingPage from './pages/SellLandingPage';
 import Profile from './pages/Profile';
 import ProfileWallet from './pages/ProfileWallet';
 import Dashboard from './pages/Dashboard';
@@ -36,6 +37,7 @@ import ScrollToTop from './components/ScrollToTop';
 import { toastError } from './utils/toast';
 import { Analytics } from './utils/analytics';
 import { trackGa4Pageview } from './utils/ga4';
+import { ensureMetaPixel, trackMetaPageView } from './utils/metaPixel';
 import './App.css';
 
 function safeReturnTo(value) {
@@ -43,12 +45,23 @@ function safeReturnTo(value) {
   return raw.startsWith('/login') ? '/' : raw;
 }
 
-/** Backend funnel analytics + GA4 pageviews on every React Router navigation. */
+/** Backend funnel analytics + GA4/Meta pageviews on every React Router navigation. */
 function PageTracker() {
   const location = useLocation();
+  const isInitialMetaPageView = useRef(true);
+
   useEffect(() => {
+    ensureMetaPixel();
     Analytics.pageView(location.pathname);
     trackGa4Pageview(location.pathname, location.search);
+
+    // The base pixel in index.html tracks the initial load. Track subsequent
+    // client-side navigations so every SPA page receives a PageView.
+    if (isInitialMetaPageView.current) {
+      isInitialMetaPageView.current = false;
+    } else {
+      trackMetaPageView();
+    }
   }, [location.pathname, location.search]);
   return null;
 }
@@ -86,6 +99,21 @@ function SessionExpiredRedirector() {
   return null;
 }
 
+/* eslint-disable-next-line react/prop-types */
+function AppChrome({ children }) {
+  const location = useLocation();
+  const isSellerFunnel = location.pathname === '/sell' || location.pathname === '/sell/new';
+
+  return (
+    <div className="App">
+      {!isSellerFunnel && <Navbar />}
+      <main>{children}</main>
+      {!isSellerFunnel && <Footer />}
+      {!isSellerFunnel && <FloatingWhatsApp />}
+    </div>
+  );
+}
+
 function App() {
   useEffect(() => {
     authAPI.getCsrf().catch(() => {});
@@ -111,10 +139,8 @@ function App() {
         <ScrollToTop />
         <PageTracker />
         <SessionExpiredRedirector />
-        <div className="App">
-          <Navbar />
-          <main>
-            <Routes>
+        <AppChrome>
+          <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/artist/:artistId" element={<ArtistEventsPage />} />
               <Route path="/event/:eventSlug" element={<EventDetailsPage />} />
@@ -122,7 +148,8 @@ function App() {
               <Route path="/ticket/:ticketId" element={<TicketSelectionPage />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route path="/sell" element={<Sell />} />
+              <Route path="/sell" element={<SellLandingPage />} />
+              <Route path="/sell/new" element={<Sell />} />
               <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/profile/wallet" element={<ProtectedRoute><ProfileWallet /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -154,11 +181,8 @@ function App() {
               <Route path="/checkout/payme/success" element={<PaymeCheckoutSuccess />} />
               <Route path="/checkout/payme/failure" element={<PaymeCheckoutFailure />} />
               <Route path="*" element={<NotFoundPage />} />
-            </Routes>
-          </main>
-          <Footer />
-          <FloatingWhatsApp />
-        </div>
+          </Routes>
+        </AppChrome>
       </Router>
     </AuthProvider>
   );

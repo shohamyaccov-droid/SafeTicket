@@ -185,6 +185,7 @@ class FullPlatformE2ETest(TestCase):
             {
                 'ticket': tid,
                 'total_amount': str(expected_total),
+                'accepted_terms': True,
                 'quantity': qty,
                 'event_name': self.event.name,
             },
@@ -260,10 +261,13 @@ class FullPlatformE2ETest(TestCase):
             {
                 'guest_email': guest_email,
                 'guest_phone': '0501234567',
+                'guest_first_name': 'Guest',
+                'guest_last_name': 'Buyer',
                 'ticket_id': tid,
                 'total_amount': str(expected_total),
                 'quantity': 1,
                 'event_name': self.event.name,
+                'accepted_terms': True,
             },
         )
         self.assertEqual(gc.status_code, 201, gc.content)
@@ -368,6 +372,7 @@ class FullPlatformE2ETest(TestCase):
                 'ticket': tid,
                 'quantity': 1,
                 'total_amount': str(neg_total),
+                'accepted_terms': True,
                 'event_name': self.event.name,
                 'offer_id': oid1,
             },

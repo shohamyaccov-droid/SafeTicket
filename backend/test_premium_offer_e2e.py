@@ -293,6 +293,7 @@ class PremiumOfferE2ETest(TestCase):
             {
                 'ticket': self.ticket.id,
                 'total_amount': expected_total,
+                'accepted_terms': True,
                 'quantity': 1,
                 'event_name': self.event.name,
             },

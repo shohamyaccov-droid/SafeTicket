@@ -79,6 +79,7 @@ class GuestCheckoutFlowTests(TestCase):
                 'total_amount': str(checkout_total),
                 'quantity': 1,
                 'event_name': self.event.name,
+                'accepted_terms': True,
             },
             format='json',
         )
