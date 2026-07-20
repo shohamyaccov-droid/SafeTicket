@@ -1557,13 +1557,19 @@
 }
 
 .checkout-legal-acceptance {
-  margin: 1rem 0 0.75rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid var(--border-color, #e2e8f0);
-  border-radius: 10px;
-  background: #f8fafc;
+  margin: 1.1rem 0 0.35rem;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   direction: rtl;
   text-align: right;
+}
+
+.guest-checkout .checkout-legal-acceptance,
+.user-checkout .checkout-legal-acceptance {
+  margin-top: 0.85rem;
+  margin-bottom: 0.5rem;
 }
 
 .checkout-legal-acceptance__label {

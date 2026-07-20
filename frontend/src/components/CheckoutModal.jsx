@@ -1821,15 +1821,6 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               </div>
             )}
 
-            <CheckoutLegalAcceptance
-              checked={legalAccepted}
-              onChange={(next) => {
-                setLegalAccepted(next);
-                if (next) setLegalError('');
-              }}
-              error={legalError}
-            />
-            
             <div className="button-group checkout-buttons-row modal-actions">
               <button
                 type="button"
