@@ -198,7 +198,7 @@ def build_event_json_ld(event, *, request=None) -> dict[str, Any]:
     canonical = event_canonical_url(event)
     image_url = first_resolved_image_url_for_event(request, event) if request is not None else None
     if not image_url:
-        image_url = f'{frontend_origin()}/og-share.svg'
+        image_url = f'{frontend_origin()}/og-share.png'
 
     venue_name = ''
     try:
@@ -294,7 +294,7 @@ def build_event_seo_payload(event, *, request=None) -> dict[str, Any]:
     except Exception:
         image = None
     if not image:
-        image = f'{frontend_origin()}/og-share.svg'
+        image = f'{frontend_origin()}/og-share.png'
 
     return {
         'slug': slug,

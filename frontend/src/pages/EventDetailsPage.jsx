@@ -56,7 +56,7 @@ import TakenBuyButton from '../components/TakenBuyButton';
 import './EventDetailsPage.css';
 
 /** Absolute URL for OG/Twitter when the SPA has no event image yet. */
-const defaultOgImageUrl = () => `${PUBLIC_SITE_ORIGIN}/og-share.svg`;
+const defaultOgImageUrl = () => `${PUBLIC_SITE_ORIGIN}/og-share.png`;
 
 /** Seller id from API may be a numeric PK or nested object — compare robustly to current user. */
 const isCurrentUserSellerOfTicket = isCurrentUserOwnListing;

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="he" dir="rtl">
   <head>
-    <meta charset="UTF-8" />
+    <meta charset="utf-8" />
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -27,16 +27,17 @@
     <meta property="og:url" content="https://tradetix.co.il/" />
     <meta property="og:title" content="TradeTix | טריידטיקס" />
     <meta property="og:description" content="זירת מסחר בטוחה לקנייה ומכירת כרטיסים בישראל — תשלום מאובטח והגנה מלאה על הכסף." />
-    <meta property="og:image" content="https://tradetix.co.il/og-share.svg" />
-    <meta property="og:image:secure_url" content="https://tradetix.co.il/og-share.svg" />
-    <meta property="og:image:type" content="image/svg+xml" />
+    <!-- PNG (not SVG): Facebook/Messenger crawlers do not reliably render Hebrew in SVG. -->
+    <meta property="og:image" content="https://tradetix.co.il/og-share.png" />
+    <meta property="og:image:secure_url" content="https://tradetix.co.il/og-share.png" />
+    <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="TradeTix — שוק כרטיסים מאובטח" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="TradeTix | טריידטיקס" />
     <meta name="twitter:description" content="זירת מסחר בטוחה לקנייה ומכירת כרטיסים בישראל — תשלום מאובטח והגנה מלאה על הכסף." />
-    <meta name="twitter:image" content="https://tradetix.co.il/og-share.svg" />
+    <meta name="twitter:image" content="https://tradetix.co.il/og-share.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700&family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -44,8 +45,7 @@
 
     <!-- GA4 (G-D0P22V9YLH) is initialized by react-ga4 in production only — see src/utils/ga4.js -->
 
-    <!-- Meta (Facebook) Pixel — Shoham: replace NUMERIC_PIXEL_ID with your Pixel ID -->
-    <!--
+    <!-- Meta Pixel Code -->
     <script>
       !function(f,b,e,v,n,t,s)
       {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -55,19 +55,21 @@
       t.src=v;s=b.getElementsByTagName(e)[0];
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
-      fbq('init', 'NUMERIC_PIXEL_ID');
+      fbq('init', '1267663240931005');
       fbq('track', 'PageView');
     </script>
-    <noscript><img height="1" width="1" style="display:none"
-      src="https://www.facebook.com/tr?id=NUMERIC_PIXEL_ID&ev=PageView&noscript=1"
-    /></noscript>
-    -->
+    <!-- End Meta Pixel Code -->
   </head>
   <body>
     <!-- Google Tag Manager (noscript) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-T32H2ZJC"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- End Google Tag Manager (noscript) -->
+    <!-- Meta Pixel (noscript) -->
+    <noscript><img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=1267663240931005&ev=PageView&noscript=1"
+      alt=""
+    /></noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
