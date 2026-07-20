@@ -939,6 +939,9 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
             response.data = body
             return response
+        except APIException:
+            # Auth failures, parse errors, throttles — let DRF return proper 4xx.
+            raise
         except Exception as e:
             traceback.print_exc()
             logger.exception('CookieTokenObtainPairView unhandled error: %s', e)
@@ -2829,8 +2832,12 @@ class TicketViewSet(viewsets.ModelViewSet):
                     is_auto_split_mode = False
                     available_quantity = 1
                 else:
+                    logger.warning('PDF read failed during ticket create: %s', e, exc_info=True)
+                    err = 'לא ניתן לקרוא את קובץ ה-PDF. ייתכן שהקובץ פגום או מוגן בסיסמה.'
+                    if settings.DEBUG:
+                        err = f'{err} ({str(e)})'
                     return Response(
-                        {'error': f'לא ניתן לקרוא את קובץ ה-PDF. ייתכן שהקובץ פגום או מוגן בסיסמה. ({str(e)})'},
+                        {'error': err},
                         status=status.HTTP_400_BAD_REQUEST
                     )
             if is_auto_split_mode and page_count != available_quantity:
@@ -3031,7 +3038,7 @@ class TicketViewSet(viewsets.ModelViewSet):
                 except Exception as e:
                     _log_cloudinary_or_storage_error(e, 'ticket_create_auto_split')
                     payload = {
-                        'error': 'Failed to store ticket PDF (Cloudinary/storage). See server logs for full traceback.',
+                        'error': 'Failed to store ticket file. Please try again later.',
                     }
                     if settings.DEBUG:
                         payload['detail'] = (str(e) or repr(e))[:500]
@@ -3054,7 +3061,7 @@ class TicketViewSet(viewsets.ModelViewSet):
                         {
                             'error': (
                                 'הקובץ לא נשמר בשרת האחסון. ייתכן שהדפדפן לא שלח את הקובץ (multipart). '
-                                'PDF did not persist to storage — check the upload request.'
+                                'Please try uploading again.'
                             ),
                         },
                         status=status.HTTP_400_BAD_REQUEST,
@@ -3087,7 +3094,7 @@ class TicketViewSet(viewsets.ModelViewSet):
                 except Exception as e:
                     _log_cloudinary_or_storage_error(e, 'ticket_create_multi_pdf')
                     payload = {
-                        'error': 'Failed to store ticket PDF (Cloudinary/storage). See server logs for full traceback.',
+                        'error': 'Failed to store ticket file. Please try again later.',
                     }
                     if settings.DEBUG:
                         payload['detail'] = (str(e) or repr(e))[:500]
@@ -3110,7 +3117,7 @@ class TicketViewSet(viewsets.ModelViewSet):
                         {
                             'error': (
                                 'הקובץ לא נשמר בשרת האחסון. ייתכן שהדפדפן לא שלח את הקובץ (multipart). '
-                                'PDF did not persist to storage — check the upload request.'
+                                'Please try uploading again.'
                             ),
                         },
                         status=status.HTTP_400_BAD_REQUEST,

@@ -426,6 +426,8 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    # Scrub stack traces / provider payloads from client responses when DEBUG=False.
+    'EXCEPTION_HANDLER': 'safeticket.exception_handler.custom_exception_handler',
     'DEFAULT_THROTTLE_RATES': {
         'anon': '120/hour',
         'user': '2000/hour',

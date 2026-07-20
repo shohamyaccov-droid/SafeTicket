@@ -430,11 +430,19 @@ def payme_init_checkout(request):
             order_id=oid,
             response={'error': str(exc), 'http': exc.http_status},
         )
+        # Never expose PayMe upstream payloads or exception text to clients in production.
+        if settings.DEBUG:
+            return Response(
+                {
+                    'error': str(exc),
+                    'payme_http_status': exc.http_status,
+                    'payme_response': exc.payload,
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
         return Response(
             {
-                'error': str(exc),
-                'payme_http_status': exc.http_status,
-                'payme_response': exc.payload,
+                'error': 'Payment provider is temporarily unavailable. Please try again later.',
             },
             status=status.HTTP_502_BAD_GATEWAY,
         )
@@ -444,8 +452,13 @@ def payme_init_checkout(request):
 
     if not p_tid:
         log_payme('init_missing_transaction_id', order_id=oid, response=result.get('raw'))
+        if settings.DEBUG:
+            return Response(
+                {'error': 'Payme did not return a transaction ID', 'payme_response': result.get('raw')},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
         return Response(
-            {'error': 'Payme did not return a transaction ID', 'payme_response': result.get('raw')},
+            {'error': 'Payment provider did not start checkout. Please try again later.'},
             status=status.HTTP_502_BAD_GATEWAY,
         )
 
@@ -461,13 +474,12 @@ def payme_init_checkout(request):
         sandbox=PayMeSettings.from_django().api_url,
     )
 
-    return Response(
-        {
-            'order_id': order.id,
-            'redirect_url': payme_sale_url,
-            'payme_sale_url': payme_sale_url,
-            'payme_transaction_id': p_tid,
-            'payme_raw': result.get('raw'),
-        },
-        status=status.HTTP_200_OK,
-    )
+    body = {
+        'order_id': order.id,
+        'redirect_url': payme_sale_url,
+        'payme_sale_url': payme_sale_url,
+        'payme_transaction_id': p_tid,
+    }
+    if settings.DEBUG:
+        body['payme_raw'] = result.get('raw')
+    return Response(body, status=status.HTTP_200_OK)
