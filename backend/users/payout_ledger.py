@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from django.db import transaction
 
-from .models import Order, SellerPayout, User
+from .models import Order, SellerBonusCampaign, SellerPayout, User
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,40 @@ def payout_amounts_from_order(order: Order) -> tuple[Decimal, Decimal, Decimal] 
         platform_fee = _decimal_or_zero(total_paid - seller_net)
 
     return total_paid, platform_fee, seller_net
+
+
+def claim_launch_seller_bonus(payout: SellerPayout) -> bool:
+    """
+    Atomically attach the platform-funded launch bonus to a newly created payout.
+
+    The singleton campaign row is locked, so concurrent 100th/101st sales cannot
+    both win. The payout field makes this idempotent and keeps ticket-price math
+    (`net_payout`) separate from the subsidy.
+    """
+    if payout.pk is None or Decimal(payout.seller_bonus_amount or 0) > 0:
+        return False
+
+    campaign, _created = SellerBonusCampaign.objects.select_for_update().get_or_create(pk=1)
+    if (
+        not campaign.is_active
+        or campaign.claimed_sales_count >= campaign.max_sales
+        or campaign.bonus_amount <= 0
+    ):
+        return False
+
+    payout.seller_bonus_amount = _decimal_or_zero(campaign.bonus_amount)
+    payout.save(update_fields=['seller_bonus_amount'])
+    campaign.claimed_sales_count += 1
+    campaign.save(update_fields=['claimed_sales_count', 'updated_at'])
+    logger.info(
+        'Applied launch seller bonus payout_id=%s order_id=%s amount=%s slot=%s/%s',
+        payout.pk,
+        payout.order_id,
+        payout.seller_bonus_amount,
+        campaign.claimed_sales_count,
+        campaign.max_sales,
+    )
+    return True
 
 
 def ensure_seller_payout_for_order(order: Order) -> SellerPayout | None:
@@ -126,12 +160,14 @@ def ensure_seller_payout_for_order(order: Order) -> SellerPayout | None:
         )
         payout.full_clean()
         payout.save()
+        claim_launch_seller_bonus(payout)
         logger.info(
-            'Created SellerPayout id=%s order_id=%s seller_id=%s net=%s fee=%s',
+            'Created SellerPayout id=%s order_id=%s seller_id=%s net=%s bonus=%s fee=%s',
             payout.pk,
             order.pk,
             seller.pk,
             net_payout,
+            payout.seller_bonus_amount,
             platform_fee,
         )
         try:

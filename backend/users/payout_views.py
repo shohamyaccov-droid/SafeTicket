@@ -23,6 +23,11 @@ def _quantize(value) -> Decimal:
     return Decimal(value or 0).quantize(Decimal('0.01'))
 
 
+def _sum_seller_obligation(qs) -> Decimal:
+    totals = qs.aggregate(net=Sum('net_payout'), bonus=Sum('seller_bonus_amount'))
+    return _quantize(Decimal(totals['net'] or 0) + Decimal(totals['bonus'] or 0))
+
+
 def _seller_bank_payload(user) -> dict:
     return {
         'account_holder_name': (user.account_holder_name or '').strip() or None,
@@ -100,11 +105,11 @@ def _admin_payout_summary() -> dict:
     available_qs = pending_qs.filter(order__payout_status='eligible')
     transferred_qs = base.filter(payout_status=SellerPayout.PayoutStatus.TRANSFERRED)
 
-    pending_net = _quantize(pending_qs.aggregate(s=Sum('net_payout'))['s'])
-    available_net = _quantize(available_qs.aggregate(s=Sum('net_payout'))['s'])
+    pending_net = _sum_seller_obligation(pending_qs)
+    available_net = _sum_seller_obligation(available_qs)
     pending_fees = _quantize(pending_qs.aggregate(s=Sum('platform_fee'))['s'])
     total_revenue = _quantize(base.aggregate(s=Sum('platform_fee'))['s'])
-    total_transferred = _quantize(transferred_qs.aggregate(s=Sum('net_payout'))['s'])
+    total_transferred = _sum_seller_obligation(transferred_qs)
 
     return {
         'total_pending_owed': str(pending_net),
@@ -133,7 +138,10 @@ def _serialize_admin_payout(payout: SellerPayout) -> dict:
         'total_paid': str(payout.total_paid),
         'platform_fee': str(payout.platform_fee),
         'platform_fee_percent': _platform_fee_percent(payout),
+        'seller_ticket_net': str(payout.net_payout),
+        'seller_bonus_amount': str(payout.seller_bonus_amount),
         'net_payout': str(payout.net_payout),
+        'total_seller_payout': str(payout.total_seller_payout),
         'payout_status': payout.payout_status,
         'created_at': payout.created_at.isoformat() if payout.created_at else None,
         'transferred_at': payout.transferred_at.isoformat() if payout.transferred_at else None,
@@ -149,7 +157,7 @@ def _wallet_summary_for_seller(user) -> dict:
     )
     transferred = base.filter(payout_status=SellerPayout.PayoutStatus.TRANSFERRED)
 
-    total_earned = _quantize(transferred.aggregate(s=Sum('net_payout'))['s'])
+    total_earned = _sum_seller_obligation(transferred)
     pending_funds = _quantize(getattr(wallet, 'locked_balance', Decimal('0.00')))
     available_funds = _quantize(getattr(wallet, 'available_balance', Decimal('0.00')))
 
@@ -191,7 +199,9 @@ def _serialize_wallet_transaction(payout: SellerPayout) -> dict:
         'event_name': (order.event_name or '').strip() if order else None,
         'ticket_price': str(payout.total_paid),
         'platform_fee': str(payout.platform_fee),
+        'seller_bonus_amount': str(payout.seller_bonus_amount),
         'net_earnings': str(payout.net_payout),
+        'total_earnings': str(payout.total_seller_payout),
         'payout_status': payout.payout_status,
         'display_status': display_status,
         'order_escrow_status': escrow,

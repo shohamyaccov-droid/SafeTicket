@@ -9,7 +9,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from users.models import Event, Order, SellerPayout, Ticket
+from users.models import Event, Order, SellerBonusCampaign, SellerPayout, Ticket
 from users.payout_ledger import ensure_seller_payout_for_order
 from wallets.models import WalletTransaction
 
@@ -19,6 +19,9 @@ User = get_user_model()
 @override_settings(DEBUG=True, SECRET_KEY='test-secret-key-for-local')
 class PayoutApiTestBase(TestCase):
     def setUp(self):
+        campaign = SellerBonusCampaign.load()
+        campaign.is_active = False
+        campaign.save(update_fields=['is_active', 'updated_at'])
         self.client = APIClient()
         self.admin = User.objects.create_user(
             username='admin_fin',

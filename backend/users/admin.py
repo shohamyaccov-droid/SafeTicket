@@ -23,6 +23,7 @@ from .models import (
     GlobalFeeSettings,
     Offer,
     Order,
+    SellerBonusCampaign,
     SellerPayout,
     Ticket,
     User,
@@ -688,6 +689,29 @@ class CouponRedemptionAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at', 'redeemed_at', 'released_at']
 
 
+@admin.register(SellerBonusCampaign)
+class SellerBonusCampaignAdmin(admin.ModelAdmin):
+    list_display = [
+        'is_active',
+        'bonus_amount',
+        'claimed_sales_count',
+        'max_sales',
+        'remaining_sales',
+        'updated_at',
+    ]
+    readonly_fields = ['claimed_sales_count', 'updated_at']
+
+    def has_add_permission(self, request):
+        return not SellerBonusCampaign.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        obj = SellerBonusCampaign.load()
+        return redirect(reverse('admin:users_sellerbonuscampaign_change', args=[obj.pk]))
+
+
 @admin.register(SellerPayout)
 class SellerPayoutAdmin(admin.ModelAdmin):
     list_display = [
@@ -697,6 +721,8 @@ class SellerPayoutAdmin(admin.ModelAdmin):
         'total_paid',
         'platform_fee',
         'net_payout',
+        'seller_bonus_amount',
+        'total_seller_payout',
         'payout_status',
         'seller_bank_summary',
         'transferred_at',
@@ -725,6 +751,8 @@ class SellerPayoutAdmin(admin.ModelAdmin):
         'total_paid',
         'platform_fee',
         'net_payout',
+        'seller_bonus_amount',
+        'total_seller_payout',
     ]
     list_select_related = ['seller', 'order']
     ordering = ['-created_at']
@@ -740,6 +768,8 @@ class SellerPayoutAdmin(admin.ModelAdmin):
                     'total_paid',
                     'platform_fee',
                     'net_payout',
+                    'seller_bonus_amount',
+                    'total_seller_payout',
                     'transferred_at',
                     'created_at',
                     'seller_pending_total_panel',
@@ -758,7 +788,8 @@ class SellerPayoutAdmin(admin.ModelAdmin):
         extra_context = extra_context or {}
         pending_qs = SellerPayout.objects.filter(payout_status=SellerPayout.PayoutStatus.PENDING)
         all_qs = SellerPayout.objects.exclude(payout_status=SellerPayout.PayoutStatus.CANCELLED)
-        owed = pending_qs.aggregate(s=Sum('net_payout'))['s'] or Decimal('0')
+        owed_parts = pending_qs.aggregate(net=Sum('net_payout'), bonus=Sum('seller_bonus_amount'))
+        owed = Decimal(owed_parts['net'] or 0) + Decimal(owed_parts['bonus'] or 0)
         revenue = all_qs.aggregate(s=Sum('platform_fee'))['s'] or Decimal('0')
         extra_context['ledger_total_owed'] = Decimal(owed).quantize(Decimal('0.01'))
         extra_context['ledger_platform_revenue'] = Decimal(revenue).quantize(Decimal('0.01'))

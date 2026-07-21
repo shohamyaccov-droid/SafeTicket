@@ -161,7 +161,12 @@ export default function AdminPayoutsPage() {
                       <div className="admin-muted">#{row.order_id}</div>
                     </td>
                     <td data-label="נטו" dir="ltr">
-                      ₪{formatAmountForCurrency(row.net_payout, 'ILS')}
+                      ₪{formatAmountForCurrency(row.total_seller_payout ?? row.net_payout, 'ILS')}
+                      {Number(row.seller_bonus_amount || 0) > 0 && (
+                        <div className="admin-muted">
+                          כולל בונוס ₪{formatAmountForCurrency(row.seller_bonus_amount, 'ILS')}
+                        </div>
+                      )}
                     </td>
                     <td data-label="עמלה" dir="ltr">
                       ₪{formatAmountForCurrency(row.platform_fee, 'ILS')}

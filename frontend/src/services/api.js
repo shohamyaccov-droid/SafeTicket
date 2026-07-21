@@ -154,6 +154,7 @@ function isPublicGuestEndpoint(url = '') {
     path.includes('/users/orders/guest/') ||
     path.includes('/users/shabbat/status/') ||
     path.includes('/users/pricing/settings/') ||
+    path.includes('/users/promotions/launch/') ||
     path.includes('/users/coupons/validate/') ||
     /\/users\/tickets\/\d+\/reserve\//.test(path) ||
     /\/users\/tickets\/\d+\/release_reservation\//.test(path) ||
@@ -556,6 +557,9 @@ export const orderAPI = {
   },
   getPricingSettings: async () => {
     return api.get('/users/pricing/settings/', { skipAuth: true });
+  },
+  getLaunchPromotion: async () => {
+    return api.get('/users/promotions/launch/', { skipAuth: true });
   },
 };
 

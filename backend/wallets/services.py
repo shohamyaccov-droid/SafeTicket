@@ -65,6 +65,13 @@ def _payout_is_past_escrow_release_threshold(payout) -> bool:
     return bool(eligible_at and timezone.now() > eligible_at)
 
 
+def _seller_credit_amount(payout) -> Decimal:
+    """Ticket proceeds plus a separate platform-funded seller bonus."""
+    return (
+        Decimal(payout.net_payout or 0) + Decimal(getattr(payout, 'seller_bonus_amount', 0) or 0)
+    ).quantize(Decimal('0.01'))
+
+
 def credit_wallet_for_seller_payout(payout) -> WalletTransaction | None:
     """
     Idempotently credit the seller wallet when a paid order creates a SellerPayout.
@@ -73,7 +80,7 @@ def credit_wallet_for_seller_payout(payout) -> WalletTransaction | None:
     if payout is None or payout.pk is None or payout.seller_id is None:
         return None
 
-    amount = Decimal(payout.net_payout or 0).quantize(Decimal('0.01'))
+    amount = _seller_credit_amount(payout)
     if amount <= 0:
         return None
 
@@ -109,7 +116,14 @@ def credit_wallet_for_seller_payout(payout) -> WalletTransaction | None:
             transaction_type=WalletTransaction.TransactionType.SALE_CREDIT,
             associated_event=_event_for_payout(payout),
             seller_payout=payout,
-            note=f'Order #{payout.order_id} seller net payout',
+            note=(
+                f'Order #{payout.order_id} seller payout'
+                + (
+                    f' + ₪{payout.seller_bonus_amount} launch bonus'
+                    if Decimal(getattr(payout, 'seller_bonus_amount', 0) or 0) > 0
+                    else ''
+                )
+            )[:255],
         )
         return tx
 
@@ -122,8 +136,11 @@ def reconcile_wallet_credit_for_seller_payout(payout, previous_amount) -> Wallet
     if payout is None or payout.pk is None or payout.seller_id is None:
         return None
 
-    new_amount = Decimal(payout.net_payout or 0).quantize(Decimal('0.01'))
-    old_amount = Decimal(previous_amount or 0).quantize(Decimal('0.01'))
+    new_amount = _seller_credit_amount(payout)
+    old_amount = (
+        Decimal(previous_amount or 0)
+        + Decimal(getattr(payout, 'seller_bonus_amount', 0) or 0)
+    ).quantize(Decimal('0.01'))
     if new_amount <= 0:
         return None
 
@@ -150,7 +167,14 @@ def reconcile_wallet_credit_for_seller_payout(payout, previous_amount) -> Wallet
             wallet.locked_balance = wallet.locked_balance - old_amount + new_amount
         wallet.save(update_fields=['available_balance', 'locked_balance', 'updated_at'])
         tx.amount = new_amount
-        tx.note = f'Order #{payout.order_id} seller net payout'
+        tx.note = (
+            f'Order #{payout.order_id} seller payout'
+            + (
+                f' + ₪{payout.seller_bonus_amount} launch bonus'
+                if Decimal(getattr(payout, 'seller_bonus_amount', 0) or 0) > 0
+                else ''
+            )
+        )[:255]
         tx.save(update_fields=['amount', 'note', 'updated_at'])
         return tx
 
@@ -214,7 +238,7 @@ def mark_seller_payout_paid(payout):
 
     release_eligible_wallet_payouts(seller=payout.seller)
 
-    amount = Decimal(payout.net_payout or 0).quantize(Decimal('0.01'))
+    amount = _seller_credit_amount(payout)
     with transaction.atomic():
         payout = SellerPayout.objects.select_for_update().select_related('seller', 'order').get(pk=payout.pk)
         if payout.payout_status == SellerPayout.PayoutStatus.TRANSFERRED:

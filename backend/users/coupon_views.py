@@ -11,6 +11,7 @@ from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 from users.coupons import CouponError, preview_coupon_for_base
 from users.fee_settings import get_fee_rates
+from users.models import Coupon, SellerBonusCampaign
 
 
 def _csrf_passthrough(view):
@@ -90,6 +91,32 @@ def pricing_settings_view(request):
             'affiliate_commission_percent': affiliate_pct,
             'affiliate_platform_net_percent': platform_aff_pct,
             'buyer_fee_percent_with_coupon': with_coupon_pct,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@_csrf_passthrough
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def launch_promotion_status_view(request):
+    """Public, cache-friendly launch-promo status for marketing banners."""
+    campaign = SellerBonusCampaign.load()
+    coupon = Coupon.objects.filter(code__iexact='TIX15', is_active=True).first()
+    return Response(
+        {
+            'seller_bonus': {
+                'is_active': bool(campaign.is_active and campaign.remaining_sales > 0),
+                'bonus_amount': str(campaign.bonus_amount),
+                'max_sales': campaign.max_sales,
+                'claimed_sales': campaign.claimed_sales_count,
+                'remaining_sales': campaign.remaining_sales,
+            },
+            'buyer_coupon': {
+                'is_active': bool(coupon),
+                'code': coupon.code.upper() if coupon else 'TIX15',
+                'discount_amount': str(coupon.discount_amount) if coupon else '15.00',
+            },
         },
         status=status.HTTP_200_OK,
     )

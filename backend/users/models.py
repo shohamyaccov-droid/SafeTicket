@@ -872,6 +872,12 @@ class SellerPayout(models.Model):
         decimal_places=2,
         help_text='Amount owed to the seller after seller-side fees',
     )
+    seller_bonus_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text='Platform-funded promotional bonus, separate from ticket-price economics.',
+    )
     payout_status = models.CharField(
         max_length=20,
         choices=PayoutStatus.choices,
@@ -897,8 +903,15 @@ class SellerPayout(models.Model):
     def __str__(self):
         return (
             f'SellerPayout #{self.pk} order={self.order_id} seller={self.seller_id} '
-            f'{self.payout_status} net={self.net_payout}'
+            f'{self.payout_status} net={self.net_payout} bonus={self.seller_bonus_amount}'
         )
+
+    @property
+    def total_seller_payout(self) -> Decimal:
+        """Actual amount owed: seller ticket net plus any platform-funded bonus."""
+        return (
+            Decimal(self.net_payout or 0) + Decimal(self.seller_bonus_amount or 0)
+        ).quantize(Decimal('0.01'))
 
     @classmethod
     def compute_amounts(cls, total_paid: Decimal) -> tuple[Decimal, Decimal, Decimal]:
@@ -910,26 +923,28 @@ class SellerPayout(models.Model):
 
     @classmethod
     def total_pending_for_seller(cls, seller) -> Decimal:
-        """Sum of net_payout still owed to this seller (pending status only)."""
+        """Sum of ticket net plus promotional bonuses still owed to this seller."""
         from django.db.models import Sum
 
-        total = (
+        totals = (
             cls.objects.filter(seller=seller, payout_status=cls.PayoutStatus.PENDING)
-            .aggregate(sum=Sum('net_payout'))
-            .get('sum')
+            .aggregate(net=Sum('net_payout'), bonus=Sum('seller_bonus_amount'))
         )
-        return Decimal(total or 0).quantize(Decimal('0.01'))
+        return (
+            Decimal(totals.get('net') or 0) + Decimal(totals.get('bonus') or 0)
+        ).quantize(Decimal('0.01'))
 
     @classmethod
     def total_pending_for_seller_id(cls, seller_id: int) -> Decimal:
         from django.db.models import Sum
 
-        total = (
+        totals = (
             cls.objects.filter(seller_id=seller_id, payout_status=cls.PayoutStatus.PENDING)
-            .aggregate(sum=Sum('net_payout'))
-            .get('sum')
+            .aggregate(net=Sum('net_payout'), bonus=Sum('seller_bonus_amount'))
         )
-        return Decimal(total or 0).quantize(Decimal('0.01'))
+        return (
+            Decimal(totals.get('net') or 0) + Decimal(totals.get('bonus') or 0)
+        ).quantize(Decimal('0.01'))
 
     @classmethod
     def pending_for_seller(cls, seller):
@@ -948,6 +963,41 @@ class SellerPayout(models.Model):
     def clean(self):
         if self.net_payout is not None and self.net_payout < 0:
             raise ValidationError({'net_payout': 'Net payout cannot be negative.'})
+        if self.seller_bonus_amount is not None and self.seller_bonus_amount < 0:
+            raise ValidationError({'seller_bonus_amount': 'Seller bonus cannot be negative.'})
+
+
+class SellerBonusCampaign(models.Model):
+    """Singleton counter that atomically caps the launch bonus at 100 sales."""
+
+    is_active = models.BooleanField(default=True)
+    bonus_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('20.00'),
+    )
+    max_sales = models.PositiveIntegerField(default=100)
+    claimed_sales_count = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Seller bonus campaign'
+        verbose_name_plural = 'Seller bonus campaign'
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    @property
+    def remaining_sales(self) -> int:
+        return max(0, int(self.max_sales or 0) - int(self.claimed_sales_count or 0))
+
+    def __str__(self):
+        return (
+            f'Seller bonus ₪{self.bonus_amount}: '
+            f'{self.claimed_sales_count}/{self.max_sales} claimed'
+        )
 
 
 # Backward-compatible alias (deprecated — use SellerPayout)

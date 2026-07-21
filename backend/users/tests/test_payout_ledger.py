@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
-from users.models import Event, Order, SellerPayout, Ticket
+from users.models import Event, Order, SellerBonusCampaign, SellerPayout, Ticket
 from users.payout_ledger import ensure_seller_payout_for_order, payout_amounts_from_order
 
 User = get_user_model()
@@ -13,6 +13,9 @@ User = get_user_model()
 
 class PayoutLedgerTest(TestCase):
     def setUp(self):
+        campaign = SellerBonusCampaign.load()
+        campaign.is_active = False
+        campaign.save(update_fields=['is_active', 'updated_at'])
         self.seller = User.objects.create_user(
             username='seller_ledger',
             email='seller_ledger@test.com',

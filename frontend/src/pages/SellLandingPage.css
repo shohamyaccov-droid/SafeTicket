@@ -1,0 +1,316 @@
+.sell-landing {
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 8% 10%, rgba(0, 69, 175, 0.11), transparent 28rem),
+    linear-gradient(180deg, #f7faff 0%, #fff 58%);
+  color: #10233f;
+}
+
+.sell-landing__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: min(1180px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1.1rem 0;
+}
+
+.sell-landing__brand {
+  color: #10233f;
+  font-size: 1.55rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.sell-landing__brand span {
+  color: #0045af;
+}
+
+.sell-landing__brand:hover {
+  text-decoration: none;
+}
+
+.sell-landing__secure,
+.sell-landing__badge,
+.sell-landing__cta-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.sell-landing__secure {
+  color: #166534;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.sell-landing__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.75fr);
+  align-items: center;
+  gap: clamp(2rem, 7vw, 6rem);
+  width: min(1120px, calc(100% - 2rem));
+  min-height: 590px;
+  margin: 0 auto;
+  padding: 4rem 0 5rem;
+}
+
+.sell-landing__badge {
+  width: fit-content;
+  margin-bottom: 1.2rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #0045af;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.sell-landing__hero h1 {
+  max-width: 760px;
+  color: #0b1f3a;
+  font-size: clamp(2.45rem, 5.8vw, 4.9rem);
+  line-height: 1.04;
+  letter-spacing: -0.045em;
+}
+
+.sell-landing__lead {
+  max-width: 640px;
+  margin: 1.5rem 0 1.75rem;
+  color: #465b76;
+  font-size: clamp(1.05rem, 2vw, 1.24rem);
+  line-height: 1.75;
+}
+
+.sell-landing__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  min-height: 56px;
+  padding: 0.9rem 1.45rem;
+  border-radius: 10px;
+  background: #0045af;
+  box-shadow: 0 12px 24px rgba(0, 69, 175, 0.2);
+  color: #fff;
+  font-size: 1.06rem;
+  font-weight: 800;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.sell-landing__cta:hover {
+  background: #003894;
+  box-shadow: 0 15px 30px rgba(0, 69, 175, 0.26);
+  color: #fff;
+  text-decoration: none;
+  transform: translateY(-2px);
+}
+
+.sell-landing__cta-note {
+  margin: 0.8rem 0 0;
+  color: #58708d;
+  font-size: 0.9rem;
+}
+
+.sell-landing__cta-note svg {
+  color: #15803d;
+}
+
+.sell-landing__relief-card {
+  position: relative;
+  padding: 1.15rem;
+  border: 1px solid rgba(189, 207, 230, 0.75);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 30px 65px rgba(20, 52, 92, 0.14);
+  backdrop-filter: blur(14px);
+}
+
+.sell-landing__pain {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border-radius: 14px;
+  background: #fff5f5;
+  color: #9b2c2c;
+}
+
+.sell-landing__pain div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.sell-landing__pain span {
+  color: #7f4b4b;
+  font-size: 0.86rem;
+}
+
+.sell-landing__payment-card {
+  display: grid;
+  justify-items: center;
+  padding: 2.3rem 1.25rem;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #063d94, #0063d7);
+  color: #fff;
+  text-align: center;
+}
+
+.sell-landing__payment-icon {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 0.85rem;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.17);
+}
+
+.sell-landing__payment-card > span:not(.sell-landing__payment-icon) {
+  opacity: 0.78;
+}
+
+.sell-landing__payment-card strong {
+  margin: 0.15rem 0 0.75rem;
+  font-size: 1.45rem;
+}
+
+.sell-landing__payment-card small {
+  max-width: 280px;
+  opacity: 0.82;
+  line-height: 1.55;
+}
+
+.sell-landing__steps {
+  padding: 5rem 1rem 5.5rem;
+  background: #fff;
+  text-align: center;
+}
+
+.sell-landing__section-kicker {
+  margin: 0;
+  color: #0045af;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.sell-landing__steps h2 {
+  margin: 0.35rem 0 2.2rem;
+  color: #10233f;
+}
+
+.sell-landing__steps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  width: min(980px, 100%);
+  margin: 0 auto 2.2rem;
+}
+
+.sell-landing__step {
+  position: relative;
+  padding: 2rem 1.25rem 1.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fbfdff;
+}
+
+.sell-landing__step-number {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.9rem;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.sell-landing__step-icon {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  margin: 0 auto 0.85rem;
+  place-items: center;
+  border-radius: 14px;
+  background: #eaf2ff;
+  color: #0045af;
+}
+
+.sell-landing__step h3 {
+  margin: 0 0 0.4rem;
+  color: #10233f;
+  font-size: 1.08rem;
+}
+
+.sell-landing__step p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.55;
+}
+
+.sell-landing__cta--secondary {
+  min-width: 230px;
+}
+
+@media (max-width: 800px) {
+  .sell-landing__hero {
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+    padding: 2.5rem 0 4rem;
+  }
+
+  .sell-landing__hero-copy {
+    text-align: center;
+  }
+
+  .sell-landing__badge,
+  .sell-landing__lead {
+    margin-right: auto;
+    margin-left: auto;
+  }
+
+  .sell-landing__cta-note {
+    justify-content: center;
+  }
+
+  .sell-landing__relief-card {
+    width: min(460px, 100%);
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 650px) {
+  .sell-landing__header,
+  .sell-landing__hero {
+    width: min(100% - 1.25rem, 1120px);
+  }
+
+  .sell-landing__header {
+    padding-top: 0.8rem;
+  }
+
+  .sell-landing__secure {
+    font-size: 0.78rem;
+  }
+
+  .sell-landing__hero h1 {
+    font-size: clamp(2.25rem, 12vw, 3.35rem);
+  }
+
+  .sell-landing__steps-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sell-landing__cta {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sell-landing__cta {
+    transition: none;
+  }
+}
