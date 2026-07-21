@@ -194,6 +194,7 @@ class PaymentScaryCaseTests(TestCase):
             'ticket': ticket.id,
             'total_amount': total,
             'quantity': 1,
+            'accepted_terms': True,
         }
 
         req1 = self.factory.post('/api/users/orders/', payload, format='json')

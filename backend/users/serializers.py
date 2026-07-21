@@ -1489,6 +1489,7 @@ class OfferSerializer(serializers.ModelSerializer):
             'id', 'buyer', 'currency', 'expires_at', 'accepted_at', 'checkout_expires_at',
             'created_at', 'updated_at',
             'status', 'amount', 'ticket', 'quantity', 'offer_round_count',
+            'parent_offer', 'counter_offer',
         )
 
     def __init__(self, *args, **kwargs):
@@ -1563,6 +1564,13 @@ class OfferSerializer(serializers.ModelSerializer):
                 attrs['amount'] = quantize_money_decimal(amt, cur)
                 if attrs['amount'] <= 0:
                     raise serializers.ValidationError({'amount': 'Offer amount must be greater than zero.'})
+
+        if 'quantity' in attrs:
+            quantity = attrs.get('quantity')
+            if isinstance(quantity, bool) or quantity is None or quantity < 1:
+                raise serializers.ValidationError(
+                    {'quantity': 'Offer quantity must be at least one.'}
+                )
         return attrs
 
     def create(self, validated_data):

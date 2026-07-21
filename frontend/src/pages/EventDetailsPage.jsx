@@ -758,7 +758,8 @@ const EventDetailsPage = () => {
     const offerPrice = parseFloat(offerAmount);
     if (isNaN(offerPrice) || offerPrice <= 0) return null;
     
-    const percentage = (offerPrice / askingPrice) * 100;
+    const askingTotal = askingPrice * Math.max(1, Number(offerQuantity) || 1);
+    const percentage = askingTotal > 0 ? (offerPrice / askingTotal) * 100 : 0;
     
     if (percentage < 70) {
       return { text: 'הצעה נמוכה עשויה להידחות', type: 'warning' };

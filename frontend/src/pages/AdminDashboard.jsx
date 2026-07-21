@@ -217,6 +217,9 @@ export default function AdminDashboard() {
             <Link to="/admin-panel/payouts" className="admin-dash-link-secondary">
               תשלומים למוכרים
             </Link>
+            <Link to="/admin-panel/offers" className="admin-dash-link-secondary">
+              מעקב הצעות
+            </Link>
             <Link to="/admin/verification" className="admin-dash-link-secondary">
               אימות (דף מלא)
             </Link>

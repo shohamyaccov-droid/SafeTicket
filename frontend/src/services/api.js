@@ -789,6 +789,7 @@ export const adminAPI = {
   getPendingTickets: () => api.get('/users/admin/pending-tickets/'),
   getDashboardStats: () => api.get('/users/admin/dashboard/stats/'),
   getTransactions: (params) => api.get('/users/admin/transactions/', { params }),
+  getOffersDashboard: (params) => api.get('/users/admin/offers/', { params }),
   getPayouts: (params) => api.get('/users/admin/payouts/', { params }),
   markPayoutPaid: async (payoutId) => {
     await ensureCsrfToken();

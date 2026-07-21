@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from users.coupon_views import launch_promotion_status_view, pricing_settings_view, validate_coupon
+from users.offer_admin_views import admin_offers_dashboard
 from .payme_views import payme_init_checkout
 from .payout_views import admin_payout_mark_paid, admin_payouts_list, user_wallet
 from .shabbat import shabbat_status_view
@@ -73,6 +74,7 @@ urlpatterns = [
     path('admin/dashboard/stats/', admin_dashboard_stats, name='admin_dashboard_stats'),
     path('admin/transactions/', admin_transactions, name='admin_transactions'),
     path('admin/payouts/', admin_payouts_list, name='admin_payouts_list'),
+    path('admin/offers/', admin_offers_dashboard, name='admin_offers_dashboard'),
     path('admin/payouts/<int:payout_id>/mark-paid/', admin_payout_mark_paid, name='admin_payout_mark_paid'),
     path('admin/orders/<int:order_id>/cancel/', admin_cancel_order, name='admin_cancel_order'),
     path('admin/tickets/<int:ticket_id>/approve/', admin_approve_ticket, name='admin_approve_ticket'),

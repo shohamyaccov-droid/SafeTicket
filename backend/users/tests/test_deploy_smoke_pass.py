@@ -167,13 +167,20 @@ class DeployReadinessSmokeTests(TestCase):
         self.assertEqual(self.ticket.status, 'sold')
 
     def test_smoke_bad_input_does_not_500(self):
-        missing_ticket = self.client.post('/api/users/orders/', {'total_amount': '100'}, format='json')
-        'accepted_terms': True,
+        missing_ticket = self.client.post(
+            '/api/users/orders/',
+            {'total_amount': '100', 'accepted_terms': True},
+            format='json',
+        )
         self.assertIn(missing_ticket.status_code, (400, 401))
 
         bad_guest = self.client.post(
             '/api/users/orders/guest/',
-            {'guest_email': 'not-an-email', 'ticket_id': self.ticket.id},
+            {
+                'guest_email': 'not-an-email',
+                'ticket_id': self.ticket.id,
+                'accepted_terms': True,
+            },
             format='json',
         )
         self.assertIn(bad_guest.status_code, (400, 401))

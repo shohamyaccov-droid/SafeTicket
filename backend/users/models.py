@@ -1176,6 +1176,33 @@ class Offer(models.Model):
             models.Index(fields=['status', 'expires_at']),
             models.Index(fields=['checkout_expires_at']),
         ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=Decimal('0.00')),
+                name='users_offer_amount_positive',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(quantity__gte=1),
+                name='users_offer_quantity_positive',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(offer_round_count__lte=2),
+                name='users_offer_round_max_two',
+            ),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.amount is None or not Decimal(self.amount).is_finite() or self.amount <= 0:
+            errors['amount'] = 'Offer amount must be greater than zero.'
+        if self.quantity is None or self.quantity < 1:
+            errors['quantity'] = 'Offer quantity must be at least one.'
+        if self.offer_round_count is None or not 0 <= self.offer_round_count <= 2:
+            errors['offer_round_count'] = 'Offer round must be between zero and two.'
+        if self.buyer_id and self.ticket_id and self.ticket.seller_id == self.buyer_id:
+            errors['buyer'] = 'A seller cannot make an offer on their own ticket.'
+        if errors:
+            raise ValidationError(errors)
 
 
 class EventRequest(models.Model):

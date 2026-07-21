@@ -26,7 +26,7 @@ from django.http import FileResponse, Http404, JsonResponse
 from django.views.decorators.http import require_GET
 from django.db.models import F, Q, Count, Sum, Exists, OuterRef, Value, Prefetch, DecimalField
 from django.db.models.functions import Coalesce
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from django.conf import settings as dj_settings
 from django.core.files.base import ContentFile
@@ -1433,6 +1433,22 @@ def create_order(request):
     if accepted_terms is not True and str(accepted_terms).lower() not in ('true', '1', 'yes'):
         return Response(
             {'error': 'יש לאשר את התקנון ומדיניות ההחזרים לפני המשך לתשלום.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    raw_total = request.data.get('total_amount')
+    if isinstance(raw_total, bool) or not isinstance(raw_total, (str, int, float, Decimal)):
+        return Response(
+            {'error': 'Invalid total amount.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        parsed_total = Decimal(str(raw_total))
+        if not parsed_total.is_finite() or parsed_total < 0:
+            raise InvalidOperation
+    except (InvalidOperation, TypeError, ValueError):
+        return Response(
+            {'error': 'Invalid total amount.'},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -4473,23 +4489,6 @@ class OfferViewSet(viewsets.ModelViewSet):
             return [OffersMutationScopedThrottle()]
         return super().get_throttles()
 
-    def create(self, request, *args, **kwargs):
-        """JSON safety net: unhandled errors become JSON (not Django HTML 500) while DRF APIExceptions pass through."""
-        try:
-            return super().create(request, *args, **kwargs)
-        except APIException:
-            raise
-        except Http404:
-            raise
-        except Exception as e:
-            traceback.print_exc()
-            logger.exception('OfferViewSet.create unhandled error: %s', e)
-            detail = f'SERVER CRASH: {str(e)}' if settings.DEBUG else 'Internal server error'
-            return Response(
-                {'detail': detail},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
     def _annotate_offer_flags(self, queryset):
         """One Exists subquery — avoids N+1 when serializing purchase_completed."""
         return queryset.annotate(
@@ -4544,11 +4543,29 @@ class OfferViewSet(viewsets.ModelViewSet):
         ticket = serializer.validated_data['ticket']
         buyer = self.request.user
         ticket_pk = ticket.pk
+        requested_quantity = int(serializer.validated_data.get('quantity') or 1)
 
         with transaction.atomic():
-            # No select_related on nullable FKs (e.g. event) with select_for_update — PostgreSQL rejects
-            # FOR UPDATE on the nullable side of an outer join.
-            ticket_locked = Ticket.objects.select_for_update().get(pk=ticket_pk)
+            # Lock the whole listing group so offer quantity validation cannot race
+            # a concurrent purchase or another inventory mutation.
+            if ticket.listing_group_id:
+                locked_tickets = list(
+                    Ticket.objects.select_for_update()
+                    .filter(
+                        listing_group_id=ticket.listing_group_id,
+                        seller_id=ticket.seller_id,
+                    )
+                    .order_by('id')
+                )
+                ticket_locked = next((row for row in locked_tickets if row.pk == ticket_pk), None)
+            else:
+                locked_tickets = list(
+                    Ticket.objects.select_for_update().filter(pk=ticket_pk)
+                )
+                ticket_locked = locked_tickets[0] if locked_tickets else None
+            if ticket_locked is None:
+                raise ValidationError({'ticket': ['This ticket is no longer available.']})
+
             recent_cutoff = timezone.now() - timedelta(seconds=5)
             if Offer.objects.filter(
                 buyer=buyer,
@@ -4571,7 +4588,47 @@ class OfferViewSet(viewsets.ModelViewSet):
                     code='invalid',
                 )
 
+            if ticket_locked.listing_group_id:
+                available_units = sum(
+                    int(row.available_quantity or 0)
+                    for row in locked_tickets
+                    if row.status == 'active'
+                )
+            else:
+                available_units = (
+                    int(ticket_locked.available_quantity or 0)
+                    if ticket_locked.status == 'active'
+                    else 0
+                )
+            if requested_quantity > available_units:
+                raise ValidationError(
+                    {'quantity': ['Not enough tickets are available for this offer.']},
+                    code='insufficient_inventory',
+                )
+
             listing_group_id = getattr(ticket_locked, 'listing_group_id', None) or ''
+            active_checkout = Offer.objects.filter(
+                buyer=buyer,
+                status='accepted',
+                checkout_expires_at__gt=timezone.now(),
+            )
+            if listing_group_id:
+                active_checkout = active_checkout.filter(
+                    ticket__listing_group_id=listing_group_id,
+                    ticket__seller_id=ticket_locked.seller_id,
+                )
+            else:
+                active_checkout = active_checkout.filter(ticket_id=ticket_locked.id)
+            if active_checkout.exists():
+                raise ValidationError(
+                    {
+                        'non_field_errors': [
+                            'כבר קיימת הצעה מאושרת למודעה זו. יש להשלים או להמתין לסיום חלון התשלום.',
+                        ]
+                    },
+                    code='accepted_offer_exists',
+                )
+
             old_pending = Offer.objects.filter(
                 buyer=buyer,
                 status='pending',
@@ -4602,6 +4659,7 @@ class OfferViewSet(viewsets.ModelViewSet):
             expires_at = timezone.now() + timedelta(hours=48)
             offer = serializer.save(
                 buyer=buyer,
+                ticket=ticket_locked,
                 expires_at=expires_at,
                 status='pending',
             )
@@ -4841,21 +4899,52 @@ class OfferViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):
         """Reject an offer - only the RECIPIENT (not creator) can reject."""
-        offer = self.get_object()
-        
-        # Only the recipient can reject (prevents self-rejection abuse)
-        recipient = self._get_offer_recipient(offer)
-        if recipient is None or request.user.pk != recipient.pk:
-            raise PermissionDenied("Only the recipient of this offer can reject it.")
-        
-        if offer.status != 'pending':
-            return Response(
-                {'error': 'This offer is no longer pending.'},
-                status=status.HTTP_400_BAD_REQUEST
+        try:
+            pk_int = int(pk)
+        except (TypeError, ValueError):
+            return Response({'error': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        target = (
+            Offer.objects.select_related('ticket')
+            .filter(pk=pk_int)
+            .filter(Q(buyer=request.user) | Q(ticket__seller=request.user))
+            .first()
+        )
+        if not target:
+            return Response({'error': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        with transaction.atomic():
+            # Keep lock ordering consistent with accept/counter: inventory first, offer second.
+            Ticket.objects.select_for_update().get(pk=target.ticket_id)
+            offer = (
+                Offer.objects.select_for_update()
+                .select_related('buyer', 'ticket__seller')
+                .filter(pk=pk_int)
+                .filter(Q(buyer=request.user) | Q(ticket__seller=request.user))
+                .first()
             )
-        
-        offer.status = 'rejected'
-        offer.save()
+            if not offer:
+                return Response({'error': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+            recipient = self._get_offer_recipient(offer)
+            if recipient is None or request.user.pk != recipient.pk:
+                raise PermissionDenied("Only the recipient of this offer can reject it.")
+
+            if offer.expires_at and timezone.now() > offer.expires_at:
+                offer.status = 'expired'
+                offer.save(update_fields=['status', 'updated_at'])
+                return Response(
+                    {'error': HE_OFFER_EXPIRED},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if offer.status != 'pending':
+                return Response(
+                    {'error': 'This offer is no longer pending.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            offer.status = 'rejected'
+            offer.save(update_fields=['status', 'updated_at'])
         
         serializer = self.get_serializer(offer)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -4876,9 +4965,9 @@ class OfferViewSet(viewsets.ModelViewSet):
 
         try:
             counter_amount = Decimal(str(counter_amount))
-            if counter_amount <= 0:
+            if not counter_amount.is_finite() or counter_amount <= 0:
                 raise ValueError("Amount must be positive")
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, InvalidOperation):
             return Response(
                 {'error': 'סכום הצעת הנגד אינו תקין.'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -4914,6 +5003,11 @@ class OfferViewSet(viewsets.ModelViewSet):
 
             offer_cur = getattr(offer, 'currency', None) or iso4217_for_ticket_listing(ticket)
             counter_amount = quantize_money_decimal(counter_amount, offer_cur)
+            if not counter_amount.is_finite() or counter_amount <= 0:
+                return Response(
+                    {'error': 'סכום הצעת הנגד אינו תקין.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             if offer.expires_at and timezone.now() > offer.expires_at:
                 offer.status = 'expired'
