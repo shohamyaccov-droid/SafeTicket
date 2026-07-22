@@ -155,6 +155,7 @@ INSTALLED_APPS = _INSTALLED_CORE + [
     'corsheaders',
     'users',
     'wallets',
+    'offers',
 ]
 
 MIDDLEWARE = [

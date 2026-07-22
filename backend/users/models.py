@@ -1086,6 +1086,7 @@ class Offer(models.Model):
         ('rejected', 'Rejected'),
         ('countered', 'Countered'),
         ('expired', 'Expired'),
+        ('completed', 'Completed'),
     ]
     
     buyer = models.ForeignKey(

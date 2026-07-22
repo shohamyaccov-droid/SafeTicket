@@ -366,6 +366,8 @@ HE_RESERVATION_RELEASE_FORBIDDEN = 'אין הרשאה לשחרר את השמיר
 HE_OFFER_NOT_PENDING = 'ההצעה כבר אינה זמינה. ייתכן שהיא טופלה על ידי משתמש אחר.'
 HE_OFFER_EXPIRED = 'פג תוקף ההצעה.'
 HE_OFFER_NOT_ENOUGH_TICKETS = 'אין מספיק כרטיסים זמינים עבור ההצעה הזו.'
+HE_OFFER_ALREADY_CONSUMED = 'Offer already consumed'
+HE_TICKET_ALREADY_SOLD = 'The ticket is already sold.'
 # Re-export for tests / API clients that import from views
 __all_ticket_status_exports = (HE_TICKET_TAKEN, TICKET_STATUS_TAKEN)
 
@@ -402,21 +404,125 @@ def _find_existing_pending_checkout(*, ticket_ids, quantity, user=None, guest_em
 
 
 def _reject_pending_offers_for_ticket_ids(ticket_ids):
-    """When inventory is sold, invalidate competing pending offers on those rows."""
+    """When inventory is sold, invalidate competing pending/accepted offers on those rows."""
     if not ticket_ids:
         return 0
     return Offer.objects.filter(
         ticket_id__in=list(ticket_ids),
-        status='pending',
+        status__in=['pending', 'accepted'],
     ).update(status='rejected')
+
+
+def _finalize_offers_after_sale(*, ticket_ids, winning_offer=None):
+    """
+    After a successful payment: mark the winning accepted offer completed and
+    invalidate every other pending/accepted offer on the sold inventory.
+    """
+    ids = []
+    for tid in ticket_ids or []:
+        try:
+            ids.append(int(tid))
+        except (TypeError, ValueError):
+            continue
+    ids = sorted(set(ids))
+    if not ids and winning_offer is None:
+        return 0
+
+    updated = 0
+    win_pk = getattr(winning_offer, 'pk', None) or getattr(winning_offer, 'id', None)
+    if win_pk is not None:
+        updated += Offer.objects.filter(
+            pk=win_pk,
+            status__in=['accepted', 'pending'],
+        ).update(status='completed')
+        if ids:
+            updated += Offer.objects.filter(
+                ticket_id__in=ids,
+                status__in=['pending', 'accepted'],
+            ).exclude(pk=win_pk).update(status='rejected')
+        return updated
+
+    if ids:
+        updated += Offer.objects.filter(
+            ticket_id__in=ids,
+            status__in=['pending', 'accepted'],
+        ).update(status='rejected')
+    return updated
+
+
+def _accepted_offer_hold_protects_ticket(ticket) -> bool:
+    """
+    True when a reserved row is held for a buyer with a still-valid accepted offer
+    (24h checkout window). The 10-minute abandoned-cart sweeper must not release these.
+    """
+    if getattr(ticket, 'status', None) != 'reserved':
+        return False
+    buyer_id = getattr(ticket, 'reserved_by_id', None)
+    if not buyer_id:
+        return False
+    now = timezone.now()
+    base = Offer.objects.filter(
+        buyer_id=buyer_id,
+        status='accepted',
+        checkout_expires_at__gt=now,
+    )
+    listing_group_id = getattr(ticket, 'listing_group_id', None)
+    if listing_group_id:
+        return base.filter(
+            Q(ticket_id=ticket.pk)
+            | Q(
+                ticket__listing_group_id=listing_group_id,
+                ticket__seller_id=getattr(ticket, 'seller_id', None),
+            )
+        ).exists()
+    return base.filter(ticket_id=ticket.pk).exists()
+
+
+def _ticket_pks_protected_by_accepted_offer_holds():
+    """All ticket PKs that must survive the short cart sweeper due to offer holds."""
+    now = timezone.now()
+    offers = (
+        Offer.objects.filter(
+            status='accepted',
+            checkout_expires_at__gt=now,
+        )
+        .select_related('ticket')
+        .only(
+            'id',
+            'buyer_id',
+            'ticket_id',
+            'ticket__listing_group_id',
+            'ticket__seller_id',
+        )
+    )
+    pks = set()
+    group_q = Q()
+    has_group = False
+    for offer in offers.iterator():
+        pks.add(offer.ticket_id)
+        ticket = offer.ticket
+        if ticket.listing_group_id:
+            has_group = True
+            group_q |= Q(
+                listing_group_id=ticket.listing_group_id,
+                seller_id=ticket.seller_id,
+                reserved_by_id=offer.buyer_id,
+                status='reserved',
+            )
+    if has_group:
+        pks.update(Ticket.objects.filter(group_q).values_list('pk', flat=True))
+    return pks
 
 
 def _sync_expired_cart_reservation(ticket):
     """
     If reservation TTL passed, release the row so checkout can proceed fairly.
     Mutates and saves ticket when expired.
+    Accepted-offer holds use checkout_expires_at (up to 24h), not the 10-minute cart TTL.
     """
     if ticket.status != 'reserved' or not ticket.reserved_at:
+        return
+    if _accepted_offer_hold_protects_ticket(ticket):
         return
     cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
     if ticket.reserved_at < cutoff:
@@ -633,15 +739,22 @@ def release_abandoned_carts():
     """
     Self-healing: Release expired ticket reservations and cancel stale pending orders.
     Call lazily at the top of Event/Ticket list endpoints so inventory cleans itself.
+
+    Accepted-offer checkout holds (checkout_expires_at window, typically 24h) are excluded
+    from the short RESERVATION_TIMEOUT_MINUTES cart sweeper so negotiation buyers are not
+    unlocked after 10 minutes.
     """
     from users.order_cleanup import cancel_abandoned_pending_payment_orders
     cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
     released = 0
-    # 1. Expired ticket reservations -> back to active
+    protected_pks = _ticket_pks_protected_by_accepted_offer_holds()
+    # 1. Expired ticket reservations -> back to active (except protected offer holds)
     expired_tickets = Ticket.objects.filter(
         status='reserved',
-        reserved_at__lt=cutoff
+        reserved_at__lt=cutoff,
     )
+    if protected_pks:
+        expired_tickets = expired_tickets.exclude(pk__in=protected_pks)
     count = expired_tickets.update(
         status='active',
         reserved_at=None,
@@ -656,14 +769,16 @@ def release_abandoned_carts():
     )
     for order in stale_orders:
         if order.ticket_id:
-            Ticket.objects.filter(id=order.ticket_id).update(
+            Ticket.objects.filter(id=order.ticket_id).exclude(
+                pk__in=protected_pks
+            ).update(
                 status='active',
                 reserved_at=None,
                 reserved_by=None,
                 reservation_email=None
             )
         for tid in (order.ticket_ids or []):
-            Ticket.objects.filter(id=tid).update(
+            Ticket.objects.filter(id=tid).exclude(pk__in=protected_pks).update(
                 status='active',
                 reserved_at=None,
                 reserved_by=None,
@@ -758,14 +873,18 @@ def _reserve_rows_for_pending_checkout(available_tickets, user=None, guest_email
 
 
 def _verify_reservations_fresh(reserved_before, user=None, guest_email: str = ''):
-    """Ensure checkout reservations have not expired (RESERVATION_TIMEOUT_MINUTES)."""
+    """Ensure checkout reservations have not expired (RESERVATION_TIMEOUT_MINUTES).
+
+    Accepted-offer holds remain valid until offer.checkout_expires_at.
+    """
     cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
     guest_email = (guest_email or '').strip()
     for t in reserved_before:
         t.refresh_from_db()
         if t.status != 'reserved':
             raise ValueError('ticket_state_changed')
-        if not t.reserved_at or t.reserved_at < cutoff:
+        offer_protected = _accepted_offer_hold_protects_ticket(t)
+        if not offer_protected and (not t.reserved_at or t.reserved_at < cutoff):
             raise ValueError('reservation_expired')
         if user and getattr(user, 'is_authenticated', False):
             if t.reserved_by_id != user.id:
@@ -1492,9 +1611,33 @@ def create_order(request):
                 negotiated_offer = Offer.objects.select_for_update().filter(
                     id=oid,
                     buyer=request.user,
-                    status='accepted',
                 ).first()
-                if not negotiated_offer:
+                if negotiated_offer and negotiated_offer.status == 'completed':
+                    return Response(
+                        {'error': HE_OFFER_ALREADY_CONSUMED},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if not negotiated_offer or negotiated_offer.status != 'accepted':
+                    # Prefer an explicit sold error when inventory was already purchased.
+                    sold_ticket = None
+                    if negotiated_offer is not None:
+                        sold_ticket = Ticket.objects.filter(
+                            pk=negotiated_offer.ticket_id,
+                            status='sold',
+                        ).first()
+                    if sold_ticket is None and negotiated_offer is not None:
+                        tref = negotiated_offer.ticket
+                        if tref.listing_group_id and Ticket.objects.filter(
+                            listing_group_id=tref.listing_group_id,
+                            seller_id=tref.seller_id,
+                            status='sold',
+                        ).exists():
+                            sold_ticket = True
+                    if sold_ticket:
+                        return Response(
+                            {'error': HE_TICKET_ALREADY_SOLD},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
                     return Response(
                         {
                             'error': 'Invalid or ineligible offer for checkout (must be accepted and belong to you).',
@@ -1801,6 +1944,11 @@ def create_order(request):
                     )
                 if ticket.status not in ['active', 'reserved']:
                     logger.debug(f"ERROR: Ticket {ticket_id} status is {ticket.status}, not 'active' or 'reserved'")
+                    if ticket.status == 'sold':
+                        return Response(
+                            {'error': HE_TICKET_ALREADY_SOLD},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
                     return Response(
                         {'error': 'Ticket is no longer available'},
                         status=status.HTTP_400_BAD_REQUEST
@@ -2065,7 +2213,10 @@ def confirm_order_payment(request, order_id):
                 _verify_reservations_fresh(tix, user=user_obj, guest_email=ge)
                 _finalize_group_sale_ticket_rows(order.ticket_ids)
 
-            _reject_pending_offers_for_ticket_ids(list(order.ticket_ids or []))
+            _finalize_offers_after_sale(
+                ticket_ids=list(order.ticket_ids or []),
+                winning_offer=negotiated_offer,
+            )
             order.status = 'paid'
             order.payment_confirm_token = None
             order.save(update_fields=['status', 'payment_confirm_token', 'updated_at'])
@@ -2331,13 +2482,28 @@ def guest_checkout(request):
         except (TypeError, ValueError):
             return Response({'error': 'Invalid offer_id.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            negotiated_offer = Offer.objects.get(id=oid, status='accepted')
-            logger.debug(f"Guest checkout: Negotiated offer found: ID={oid}, Amount={negotiated_offer.amount}")
+            negotiated_offer = Offer.objects.get(id=oid)
         except Offer.DoesNotExist:
             return Response(
                 {'error': 'Invalid or ineligible offer for checkout.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if negotiated_offer.status == 'completed':
+            return Response(
+                {'error': HE_OFFER_ALREADY_CONSUMED},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if negotiated_offer.status != 'accepted':
+            if Ticket.objects.filter(pk=negotiated_offer.ticket_id, status='sold').exists():
+                return Response(
+                    {'error': HE_TICKET_ALREADY_SOLD},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return Response(
+                {'error': 'Invalid or ineligible offer for checkout.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        logger.debug(f"Guest checkout: Negotiated offer found: ID={oid}, Amount={negotiated_offer.amount}")
 
     serializer = GuestCheckoutSerializer(data=request.data)
     if serializer.is_valid():

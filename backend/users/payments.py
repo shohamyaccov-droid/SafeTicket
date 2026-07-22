@@ -516,7 +516,7 @@ def finalize_pending_order_to_paid(order_id: int, source: str = 'payme') -> tupl
         RESERVATION_TIMEOUT_MINUTES,
         _apply_order_pricing_fields,
         _finalize_group_sale_ticket_rows,
-        _reject_pending_offers_for_ticket_ids,
+        _finalize_offers_after_sale,
         _verify_reservations_fresh,
         release_abandoned_carts,
     )
@@ -570,7 +570,10 @@ def finalize_pending_order_to_paid(order_id: int, source: str = 'payme') -> tupl
                 _verify_reservations_fresh(tix, user=user_obj, guest_email=ge)
                 _finalize_group_sale_ticket_rows(order.ticket_ids)
 
-            _reject_pending_offers_for_ticket_ids(list(order.ticket_ids or []))
+            _finalize_offers_after_sale(
+                ticket_ids=list(order.ticket_ids or []),
+                winning_offer=negotiated_offer,
+            )
             order.status = 'paid'
             order.payment_confirm_token = None
             order.save(update_fields=['status', 'payment_confirm_token', 'updated_at'])
