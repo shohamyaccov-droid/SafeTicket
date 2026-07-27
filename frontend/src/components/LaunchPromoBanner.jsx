@@ -33,8 +33,8 @@ export default function LaunchPromoBanner() {
 
   return (
     <aside className="launch-promo-banner" role="status" aria-label="מבצע בונוס למוכרים">
-      <strong>🎁 20 ₪ בונוס למוכרים!</strong>{' '}
-      <span>מוגבל ל-100 המכירות הראשונות באתר.</span>
+      <span>🎁 20 ₪ בונוס למוכרים! מוגבל ל-100 המכירות הראשונות באתר. קוד קופון: </span>
+      <strong>SAFE20</strong>
     </aside>
   );
 }
