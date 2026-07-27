@@ -1,0 +1,125 @@
+.ticket-upload-wizard {
+  width: 100%;
+}
+
+.ticket-upload-wizard > .listing-card {
+  margin-inline: auto;
+}
+
+.ticket-upload-wizard__progress {
+  width: min(760px, calc(100% - 2rem));
+  margin: 1.25rem auto 0.75rem;
+}
+
+.ticket-upload-wizard__eyebrow {
+  margin: 0 0 0.65rem;
+  color: #425466;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.ticket-upload-wizard__steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ticket-upload-wizard__step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0.7rem 0.45rem;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  background: #fff;
+  color: #718096;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.ticket-upload-wizard__step-icon {
+  display: grid;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: #edf2f7;
+}
+
+.ticket-upload-wizard__step.is-current {
+  border-color: #0045af;
+  color: #003894;
+  box-shadow: 0 0 0 2px rgba(0, 69, 175, 0.08);
+}
+
+.ticket-upload-wizard__step.is-current .ticket-upload-wizard__step-icon {
+  background: #0045af;
+  color: #fff;
+}
+
+.ticket-upload-wizard__step.is-complete {
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.ticket-upload-wizard__step.is-complete .ticket-upload-wizard__step-icon {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.sell-wizard-hidden {
+  display: none;
+}
+
+.sell-wizard-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.sell-wizard-back {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+}
+
+.sell-wizard-next {
+  flex: 1;
+  max-width: 360px;
+  background: #0045af;
+  color: #fff;
+}
+
+.sell-wizard-next:hover {
+  background: #003894;
+}
+
+@media (max-width: 640px) {
+  .ticket-upload-wizard__progress {
+    width: calc(100% - 1rem);
+    margin-top: 0.75rem;
+  }
+
+  .ticket-upload-wizard__step {
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.55rem 0.2rem;
+    font-size: 0.72rem;
+    text-align: center;
+  }
+
+  .ticket-upload-wizard__step-icon {
+    width: 26px;
+    height: 26px;
+    flex-basis: 26px;
+  }
+}
