@@ -569,6 +569,38 @@ def verify_payme_webhook_request(
     return True, 'ok'
 
 
+def _order_ticket_id_set(order) -> set[int]:
+    ids: set[int] = set()
+    for tid in order.ticket_ids or []:
+        try:
+            ids.add(int(tid))
+        except (TypeError, ValueError):
+            continue
+    if order.ticket_id:
+        ids.add(int(order.ticket_id))
+    if getattr(order, 'held_ticket_id', None):
+        ids.add(int(order.held_ticket_id))
+    return ids
+
+
+def _tickets_claimed_by_other_paid_order(order) -> int | None:
+    """Return conflicting paid/completed order id if any ticket is already owned elsewhere."""
+    from users.models import Order
+
+    wanted = _order_ticket_id_set(order)
+    if not wanted:
+        return None
+    for other in (
+        Order.objects.filter(status__in=('paid', 'completed'))
+        .exclude(pk=order.pk)
+        .only('id', 'ticket_ids', 'ticket_id', 'held_ticket_id')
+        .iterator()
+    ):
+        if wanted & _order_ticket_id_set(other):
+            return int(other.pk)
+    return None
+
+
 def _fulfill_paid_order_ticket_rows(order) -> None:
     """Ensure paid/completed orders leave fully purchased ticket rows unavailable."""
     from users.models import Ticket
@@ -617,10 +649,32 @@ def _fulfill_paid_order_ticket_rows(order) -> None:
         return
 
 
-def finalize_pending_order_to_paid(order_id: int, source: str = 'payme') -> tuple[bool, str | None]:
+# Statuses the normal webhook/client path may finalize from.
+_FINALIZE_DEFAULT_STATUSES = frozenset({'pending_payment'})
+# Admin recovery only: abandoned cleanup may have cancelled a paid-in-PayMe order.
+_FINALIZE_ADMIN_FORCE_STATUSES = frozenset(
+    {
+        'pending_payment',
+        'cancelled',
+        'canceled',  # defensive alias if ever stored
+        'pending',
+    }
+)
+
+
+def finalize_pending_order_to_paid(
+    order_id: int,
+    source: str = 'payme',
+    *,
+    force_from_admin: bool = False,
+) -> tuple[bool, str | None]:
     """
     Run the same inventory + status transition as confirm_order_payment (without user session checks).
     Caller must verify webhook signature / PSP trust first.
+
+    When force_from_admin=True (Django admin recovery only), also accepts cancelled/pending
+    stuck orders, skips reservation-expiry checks, and re-claims released inventory so the
+    buyer gets the same paid order + sold tickets + payout ledger as a successful webhook.
     """
     from django.db import close_old_connections
 
@@ -637,20 +691,45 @@ def finalize_pending_order_to_paid(order_id: int, source: str = 'payme') -> tupl
 
     try:
         with transaction.atomic():
-            release_abandoned_carts()
+            if not force_from_admin:
+                release_abandoned_carts()
             order = Order.objects.select_for_update().filter(pk=order_id).first()
             if not order:
                 return False, 'order_missing'
             if order.status == 'paid':
                 _fulfill_paid_order_ticket_rows(order)
                 return True, None
-            if order.status != 'pending_payment':
+
+            allowed = _FINALIZE_ADMIN_FORCE_STATUSES if force_from_admin else _FINALIZE_DEFAULT_STATUSES
+            if order.status not in allowed:
                 return False, 'order_not_pending'
+
+            if force_from_admin:
+                conflict = _tickets_claimed_by_other_paid_order(order)
+                if conflict is not None:
+                    logger.warning(
+                        'finalize_pending_order_to_paid admin force blocked order_id=%s '
+                        'tickets already on paid order_id=%s',
+                        order_id,
+                        conflict,
+                    )
+                    return False, f'ticket_already_sold_on_order_{conflict}'
 
             negotiated_offer = order.pending_offer
             ticket_ref = order.ticket
 
-            if order.held_ticket_id and order.held_quantity:
+            if force_from_admin:
+                # Cancelled / expired holds often released inventory back to active — reclaim.
+                ticket_ids = list(order.ticket_ids or [])
+                if not ticket_ids and order.ticket_id:
+                    ticket_ids = [order.ticket_id]
+                if order.held_ticket_id and order.held_ticket_id not in ticket_ids:
+                    ticket_ids.append(order.held_ticket_id)
+                if not ticket_ids:
+                    return False, 'ticket_mismatch'
+                _finalize_group_sale_ticket_rows(ticket_ids)
+                ticket_ref = Ticket.objects.filter(pk=ticket_ids[0]).first() or ticket_ref
+            elif order.held_ticket_id and order.held_quantity:
                 t = Ticket.objects.select_for_update().get(pk=order.held_ticket_id)
                 if timezone.now() - order.created_at > timedelta(minutes=RESERVATION_TIMEOUT_MINUTES + 5):
                     raise ValueError('checkout_expired')
@@ -689,7 +768,20 @@ def finalize_pending_order_to_paid(order_id: int, source: str = 'payme') -> tupl
             )
             order.status = 'paid'
             order.payment_confirm_token = None
-            order.save(update_fields=['status', 'payment_confirm_token', 'updated_at'])
+            update_fields = ['status', 'payment_confirm_token', 'updated_at']
+            if force_from_admin:
+                # Clear stale hold pointers left from abandoned-checkout cancel.
+                order.held_ticket = None
+                order.held_quantity = 0
+                update_fields.extend(['held_ticket', 'held_quantity'])
+                if not (order.payme_status or '').strip() or order.payme_status in (
+                    'initialized',
+                    'pending',
+                    'unknown',
+                ):
+                    order.payme_status = 'admin_force_paid'
+                    update_fields.append('payme_status')
+            order.save(update_fields=list(dict.fromkeys(update_fields)))
             _apply_order_pricing_fields(order, negotiated_offer, ticket_ref, order.quantity)
             from users.coupons import finalize_coupon_redemption
 
@@ -698,6 +790,12 @@ def finalize_pending_order_to_paid(order_id: int, source: str = 'payme') -> tupl
             from users.payout_ledger import ensure_seller_payout_for_order
 
             ensure_seller_payout_for_order(order)
+            logger.warning(
+                'finalize_pending_order_to_paid ok order_id=%s source=%s force_from_admin=%s',
+                order_id,
+                source,
+                force_from_admin,
+            )
     except ValueError as e:
         logger.warning('finalize_pending_order_to_paid order_id=%s: %s', order_id, e)
         return False, str(e)

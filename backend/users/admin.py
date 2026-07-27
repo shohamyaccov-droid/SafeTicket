@@ -575,11 +575,18 @@ class EventAdmin(admin.ModelAdmin):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
+    """
+    Orders awaiting PayMe: use action
+    "Finalize stuck PayMe orders (mark paid)" after confirming payment in PayMe dashboard.
+    """
+
     list_display = [
         'id',
         'user',
         'guest_email',
         'status',
+        'payme_status',
+        'payme_transaction_id_short',
         'total_amount',
         'coupon_code_snapshot',
         'affiliate_commission',
@@ -587,9 +594,131 @@ class OrderAdmin(admin.ModelAdmin):
         'event_name',
         'created_at',
     ]
-    list_filter = ['status', 'created_at']
-    search_fields = ['user__username', 'guest_email', 'event_name', 'coupon_code_snapshot']
+    list_filter = ['status', 'payme_status', 'created_at']
+    search_fields = [
+        'user__username',
+        'guest_email',
+        'event_name',
+        'coupon_code_snapshot',
+        'payme_transaction_id',
+    ]
     readonly_fields = ['created_at', 'updated_at', 'payment_confirm_token']
+    actions = ['finalize_stuck_payme_orders']
+
+    _FINALIZE_MAX_ORDERS = 25
+
+    @admin.display(description='PayMe sale id', ordering='payme_transaction_id')
+    def payme_transaction_id_short(self, obj):
+        tid = (getattr(obj, 'payme_transaction_id', None) or '').strip()
+        if not tid:
+            return '—'
+        if len(tid) <= 24:
+            return tid
+        return f'{tid[:10]}…{tid[-8:]}'
+
+    @admin.action(description='Finalize stuck PayMe orders (mark paid)')
+    def finalize_stuck_payme_orders(self, request, queryset):
+        """
+        Manual recovery when PayMe shows Completed but TradeTix is stuck on
+        pending_payment or cancelled (e.g. Apple Pay webhook miss + abandoned cleanup).
+        Requires confirmation + a stored PayMe sale id. Force-claims tickets for the buyer.
+        """
+        from users.payments import _FINALIZE_ADMIN_FORCE_STATUSES, finalize_pending_order_to_paid
+
+        eligible_statuses = tuple(_FINALIZE_ADMIN_FORCE_STATUSES)
+        skipped_status = queryset.exclude(status__in=eligible_statuses).count()
+        candidate_qs = queryset.filter(status__in=eligible_statuses)
+        skipped_no_sale = candidate_qs.filter(payme_transaction_id__isnull=True).count() + candidate_qs.filter(
+            payme_transaction_id=''
+        ).count()
+        eligible_qs = (
+            candidate_qs.exclude(payme_transaction_id__isnull=True)
+            .exclude(payme_transaction_id='')
+            .order_by('id')
+        )
+        eligible = list(eligible_qs[: self._FINALIZE_MAX_ORDERS])
+
+        if not eligible:
+            self.message_user(
+                request,
+                (
+                    'No eligible orders. Only pending_payment / cancelled / pending orders with a '
+                    'non-empty payme_transaction_id can be force-finalized. '
+                    f'Skipped (wrong status): {skipped_status}; '
+                    f'skipped (no PayMe sale id): {skipped_no_sale}.'
+                ),
+                level=messages.WARNING,
+            )
+            return None
+
+        # Intermediate confirmation (POST apply=1 from template).
+        if request.POST.get('apply') != '1':
+            opts = self.model._meta
+            context = {
+                **self.admin_site.each_context(request),
+                'opts': opts,
+                'title': 'Confirm finalize stuck PayMe orders',
+                'orders': eligible,
+                'action': 'finalize_stuck_payme_orders',
+                'queryset_pks': [o.pk for o in eligible],
+                'skipped_status': skipped_status,
+                'skipped_no_sale': skipped_no_sale,
+                'media': self.media,
+            }
+            return render(request, 'admin/finalize_stuck_payme_orders_confirm.html', context)
+
+        ok_count = 0
+        fail_details: list[str] = []
+        # On confirm, Django rebuilds queryset from _selected_action; re-check safety gates.
+        for order in (
+            queryset.filter(status__in=eligible_statuses)
+            .exclude(payme_transaction_id__isnull=True)
+            .exclude(payme_transaction_id='')
+            .order_by('id')[: self._FINALIZE_MAX_ORDERS]
+        ):
+            prior_status = order.status
+            ok, err = finalize_pending_order_to_paid(
+                order.pk,
+                source=f'admin_manual_finalize:user={request.user.pk}',
+                force_from_admin=True,
+            )
+            if ok:
+                ok_count += 1
+                _admin_log.warning(
+                    'admin finalize_stuck_payme_orders success order_id=%s admin_user_id=%s '
+                    'prior_status=%s payme_transaction_id=%s',
+                    order.pk,
+                    request.user.pk,
+                    prior_status,
+                    order.payme_transaction_id,
+                )
+            else:
+                fail_details.append(f'#{order.pk}: {err or "finalize_failed"}')
+                _admin_log.warning(
+                    'admin finalize_stuck_payme_orders failed order_id=%s admin_user_id=%s '
+                    'prior_status=%s err=%s',
+                    order.pk,
+                    request.user.pk,
+                    prior_status,
+                    err,
+                )
+
+        if ok_count:
+            self.message_user(
+                request,
+                (
+                    f'Finalized {ok_count} order(s) to paid '
+                    '(tickets sold to buyer, inventory claimed, payout ledger updated).'
+                ),
+                level=messages.SUCCESS,
+            )
+        if fail_details:
+            self.message_user(
+                request,
+                'Failed: ' + '; '.join(fail_details[:12]),
+                level=messages.ERROR,
+            )
+        return None
 
 
 @admin.register(AffiliatePartner)
