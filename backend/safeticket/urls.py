@@ -14,7 +14,6 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 from safeticket.apple_pay_views import apple_pay_domain_association
-from users.force_fix_order_111 import force_fix_order_111
 from users.views import subscribe_ticket_alert, secret_run_seed_dummy_tickets
 
 
@@ -101,8 +100,6 @@ urlpatterns = [
     path('api/health/', health_check, name='health_check'),
     path('api/alerts/subscribe/', subscribe_ticket_alert, name='subscribe_ticket_alert'),
     path('api/secret-run-seed-9988/', secret_run_seed_dummy_tickets, name='secret_run_seed_dummy_tickets'),
-    # TEMPORARY: remove after Order 111 Apple Pay recovery
-    path('api/force-fix-111/', force_fix_order_111, name='force_fix_order_111'),
     path('api/payments/', include('users.payme_urls')),
     path('api/users/', include('users.urls')),
 ]

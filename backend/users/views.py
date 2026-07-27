@@ -743,53 +743,95 @@ def release_abandoned_carts():
     Accepted-offer checkout holds (checkout_expires_at window, typically 24h) are excluded
     from the short RESERVATION_TIMEOUT_MINUTES cart sweeper so negotiation buyers are not
     unlocked after 10 minutes.
+
+    Pending PayMe checkouts use a wider grace window (default 60 minutes) and are not
+    cancelled while a payme_transaction_id is present unless PayMe confirmed failure.
     """
-    from users.order_cleanup import cancel_abandoned_pending_payment_orders
+    from users.order_cleanup import (
+        DEFAULT_PENDING_PAYMENT_GRACE_MINUTES,
+        cancel_abandoned_pending_payment_orders,
+    )
+
     cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
     released = 0
-    protected_pks = _ticket_pks_protected_by_accepted_offer_holds()
-    # 1. Expired ticket reservations -> back to active (except protected offer holds)
-    expired_tickets = Ticket.objects.filter(
-        status='reserved',
-        reserved_at__lt=cutoff,
-    )
-    if protected_pks:
-        expired_tickets = expired_tickets.exclude(pk__in=protected_pks)
-    count = expired_tickets.update(
-        status='active',
-        reserved_at=None,
-        reserved_by=None,
-        reservation_email=None
-    )
-    released += count
-    # 2. Pending orders older than timeout -> cancelled (if any exist)
-    stale_orders = Order.objects.filter(
-        status='pending',
-        created_at__lt=cutoff
-    )
-    for order in stale_orders:
-        if order.ticket_id:
-            Ticket.objects.filter(id=order.ticket_id).exclude(
-                pk__in=protected_pks
-            ).update(
-                status='active',
-                reserved_at=None,
-                reserved_by=None,
-                reservation_email=None
-            )
-        for tid in (order.ticket_ids or []):
-            Ticket.objects.filter(id=tid).exclude(pk__in=protected_pks).update(
-                status='active',
-                reserved_at=None,
-                reserved_by=None,
-                reservation_email=None
-            )
-    stale_count = stale_orders.update(status='cancelled')
-    released += stale_count
+    protected_pks = set(_ticket_pks_protected_by_accepted_offer_holds() or [])
 
-    # 3. payment pending orders: give PayMe/webhooks the same 10-minute checkout window
-    # cancelling and releasing inventory. Successful/authorized PayMe statuses are skipped.
-    cleanup_result = cancel_abandoned_pending_payment_orders(older_than_minutes=RESERVATION_TIMEOUT_MINUTES)
+    # 1. Expired ticket reservations -> back to active (row-locked; skip offer holds)
+    expired_ids = list(
+        Ticket.objects.filter(status='reserved', reserved_at__lt=cutoff)
+        .exclude(pk__in=protected_pks)
+        .order_by('id')
+        .values_list('id', flat=True)[:500]
+    )
+    for tid in expired_ids:
+        with transaction.atomic():
+            ticket = Ticket.objects.select_for_update().filter(pk=tid, status='reserved').first()
+            if not ticket:
+                continue
+            if ticket.pk in protected_pks:
+                continue
+            if not ticket.reserved_at or ticket.reserved_at >= cutoff:
+                continue
+            ticket.status = 'active'
+            ticket.reserved_at = None
+            ticket.reserved_by = None
+            ticket.reservation_email = None
+            ticket.save(
+                update_fields=[
+                    'status',
+                    'reserved_at',
+                    'reserved_by',
+                    'reservation_email',
+                    'updated_at',
+                ]
+            )
+            released += 1
+
+    # 2. Legacy status='pending' orders older than the short cart timeout
+    stale_order_ids = list(
+        Order.objects.filter(status='pending', created_at__lt=cutoff)
+        .order_by('id')
+        .values_list('id', flat=True)[:200]
+    )
+    for oid in stale_order_ids:
+        with transaction.atomic():
+            order = Order.objects.select_for_update().filter(pk=oid, status='pending').first()
+            if not order:
+                continue
+            ticket_ids = []
+            if order.ticket_id and order.ticket_id not in protected_pks:
+                ticket_ids.append(order.ticket_id)
+            for tid in order.ticket_ids or []:
+                try:
+                    tid_i = int(tid)
+                except (TypeError, ValueError):
+                    continue
+                if tid_i not in protected_pks:
+                    ticket_ids.append(tid_i)
+            for ticket in Ticket.objects.select_for_update().filter(pk__in=sorted(set(ticket_ids))):
+                if ticket.status != 'reserved':
+                    continue
+                ticket.status = 'active'
+                ticket.reserved_at = None
+                ticket.reserved_by = None
+                ticket.reservation_email = None
+                ticket.save(
+                    update_fields=[
+                        'status',
+                        'reserved_at',
+                        'reserved_by',
+                        'reservation_email',
+                        'updated_at',
+                    ]
+                )
+            order.status = 'cancelled'
+            order.save(update_fields=['status', 'updated_at'])
+            released += 1
+
+    # 3. pending_payment: wide PayMe grace + never cancel sale-id rows without explicit failure
+    cleanup_result = cancel_abandoned_pending_payment_orders(
+        older_than_minutes=DEFAULT_PENDING_PAYMENT_GRACE_MINUTES,
+    )
     released += cleanup_result.cancelled
     return released
 
@@ -1663,13 +1705,28 @@ def create_order(request):
                 logger.debug(
                     f"Negotiated offer found: ID={oid}, Amount={negotiated_offer.amount}, Quantity={negotiated_offer.quantity}"
                 )
-                expected_total = expected_negotiated_total_from_offer_base(negotiated_offer.amount)
+                coupon_code_early = (request.data.get('coupon_code') or '').strip()
+                from users.coupons import CouponError as _CouponErrorEarly
+                try:
+                    expected_total = _checkout_expected_total(
+                        ticket=negotiated_offer.ticket,
+                        order_quantity=order_quantity,
+                        negotiated_offer=negotiated_offer,
+                        coupon_code=coupon_code_early,
+                    )
+                except _CouponErrorEarly as ce:
+                    return Response(
+                        {'error': ce.message, 'code': ce.code},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 received_total = decimal_money(request.data.get('total_amount', 0))
                 if not payment_amounts_match(received_total, expected_total):
                     return Response(
                         {
                             'error': (
-                                f'Amount mismatch. Expected {expected_total:.2f} (negotiated base + buyer service fee), '
+                                f'Amount mismatch. Expected {expected_total:.2f} '
+                                f'(negotiated base + buyer service fee'
+                                f'{", with coupon" if coupon_code_early else ""}), '
                                 f'got {received_total}'
                             )
                         },
@@ -2523,7 +2580,20 @@ def guest_checkout(request):
                     {'error': 'Invalid or ineligible offer for checkout (offer was not properly accepted).'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            expected_total = expected_negotiated_total_from_offer_base(negotiated_offer.amount)
+            coupon_code_early = (order_data.get('coupon_code') or '').strip()
+            from users.coupons import CouponError as _CouponErrorEarly
+            try:
+                expected_total = _checkout_expected_total(
+                    ticket=negotiated_offer.ticket,
+                    order_quantity=int(order_data.get('quantity', 1) or 1),
+                    negotiated_offer=negotiated_offer,
+                    coupon_code=coupon_code_early,
+                )
+            except _CouponErrorEarly as ce:
+                return Response(
+                    {'error': ce.message, 'code': ce.code},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             received_total = decimal_money(order_data.get('total_amount', 0))
             if not payment_amounts_match(received_total, expected_total):
                 return Response(

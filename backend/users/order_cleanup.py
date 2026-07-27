@@ -4,12 +4,16 @@ import logging
 from dataclasses import dataclass
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
 from users.models import Order, Ticket
 
 logger = logging.getLogger(__name__)
+
+# Short cart hold (browse → reserve). Pending PayMe handoff uses a wider grace window.
+DEFAULT_PENDING_PAYMENT_GRACE_MINUTES = 60
 
 PAYME_COMPLETED_STATUS_TOKENS = (
     'success',
@@ -22,6 +26,20 @@ PAYME_COMPLETED_STATUS_TOKENS = (
     'authorised',
     'pre_auth',
     'preauth',
+    'admin_force_paid',
+)
+
+# Explicit failure tokens from PayMe webhook / status fields — only then may we cancel a sale-id order.
+PAYME_FAILED_STATUS_TOKENS = (
+    'fail',
+    'failed',
+    'declined',
+    'error',
+    'reject',
+    'rejected',
+    'void',
+    'cancelled',
+    'canceled',
 )
 
 
@@ -32,11 +50,52 @@ class AbandonedOrderCleanupResult:
     restored_quantity: int
     released_tickets: int
     skipped_payme_completed: int
+    skipped_payme_sale_pending: int = 0
 
 
 def payme_status_looks_completed(raw_status: str | None) -> bool:
     status = (raw_status or '').strip().lower()
-    return bool(status) and any(token in status for token in PAYME_COMPLETED_STATUS_TOKENS)
+    if not status or payme_status_looks_failed(status):
+        return False
+    return any(token in status for token in PAYME_COMPLETED_STATUS_TOKENS)
+
+
+def payme_status_looks_failed(raw_status: str | None) -> bool:
+    status = (raw_status or '').strip().lower().replace('-', '_')
+    if not status:
+        return False
+    # Whole-segment match avoids 'authorized' containing nothing from fail list;
+    # 'cancel' would false-positive inside unrelated strings — use explicit tokens.
+    return any(token in status for token in PAYME_FAILED_STATUS_TOKENS)
+
+
+def payme_sale_explicitly_failed(order: Order) -> bool:
+    """
+    True only with positive evidence the PayMe sale failed.
+
+    Primary signal: payme_status from webhook (failed/declined/…).
+    Optional: settings.PAYME_CONFIRM_FAILURE_VIA_API + users.payments.query_payme_sale_failed.
+    Never treat missing/initialized status as failure — that is the Apple Pay delay case.
+    """
+    if payme_status_looks_failed(order.payme_status):
+        return True
+
+    if not getattr(settings, 'PAYME_CONFIRM_FAILURE_VIA_API', False):
+        return False
+
+    try:
+        from users import payments as payme_payments
+
+        query_fn = getattr(payme_payments, 'query_payme_sale_failed', None)
+        if not callable(query_fn):
+            return False
+        return bool(query_fn(order))
+    except Exception:
+        logger.exception(
+            'PayMe failure confirmation failed for order %s; refusing abandoned cancel',
+            getattr(order, 'pk', None),
+        )
+        return False
 
 
 def _restore_held_ticket(order: Order) -> int:
@@ -91,15 +150,26 @@ def _release_reserved_ticket_ids(ticket_ids) -> int:
 
 def cancel_abandoned_pending_payment_orders(
     *,
-    older_than_minutes: int = 10,
+    older_than_minutes: int | None = None,
     dry_run: bool = False,
 ) -> AbandonedOrderCleanupResult:
     """
     Cancel pending_payment orders abandoned after checkout handoff and release inventory.
 
-    Orders with a PayMe status that already looks successful/authorized are skipped so a delayed
-    webhook can still finalize them instead of losing a real payment.
+    Protections for Apple Pay / delayed webhooks:
+    - Default grace window is 60 minutes (not the 10-minute cart hold).
+    - Orders with payme_status that looks successful/authorized are skipped.
+    - Orders with a stored payme_transaction_id are NOT cancelled unless PayMe has
+      explicitly confirmed failure (failed/declined status). Ambiguous 'initialized'
+      sales stay open so a late webhook can still finalize.
     """
+    if older_than_minutes is None:
+        older_than_minutes = int(
+            getattr(settings, 'PAYME_PENDING_PAYMENT_GRACE_MINUTES', DEFAULT_PENDING_PAYMENT_GRACE_MINUTES)
+        )
+    if older_than_minutes < 1:
+        older_than_minutes = DEFAULT_PENDING_PAYMENT_GRACE_MINUTES
+
     cutoff = timezone.now() - timedelta(minutes=older_than_minutes)
     candidate_ids = list(
         Order.objects.filter(status='pending_payment', created_at__lt=cutoff)
@@ -112,6 +182,7 @@ def cancel_abandoned_pending_payment_orders(
     restored_quantity = 0
     released_tickets = 0
     skipped_payme_completed = 0
+    skipped_payme_sale_pending = 0
 
     for order_id in candidate_ids:
         with transaction.atomic():
@@ -123,6 +194,17 @@ def cancel_abandoned_pending_payment_orders(
                 skipped_payme_completed += 1
                 logger.warning(
                     'Skipping abandoned cleanup for order %s because PayMe status is %r',
+                    order.id,
+                    order.payme_status,
+                )
+                continue
+
+            has_payme_sale = bool((order.payme_transaction_id or '').strip())
+            if has_payme_sale and not payme_sale_explicitly_failed(order):
+                skipped_payme_sale_pending += 1
+                logger.warning(
+                    'Skipping abandoned cleanup for order %s: payme_transaction_id set and '
+                    'PayMe has not explicitly confirmed failure (status=%r)',
                     order.id,
                     order.payme_status,
                 )
@@ -162,4 +244,5 @@ def cancel_abandoned_pending_payment_orders(
         restored_quantity=restored_quantity,
         released_tickets=released_tickets,
         skipped_payme_completed=skipped_payme_completed,
+        skipped_payme_sale_pending=skipped_payme_sale_pending,
     )

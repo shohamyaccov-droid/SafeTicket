@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from users.models import Artist, Event, Order, Ticket
 from users.order_cleanup import cancel_abandoned_pending_payment_orders
+from users.views import release_abandoned_carts
 
 
 User = get_user_model()
@@ -51,7 +52,7 @@ class AbandonedOrderCleanupTests(TestCase):
         base.update(overrides)
         return Ticket.objects.create(**base)
 
-    def _pending_order(self, *, age_minutes=20, **overrides):
+    def _pending_order(self, *, age_minutes=70, **overrides):
         base = {
             'user': self.buyer,
             'total_amount': Decimal('110.00'),
@@ -66,11 +67,11 @@ class AbandonedOrderCleanupTests(TestCase):
         order.refresh_from_db()
         return order
 
-    def test_cancels_ten_minute_abandoned_group_order_and_releases_reserved_tickets(self):
+    def test_cancels_abandoned_group_order_without_payme_sale_id(self):
         ticket = self._ticket()
         order = self._pending_order(ticket=ticket, ticket_ids=[ticket.id], payme_status='initialized')
 
-        result = cancel_abandoned_pending_payment_orders()
+        result = cancel_abandoned_pending_payment_orders(older_than_minutes=60)
 
         self.assertEqual(result.cancelled, 1)
         self.assertEqual(result.released_tickets, 1)
@@ -93,7 +94,7 @@ class AbandonedOrderCleanupTests(TestCase):
             payme_status='pending',
         )
 
-        result = cancel_abandoned_pending_payment_orders()
+        result = cancel_abandoned_pending_payment_orders(older_than_minutes=60)
 
         self.assertEqual(result.cancelled, 1)
         self.assertEqual(result.restored_quantity, 2)
@@ -107,9 +108,14 @@ class AbandonedOrderCleanupTests(TestCase):
 
     def test_skips_orders_with_successful_payme_status(self):
         ticket = self._ticket()
-        order = self._pending_order(ticket=ticket, ticket_ids=[ticket.id], payme_status='authorized')
+        order = self._pending_order(
+            ticket=ticket,
+            ticket_ids=[ticket.id],
+            payme_status='authorized',
+            payme_transaction_id='SALE-AUTH',
+        )
 
-        result = cancel_abandoned_pending_payment_orders()
+        result = cancel_abandoned_pending_payment_orders(older_than_minutes=60)
 
         self.assertEqual(result.cancelled, 0)
         self.assertEqual(result.skipped_payme_completed, 1)
@@ -118,10 +124,46 @@ class AbandonedOrderCleanupTests(TestCase):
         self.assertEqual(order.status, 'pending_payment')
         self.assertEqual(ticket.status, 'reserved')
 
-    def test_keeps_pending_payment_order_inside_ten_minute_window(self):
+    def test_skips_orders_with_payme_sale_id_until_explicit_failure(self):
+        """Apple Pay: sale id stored at init, webhook delayed — must not cancel."""
         ticket = self._ticket()
         order = self._pending_order(
-            age_minutes=9,
+            age_minutes=90,
+            ticket=ticket,
+            ticket_ids=[ticket.id],
+            payme_status='initialized',
+            payme_transaction_id='SALE-APPLE-PENDING',
+        )
+
+        result = cancel_abandoned_pending_payment_orders(older_than_minutes=60)
+
+        self.assertEqual(result.cancelled, 0)
+        self.assertEqual(result.skipped_payme_sale_pending, 1)
+        order.refresh_from_db()
+        self.assertEqual(order.status, 'pending_payment')
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'reserved')
+
+    def test_cancels_payme_sale_when_status_explicitly_failed(self):
+        ticket = self._ticket()
+        order = self._pending_order(
+            age_minutes=90,
+            ticket=ticket,
+            ticket_ids=[ticket.id],
+            payme_status='failed',
+            payme_transaction_id='SALE-FAILED',
+        )
+
+        result = cancel_abandoned_pending_payment_orders(older_than_minutes=60)
+
+        self.assertEqual(result.cancelled, 1)
+        order.refresh_from_db()
+        self.assertEqual(order.status, 'cancelled')
+
+    def test_keeps_pending_payment_order_inside_sixty_minute_grace(self):
+        ticket = self._ticket()
+        order = self._pending_order(
+            age_minutes=45,
             ticket=ticket,
             ticket_ids=[ticket.id],
             payme_status='initialized',
@@ -134,3 +176,49 @@ class AbandonedOrderCleanupTests(TestCase):
         ticket.refresh_from_db()
         self.assertEqual(order.status, 'pending_payment')
         self.assertEqual(ticket.status, 'reserved')
+
+
+class ReleaseAbandonedCartsLockingTests(TestCase):
+    def setUp(self):
+        self.seller = User.objects.create_user(
+            username='seller-release',
+            email='seller-release@example.com',
+            password='pass',
+            role='seller',
+        )
+        self.buyer = User.objects.create_user(
+            username='buyer-release',
+            email='buyer-release@example.com',
+            password='pass',
+        )
+        self.artist = Artist.objects.create(name='Release Artist')
+        self.event = Event.objects.create(
+            artist=self.artist,
+            name='Release Show',
+            date=timezone.now() + timedelta(days=30),
+            venue='Arena',
+            city='Tel Aviv',
+            country='IL',
+        )
+
+    def test_release_abandoned_carts_unlocks_expired_reservation_row_locked(self):
+        ticket = Ticket.objects.create(
+            seller=self.seller,
+            event=self.event,
+            original_price=Decimal('100'),
+            asking_price=Decimal('100'),
+            pdf_file='tickets/pdfs/test.pdf',
+            status='reserved',
+            verification_status='מאומת',
+            available_quantity=1,
+            reserved_by=self.buyer,
+            reserved_at=timezone.now() - timedelta(minutes=20),
+        )
+
+        released = release_abandoned_carts()
+
+        self.assertGreaterEqual(released, 1)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'active')
+        self.assertIsNone(ticket.reserved_at)
+        self.assertIsNone(ticket.reserved_by_id)

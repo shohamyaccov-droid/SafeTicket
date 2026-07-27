@@ -68,9 +68,9 @@ else:
     )
 
 # Platform commission rates — fallback only when GlobalFeeSettings table is unavailable.
-# Live source of truth: Django Admin → Global fee settings (defaults 12% / 0% / 5% / 5%).
+# Live source of truth: Django Admin → Global fee settings (defaults 7% / 0% / 5% / 2%).
 PLATFORM_BUYER_SERVICE_FEE_RATE = Decimal(
-    str(os.environ.get('PLATFORM_BUYER_SERVICE_FEE_RATE', '0.12'))
+    str(os.environ.get('PLATFORM_BUYER_SERVICE_FEE_RATE', '0.07'))
 )
 PLATFORM_SELLER_SERVICE_FEE_RATE = Decimal(
     str(os.environ.get('PLATFORM_SELLER_SERVICE_FEE_RATE', '0.00'))
@@ -79,10 +79,10 @@ AFFILIATE_BUYER_DISCOUNT_RATE = Decimal(
     str(os.environ.get('AFFILIATE_BUYER_DISCOUNT_RATE', '0.05'))
 )
 AFFILIATE_COMMISSION_RATE = Decimal(
-    str(os.environ.get('AFFILIATE_COMMISSION_RATE', '0.05'))
+    str(os.environ.get('AFFILIATE_COMMISSION_RATE', '0.02'))
 )
 AFFILIATE_PLATFORM_NET_RATE = Decimal(
-    str(os.environ.get('AFFILIATE_PLATFORM_NET_RATE', '0.02'))
+    str(os.environ.get('AFFILIATE_PLATFORM_NET_RATE', '0.00'))
 )
 
 # When True: looser PDF MIME checks (%PDF magic bytes), non-strict PyPDF, optional fallbacks for testing.
@@ -598,6 +598,18 @@ PAYME_GENERATE_SALE_URL = (
 ).strip()
 PAYME_WEBHOOK_SECRET = (os.environ.get('PAYME_WEBHOOK_SECRET') or '').strip()
 PAYME_SUB_SELLER_PAYEE_ID = (os.environ.get('PAYME_SUB_SELLER_PAYEE_ID') or '').strip()
+# Grace before abandoning pending_payment (Apple Pay webhooks can arrive late).
+try:
+    PAYME_PENDING_PAYMENT_GRACE_MINUTES = max(
+        1,
+        int(os.environ.get('PAYME_PENDING_PAYMENT_GRACE_MINUTES', '60') or '60'),
+    )
+except ValueError:
+    PAYME_PENDING_PAYMENT_GRACE_MINUTES = 60
+# Optional: poll PayMe to confirm failure before cancelling sale-id orders (off by default).
+PAYME_CONFIRM_FAILURE_VIA_API = (
+    os.environ.get('PAYME_CONFIRM_FAILURE_VIA_API', '').strip().lower() in ('1', 'true', 'yes')
+)
 _VITE_USE_PAYME = (os.environ.get('VITE_USE_PAYME') or '').strip().lower() in ('1', 'true', 'yes')
 _PAYME_CONFIGURED = bool(PAYME_SELLER_ID or PAYME_API_KEY or PAYME_MERCHANT_ID)
 # Production: only a verified PayMe webhook may finalize inventory (never client mock ack).

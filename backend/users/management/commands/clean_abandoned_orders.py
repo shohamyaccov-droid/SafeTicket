@@ -1,17 +1,26 @@
 from django.core.management.base import BaseCommand
 
-from users.order_cleanup import cancel_abandoned_pending_payment_orders
+from users.order_cleanup import (
+    DEFAULT_PENDING_PAYMENT_GRACE_MINUTES,
+    cancel_abandoned_pending_payment_orders,
+)
 
 
 class Command(BaseCommand):
-    help = 'Cancel abandoned pending_payment orders and release held ticket inventory.'
+    help = (
+        'Cancel abandoned pending_payment orders and release held ticket inventory. '
+        'Orders with a PayMe sale id are skipped unless PayMe status explicitly failed.'
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
             '--minutes',
             type=int,
-            default=10,
-            help='Cancel pending_payment orders older than this many minutes. Default: 10.',
+            default=DEFAULT_PENDING_PAYMENT_GRACE_MINUTES,
+            help=(
+                'Cancel pending_payment orders older than this many minutes. '
+                f'Default: {DEFAULT_PENDING_PAYMENT_GRACE_MINUTES} (PayMe / Apple Pay grace).'
+            ),
         )
         parser.add_argument(
             '--dry-run',
@@ -38,7 +47,8 @@ class Command(BaseCommand):
                     f'cancelled={result.cancelled} '
                     f'restored_quantity={result.restored_quantity} '
                     f'released_tickets={result.released_tickets} '
-                    f'skipped_payme_completed={result.skipped_payme_completed}'
+                    f'skipped_payme_completed={result.skipped_payme_completed} '
+                    f'skipped_payme_sale_pending={result.skipped_payme_sale_pending}'
                 )
             )
         )
