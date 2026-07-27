@@ -594,9 +594,11 @@ class OrderAdmin(admin.ModelAdmin):
         'event_name',
         'created_at',
     ]
-    list_filter = ['status', 'payme_status', 'created_at']
+    list_filter = ['status', 'created_at']
     search_fields = [
+        'id',
         'user__username',
+        'user__email',
         'guest_email',
         'event_name',
         'coupon_code_snapshot',
@@ -604,6 +606,9 @@ class OrderAdmin(admin.ModelAdmin):
     ]
     readonly_fields = ['created_at', 'updated_at', 'payment_confirm_token']
     actions = ['finalize_stuck_payme_orders']
+    list_per_page = 50
+    show_full_result_count = True
+    ordering = ['-id']
 
     _FINALIZE_MAX_ORDERS = 25
 
