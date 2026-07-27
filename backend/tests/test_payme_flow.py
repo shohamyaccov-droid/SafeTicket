@@ -255,6 +255,62 @@ class PaymeWebhookFlowTests(TestCase):
         )
         self.assertEqual(res.status_code, 404)
 
+    def test_webhook_apple_pay_like_payload_marks_paid(self):
+        """
+        Apple Pay / wallet notifies often differ from card:
+        - PayMe-internal order_id field (not merchant_order_id)
+        - New TRAN id plus original payme_sale_id from init
+        - Nested sale.status = completed
+        - Sometimes no sale_price
+        """
+        self.order.payme_transaction_id = 'SALE-APPLE-INIT'
+        self.order.save(update_fields=['payme_transaction_id'])
+        payload = {
+            'order_id': 'payme-internal-wallet-oid',
+            'transaction_id': 'TRAN-APPLE-WALLET-99',
+            'payme_sale_id': 'SALE-APPLE-INIT',
+            'payment_method': 'apple_pay',
+            'currency': 'ILS',
+            'sale': {'status': 'completed'},
+        }
+        body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+        sig = hmac.new(b'whsec_test', body, hashlib.sha256).hexdigest()
+        res = self.client.post(
+            '/api/payments/webhook/payme/',
+            body,
+            content_type='application/json',
+            HTTP_X_PAYME_SIGNATURE=sig,
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertTrue(res.data.get('finalized'), res.data)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'paid')
+        self.assertEqual(self.order.payme_status, 'success')
+        self.assertEqual(self.order.payme_transaction_id, 'SALE-APPLE-INIT')
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.status, 'sold')
+
+    def test_webhook_nested_completed_status_with_matching_sale_id(self):
+        payload = {
+            'payme_sale_id': 'webhook_txn_1',
+            'order_id': 'payme-internal-not-our-pk',
+            'sale_price': 11500,
+            'currency': 'ILS',
+            'payment': {'status': 'completed'},
+        }
+        body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+        sig = hmac.new(b'whsec_test', body, hashlib.sha256).hexdigest()
+        res = self.client.post(
+            '/api/payments/webhook/payme/',
+            body,
+            content_type='application/json',
+            HTTP_X_PAYME_SIGNATURE=sig,
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertTrue(res.data.get('finalized'), res.data)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'paid')
+
     def test_webhook_idempotent_when_already_paid(self):
         self.order.status = 'paid'
         self.order.save(update_fields=['status'])

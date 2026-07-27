@@ -330,42 +330,113 @@ def _expected_order_total_agorot(order) -> int:
     return _money_to_agorot(total)
 
 
+def _payload_transaction_refs(payload: dict[str, Any]) -> set[str]:
+    """All sale/transaction identifiers present in a PayMe webhook (top-level + nested)."""
+    keys = {
+        'transaction_id',
+        'transactionid',
+        'payme_transaction_id',
+        'paymetransactionid',
+        'payme_sale_id',
+        'paymesaleid',
+        'payme_sale_code',
+        'paymesalecode',
+        'sale_id',
+        'saleid',
+        'sale_code',
+        'salecode',
+        'id',
+    }
+    refs: set[str] = set()
+    for source in _nested_dicts(payload):
+        for key, value in source.items():
+            kl = str(key).lower().replace('-', '_')
+            compact = kl.replace('_', '')
+            if kl not in keys and compact not in keys:
+                continue
+            if value in (None, ''):
+                continue
+            ref = str(value).strip()
+            if ref:
+                refs.add(ref)
+    return refs
+
+
+def _status_token_match(normalized: str, tokens: tuple[str, ...]) -> bool:
+    """Match status tokens as whole segments (avoids 'complete' matching 'incomplete')."""
+    if not normalized:
+        return False
+    if normalized in tokens:
+        return True
+    parts = set(normalized.split('_'))
+    return any(token in parts for token in tokens)
+
+
 def normalize_payme_webhook_status(payload: dict[str, Any]) -> tuple[str | None, str | None]:
     """Return (transaction_id, normalized_status) where normalized is success|authorized|failed|pending."""
     tid = None
-    for k in ('transaction_id', 'transactionId', 'payme_transaction_id', 'sale_id', 'id'):
-        v = payload.get(k)
+    for k in (
+        'transaction_id',
+        'transactionId',
+        'payme_transaction_id',
+        'payme_sale_id',
+        'payme_sale_code',
+        'sale_id',
+        'sale_code',
+        'id',
+    ):
+        v = _first_payload_value(payload, k)
         if v is not None and str(v).strip():
             tid = str(v).strip()
             break
 
-    raw = (
-        payload.get('status')
-        or payload.get('payment_status')
-        or payload.get('state')
-        or payload.get('transaction_status')
-        or payload.get('sale_status')
-        or payload.get('payme_status')
-        or payload.get('status_code')
-        or payload.get('payme_status_code')
-        or ''
+    raw = _first_payload_value(
+        payload,
+        'status',
+        'payment_status',
+        'state',
+        'transaction_status',
+        'sale_status',
+        'payme_sale_status',
+        'payme_status',
+        'notify_type',
+        'notifyType',
+        'event',
+        'event_type',
+        'status_code',
+        'payme_status_code',
     )
-    s = str(raw).strip().lower()
+    s = str(raw or '').strip().lower().replace(' ', '_').replace('-', '_')
 
     if s in ('0', '00'):
         return tid, 'success'
     if s in ('1', '01'):
         return tid, 'pending'
 
-    success_tokens = ('success', 'succeeded', 'completed', 'paid', 'captured', 'ok', 'approved')
-    auth_tokens = ('authorized', 'authorised', 'auth', 'pre_auth', 'preauth', 'hold')
-    fail_tokens = ('fail', 'failed', 'declined', 'error', 'cancel', 'void', 'rejected')
+    success_tokens = (
+        'success',
+        'succeeded',
+        'completed',
+        'complete',
+        'paid',
+        'captured',
+        'capture',
+        'ok',
+        'approved',
+        'salecomplete',
+        'chargesucceeded',
+        'paymentcompleted',
+    )
+    auth_tokens = ('authorized', 'authorised', 'auth', 'preauth', 'hold')
+    fail_tokens = ('fail', 'failed', 'declined', 'error', 'cancel', 'cancelled', 'void', 'rejected')
 
-    if any(t in s for t in fail_tokens):
+    # Compact form catches sale_complete / charge_succeeded without false positives.
+    compact = s.replace('_', '')
+    if _status_token_match(s, fail_tokens) or compact in {t.replace('_', '') for t in fail_tokens}:
         return tid, 'failed'
-    if any(t in s for t in success_tokens):
+    if _status_token_match(s, success_tokens) or compact in {t.replace('_', '') for t in success_tokens}:
         return tid, 'success'
-    if any(t in s for t in auth_tokens):
+    if _status_token_match(s, auth_tokens) or compact in {t.replace('_', '') for t in auth_tokens}:
         return tid, 'authorized'
     return tid, 'pending' if s else None
 
@@ -394,6 +465,10 @@ def verify_payme_webhook_request(
     signature (production only), merchant order id, PayMe transaction id, amount, and currency.
 
     HMAC verification is skipped when PAYME_IS_SANDBOX is True or PAYME_WEBHOOK_SECRET is unset.
+
+    Apple Pay / wallet callbacks often send PayMe-internal `order_id` and a TRAN id that
+    differs from the `payme_sale_id` stored at init — verification accepts any matching
+    sale/transaction reference and prefers explicit merchant_order_id fields.
     """
     if _payme_webhook_hmac_bypassed():
         is_sandbox = bool(getattr(settings, 'PAYME_IS_SANDBOX', False))
@@ -430,28 +505,66 @@ def verify_payme_webhook_request(
         if not (compare_digest(got, expected) or compare_digest(got, f'sha256={expected}')):
             return False, 'bad_signature'
 
-    merchant_order_id = _extract_merchant_order_id(payload)
-    if merchant_order_id != int(order.pk):
-        return False, 'merchant_order_id_mismatch'
+    # Prefer explicit merchant order fields. Generic order_id is often PayMe-internal
+    # (especially Apple Pay / Bit notify) and must not reject a sale-id match.
+    explicit_merchant = _first_payload_value(payload, 'merchant_order_id', 'merchantOrderId')
+    if explicit_merchant not in (None, ''):
+        try:
+            if int(explicit_merchant) != int(order.pk):
+                return False, 'merchant_order_id_mismatch'
+        except (TypeError, ValueError):
+            return False, 'merchant_order_id_mismatch'
+    else:
+        generic_oid = _first_payload_value(payload, 'order_id', 'orderId')
+        if generic_oid not in (None, ''):
+            try:
+                if int(generic_oid) == int(order.pk):
+                    pass  # matches our order
+                else:
+                    logger.warning(
+                        'PayMe webhook: ignoring non-matching generic order_id=%s for order_id=%s '
+                        '(common on Apple Pay / wallet notifies)',
+                        generic_oid,
+                        getattr(order, 'pk', None),
+                    )
+            except (TypeError, ValueError):
+                logger.warning(
+                    'PayMe webhook: ignoring non-int generic order_id=%s for order_id=%s',
+                    generic_oid,
+                    getattr(order, 'pk', None),
+                )
 
-    transaction_id, _norm = normalize_payme_webhook_status(payload)
-    if not transaction_id:
-        return False, 'missing_transaction_id'
     stored_tid = (order.payme_transaction_id or '').strip()
     if not stored_tid:
         return False, 'missing_stored_transaction_id'
-    if transaction_id != stored_tid:
+
+    payload_refs = _payload_transaction_refs(payload)
+    if stored_tid not in payload_refs:
         return False, 'transaction_id_mismatch'
 
     currency = _extract_currency(payload)
     expected_currency = (order.currency or 'ILS').strip().upper()
-    if not currency or currency != expected_currency:
+    if currency and currency != expected_currency:
         return False, 'currency_mismatch'
+    if not currency:
+        logger.warning(
+            'PayMe webhook: currency missing in payload; continuing with order currency=%s order_id=%s',
+            expected_currency,
+            getattr(order, 'pk', None),
+        )
 
     expected_amount = _expected_order_total_agorot(order)
     amount_candidates = _payload_amount_candidates_agorot(payload)
-    if expected_amount not in amount_candidates:
-        return False, 'amount_mismatch'
+    if amount_candidates:
+        if expected_amount not in amount_candidates:
+            return False, 'amount_mismatch'
+    else:
+        # Apple Pay / some wallet notifies omit price; sale id match is still required above.
+        logger.warning(
+            'PayMe webhook: no amount fields in payload; skipping amount check order_id=%s stored_tid_hash=%s',
+            getattr(order, 'pk', None),
+            _short_hash(stored_tid),
+        )
 
     return True, 'ok'
 

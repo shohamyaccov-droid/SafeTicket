@@ -282,7 +282,7 @@ class PayMeFraudFailureE2ETests(PayMeMarketplaceE2EBase):
         payload = {
             'status': 'success',
             'transaction_id': 'txn_fraud_guard',
-            'sale_price': 11500,
+            'sale_price': int(self.checkout_total * 100),
             'currency': 'ILS',
         }
         res = self._post_signed_webhook(payload)
@@ -297,7 +297,7 @@ class PayMeFraudFailureE2ETests(PayMeMarketplaceE2EBase):
             'merchant_order_id': '999999',
             'status': 'success',
             'transaction_id': 'txn_fraud_guard',
-            'sale_price': 11500,
+            'sale_price': int(self.checkout_total * 100),
             'currency': 'ILS',
         }
         res = self._post_signed_webhook(payload)
@@ -312,9 +312,10 @@ class PayMeFraudFailureE2ETests(PayMeMarketplaceE2EBase):
         self._assert_checkout_still_pending()
 
     def test_webhook_transaction_id_mismatch_does_not_finalize(self):
+        # Wrong TRAN and no matching sale id — must not resolve via merchant_order_id alone.
         payload = self._success_webhook_payload(self.order, transaction_id='txn_attacker')
         res = self._post_signed_webhook(payload)
-        self.assertEqual(res.status_code, 404)
+        self.assertIn(res.status_code, (403, 404))
         self._assert_checkout_still_pending()
 
     def test_webhook_amount_mismatch_does_not_finalize(self):

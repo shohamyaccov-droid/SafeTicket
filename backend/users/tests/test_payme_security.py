@@ -144,9 +144,68 @@ class PaymeWebhookVerificationTests(TestCase):
         self.assertEqual(reason, 'amount_mismatch')
 
     @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
-    def test_webhook_accepts_exact_signed_order_payment(self):
+    def test_webhook_accepts_sale_id_when_transaction_id_differs(self):
+        """Apple Pay often sends TRAN + original payme_sale_id; either must verify."""
         payload = {
             'merchant_order_id': '123',
+            'transaction_id': 'TRAN_APPLE_NEW',
+            'payme_sale_id': 'txn_123',
+            'sale_price': 11000,
+            'currency': 'ILS',
+            'status': 'completed',
+        }
+
+        ok, reason = verify_payme_webhook_request(
+            _signed_request(payload),
+            payload=payload,
+            order=_order(),
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, 'ok')
+
+    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
+    def test_webhook_ignores_mismatched_generic_order_id_when_sale_matches(self):
+        """PayMe-internal order_id must not reject a valid sale-id callback."""
+        payload = {
+            'order_id': '999001',
+            'transaction_id': 'txn_123',
+            'sale_price': 11000,
+            'currency': 'ILS',
+            'status': 'completed',
+        }
+
+        ok, reason = verify_payme_webhook_request(
+            _signed_request(payload),
+            payload=payload,
+            order=_order(),
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, 'ok')
+
+    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
+    def test_webhook_skips_amount_when_omitted(self):
+        payload = {
+            'merchant_order_id': '123',
+            'transaction_id': 'txn_123',
+            'currency': 'ILS',
+            'status': 'completed',
+        }
+
+        ok, reason = verify_payme_webhook_request(
+            _signed_request(payload),
+            payload=payload,
+            order=_order(),
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, 'ok')
+
+    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
+    def test_webhook_rejects_explicit_merchant_order_mismatch(self):
+        payload = {
+            'merchant_order_id': '999999',
             'transaction_id': 'txn_123',
             'sale_price': 11000,
             'currency': 'ILS',
@@ -159,11 +218,9 @@ class PaymeWebhookVerificationTests(TestCase):
             order=_order(),
         )
 
-        self.assertTrue(ok)
-        self.assertEqual(reason, 'ok')
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'merchant_order_id_mismatch')
 
-
-class ClientConfirmPaymentSecurityTests(TestCase):
     @override_settings(PAYME_REQUIRE_WEBHOOK_CONFIRMATION=True)
     def test_client_confirm_token_rejected_when_payme_webhook_required(self):
         order = Order.objects.create(
