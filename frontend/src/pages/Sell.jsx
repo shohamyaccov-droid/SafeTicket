@@ -447,11 +447,46 @@ const Sell = () => {
 
   useEffect(() => {
     if (!success) return undefined;
-    const timer = window.setTimeout(() => {
+
+    let cancelled = false;
+    const goHome = () => {
+      if (cancelled) return;
+      try {
+        navigate('/', { replace: true });
+      } catch {
+        /* fall through */
+      }
+      // Hard fallback if client routing is stuck (common after long upload sessions).
+      window.setTimeout(() => {
+        if (cancelled) return;
+        if (window.location.pathname !== '/') {
+          window.location.assign('/');
+        }
+      }, 250);
+    };
+
+    const timer = window.setTimeout(goHome, 3000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+    // Intentionally depend only on `success` so a changing navigate identity cannot
+    // clear/restart the 3s timer indefinitely.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate used as imperative escape hatch
+  }, [success]);
+
+  const goToHomepage = () => {
+    try {
       navigate('/', { replace: true });
-    }, 3000);
-    return () => window.clearTimeout(timer);
-  }, [success, navigate]);
+    } catch {
+      /* fall through */
+    }
+    window.setTimeout(() => {
+      if (window.location.pathname !== '/') {
+        window.location.assign('/');
+      }
+    }, 100);
+  };
 
   /**
    * IL rules (receipt + price cap + pending approval) use ONLY the event venue country code,
@@ -792,6 +827,37 @@ const Sell = () => {
       ? eventDetail
       : formData.selectedEvent || {}
   );
+
+  // Success must win over authLoading — a profile refresh must not replace the
+  // success screen with a skeleton and leave the user without a home CTA.
+  if (success) {
+    return (
+      <div className="sell-container sell-success-screen" data-testid="listing-success">
+        <div className="listing-card success-message">
+          <div className="success-icon-large" aria-hidden="true">✓</div>
+          <h2 className="success-title">Listing Created Successfully!</h2>
+          <h3 className="success-subtitle-hebrew">הכרטיס הועלה בהצלחה!</h3>
+          {successWasIsrael ? (
+            <p className="success-text">
+              הכרטיס הועלה בהצלחה! הוא יפורסם באתר לאחר בדיקת צוות קצרה (עד 24 שעות).
+            </p>
+          ) : (
+            <p className="success-text">הכרטיס פורסם באתר וזמין למכירה.</p>
+          )}
+          <p className="success-redirect-text" role="status" aria-live="polite">
+            מעבירים אותך לדף הבית בעוד 3 שניות...
+          </p>
+          <button
+            type="button"
+            className="success-home-button"
+            onClick={goToHomepage}
+          >
+            חזרה לדף הבית
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Wait for auth to finish loading — then show listing form for everyone (reverse funnel).
   if (authLoading) {
@@ -1405,33 +1471,6 @@ const Sell = () => {
 
     await executeTicketUpload();
   };
-
-  if (success) {
-    return (
-      <div className="sell-container">
-        <div className="listing-card success-message">
-          <div className="success-icon-large">✓</div>
-          <h2 className="success-title">Listing Created Successfully!</h2>
-          <h3 className="success-subtitle-hebrew">הכרטיס הועלה בהצלחה!</h3>
-          {successWasIsrael ? (
-            <p className="success-text">
-              הכרטיס הועלה בהצלחה! הוא יפורסם באתר לאחר בדיקת צוות קצרה (עד 24 שעות).
-            </p>
-          ) : (
-            <p className="success-text">הכרטיס פורסם באתר וזמין למכירה.</p>
-          )}
-          <p className="success-redirect-text">מעבירים אותך לדף הבית בעוד כמה שניות...</p>
-          <button
-            type="button"
-            className="success-home-button"
-            onClick={() => navigate('/', { replace: true })}
-          >
-            חזרה לדף הבית
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   const ilSelected = isIsraelEvent(formData.selectedEvent);
   const feeBasis = parseFloat(String(formData.listing_price || 0)) || 0;
