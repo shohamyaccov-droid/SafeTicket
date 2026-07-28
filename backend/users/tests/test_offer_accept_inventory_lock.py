@@ -6,9 +6,9 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from users.models import Artist, Event, Offer, Ticket
+from users.models import Artist, Event, Offer, Order, Ticket
 from users.pricing import expected_buy_now_total
-from users.views import OfferViewSet, create_order
+from users.views import OfferViewSet, confirm_order_payment, create_order
 
 User = get_user_model()
 
@@ -74,7 +74,8 @@ class OfferAcceptInventoryLockTests(TestCase):
             expires_at=timezone.now() + timedelta(days=1),
         )
 
-    def test_accept_offer_reserves_inventory_blocks_competing_buy_now(self):
+    def test_accept_offer_keeps_listing_active_and_allows_competing_buy_now(self):
+        """Accepted offer is a price agreement only — inventory stays marketplace-visible."""
         accept_view = OfferViewSet.as_view({'post': 'accept'})
         req = self.factory.post(f'/offers/{self.offer.id}/accept/', {})
         force_authenticate(req, user=self.seller)
@@ -84,14 +85,14 @@ class OfferAcceptInventoryLockTests(TestCase):
 
         self.t1.refresh_from_db()
         self.t2.refresh_from_db()
-        self.assertEqual(self.t1.status, 'reserved')
-        self.assertEqual(self.t2.status, 'reserved')
-        self.assertEqual(self.t1.reserved_by_id, self.offer_buyer.id)
-        self.assertEqual(self.t2.reserved_by_id, self.offer_buyer.id)
+        self.offer.refresh_from_db()
+        self.assertEqual(self.offer.status, 'accepted')
+        self.assertEqual(self.t1.status, 'active')
+        self.assertEqual(self.t2.status, 'active')
+        self.assertIsNone(self.t1.reserved_by_id)
+        self.assertIsNone(self.t2.reserved_by_id)
 
         buy_payload = {
-            # create_order requires `ticket`; when listing_group_id is provided it ignores ticket's
-            # active status and purchases from the group.
             'ticket': self.t1.id,
             'listing_group_id': self.listing_group_id,
             'quantity': 2,
@@ -102,9 +103,23 @@ class OfferAcceptInventoryLockTests(TestCase):
         force_authenticate(buy_req, user=self.other_buyer)
 
         buy_res = create_order(buy_req)
-        self.assertEqual(buy_res.status_code, 400, getattr(buy_res, 'data', buy_res))
-        self.assertIn(
-            'Not enough tickets available',
-            str(getattr(buy_res, 'data', buy_res)),
-        )
+        self.assertEqual(buy_res.status_code, 201, getattr(buy_res, 'data', buy_res))
+        order_id = buy_res.data['id']
+        token = buy_res.data.get('payment_confirm_token')
 
+        confirm_req = self.factory.post(
+            f'/api/users/orders/{order_id}/confirm-payment/',
+            {'mock_payment_ack': True, 'payment_confirm_token': token},
+            format='json',
+        )
+        force_authenticate(confirm_req, user=self.other_buyer)
+        confirm_res = confirm_order_payment(confirm_req, order_id)
+        self.assertIn(confirm_res.status_code, (200, 201), getattr(confirm_res, 'data', confirm_res))
+
+        self.t1.refresh_from_db()
+        self.t2.refresh_from_db()
+        self.offer.refresh_from_db()
+        self.assertEqual(Order.objects.get(pk=order_id).status, 'paid')
+        self.assertEqual(self.t1.status, 'sold')
+        self.assertEqual(self.t2.status, 'sold')
+        self.assertIn(self.offer.status, ('rejected', 'expired'))
