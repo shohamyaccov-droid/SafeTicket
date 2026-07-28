@@ -516,10 +516,14 @@ const Dashboard = () => {
       toastError('שגיאה: לא נמצא מזהה כרטיס');
       return;
     }
+    const details = group?.ticketDetails || offer.ticket_details || {};
     const ticket = {
+      ...details,
       id: ticketId,
-      listing_group_id: group?.ticketDetails?.listing_group_id,
-      ...group?.ticketDetails,
+      listing_group_id: details.listing_group_id || group?.ticketDetails?.listing_group_id || null,
+      available_quantity: details.available_quantity || offer.quantity || 1,
+      asking_price: details.asking_price ?? details.original_price,
+      event_name: details.event_name || details.event?.name,
     };
     setCheckoutTicket(ticket);
     setCheckoutAcceptedOffer(offer);
@@ -1417,7 +1421,7 @@ const Dashboard = () => {
               <button
                 type="button"
                 className="seller-escrow-onboarding-cta"
-                onClick={() => navigate('/sell')}
+                onClick={() => navigate('/sell/new')}
               >
                 התחלת מכירה
               </button>
@@ -1434,7 +1438,7 @@ const Dashboard = () => {
                     </div>
                   <h3>עדיין לא פרסמת כרטיסים למכירה</h3>
                   <p>כשתפרסם כרטיסים, הם יופיעו כאן</p>
-                    <button onClick={() => navigate('/sell')} className="primary-button">
+                    <button onClick={() => navigate('/sell/new')} className="primary-button">
                       הצע כרטיס למכירה
                     </button>
                   </div>

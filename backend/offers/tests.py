@@ -3,37 +3,30 @@ High-level Integration / E2E suite for the Offer mechanism.
 
 Run with:
   python manage.py test offers.tests -v 2
-
-Scenario 1 physically sleeps ~11 minutes to prove the 24h offer hold is not
-swept by the 10-minute abandoned-cart reservation sweeper.
 """
 from __future__ import annotations
 
-import threading
-import time
 from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import close_old_connections, connection
+from django.db import connection
 from django.test import Client, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from users.models import Artist, Event, Offer, Order, Ticket
-from users.pricing import expected_negotiated_total_from_offer_base
+from users.pricing import expected_buy_now_total, expected_negotiated_total_from_offer_base
 from users.views import (
     HE_OFFER_ALREADY_CONSUMED,
     HE_TICKET_ALREADY_SOLD,
+    RESERVATION_TIMEOUT_MINUTES,
     release_abandoned_carts,
 )
 
 User = get_user_model()
-
-# Physical wait: 11 minutes + 1 second (Scenario 1).
-OFFER_HOLD_VS_SWEEPER_SLEEP_SECONDS = (11 * 60) + 1
 
 
 def _pdf():
@@ -159,10 +152,9 @@ def _confirm_payment(client: APIClient, order_id: int, token):
     }
 )
 class OfferMechanismE2ETests(TransactionTestCase):
-    """Four autonomous offer-flow scenarios (seller + buyer at API/DB level).
+    """Offer-flow scenarios (seller + buyer at API/DB level).
 
-    Uses TransactionTestCase so Scenario 1's background sweeper thread can see
-    committed inventory / offer rows (plain TestCase wraps in an unshared txn).
+    Uses TransactionTestCase so concurrent reservation / sale paths see committed rows.
     """
 
     # ------------------------------------------------------------------
@@ -198,10 +190,11 @@ class OfferMechanismE2ETests(TransactionTestCase):
         offer_b.refresh_from_db()
         ticket.refresh_from_db()
         self.assertEqual(offer_a.status, 'accepted')
-        self.assertEqual(ticket.status, 'reserved')
-        self.assertEqual(ticket.reserved_by_id, buyer1.id)
+        # Accepted offer must NOT hide inventory from the marketplace.
+        self.assertEqual(ticket.status, 'active')
+        self.assertIsNone(ticket.reserved_by_id)
 
-        # Residual dual-accept race: resurrect Offer B as accepted while inventory held.
+        # Residual dual-accept race: resurrect Offer B as accepted while listing stays active.
         now = timezone.now()
         Offer.objects.filter(pk=offer_b.pk).update(
             status='accepted',
@@ -323,11 +316,10 @@ class OfferMechanismE2ETests(TransactionTestCase):
         self.assertTrue(Offer.objects.filter(pk__in=offer_ids).exists())
 
     # ------------------------------------------------------------------
-    # SCENARIO 1 — 11-minute race: offer hold vs 10-minute sweeper
-    # (Runs last so faster scenarios fail-fast before the long sleep.)
+    # SCENARIO 1 — Accept leaves listing visible; cart TTL (not 24h) owns lock
     # ------------------------------------------------------------------
-    def test_scenario_z1_eleven_minute_hold_survives_reservation_sweeper(self):
-        seller, buyer1, _ = _make_users('s1')
+    def test_scenario_z1_accept_keeps_ticket_active_and_cart_ttl_releases(self):
+        seller, buyer1, buyer2 = _make_users('s1')
         ticket = _make_ticket(seller, name_suffix='s1-hold')
         offer = _create_and_accept_offer(
             buyer=buyer1, seller=seller, ticket=ticket, amount='180.00'
@@ -335,72 +327,66 @@ class OfferMechanismE2ETests(TransactionTestCase):
 
         ticket.refresh_from_db()
         self.assertEqual(offer.status, 'accepted')
-        self.assertEqual(ticket.status, 'reserved')
-        self.assertEqual(ticket.reserved_by_id, buyer1.id)
+        self.assertEqual(ticket.status, 'active', 'Accepted offer must not hide marketplace listing')
+        self.assertIsNone(ticket.reserved_by_id)
         self.assertIsNotNone(offer.checkout_expires_at)
         self.assertGreater(offer.checkout_expires_at, timezone.now() + timedelta(hours=20))
 
-        offer_id = offer.id
-        ticket_id = ticket.id
-        buyer1_id = buyer1.id
-
-        stop_event = threading.Event()
-        sweep_counts = []
-        integrity_ok = {'value': True, 'notes': []}
-
-        def sweeper_loop():
-            """While the hold sleeps, hammer the 10-minute reservation sweeper."""
-            close_old_connections()
-            while not stop_event.wait(30):
-                try:
-                    close_old_connections()
-                    released = release_abandoned_carts()
-                    sweep_counts.append(int(released or 0))
-                    live_offer = Offer.objects.get(pk=offer_id)
-                    live_ticket = Ticket.objects.get(pk=ticket_id)
-                    if live_offer.status != 'accepted':
-                        integrity_ok['value'] = False
-                        integrity_ok['notes'].append(f'offer drifted to {live_offer.status}')
-                    if live_ticket.status != 'reserved' or live_ticket.reserved_by_id != buyer1_id:
-                        integrity_ok['value'] = False
-                        integrity_ok['notes'].append(
-                            f'ticket drifted status={live_ticket.status} '
-                            f'reserved_by={live_ticket.reserved_by_id}'
-                        )
-                    if live_ticket.status == 'sold' and not Order.objects.filter(
-                        ticket_id=ticket_id
-                    ).exists():
-                        integrity_ok['value'] = False
-                        integrity_ok['notes'].append('ticket sold without order')
-                except Exception as exc:  # pragma: no cover
-                    integrity_ok['value'] = False
-                    integrity_ok['notes'].append(f'sweeper thread error: {exc}')
-                finally:
-                    close_old_connections()
-
-        worker = threading.Thread(target=sweeper_loop, name='offer-hold-sweeper', daemon=True)
-        worker.start()
-        try:
-            # Physical wait — do not mock time. Per product requirement.
-            time.sleep(OFFER_HOLD_VS_SWEEPER_SLEEP_SECONDS)
-            release_abandoned_carts()
-            release_abandoned_carts()
-        finally:
-            stop_event.set()
-            worker.join(timeout=60)
-
-        offer.refresh_from_db()
+        # Proceed-to-Payment style lock: reserve via API (10-minute cart hold)
+        client1 = _auth_client(buyer1)
+        reserve_resp = client1.post(f'/api/users/tickets/{ticket.id}/reserve/', {}, format='json')
+        self.assertEqual(reserve_resp.status_code, 200, reserve_resp.data)
         ticket.refresh_from_db()
-
-        self.assertTrue(
-            integrity_ok['value'],
-            f'Integrity checks failed during sleep: {integrity_ok["notes"]}',
-        )
-        self.assertEqual(offer.status, 'accepted', 'Accepted offer must remain valid after 11m+')
-        self.assertEqual(ticket.status, 'reserved', 'Ticket must stay locked for Buyer 1')
+        self.assertEqual(ticket.status, 'reserved')
         self.assertEqual(ticket.reserved_by_id, buyer1.id)
-        self.assertIsNotNone(ticket.reserved_at)
-        self.assertGreaterEqual(len(sweep_counts), 1)
 
-        _client, create_resp = _checkout_offer(buyer=buyer1, ticket=ticket, offer=offer)
+        # Backdate reservation past cart TTL — sweeper must release (offer stays accepted)
+        Ticket.objects.filter(pk=ticket.pk).update(
+            reserved_at=timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES + 2)
+        )
+        released = release_abandoned_carts()
+        self.assertGreaterEqual(int(released or 0), 1)
+        ticket.refresh_from_db()
+        offer.refresh_from_db()
+        self.assertEqual(ticket.status, 'active')
+        self.assertIsNone(ticket.reserved_by_id)
+        self.assertEqual(offer.status, 'accepted', '24h offer window survives cart release')
+
+        # Buyer 2 can buy at full price while Buyer 1 still has an accepted offer
+        client2 = _auth_client(buyer2)
+        buy_now_total = expected_buy_now_total(ticket.asking_price, 1)
+        create_resp = client2.post(
+            '/api/users/orders/',
+            {
+                'ticket': ticket.id,
+                'quantity': 1,
+                'total_amount': str(buy_now_total),
+                'accepted_terms': True,
+            },
+            format='json',
+        )
         self.assertEqual(create_resp.status_code, 201, create_resp.data)
+        order_id = create_resp.data['id']
+        token = create_resp.data.get('payment_confirm_token')
+        pay_resp = _confirm_payment(client2, order_id, token)
+        self.assertIn(pay_resp.status_code, (200, 201), getattr(pay_resp, 'data', pay_resp))
+
+        ticket.refresh_from_db()
+        offer.refresh_from_db()
+        self.assertEqual(ticket.status, 'sold')
+        self.assertIn(
+            offer.status,
+            ('rejected', 'expired'),
+            f'Losing negotiated offer must be invalidated, got {offer.status}',
+        )
+
+        _client, lose_resp = _checkout_offer(buyer=buyer1, ticket=ticket, offer=offer)
+        self.assertEqual(lose_resp.status_code, 400, lose_resp.data)
+        err = str(lose_resp.data.get('error') or lose_resp.data)
+        self.assertTrue(
+            HE_TICKET_ALREADY_SOLD in err
+            or 'already sold' in err.lower()
+            or 'sold' in err.lower()
+            or 'ineligible' in err.lower(),
+            f'Expected sold/invalidated error, got: {err}',
+        )

@@ -416,7 +416,8 @@ def _reject_pending_offers_for_ticket_ids(ticket_ids):
 def _finalize_offers_after_sale(*, ticket_ids, winning_offer=None):
     """
     After a successful payment: mark the winning accepted offer completed and
-    invalidate every other pending/accepted offer on the sold inventory.
+    invalidate every other pending/accepted offer on the sold inventory
+    (including other seats in the same listing group).
     """
     ids = []
     for tid in ticket_ids or []:
@@ -427,6 +428,25 @@ def _finalize_offers_after_sale(*, ticket_ids, winning_offer=None):
     ids = sorted(set(ids))
     if not ids and winning_offer is None:
         return 0
+
+    # Expand to full listing groups so a full-price buyer invalidates accepted
+    # negotiation offers on sibling seats in the same listing.
+    if ids:
+        group_rows = (
+            Ticket.objects.filter(pk__in=ids)
+            .exclude(listing_group_id__isnull=True)
+            .exclude(listing_group_id='')
+            .values_list('listing_group_id', 'seller_id')
+        )
+        expanded = set(ids)
+        for listing_group_id, seller_id in group_rows:
+            expanded.update(
+                Ticket.objects.filter(
+                    listing_group_id=listing_group_id,
+                    seller_id=seller_id,
+                ).values_list('id', flat=True)
+            )
+        ids = sorted(expanded)
 
     updated = 0
     win_pk = getattr(winning_offer, 'pk', None) or getattr(winning_offer, 'id', None)
@@ -452,73 +472,23 @@ def _finalize_offers_after_sale(*, ticket_ids, winning_offer=None):
 
 def _accepted_offer_hold_protects_ticket(ticket) -> bool:
     """
-    True when a reserved row is held for a buyer with a still-valid accepted offer
-    (24h checkout window). The 10-minute abandoned-cart sweeper must not release these.
+    Accepted offers are price agreements only — they do not exclusively lock inventory.
+
+    Inventory is reserved solely by the 10-minute cart / Proceed-to-Payment hold, which the
+    standard abandoned-cart sweeper must be allowed to release. Always return False.
     """
-    if getattr(ticket, 'status', None) != 'reserved':
-        return False
-    buyer_id = getattr(ticket, 'reserved_by_id', None)
-    if not buyer_id:
-        return False
-    now = timezone.now()
-    base = Offer.objects.filter(
-        buyer_id=buyer_id,
-        status='accepted',
-        checkout_expires_at__gt=now,
-    )
-    listing_group_id = getattr(ticket, 'listing_group_id', None)
-    if listing_group_id:
-        return base.filter(
-            Q(ticket_id=ticket.pk)
-            | Q(
-                ticket__listing_group_id=listing_group_id,
-                ticket__seller_id=getattr(ticket, 'seller_id', None),
-            )
-        ).exists()
-    return base.filter(ticket_id=ticket.pk).exists()
+    return False
 
 
 def _ticket_pks_protected_by_accepted_offer_holds():
-    """All ticket PKs that must survive the short cart sweeper due to offer holds."""
-    now = timezone.now()
-    offers = (
-        Offer.objects.filter(
-            status='accepted',
-            checkout_expires_at__gt=now,
-        )
-        .select_related('ticket')
-        .only(
-            'id',
-            'buyer_id',
-            'ticket_id',
-            'ticket__listing_group_id',
-            'ticket__seller_id',
-        )
-    )
-    pks = set()
-    group_q = Q()
-    has_group = False
-    for offer in offers.iterator():
-        pks.add(offer.ticket_id)
-        ticket = offer.ticket
-        if ticket.listing_group_id:
-            has_group = True
-            group_q |= Q(
-                listing_group_id=ticket.listing_group_id,
-                seller_id=ticket.seller_id,
-                reserved_by_id=offer.buyer_id,
-                status='reserved',
-            )
-    if has_group:
-        pks.update(Ticket.objects.filter(group_q).values_list('pk', flat=True))
-    return pks
+    """No longer used for exclusive holds; kept for call-site compatibility."""
+    return []
 
 
 def _sync_expired_cart_reservation(ticket):
     """
     If reservation TTL passed, release the row so checkout can proceed fairly.
     Mutates and saves ticket when expired.
-    Accepted-offer holds use checkout_expires_at (up to 24h), not the 10-minute cart TTL.
     """
     if ticket.status != 'reserved' or not ticket.reserved_at:
         return
@@ -740,9 +710,9 @@ def release_abandoned_carts():
     Self-healing: Release expired ticket reservations and cancel stale pending orders.
     Call lazily at the top of Event/Ticket list endpoints so inventory cleans itself.
 
-    Accepted-offer checkout holds (checkout_expires_at window, typically 24h) are excluded
-    from the short RESERVATION_TIMEOUT_MINUTES cart sweeper so negotiation buyers are not
-    unlocked after 10 minutes.
+    Accepted-offer checkout is a price agreement only (24h window to start payment).
+    Inventory is locked solely by the short RESERVATION_TIMEOUT_MINUTES cart hold when
+    a buyer clicks Proceed to Payment — not by offer accept.
 
     Pending PayMe checkouts use a wider grace window (default 60 minutes) and are not
     cancelled while a payme_transaction_id is present unless PayMe confirmed failure.
@@ -756,7 +726,7 @@ def release_abandoned_carts():
     released = 0
     protected_pks = set(_ticket_pks_protected_by_accepted_offer_holds() or [])
 
-    # 1. Expired ticket reservations -> back to active (row-locked; skip offer holds)
+    # 1. Expired ticket reservations -> back to active (row-locked)
     expired_ids = list(
         Ticket.objects.filter(status='reserved', reserved_at__lt=cutoff)
         .exclude(pk__in=protected_pks)
@@ -2133,6 +2103,10 @@ def create_order(request):
                         )
                     raise
 
+            # Persist fee/currency/related_offer before PayMe init so generate-sale
+            # uses the same totals as standard checkout (critical for negotiated offers).
+            _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity)
+
         order.refresh_from_db()
         return _order_pending_checkout_response(order, request)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -2972,6 +2946,8 @@ def guest_checkout(request):
                             status=status.HTTP_400_BAD_REQUEST,
                         )
                     raise
+
+            _apply_order_pricing_fields(order, negotiated_offer, ticket, order_quantity)
 
         order.refresh_from_db()
         return _order_pending_checkout_response(order, request)
@@ -5039,87 +5015,10 @@ class OfferViewSet(viewsets.ModelViewSet):
             if competing_offer_ids:
                 Offer.objects.filter(id__in=competing_offer_ids).update(status='rejected')
 
-            # Hold stock for the accepted buyer during checkout window.
-            # IMPORTANT: grouped listings must also reserve inventory, otherwise a "Buy Now"
-            # user can steal the same seats before the offer-buyer starts checkout.
-            now = timezone.now()
-            needed_qty = int(offer.quantity or 1)
-
-            if ticket.listing_group_id:
-                offer_buyer = offer.buyer
-                buyer_id = getattr(offer, 'buyer_id', None)
-                buyer_email = ''
-                try:
-                    buyer_email = (offer_buyer.email or '').strip().lower()
-                except Exception:
-                    buyer_email = ''
-
-                def _reserved_belongs_to_offer_buyer(t):
-                    if t.reserved_by_id is not None and buyer_id is not None:
-                        try:
-                            return int(t.reserved_by_id) == int(buyer_id)
-                        except (TypeError, ValueError):
-                            return False
-                    if t.reserved_by_id is None and buyer_email:
-                        ge = (t.reservation_email or '').strip().lower()
-                        return bool(ge) and ge == buyer_email
-                    return False
-
-                reserved_for_buyer = [
-                    t for t in locked_tickets
-                    if t.status == 'reserved' and _reserved_belongs_to_offer_buyer(t)
-                ]
-
-                # Refresh existing reservations and upgrade guest-email reservations to reserved_by.
-                for t in reserved_for_buyer:
-                    fields = []
-                    if buyer_id is not None and (t.reserved_by_id != buyer_id):
-                        t.reserved_by = offer_buyer
-                        t.reservation_email = None
-                        fields.extend(['reserved_by', 'reservation_email'])
-                    t.reserved_at = now
-                    fields.extend(['reserved_at', 'updated_at'])
-                    t.save(update_fields=fields)
-
-                reserve_needed = max(0, needed_qty - len(reserved_for_buyer))
-                active_rows = sorted(
-                    [t for t in locked_tickets if t.status == 'active'],
-                    key=lambda x: x.id,
-                )
-                to_reserve = active_rows[:reserve_needed]
-                for t in to_reserve:
-                    t.status = 'reserved'
-                    t.reserved_by = offer_buyer
-                    t.reserved_at = now
-                    t.reservation_email = None
-                    t.save(update_fields=['status', 'reserved_by', 'reserved_at', 'reservation_email', 'updated_at'])
-            else:
-                # Non-bundled listing: hold stock for the accepted buyer during checkout window
-                hold_fields = []
-                if ticket.status == 'active':
-                    ticket.status = 'reserved'
-                    ticket.reserved_by = offer.buyer
-                    ticket.reserved_at = now
-                    hold_fields = ['status', 'reserved_by', 'reserved_at', 'updated_at']
-                elif ticket.status == 'reserved':
-                    try:
-                        same = int(ticket.reserved_by_id or 0) == int(offer.buyer_id or 0)
-                    except (TypeError, ValueError):
-                        same = False
-                    if (
-                        not same
-                        and not ticket.reserved_by_id
-                        and (ticket.reservation_email or '').strip()
-                        and getattr(offer, 'buyer', None)
-                    ):
-                        be = (getattr(offer.buyer, 'email', None) or '').strip().lower()
-                        ge = (ticket.reservation_email or '').strip().lower()
-                        same = bool(be and ge and be == ge)
-                    if same:
-                        ticket.reserved_at = now
-                        hold_fields = ['reserved_at', 'updated_at']
-                if hold_fields:
-                    ticket.save(update_fields=hold_fields)
+            # Do NOT reserve inventory on accept. An accepted offer is a price agreement with a
+            # 24h checkout window — the listing must stay active/visible on the marketplace so
+            # other buyers can still purchase at full price. Inventory is locked only when the
+            # offer buyer clicks Proceed to Payment (10-minute cart reservation).
 
         offer.refresh_from_db()
         try:

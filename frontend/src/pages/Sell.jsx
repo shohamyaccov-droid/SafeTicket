@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ticketAPI, eventAPI, artistAPI, eventRequestAPI, authAPI } from '../services/api';
 import { createListFetchAbort } from '../utils/listFetch';
@@ -375,6 +376,7 @@ function TicketAttachmentPreview({ file }) {
 /* eslint-enable react/prop-types */
 
 const Sell = () => {
+  const navigate = useNavigate();
   const sellDraft = useMemo(() => readSellListingDraft(), []);
   const { user, loading: authLoading, refreshProfile, login, register } = useAuth();
   const [wizardStep, setWizardStep] = useState(1);
@@ -441,6 +443,14 @@ const Sell = () => {
       firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 60);
   }, [error, fieldErrors]);
+
+  useEffect(() => {
+    if (!success) return undefined;
+    const timer = window.setTimeout(() => {
+      navigate('/', { replace: true });
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [success, navigate]);
 
   /**
    * IL rules (receipt + price cap + pending approval) use ONLY the event venue country code,
@@ -1407,7 +1417,14 @@ const Sell = () => {
           ) : (
             <p className="success-text">הכרטיס פורסם באתר וזמין למכירה.</p>
           )}
-          <p className="success-redirect-text">מעבר לדף הבית...</p>
+          <p className="success-redirect-text">מעבירים אותך לדף הבית בעוד כמה שניות...</p>
+          <button
+            type="button"
+            className="success-home-button"
+            onClick={() => navigate('/', { replace: true })}
+          >
+            חזרה לדף הבית
+          </button>
         </div>
       </div>
     );

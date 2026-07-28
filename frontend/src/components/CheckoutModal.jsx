@@ -102,13 +102,19 @@ function toFriendlyCheckoutMessage(detail) {
     return 'החיבור שלך פג תוקף. אנא התחבר מחדש.';
   }
   if (/csrf|forbidden|403/i.test(text)) return CHECKOUT_CSRF_HTML_MESSAGE;
+  if (/amount mismatch|invalid total|does not match/i.test(text)) {
+    return 'סכום התשלום לא תואם להצעה. רעננו את העמוד ונסו שוב.';
+  }
   if (/no longer available|not available|sold|נמכר/i.test(text)) {
     return 'הכרטיס כבר לא זמין. רעננו את הרשימה ובחרו כרטיס אחר.';
   }
   if (/held by another|someone else|reserved|locked|שמור כרגע|בעגלה של מישהו אחר/i.test(text)) {
     return 'הכרטיס שמור כרגע על ידי רוכש אחר. נסו שוב בעוד כמה דקות.';
   }
-  if (/payment failed|payment error|could not process payment|payme/i.test(text)) {
+  if (/buyer (name|phone) is required|phone is required|name is required/i.test(text)) {
+    return 'חסרים פרטי קונה לתשלום (שם וטלפון). עדכנו את הפרופיל ונסו שוב.';
+  }
+  if (/payment failed|payment error|could not process payment|payment provider/i.test(text)) {
     return 'התשלום לא הושלם. בדקו את פרטי התשלום ונסו שוב.';
   }
   if (/timeout|network|failed to fetch|ecconn/i.test(text)) {
@@ -295,8 +301,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const isNegotiatedPrice =
     acceptedOffer &&
     (acceptedOffer.status === 'accepted' || acceptedOffer.accepted_at != null);
-  /** Offer accept already locked inventory; skip cart /reserve and do not release on modal close. */
-  const skipCartReserveForNegotiatedOffer = Boolean(isNegotiatedPrice && acceptedOffer);
+  /**
+   * Accepted offers do NOT exclusively lock inventory. Proceed to Payment uses the same
+   * 10-minute cart reservation as buy-now so the listing stays visible until checkout starts.
+   */
+  const skipCartReserveForNegotiatedOffer = false;
   const checkoutTicketIdRef = useRef(null);
   useEffect(() => {
     const tid = ticket?.id;
@@ -305,21 +314,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     if (tidChanged) {
       checkoutTicketIdRef.current = tid;
     }
-    if (skipCartReserveForNegotiatedOffer) {
-      setReservationActive(true);
-      if (tidChanged) {
-        const cr = acceptedOffer?.checkout_time_remaining;
-        const budget =
-          typeof cr === 'number' && cr > 0 ? cr : OFFER_CHECKOUT_FALLBACK_SECONDS;
-        timerBudgetRef.current = budget;
-        setTimeRemaining(budget);
-      }
-    } else if (tidChanged) {
+    if (tidChanged) {
       timerBudgetRef.current = CART_RESERVE_SECONDS;
       setTimeRemaining(CART_RESERVE_SECONDS);
       setReservationActive(false);
     }
-  }, [ticket?.id, skipCartReserveForNegotiatedOffer, acceptedOffer?.checkout_time_remaining]);
+  }, [ticket?.id]);
   const lockedQuantity = isNegotiatedPrice && acceptedOffer.quantity ? acceptedOffer.quantity : null;
   
   // Get available quantity - if locked quantity exists, use that; otherwise use ticket/group quantity
@@ -805,8 +805,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         throw new Error('שגיאה: כמות לא תקינה');
       }
       
-      // Use finalTotal (exact base*1.10) for order - NOT totalAmount which may have been rounded
-      const orderTotalAmount = finalTotal;
+      // Match backend Decimal(0.01) rounding — float drift breaks negotiated offer amount checks
+      const orderTotalAmount = Number(Number(finalTotal).toFixed(2));
       
       if (!ticketId) {
         throw new Error('שגיאה: לא נמצא מזהה כרטיס');
@@ -827,7 +827,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         };
         
         // CRITICAL: If this is a negotiated price from an accepted offer, include offer_id
-        // This tells the backend to bypass price validation and use the offer amount
+        // This tells the backend to bypass list-price validation and use the offer amount
         if (isNegotiatedPrice && acceptedOffer && acceptedOffer.id) {
           orderData.offer_id = acceptedOffer.id;
         }
@@ -1105,7 +1105,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           return;
         }
 
-        if (ticket.status && ticket.status !== 'active') {
+        // Only hard-block terminal states — reserve API handles active/reserved ownership.
+        if (ticket.status && !['active', 'reserved'].includes(String(ticket.status))) {
           setError('הכרטיס אינו זמין כרגע. אנא נסה כרטיס אחר.');
           setTimeout(() => {
             handleClose();
@@ -1661,6 +1662,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     <span>דמי שירות ותפעול ({feePercentLabel}%)</span>
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.serviceFee, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
+                  {appliedCoupon ? (
+                    <div className="price-row coupon-applied-row">
+                      <span>הנחת קופון ({appliedCoupon.code})</span>
+                      <span>−{curSym}{formatAmountForCurrency(negotiatedBundleBreakdown?.buyerDiscount ?? 0, checkoutCurrency)}</span>
+                    </div>
+                  ) : null}
                   <div className="price-row total-row">
                     <span>סך הכל לתשלום:</span>
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.totalAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
@@ -1993,6 +2000,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     <span>דמי שירות ותפעול ({feePercentLabel}%)</span>
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.serviceFee, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
+                  {appliedCoupon ? (
+                    <div className="price-row coupon-applied-row">
+                      <span>הנחת קופון ({appliedCoupon.code})</span>
+                      <span>−{curSym}{formatAmountForCurrency(negotiatedBundleBreakdown?.buyerDiscount ?? 0, checkoutCurrency)}</span>
+                    </div>
+                  ) : null}
                   <div className="price-row total-row">
                     <span>סך הכל לתשלום:</span>
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.totalAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
