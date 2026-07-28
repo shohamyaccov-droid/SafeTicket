@@ -95,6 +95,94 @@ def _checkout_expected_total(*, ticket, order_quantity, negotiated_offer=None, c
     return checkout_amounts_for_coupon(coupon, base)['total']
 
 
+def _listing_group_id_for_offer(negotiated_offer) -> str | None:
+    """Resolve listing_group_id from an accepted offer when the client omits it."""
+    if negotiated_offer is None:
+        return None
+    ticket = getattr(negotiated_offer, 'ticket', None)
+    if ticket is None:
+        return None
+    gid = getattr(ticket, 'listing_group_id', None)
+    if gid is None:
+        return None
+    gid_s = str(gid).strip()
+    return gid_s or None
+
+
+def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, guest_email: str = ''):
+    """
+    Lock `quantity` seats in a listing group for the 10-minute cart window.
+    Prefers seats already reserved by this buyer, then active seats.
+    Returns (reserved_tickets, expires_at).
+    """
+    guest_email = (guest_email or '').strip().lower()
+    needed = max(1, int(quantity or 1))
+    now = timezone.now()
+    expires_at = now + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
+
+    group_rows = list(
+        Ticket.objects.select_for_update()
+        .filter(listing_group_id=listing_group_id)
+        .order_by('id')
+    )
+    if not group_rows:
+        raise ValueError('group_not_found')
+
+    for t in group_rows:
+        _sync_expired_cart_reservation(t)
+
+    def _belongs_to_buyer(t) -> bool:
+        if t.status != 'reserved':
+            return False
+        if user is not None and getattr(user, 'is_authenticated', False):
+            return t.reserved_by_id == user.id
+        if guest_email:
+            return (t.reservation_email or '').strip().lower() == guest_email
+        return False
+
+    already = [t for t in group_rows if _belongs_to_buyer(t)]
+    # Refresh TTL on seats already held by this buyer
+    for t in already:
+        t.reserved_at = now
+        if user is not None and getattr(user, 'is_authenticated', False):
+            t.reserved_by = user
+            t.reservation_email = None
+        else:
+            t.reserved_by = None
+            t.reservation_email = guest_email or None
+        t.save(
+            update_fields=['reserved_at', 'reserved_by', 'reservation_email', 'updated_at']
+        )
+
+    still_needed = max(0, needed - len(already))
+    active_rows = [t for t in group_rows if t.status == 'active']
+    if len(active_rows) < still_needed:
+        raise ValueError('insufficient_inventory')
+
+    newly = []
+    for t in active_rows[:still_needed]:
+        t.status = 'reserved'
+        t.reserved_at = now
+        if user is not None and getattr(user, 'is_authenticated', False):
+            t.reserved_by = user
+            t.reservation_email = None
+        else:
+            t.reserved_by = None
+            t.reservation_email = guest_email or None
+        t.save(
+            update_fields=[
+                'status',
+                'reserved_at',
+                'reserved_by',
+                'reservation_email',
+                'updated_at',
+            ]
+        )
+        newly.append(t)
+
+    return already + newly, expires_at
+
+
 def _maybe_claim_coupon_on_order(order, *, coupon_code, user=None, guest_email='', ticket=None, order_quantity=1, negotiated_offer=None):
     code = (coupon_code or '').strip()
     if not code:
@@ -1675,6 +1763,10 @@ def create_order(request):
                 logger.debug(
                     f"Negotiated offer found: ID={oid}, Amount={negotiated_offer.amount}, Quantity={negotiated_offer.quantity}"
                 )
+                # Server authority: offer quantity + listing group (Dashboard often omits group id)
+                order_quantity = int(negotiated_offer.quantity or 1)
+                if not listing_group_id:
+                    listing_group_id = _listing_group_id_for_offer(negotiated_offer)
                 coupon_code_early = (request.data.get('coupon_code') or '').strip()
                 from users.coupons import CouponError as _CouponErrorEarly
                 try:
@@ -2585,6 +2677,10 @@ def guest_checkout(request):
 
         # Get quantity from request (default to 1 if not provided)
         order_quantity = int(order_data.get('quantity', 1))
+        if negotiated_offer is not None:
+            order_quantity = int(negotiated_offer.quantity or 1)
+            if not listing_group_id:
+                listing_group_id = _listing_group_id_for_offer(negotiated_offer)
         
         # Prevent negative inventory: Validate quantity doesn't exceed available
         if order_quantity < 1:
@@ -3555,20 +3651,103 @@ class TicketViewSet(viewsets.ModelViewSet):
     )
     def reserve(self, request, pk=None):
         """
-        Reserve a ticket for 10 minutes when user clicks 'Buy'.
+        Reserve ticket inventory for 10 minutes when the buyer enters checkout
+        (Buy Now or Proceed to Payment on an accepted offer).
 
-        The row lock makes the check-and-reserve operation atomic: if two buyers click at
-        the same time, one transaction commits first and the loser sees a clean Hebrew
-        "already held" response instead of both receiving success.
+        Optional body fields:
+        - quantity: number of seats to lock (default 1)
+        - listing_group_id: lock across a multi-seat listing group
+        - offer_id: accepted offer — uses offer.quantity + offer ticket's listing group
+        - email: guest reservation identity
         """
         blocked = shabbat_forbidden_response()
         if blocked is not None:
             return blocked
 
         guest_email = (request.data.get('email') or '').strip().lower()
+        offer_id = request.data.get('offer_id')
+        listing_group_id = (request.data.get('listing_group_id') or '').strip() or None
+        try:
+            quantity = int(request.data.get('quantity') or 1)
+        except (TypeError, ValueError):
+            quantity = 1
+        quantity = max(1, min(10, quantity))
+
+        negotiated_offer = None
+        if offer_id not in (None, '', []):
+            try:
+                oid = int(offer_id)
+            except (TypeError, ValueError):
+                return Response({'error': 'Invalid offer_id.'}, status=status.HTTP_400_BAD_REQUEST)
+            negotiated_offer = Offer.objects.select_related('ticket').filter(pk=oid).first()
+            if not negotiated_offer or negotiated_offer.status != 'accepted':
+                return Response(
+                    {'error': 'Invalid or ineligible offer for checkout.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if request.user.is_authenticated:
+                if negotiated_offer.buyer_id != request.user.id:
+                    return Response(
+                        {'error': 'Invalid or ineligible offer for checkout.'},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+            else:
+                if not _guest_offer_email_matches(negotiated_offer, guest_email):
+                    return Response(
+                        {'error': 'Guest email must match the registered buyer who made this offer.'},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+            if not negotiated_offer.checkout_expires_at or timezone.now() > negotiated_offer.checkout_expires_at:
+                return Response(
+                    {'error': 'הצעה זו פגה. חלון הרכישה לאחר אישור הסתיים — בקשו הצעה חדשה מהמוכר.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            quantity = int(negotiated_offer.quantity or 1)
+            if not listing_group_id:
+                listing_group_id = _listing_group_id_for_offer(negotiated_offer)
 
         try:
             with transaction.atomic():
+                if listing_group_id:
+                    try:
+                        reserved_rows, expires_at = _reserve_listing_group_quantity(
+                            listing_group_id=listing_group_id,
+                            quantity=quantity,
+                            user=request.user if request.user.is_authenticated else None,
+                            guest_email=guest_email,
+                        )
+                    except ValueError as exc:
+                        code = str(exc)
+                        if code == 'group_not_found':
+                            return Response(
+                                {'error': HE_TICKET_NOT_AVAILABLE},
+                                status=status.HTTP_404_NOT_FOUND,
+                            )
+                        return Response(
+                            {
+                                'error': (
+                                    'אין מספיק כרטיסים זמינים כרגע. ייתכן שנרכשו זה עתה — רעננו ונסו שוב.'
+                                ),
+                                'code': 'insufficient_inventory',
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    for t in reserved_rows:
+                        taken_resp = assert_ticket_not_taken(t)
+                        if taken_resp is not None:
+                            return taken_resp
+                    return Response(
+                        {
+                            'success': True,
+                            'message': 'Ticket reserved successfully',
+                            'reserved_at': reserved_rows[0].reserved_at.isoformat() if reserved_rows else None,
+                            'expires_at': expires_at.isoformat(),
+                            'reserved_ticket_ids': [t.id for t in reserved_rows],
+                            'quantity': len(reserved_rows),
+                        },
+                        status=status.HTTP_200_OK,
+                    )
+
                 ticket = Ticket.objects.select_for_update().get(pk=pk)
                 _sync_expired_cart_reservation(ticket)
 
@@ -3581,6 +3760,9 @@ class TicketViewSet(viewsets.ModelViewSet):
                         expires_at = ticket.reserved_at + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
                         if timezone.now() < expires_at:
                             if request.user.is_authenticated and ticket.reserved_by_id == request.user.id:
+                                ticket.reserved_at = timezone.now()
+                                ticket.save(update_fields=['reserved_at', 'updated_at'])
+                                expires_at = ticket.reserved_at + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
                                 return Response(
                                     {
                                         'success': True,
@@ -3592,6 +3774,9 @@ class TicketViewSet(viewsets.ModelViewSet):
                                 )
                             res_email = (ticket.reservation_email or '').strip().lower()
                             if guest_email and res_email and guest_email == res_email:
+                                ticket.reserved_at = timezone.now()
+                                ticket.save(update_fields=['reserved_at', 'updated_at'])
+                                expires_at = ticket.reserved_at + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
                                 return Response(
                                     {
                                         'success': True,
@@ -3618,6 +3803,17 @@ class TicketViewSet(viewsets.ModelViewSet):
                 if ticket.status != 'active':
                     return Response(
                         {'error': HE_TICKET_NOT_AVAILABLE, 'status': ticket.status},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                if quantity > (ticket.available_quantity or 1):
+                    return Response(
+                        {
+                            'error': (
+                                'אין מספיק כרטיסים זמינים כרגע. ייתכן שנרכשו זה עתה — רעננו ונסו שוב.'
+                            ),
+                            'code': 'insufficient_inventory',
+                        },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 

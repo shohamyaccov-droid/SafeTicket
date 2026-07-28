@@ -517,16 +517,20 @@ const Dashboard = () => {
       return;
     }
     const details = group?.ticketDetails || offer.ticket_details || {};
+    const offerQty = Math.max(1, parseInt(String(offer.quantity ?? 1), 10) || 1);
+    const seatQty = Math.max(1, parseInt(String(details.available_quantity ?? 1), 10) || 1);
     const ticket = {
       ...details,
       id: ticketId,
-      listing_group_id: details.listing_group_id || group?.ticketDetails?.listing_group_id || null,
-      available_quantity: details.available_quantity || offer.quantity || 1,
+      listing_group_id: details.listing_group_id || null,
+      // Offer qty can exceed a single seat row's available_quantity in grouped listings
+      available_quantity: Math.max(seatQty, offerQty),
+      status: details.status || 'active',
       asking_price: details.asking_price ?? details.original_price,
       event_name: details.event_name || details.event?.name,
     };
     setCheckoutTicket(ticket);
-    setCheckoutAcceptedOffer(offer);
+    setCheckoutAcceptedOffer({ ...offer, quantity: offerQty });
     setShowCheckout(true);
   };
 

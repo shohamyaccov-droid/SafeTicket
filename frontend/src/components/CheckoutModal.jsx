@@ -105,7 +105,10 @@ function toFriendlyCheckoutMessage(detail) {
   if (/amount mismatch|invalid total|does not match/i.test(text)) {
     return 'סכום התשלום לא תואם להצעה. רעננו את העמוד ונסו שוב.';
   }
-  if (/no longer available|not available|sold|נמכר/i.test(text)) {
+  if (/ineligible offer|invalid offer|offer for checkout|הצעה זו פגה/i.test(text)) {
+    return 'ההצעה אינה זמינה לתשלום כרגע. רעננו את הדף או בקשו הצעה חדשה.';
+  }
+  if (/no longer available|not available|sold|נמכר|אינו זמין/i.test(text)) {
     return 'הכרטיס כבר לא זמין. רעננו את הרשימה ובחרו כרטיס אחר.';
   }
   if (/held by another|someone else|reserved|locked|שמור כרגע|בעגלה של מישהו אחר/i.test(text)) {
@@ -120,7 +123,10 @@ function toFriendlyCheckoutMessage(detail) {
   if (/timeout|network|failed to fetch|ecconn/i.test(text)) {
     return 'יש בעיית חיבור לשרת. בדקו את האינטרנט ונסו שוב.';
   }
-  if (/invalid|quantity|כמות/i.test(text)) {
+  if (/insufficient_inventory|not enough tickets|order quantity must match/i.test(text)) {
+    return 'הכמות שנבחרה אינה זמינה כרגע. עדכנו כמות ונסו שוב.';
+  }
+  if (/(^|[^a-z])quantity([^a-z]|$)|כמות/i.test(text) && !/invalid or ineligible/i.test(text)) {
     return 'הכמות שנבחרה אינה זמינה כרגע. עדכנו כמות ונסו שוב.';
   }
   return text;
@@ -306,6 +312,13 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
    * 10-minute cart reservation as buy-now so the listing stays visible until checkout starts.
    */
   const skipCartReserveForNegotiatedOffer = false;
+  const offerQtyParsed = acceptedOffer?.quantity != null
+    ? parseInt(String(acceptedOffer.quantity), 10)
+    : NaN;
+  const lockedQuantity =
+    isNegotiatedPrice && Number.isFinite(offerQtyParsed) && offerQtyParsed > 0
+      ? offerQtyParsed
+      : null;
   const checkoutTicketIdRef = useRef(null);
   useEffect(() => {
     const tid = ticket?.id;
@@ -320,10 +333,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       setReservationActive(false);
     }
   }, [ticket?.id]);
-  const lockedQuantity = isNegotiatedPrice && acceptedOffer.quantity ? acceptedOffer.quantity : null;
   
   // Get available quantity - if locked quantity exists, use that; otherwise use ticket/group quantity
-  const availableQuantity = lockedQuantity || ticketGroup?.available_count || ticket?.available_quantity || 1;
+  const seatAvail = parseInt(
+    String(ticketGroup?.available_count ?? ticket?.available_quantity ?? 1),
+    10,
+  );
+  const availableQuantity = lockedQuantity
+    || (Number.isFinite(seatAvail) && seatAvail > 0 ? seatAvail : 1);
 
   const internalSplitTypeRaw =
     (ticketGroup?.tickets && ticketGroup.tickets[0]?.split_type) ||
@@ -525,7 +542,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     setError('');
     const q = typeof quantity === 'number' ? quantity : parseInt(quantity, 10);
     const availNum = typeof availableQuantity === 'number' ? availableQuantity : parseInt(availableQuantity, 10);
-    const validOptions = buildQuantityOptions();
+    const validOptions = buildQuantityOptions().map((n) =>
+      typeof n === 'number' ? n : parseInt(n, 10),
+    );
     if (isNaN(q) || q < 1 || q > availNum) {
       setError(`כמות לא תקינה. ניתן לבחור בין 1 ל-${availNum} כרטיסים`);
       setInfoStepBusy(false);
@@ -1116,7 +1135,18 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
         const email = user ? null : guestEmailRef.current || null;
         await ensureCsrfToken();
-        const response = await ticketAPI.reserveTicket(tid, email);
+        const reserveOpts = {};
+        if (isNegotiatedPrice && acceptedOffer?.id) {
+          reserveOpts.offer_id = acceptedOffer.id;
+        }
+        if (ticket?.listing_group_id) {
+          reserveOpts.listing_group_id = ticket.listing_group_id;
+        }
+        const reserveQty = lockedQuantity || quantity || 1;
+        if (reserveQty > 1) {
+          reserveOpts.quantity = reserveQty;
+        }
+        const response = await ticketAPI.reserveTicket(tid, email, reserveOpts);
 
         if (response.data && response.data.success) {
           reservationRef.current = true;
@@ -1177,7 +1207,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         void ticketAPI.releaseReservation(tid, email).catch(() => {});
       }
     };
-  }, [ticket?.id, user, skipCartReserveForNegotiatedOffer, acceptedOffer?.id, step]);
+  }, [ticket?.id, ticket?.listing_group_id, user, skipCartReserveForNegotiatedOffer, acceptedOffer?.id, lockedQuantity, quantity, isNegotiatedPrice, step]);
 
   /** Countdown: 10m cart lock ticks after reserve; 24h offer window ticks from open (info + payment). */
   useEffect(() => {
