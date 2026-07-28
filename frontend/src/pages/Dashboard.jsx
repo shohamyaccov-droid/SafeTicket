@@ -23,6 +23,7 @@ import ProfileWalletPage from './ProfileWallet';
 import { toastError, toastSuccess } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
 import { downloadTicketFromAxiosBlob, openBlobForMobile } from '../utils/ticketDownload';
+import { buyerHasPaymeIdentity } from '../utils/buyerPaymeIdentity';
 import './Dashboard.css';
 
 function offerBuyerId(offer) {
@@ -70,10 +71,11 @@ function offerTicketGroupKey(offer) {
 
 /* --- Account Settings Tab Component --- */
 const AccountSettingsTab = () => {
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const [personal, setPersonal] = useState({
+    firstName: '',
+    lastName: '',
     phone: '',
-    idNumber: '',
   });
   const [bank, setBank] = useState({
     bankName: '',
@@ -83,6 +85,14 @@ const AccountSettingsTab = () => {
   });
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    setPersonal({
+      firstName: user?.first_name || '',
+      lastName: user?.last_name || '',
+      phone: user?.phone_number || '',
+    });
+  }, [user]);
+
   const handlePersonalChange = (field, value) => {
     setPersonal((p) => ({ ...p, [field]: value }));
   };
@@ -90,10 +100,33 @@ const AccountSettingsTab = () => {
     setBank((b) => ({ ...b, [field]: value }));
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
+    const firstName = String(personal.firstName || '').trim();
+    const lastName = String(personal.lastName || '').trim();
+    const phone = String(personal.phone || '').trim();
+    if (`${firstName} ${lastName}`.trim().length < 2) {
+      toastError('נא להזין שם מלא.');
+      return;
+    }
+    if (phone.replace(/\D/g, '').length < 9) {
+      toastError('נא להזין מספר טלפון תקין (לפחות 9 ספרות).');
+      return;
+    }
     setSaving(true);
-    setTimeout(() => setSaving(false), 800);
+    try {
+      await authAPI.updateProfile({
+        first_name: firstName,
+        last_name: lastName,
+        phone_number: phone,
+      });
+      await refreshProfile();
+      toastSuccess('הפרטים נשמרו בהצלחה');
+    } catch (err) {
+      toastError(apiErrorMessageHe(err, 'שמירת הפרטים נכשלה. נסו שוב.'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleChangePassword = () => {
@@ -107,6 +140,9 @@ const AccountSettingsTab = () => {
         {/* Section 1: Personal Info (KYC) */}
         <section className="settings-section">
           <h3 className="settings-section-title">פרטים אישיים</h3>
+          <p className="settings-section-hint">
+            שם מלא ומספר טלפון נדרשים להשלמת תשלום (PayMe / Apple Pay).
+          </p>
           <div className="settings-fields">
             <div className="settings-field">
               <label htmlFor="email">אימייל</label>
@@ -124,7 +160,31 @@ const AccountSettingsTab = () => {
               />
             </div>
             <div className="settings-field">
-              <label htmlFor="phone">מספר טלפון</label>
+              <label htmlFor="firstName">שם פרטי *</label>
+              <input
+                id="firstName"
+                type="text"
+                value={personal.firstName}
+                onChange={(e) => handlePersonalChange('firstName', e.target.value)}
+                placeholder="ישראל"
+                autoComplete="given-name"
+                required
+              />
+            </div>
+            <div className="settings-field">
+              <label htmlFor="lastName">שם משפחה *</label>
+              <input
+                id="lastName"
+                type="text"
+                value={personal.lastName}
+                onChange={(e) => handlePersonalChange('lastName', e.target.value)}
+                placeholder="ישראלי"
+                autoComplete="family-name"
+                required
+              />
+            </div>
+            <div className="settings-field">
+              <label htmlFor="phone">מספר טלפון *</label>
               <input
                 id="phone"
                 type="tel"
@@ -132,17 +192,8 @@ const AccountSettingsTab = () => {
                 onChange={(e) => handlePersonalChange('phone', e.target.value)}
                 placeholder="050-1234567"
                 dir="ltr"
-              />
-            </div>
-            <div className="settings-field">
-              <label htmlFor="idNumber">תעודת זהות (ת.ז)</label>
-              <input
-                id="idNumber"
-                type="text"
-                value={personal.idNumber}
-                onChange={(e) => handlePersonalChange('idNumber', e.target.value)}
-                placeholder="מספר ת.ז"
-                dir="ltr"
+                autoComplete="tel"
+                required
               />
             </div>
           </div>
@@ -505,6 +556,12 @@ const Dashboard = () => {
       toastError('פג זמן התשלום להצעה המאושרת.');
       return;
     }
+    if (!buyerHasPaymeIdentity(user)) {
+      toastError('יש להשלים שם מלא ומספר טלפון בהגדרות החשבון לפני התשלום.');
+      setActiveTab('settings');
+      navigate('/dashboard?tab=settings', { replace: false });
+      return;
+    }
     if (checkoutOpeningRef.current || showCheckout) {
       return;
     }
@@ -837,6 +894,7 @@ const Dashboard = () => {
       !isOfferPurchaseComplete(o) &&
       getAcceptedCheckoutSecondsRemaining(o, countdownTimers) > 0
   );
+  const canPayAcceptedOffers = buyerHasPaymeIdentity(user);
 
   return (
     <div className="dashboard-container">
@@ -1213,6 +1271,21 @@ const Dashboard = () => {
                       להשלמת התשלום
                     </span>
                   )}
+                  {!canPayAcceptedOffers && (
+                    <div className="accepted-offer-profile-gate">
+                      <p>יש להשלים את פרטי הפרופיל כדי להמשיך לתשלום.</p>
+                      <button
+                        type="button"
+                        className="accepted-offer-profile-link"
+                        onClick={() => {
+                          setActiveTab('settings');
+                          navigate('/dashboard?tab=settings');
+                        }}
+                      >
+                        לחצו כאן לעדכון שם מלא ומספר טלפון
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1374,13 +1447,40 @@ const Dashboard = () => {
                                 {acceptedOffer &&
                                   !isOfferPurchaseComplete(acceptedOffer) &&
                                   getAcceptedCheckoutSecondsRemaining(acceptedOffer, countdownTimers) > 0 && (
-                                  <button
-                                    type="button"
-                                    className="primary-button checkout-btn"
-                                    onClick={(e) => { e.stopPropagation(); handleCompletePurchase(acceptedOffer, group); }}
-                                  >
-                                    השלם רכישה
-                                  </button>
+                                  <div className="checkout-cta-wrap">
+                                    {!canPayAcceptedOffers && (
+                                      <p className="checkout-profile-hint">
+                                        יש להשלים את פרטי הפרופיל כדי להמשיך לתשלום.{' '}
+                                        <button
+                                          type="button"
+                                          className="checkout-profile-link"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveTab('settings');
+                                            navigate('/dashboard?tab=settings');
+                                          }}
+                                        >
+                                          לחצו כאן לעדכון שם מלא ומספר טלפון
+                                        </button>
+                                      </p>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="primary-button checkout-btn"
+                                      disabled={!canPayAcceptedOffers}
+                                      title={
+                                        canPayAcceptedOffers
+                                          ? undefined
+                                          : 'יש להשלים שם מלא ומספר טלפון בהגדרות החשבון'
+                                      }
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleCompletePurchase(acceptedOffer, group);
+                                      }}
+                                    >
+                                      השלם רכישה
+                                    </button>
+                                  </div>
                                 )}
                                 {acceptedOffer &&
                                   !isOfferPurchaseComplete(acceptedOffer) &&
@@ -1806,6 +1906,12 @@ const Dashboard = () => {
           offerExpirationTimers={offerExpirationTimers}
           countdownTimers={countdownTimers}
           onCompletePurchase={(offer) => { const g = negotiationModalGroup; setNegotiationModalGroup(null); handleCompletePurchase(offer, g); }}
+          canCompletePurchase={canPayAcceptedOffers}
+          onNeedProfileDetails={() => {
+            setNegotiationModalGroup(null);
+            setActiveTab('settings');
+            navigate('/dashboard?tab=settings');
+          }}
           getOfferRoundBadge={getOfferRoundBadge}
           formatTimeRemaining={formatTimeRemaining}
           formatOfferExpiration={formatOfferExpiration}

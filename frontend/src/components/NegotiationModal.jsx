@@ -35,6 +35,8 @@ const NegotiationModal = ({
   formatOfferExpiration,
   getResponsesLeft,
   isOfferPurchaseComplete,
+  canCompletePurchase = true,
+  onNeedProfileDetails = null,
 }) => {
   const [counterAmount, setCounterAmount] = useState('');
   const [serviceFeePercent, setServiceFeePercent] = useState(12);
@@ -231,12 +233,29 @@ const NegotiationModal = ({
                     נותרו{' '}
                     {formatTimeRemaining(checkoutSecondsLeft)}
                   </span>
+                  {!canCompletePurchase && (
+                    <p className="negotiation-profile-hint">
+                      יש להשלים את פרטי הפרופיל כדי להמשיך לתשלום.{' '}
+                      <button
+                        type="button"
+                        className="negotiation-profile-link"
+                        onClick={() => onNeedProfileDetails?.()}
+                      >
+                        לחצו כאן לעדכון שם מלא ומספר טלפון
+                      </button>
+                    </p>
+                  )}
                   <button
                     type="button"
                     className="primary-button negotiation-action-btn"
                     data-e2e="negotiation-complete-purchase"
                     onClick={() => onCompletePurchase(acceptedOfferRow)}
-                    disabled={checkoutSecondsLeft <= 0}
+                    disabled={checkoutSecondsLeft <= 0 || !canCompletePurchase}
+                    title={
+                      canCompletePurchase
+                        ? undefined
+                        : 'יש להשלים שם מלא ומספר טלפון בהגדרות החשבון'
+                    }
                   >
                     השלם רכישה
                   </button>

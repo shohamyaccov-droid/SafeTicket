@@ -323,6 +323,7 @@ class UserSerializer(serializers.ModelSerializer):
     is_verified_seller = serializers.BooleanField(read_only=True)
     is_email_verified = serializers.BooleanField(read_only=True)
     profile_image = serializers.SerializerMethodField()
+    full_name = serializers.SerializerMethodField()
 
     def get_profile_image(self, obj):
         try:
@@ -333,17 +334,23 @@ class UserSerializer(serializers.ModelSerializer):
         except Exception:
             return None
 
+    def get_full_name(self, obj):
+        first = (getattr(obj, 'first_name', None) or '').strip()
+        last = (getattr(obj, 'last_name', None) or '').strip()
+        return f'{first} {last}'.strip()
+
     class Meta:
         model = User
         fields = (
-            'id', 'username', 'email', 'role', 'phone_number', 'payout_details',
+            'id', 'username', 'email', 'role', 'first_name', 'last_name', 'full_name',
+            'phone_number', 'payout_details',
             'payout_method', 'bit_phone_number',
             'accepted_escrow_terms', 'profile_image', 'is_verified_seller', 'is_email_verified',
             'is_superuser', 'is_staff', 'date_joined',
         )
         read_only_fields = (
             'id', 'date_joined', 'is_verified_seller', 'is_email_verified', 'is_superuser', 'is_staff',
-            'accepted_escrow_terms',
+            'accepted_escrow_terms', 'full_name',
         )
 
 

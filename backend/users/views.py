@@ -1237,13 +1237,53 @@ def logout_view(request):
     return response
 
 
-@api_view(['GET'])
+@api_view(['GET', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def user_profile(request):
     """
-    Get current user profile with orders and listings
-    Always returns minimum structure: {'user': {...}, 'orders': [], 'listings': []}
+    GET: current user profile with orders and listings.
+    PATCH: update buyer identity fields needed for PayMe (name + phone).
+    Always returns minimum structure on GET: {'user': {...}, 'orders': [], 'listings': []}
     """
+    if request.method == 'PATCH':
+        user = request.user
+        data = request.data if hasattr(request, 'data') else {}
+        update_fields = []
+
+        if 'first_name' in data:
+            user.first_name = str(data.get('first_name') or '').strip()[:150]
+            update_fields.append('first_name')
+        if 'last_name' in data:
+            user.last_name = str(data.get('last_name') or '').strip()[:150]
+            update_fields.append('last_name')
+        if 'phone_number' in data:
+            raw_phone = str(data.get('phone_number') or '').strip()
+            digits = ''.join(ch for ch in raw_phone if ch.isdigit())
+            if digits and len(digits) < 9:
+                return Response(
+                    {'error': 'נא להזין מספר טלפון תקין (לפחות 9 ספרות).', 'code': 'invalid_phone'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            user.phone_number = raw_phone or None
+            update_fields.append('phone_number')
+
+        if not update_fields:
+            return Response(
+                {'error': 'No updatable fields provided (first_name, last_name, phone_number).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        full = f'{(user.first_name or "").strip()} {(user.last_name or "").strip()}'.strip()
+        if 'first_name' in update_fields or 'last_name' in update_fields:
+            if len(full) < 2:
+                return Response(
+                    {'error': 'נא להזין שם מלא לתשלום.', 'code': 'invalid_name'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        user.save(update_fields=update_fields)
+        return Response({'user': UserSerializer(user, context={'request': request}).data})
+
     try:
         user = request.user
         

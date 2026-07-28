@@ -353,3 +353,27 @@
   font-size: 0.9rem;
   color: #ef4444;
 }
+
+.negotiation-profile-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: #991b1b;
+  text-align: right;
+}
+
+.negotiation-profile-link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: #1d4ed8;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+}
+
+.negotiation-action-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

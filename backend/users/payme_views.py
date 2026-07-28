@@ -19,6 +19,7 @@ from services.payme_service import (
     PayMeError,
     PayMeSettings,
     generate_payme_sale_for_order,
+    normalize_payme_buyer_phone,
     resolve_buyer_details_for_order,
 )
 
@@ -574,15 +575,53 @@ def payme_init_checkout(request):
     if not buyer_email:
         return Response({'error': 'No buyer email on order.'}, status=status.HTTP_400_BAD_REQUEST)
 
+    # Allow checkout to supply / refresh identity (dashboard negotiation path often needs this).
+    body_name = (
+        (request.data.get('buyer_full_name') or request.data.get('buyer_name') or '')
+        .strip()
+    )
+    body_phone = (
+        (request.data.get('buyer_phone_number') or request.data.get('buyer_phone') or '')
+        .strip()
+    )
+    if order.user_id and (body_name or body_phone):
+        user = order.user
+        fields = []
+        if body_name:
+            parts = body_name.split(None, 1)
+            user.first_name = parts[0][:150]
+            user.last_name = (parts[1] if len(parts) > 1 else '')[:150]
+            fields.extend(['first_name', 'last_name'])
+        if body_phone:
+            user.phone_number = body_phone
+            fields.append('phone_number')
+        if fields:
+            user.save(update_fields=fields)
+            order.user = user
+
     buyer_details = resolve_buyer_details_for_order(order)
+    if body_name:
+        buyer_details['buyer_name'] = body_name
+        buyer_details['buyer_full_name'] = body_name
+    if body_phone:
+        phone_norm = normalize_payme_buyer_phone(body_phone)
+        buyer_details['buyer_phone'] = phone_norm
+        buyer_details['buyer_phone_number'] = phone_norm
+
     if not buyer_details.get('buyer_name'):
         return Response(
-            {'error': 'Buyer name is required for PayMe checkout. Complete guest details or update your profile.'},
+            {
+                'error': 'Buyer name is required for PayMe checkout. Complete guest details or update your profile.',
+                'code': 'missing_buyer_name',
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
     if not buyer_details.get('buyer_phone'):
         return Response(
-            {'error': 'Buyer phone is required for PayMe checkout. Complete guest details or update your profile.'},
+            {
+                'error': 'Buyer phone is required for PayMe checkout. Complete guest details or update your profile.',
+                'code': 'missing_buyer_phone',
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -597,8 +636,8 @@ def payme_init_checkout(request):
             buyer_email=buyer_email,
             success_url=success_url,
             failure_url=failure_url,
-            buyer_name=buyer_details.get('buyer_name'),
-            buyer_phone=buyer_details.get('buyer_phone'),
+            buyer_name=buyer_details.get('buyer_full_name') or buyer_details.get('buyer_name'),
+            buyer_phone=buyer_details.get('buyer_phone_number') or buyer_details.get('buyer_phone'),
         )
     except PayMeError as exc:
         log_payme(

@@ -158,24 +158,56 @@ def normalize_payme_buyer_phone(raw: str | None) -> str:
     return digits
 
 
+def _looks_like_email(value: str) -> bool:
+    return '@' in (value or '')
+
+
 def resolve_buyer_details_for_order(order) -> dict[str, str]:
-    """Buyer identity for PayMe generate-sale (Bit prefill)."""
-    if getattr(order, 'user_id', None) and getattr(order, 'user', None):
-        user = order.user
-        first = (getattr(user, 'first_name', None) or '').strip()
-        last = (getattr(user, 'last_name', None) or '').strip()
-        name = f'{first} {last}'.strip() or (getattr(user, 'username', None) or '').strip()
-        return {
-            'buyer_name': name,
-            'buyer_email': (getattr(user, 'email', None) or '').strip(),
-            'buyer_phone': normalize_payme_buyer_phone(getattr(user, 'phone_number', None)),
-        }
+    """Buyer identity for PayMe generate-sale (Bit / Apple Pay prefill)."""
+    if getattr(order, 'user_id', None):
+        user = getattr(order, 'user', None)
+        if user is None:
+            from django.contrib.auth import get_user_model
+
+            user = get_user_model().objects.filter(pk=order.user_id).first()
+        if user is not None:
+            # Always re-read identity fields so dashboard checkout sees latest profile edits.
+            try:
+                user.refresh_from_db(
+                    fields=['first_name', 'last_name', 'email', 'phone_number', 'bit_phone_number', 'username']
+                )
+            except Exception:
+                pass
+            first = (getattr(user, 'first_name', None) or '').strip()
+            last = (getattr(user, 'last_name', None) or '').strip()
+            full = f'{first} {last}'.strip()
+            if not full:
+                # Do not treat email-like usernames as a legal buyer name for PayMe.
+                uname = (getattr(user, 'username', None) or '').strip()
+                if uname and not _looks_like_email(uname):
+                    full = uname
+            phone_raw = (
+                getattr(user, 'phone_number', None)
+                or getattr(user, 'bit_phone_number', None)
+                or ''
+            )
+            return {
+                'buyer_name': full,
+                'buyer_full_name': full,
+                'buyer_email': (getattr(user, 'email', None) or '').strip(),
+                'buyer_phone': normalize_payme_buyer_phone(phone_raw),
+                'buyer_phone_number': normalize_payme_buyer_phone(phone_raw),
+            }
     first = (getattr(order, 'guest_first_name', None) or '').strip()
     last = (getattr(order, 'guest_last_name', None) or '').strip()
+    full = f'{first} {last}'.strip()
+    phone = normalize_payme_buyer_phone(getattr(order, 'guest_phone', None))
     return {
-        'buyer_name': f'{first} {last}'.strip(),
+        'buyer_name': full,
+        'buyer_full_name': full,
         'buyer_email': (getattr(order, 'guest_email', None) or '').strip(),
-        'buyer_phone': normalize_payme_buyer_phone(getattr(order, 'guest_phone', None)),
+        'buyer_phone': phone,
+        'buyer_phone_number': phone,
     }
 
 
@@ -216,9 +248,12 @@ def build_standard_generate_sale_body(
     payme_buyer_name = (buyer_name or '').strip()
     payme_buyer_phone = normalize_payme_buyer_phone(buyer_phone)
     if payme_buyer_name:
+        # Canonical PayMe keys + aliases used by some hosted/Bit payloads.
         body['buyer_name'] = payme_buyer_name[:255]
+        body['buyer_full_name'] = payme_buyer_name[:255]
     if payme_buyer_phone:
         body['buyer_phone'] = payme_buyer_phone
+        body['buyer_phone_number'] = payme_buyer_phone
 
     extra = getattr(settings, 'PAYME_EXTRA_BODY_JSON', None) or {}
     if isinstance(extra, dict) and extra:

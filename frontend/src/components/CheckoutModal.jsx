@@ -943,6 +943,23 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             /* ignore */
           }
         }
+        // Always send buyer identity for PayMe (dashboard / negotiated checkout).
+        const buyerFullName = user
+          ? `${String(user.first_name || '').trim()} ${String(user.last_name || '').trim()}`.trim()
+            || String(user.full_name || '').trim()
+            || String(user.username || '').trim()
+          : `${guestForm.firstName.trim()} ${guestForm.lastName.trim()}`.trim();
+        const buyerPhone = user
+          ? String(user.phone_number || user.bit_phone_number || '').trim()
+          : String(guestForm.phone || '').trim();
+        if (buyerFullName) {
+          initPayload.buyer_full_name = buyerFullName;
+          initPayload.buyer_name = buyerFullName;
+        }
+        if (buyerPhone) {
+          initPayload.buyer_phone_number = buyerPhone;
+          initPayload.buyer_phone = buyerPhone;
+        }
         const paymeRes = await paymentAPI.paymeInitCheckout(initPayload);
         const redirectUrl = paymeRes.data?.redirect_url;
         if (!redirectUrl) {

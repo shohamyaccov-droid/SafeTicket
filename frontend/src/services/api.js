@@ -458,6 +458,10 @@ export const authAPI = {
   login: (data) => api.post('/users/login/', data, creds),
   logout: () => api.post('/users/logout/', {}, creds),
   getProfile: () => api.get('/users/profile/', creds),
+  updateProfile: async (data) => {
+    await ensureCsrfToken();
+    return api.patch('/users/profile/', data, creds);
+  },
   upgradeToSeller: async (data) => {
     await ensureCsrfToken();
     return api.post('/users/me/upgrade-to-seller/', data, creds);
