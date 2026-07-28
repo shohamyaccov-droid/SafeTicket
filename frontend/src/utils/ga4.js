@@ -1,8 +1,8 @@
 /**
- * Google Analytics 4 (react-ga4).
+ * Google Analytics 4 (react-ga4) + dataLayer bridge for GTM.
  *
- * Production-only: never initialize or send hits on localhost / 127.0.0.1
- * (or other local-style hosts). Safe to call from any route — no-ops in dev.
+ * Production-only hits on tradetix.co.il. dataLayer pushes still run so GTM
+ * can mirror events when configured. Safe to call from any route — never throws.
  */
 import ReactGA from 'react-ga4';
 
@@ -44,6 +44,22 @@ export function initGa4() {
 }
 
 /**
+ * Push a GTM/dataLayer event (works even when GA4 host gate blocks).
+ */
+export function pushDataLayerEvent(eventName, params = {}) {
+  try {
+    if (typeof window === 'undefined') return;
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: eventName,
+      ...params,
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
  * Send a GA4 pageview for the given React Router location.
  * Initializes lazily on first production pageview.
  */
@@ -54,6 +70,30 @@ export function trackGa4Pageview(pathname, search = '') {
     ReactGA.send({ hitType: 'pageview', page, title: typeof document !== 'undefined' ? document.title : page });
   } catch {
     // Analytics must never break navigation.
+  }
+}
+
+/**
+ * Fire a GA4 custom / recommended event and mirror to dataLayer for GTM.
+ * Examples: generate_lead, purchase, begin_checkout, view_item, add_to_cart
+ *
+ * @param {string} eventName
+ * @param {Record<string, unknown>} [params]
+ */
+export function trackGa4Event(eventName, params = {}) {
+  try {
+    if (!eventName) return;
+    const clean = { ...params };
+    // Prefer numbers for monetary fields when provided as strings.
+    if (clean.value != null && clean.value !== '') {
+      const n = Number(clean.value);
+      if (Number.isFinite(n)) clean.value = n;
+    }
+    pushDataLayerEvent(eventName, clean);
+    if (!initGa4()) return;
+    ReactGA.gtag('event', eventName, clean);
+  } catch {
+    /* ignore */
   }
 }
 

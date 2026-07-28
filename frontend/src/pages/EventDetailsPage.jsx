@@ -40,7 +40,7 @@ import { toastError } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
 import { formatEventDateTimeWithLocality, formatEventLocation } from '../utils/eventLocalTime';
 import { Helmet } from 'react-helmet-async';
-import { BUYER_SERVICE_FEE_PERCENT } from '../constants/pricing';
+import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import EventJsonLd from '../components/EventJsonLd';
 import { eventHref } from '../utils/eventSeo';
 import { PUBLIC_SITE_ORIGIN, toPublicAbsoluteUrl } from '../utils/publicSite';
@@ -74,6 +74,7 @@ const EventDetailsPage = () => {
   const eventKey = eventSlug || eventId;
   const navigate = useNavigate();
   const { user } = useAuth();
+  const buyerFeePercent = useBuyerServiceFeePercent();
   const [event, setEvent] = useState(null);
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -350,7 +351,9 @@ const EventDetailsPage = () => {
         if (resolvedSlug && String(eventKey) !== resolvedSlug) {
           navigate(`/event/${encodeURIComponent(resolvedSlug)}`, { replace: true });
         }
-        Analytics.ticketViewed(eventResponse.data?.id ?? eventKey);
+        Analytics.ticketViewed(eventResponse.data?.id ?? eventKey, {
+          contentName: eventResponse.data?.name || eventResponse.data?.title,
+        });
         await fetchTicketsRef.current();
       } catch (error) {
         toastError('לא ניתן לטעון את האירוע. בדקו את החיבור או חזרו לדף הבית.');
@@ -1032,8 +1035,8 @@ const EventDetailsPage = () => {
     return (
       <div className="event-details-container">
         <Helmet>
-          <title>טוען אירוע | TradeTix</title>
-          <meta name="robots" content="index, follow" />
+          <title>TradeTix | טריידטיקס</title>
+          <meta name="robots" content="noindex" />
           <meta
             name="description"
             content="קנו או מכרו כרטיסים לאירועים בישראל ב-TradeTix. תשלום מאובטח והגנה מלאה על הכסף."
@@ -1751,7 +1754,7 @@ const EventDetailsPage = () => {
                     ) : null}
                     <p className="current-price">מחיר נוכחי: {offerModalSym}{getTicketPrice(selectedOfferTicket)}</p>
                     <p className="offer-fee-clarification" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem', lineHeight: 1.5 }}>
-                      ההצעה היא לפני דמי שירות ותפעול ({BUYER_SERVICE_FEE_PERCENT}% יתווספו בקופה).
+                      ההצעה היא לפני דמי שירות ותפעול ({buyerFeePercent}% יתווספו בקופה).
                     </p>
                   </div>
                 </div>

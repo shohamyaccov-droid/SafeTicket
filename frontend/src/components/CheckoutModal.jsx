@@ -911,7 +911,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         }
         transactionCompleteRef.current = true;
         reservationRef.current = false;
-        Analytics.checkoutStart(ticket?.id);
+        Analytics.checkoutComplete(pendingId, {
+          value: paidSnapshot?.totalAmount,
+          currency: 'ILS',
+        });
         toastSuccess('התשלום הושלם בהצלחה! הכרטיס נוסף לרכישות שלך.');
         onClose?.();
         navigate('/dashboard');
@@ -920,6 +923,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
       if (usePayme) {
         setPaymentPhase('redirecting');
+        Analytics.checkoutStart(ticket?.id, {
+          value: paidSnapshot?.totalAmount,
+          currency: 'ILS',
+          quantity: orderQuantity,
+        });
         await ensureCsrfToken();
         const origin = window.location.origin.replace(/\/+$/, '');
         const successUrl = `${origin}/checkout/payme/success?order_id=${encodeURIComponent(String(pendingId))}`;
@@ -967,7 +975,6 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             paymeRes.data?.error || 'Payme לא החזיר כתובת תשלום — בדקו הגדרות PAYME_* בשרת',
           );
         }
-        Analytics.checkoutStart(ticket?.id);
         window.location.assign(redirectUrl);
         return;
       }
@@ -1021,6 +1028,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       transactionCompleteRef.current = true;
       setCheckoutSucceeded(true);
       setStep('success');
+      Analytics.checkoutComplete(resolvedId, {
+        value: paidSnapshot?.totalAmount,
+        currency: 'ILS',
+      });
 
       // PDF after success — never block transition (was causing payment form to reappear if PDF hung)
       const emailForPdf = user ? null : guestForm.email.trim();

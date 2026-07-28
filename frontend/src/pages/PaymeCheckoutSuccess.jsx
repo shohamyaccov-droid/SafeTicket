@@ -64,7 +64,13 @@ export default function PaymeCheckoutSuccess() {
         completedRef.current = true;
         setPhase('success');
         clearAllTimers();
-        Analytics.checkoutComplete(orderId);
+        const paidValue = Number(
+          res.data?.total_paid_by_buyer ?? res.data?.total_amount ?? 0,
+        );
+        Analytics.checkoutComplete(orderId, {
+          value: Number.isFinite(paidValue) ? paidValue : 0,
+          currency: res.data?.currency || 'ILS',
+        });
         try {
           sessionStorage.removeItem('payme_checkout_guest_email');
         } catch {

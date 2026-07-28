@@ -6,6 +6,7 @@ import { createListFetchAbort } from '../utils/listFetch';
 import SellFormSkeleton from '../components/skeletons/SellFormSkeleton';
 import { toastError } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
+import { Analytics } from '../utils/analytics';
 import { iso4217FromCountry, currencySymbol, formatAmountForCurrency } from '../utils/priceFormat';
 import { VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN, VENUE_CAESAREA } from '../utils/venueMaps';
 import { CONCERT_BLOCK_COUNT, CONCERT_SECTION_NAMES } from '../utils/bloomfieldConcertGeometry';
@@ -1140,13 +1141,15 @@ const Sell = () => {
         setUploadProgress((prev) => Math.min(90, prev + 4));
       }, 700);
       await ticketAPI.createTicket(submitData);
-      if (typeof window !== 'undefined') {
-        try {
-          const { trackMetaLead } = await import('../utils/metaPixel');
-          trackMetaLead();
-        } catch {
-          /* analytics must not block listing success */
-        }
+      try {
+        Analytics.ticketListed({
+          contentName: 'ticket_listing',
+          bonusValue: 20,
+          event_id: activeForm?.event_id,
+          quantity: qtyNum,
+        });
+      } catch {
+        /* analytics must not block listing success */
       }
       setUploadProgress(100);
       setUploadPhase('הכרטיסים נשמרו בהצלחה.');
