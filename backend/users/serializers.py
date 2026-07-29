@@ -478,6 +478,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
 
+class AnnouncementBannerSerializer(serializers.Serializer):
+    banner_text = serializers.CharField()
+    is_active = serializers.BooleanField()
+
+
 
 class OrderSerializer(serializers.ModelSerializer):
     ticket_info = serializers.SerializerMethodField()

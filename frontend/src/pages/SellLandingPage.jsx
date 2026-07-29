@@ -1,6 +1,5 @@
 import { ArrowLeft, Check, Clock3, LockKeyhole, MessageCircleOff, ShieldCheck, Upload } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import LaunchPromoBanner from '../components/LaunchPromoBanner';
 import './SellLandingPage.css';
 
 const HOW_IT_WORKS = [
@@ -33,9 +32,6 @@ export default function SellLandingPage() {
           תהליך מאובטח
         </div>
       </header>
-
-      <LaunchPromoBanner />
-
       <main>
         <section className="sell-landing__hero">
           <div className="sell-landing__hero-copy">

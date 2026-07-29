@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from .models import (
+    AnnouncementBanner,
     AffiliatePartner,
     AnalyticsEvent,
     Artist,
@@ -844,6 +845,26 @@ class SellerBonusCampaignAdmin(admin.ModelAdmin):
     def changelist_view(self, request, extra_context=None):
         obj = SellerBonusCampaign.load()
         return redirect(reverse('admin:users_sellerbonuscampaign_change', args=[obj.pk]))
+
+
+@admin.register(AnnouncementBanner)
+class AnnouncementBannerAdmin(admin.ModelAdmin):
+    list_display = ['is_active', 'updated_at', 'banner_preview']
+    readonly_fields = ['updated_at']
+    fields = ['is_active', 'banner_text', 'updated_at']
+
+    def banner_preview(self, obj):
+        return (obj.banner_text or '').strip()[:80]
+
+    def has_add_permission(self, request):
+        return not AnnouncementBanner.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        obj = AnnouncementBanner.load()
+        return redirect(reverse('admin:users_announcementbanner_change', args=[obj.pk]))
 
 
 @admin.register(SellerPayout)

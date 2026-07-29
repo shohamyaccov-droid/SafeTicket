@@ -9,7 +9,6 @@ import EmptyState from '../components/EmptyState';
 import EventCard from '../components/EventCard';
 import PerformerCard from '../components/PerformerCard';
 import BuyerGuarantee from '../components/BuyerGuarantee';
-import LaunchPromoBanner from '../components/LaunchPromoBanner';
 import { toastError } from '../utils/toast';
 import {
   groupEventsByPerformer,
@@ -19,6 +18,7 @@ import {
 import { formatEventLocation } from '../utils/eventLocalTime';
 import './Home.css';
 
+/* eslint-disable react/prop-types */
 function formatEventDateHe(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -282,7 +282,6 @@ const Home = () => {
           <meta name="robots" content="index, follow" />
           <meta name="description" content={HOME_PAGE_DESCRIPTION} />
         </Helmet>
-        <LaunchPromoBanner />
         <EventsPageSkeleton variant="home" />
       </div>
     );
@@ -300,8 +299,10 @@ const Home = () => {
     const [canPrev, setCanPrev] = useState(false);
     const [canNext, setCanNext] = useState(false);
 
-    const items =
-      kind === 'performer' ? performers : kind === 'lastMinute' || kind === 'event' ? events : [];
+    const items = useMemo(
+      () => (kind === 'performer' ? performers : kind === 'lastMinute' || kind === 'event' ? events : []),
+      [events, kind, performers]
+    );
 
     const updateArrows = useCallback(() => {
       const el = scrollRef.current;
@@ -443,7 +444,6 @@ const Home = () => {
         <meta name="robots" content="index, follow" />
         <meta name="description" content={HOME_PAGE_DESCRIPTION} />
       </Helmet>
-      <LaunchPromoBanner />
       {loadError && (
         <div className="home-fetch-banner" role="alert">
           <p>

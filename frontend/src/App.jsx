@@ -1,49 +1,98 @@
-import { useEffect, useRef } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import api, { authAPI, SESSION_EXPIRED_EVENT } from './services/api';
+import api, { authAPI, SESSION_EXPIRED_EVENT, siteAPI } from './services/api';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
-import EventGroupPage from './pages/EventGroupPage';
-import EventDetailsPage from './pages/EventDetailsPage';
-import TicketSelectionPage from './pages/TicketSelectionPage';
-import ArtistEventsPage from './pages/ArtistEventsPage';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import Sell from './pages/Sell';
 import SellLandingPage from './pages/SellLandingPage';
-import Profile from './pages/Profile';
-import ProfileWallet from './pages/ProfileWallet';
-import Dashboard from './pages/Dashboard';
-import AdminVerificationPage from './pages/AdminVerificationPage';
-import AdminDashboard from './pages/AdminDashboard';
-import AdminPayoutsPage from './pages/AdminPayoutsPage';
-import AdminOffersPage from './pages/AdminOffersPage';
 import AdminRoute from './components/AdminRoute';
-import FAQ from './pages/FAQ';
-import Contact from './pages/Contact';
-import TermsPage from './pages/TermsPage';
-import RefundsPage from './pages/RefundsPage';
-import PrivacyPage from './pages/PrivacyPage';
-import AboutPage from './pages/AboutPage';
-import BuyerGuaranteePage from './pages/BuyerGuaranteePage';
-import AccessibilityPage from './pages/AccessibilityPage';
-import NotFoundPage from './pages/NotFoundPage';
-import PaymeCheckoutSuccess from './pages/PaymeCheckoutSuccess';
-import PaymeCheckoutFailure from './pages/PaymeCheckoutFailure';
 import FloatingWhatsApp from './components/FloatingWhatsApp';
 import Footer from './components/Footer';
+import LaunchPromoBanner from './components/LaunchPromoBanner';
 import ScrollToTop from './components/ScrollToTop';
+import DashboardSkeleton from './components/skeletons/DashboardSkeleton';
+import EventDetailsSkeleton from './components/skeletons/EventDetailsSkeleton';
+import EventsPageSkeleton from './components/skeletons/EventsPageSkeleton';
+import SellFormSkeleton from './components/skeletons/SellFormSkeleton';
 import { toastError } from './utils/toast';
 import { Analytics } from './utils/analytics';
 import { trackGa4Pageview } from './utils/ga4';
 import { ensureMetaPixel, trackMetaPageView } from './utils/metaPixel';
 import './App.css';
 
+/* eslint-disable react/prop-types */
+const EventGroupPage = lazy(() => import('./pages/EventGroupPage'));
+const EventDetailsPage = lazy(() => import('./pages/EventDetailsPage'));
+const TicketSelectionPage = lazy(() => import('./pages/TicketSelectionPage'));
+const ArtistEventsPage = lazy(() => import('./pages/ArtistEventsPage'));
+const Sell = lazy(() => import('./pages/Sell'));
+const Profile = lazy(() => import('./pages/Profile'));
+const ProfileWallet = lazy(() => import('./pages/ProfileWallet'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const AdminVerificationPage = lazy(() => import('./pages/AdminVerificationPage'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const AdminPayoutsPage = lazy(() => import('./pages/AdminPayoutsPage'));
+const AdminOffersPage = lazy(() => import('./pages/AdminOffersPage'));
+const FAQ = lazy(() => import('./pages/FAQ'));
+const Contact = lazy(() => import('./pages/Contact'));
+const TermsPage = lazy(() => import('./pages/TermsPage'));
+const RefundsPage = lazy(() => import('./pages/RefundsPage'));
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
+const AboutPage = lazy(() => import('./pages/AboutPage'));
+const BuyerGuaranteePage = lazy(() => import('./pages/BuyerGuaranteePage'));
+const AccessibilityPage = lazy(() => import('./pages/AccessibilityPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const PaymeCheckoutSuccess = lazy(() => import('./pages/PaymeCheckoutSuccess'));
+const PaymeCheckoutFailure = lazy(() => import('./pages/PaymeCheckoutFailure'));
+
+const ANNOUNCEMENT_CACHE_KEY = 'tradetix_announcement_banner_v1';
+
 function safeReturnTo(value) {
   const raw = typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') ? value : '/';
   return raw.startsWith('/login') ? '/' : raw;
+}
+
+function readCachedAnnouncementBanner() {
+  try {
+    const raw = localStorage.getItem(ANNOUNCEMENT_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      banner_text: String(parsed.banner_text || '').trim(),
+      is_active: Boolean(parsed.is_active),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedAnnouncementBanner(value) {
+  try {
+    if (!value) {
+      localStorage.removeItem(ANNOUNCEMENT_CACHE_KEY);
+      return;
+    }
+    localStorage.setItem(ANNOUNCEMENT_CACHE_KEY, JSON.stringify(value));
+  } catch {
+    /* ignore private mode / quota */
+  }
+}
+
+function RouteSpinner({ label = 'טוען עמוד...' }) {
+  return (
+    <div className="route-spinner-shell" role="status" aria-live="polite">
+      <div className="route-spinner" aria-hidden="true" />
+      <p>{label}</p>
+    </div>
+  );
+}
+
+function routeElement(node, fallback = <RouteSpinner />) {
+  return <Suspense fallback={fallback}>{node}</Suspense>;
 }
 
 /** Backend funnel analytics + GA4/Meta pageviews on every React Router navigation. */
@@ -104,9 +153,35 @@ function SessionExpiredRedirector() {
 function AppChrome({ children }) {
   const location = useLocation();
   const isSellerFunnel = location.pathname === '/sell' || location.pathname === '/sell/new';
+  const [announcementBanner, setAnnouncementBanner] = useState(() => readCachedAnnouncementBanner());
+
+  useEffect(() => {
+    let active = true;
+    siteAPI
+      .getAnnouncementBanner()
+      .then((response) => {
+        if (!active) return;
+        const next = {
+          banner_text: String(response?.data?.banner_text || '').trim(),
+          is_active: Boolean(response?.data?.is_active),
+        };
+        setAnnouncementBanner(next);
+        writeCachedAnnouncementBanner(next);
+      })
+      .catch(() => {
+        /* keep cached banner and avoid layout flicker on transient wake-up */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className="App">
+      <LaunchPromoBanner
+        text={announcementBanner?.banner_text || ''}
+        isActive={Boolean(announcementBanner?.is_active)}
+      />
       {!isSellerFunnel && <Navbar />}
       <main>{children}</main>
       {!isSellerFunnel && <Footer />}
@@ -143,53 +218,62 @@ function App() {
         <AppChrome>
           <Routes>
               <Route path="/" element={<Home />} />
-              <Route path="/artist/:artistId" element={<ArtistEventsPage />} />
-              <Route path="/event/:eventSlug" element={<EventDetailsPage />} />
-              <Route path="/event-group/:eventName" element={<EventGroupPage />} />
-              <Route path="/ticket/:ticketId" element={<TicketSelectionPage />} />
+              <Route path="/artist/:artistId" element={routeElement(<ArtistEventsPage />, <EventsPageSkeleton variant="compact" />)} />
+              <Route path="/event/:eventSlug" element={routeElement(<EventDetailsPage />, <EventDetailsSkeleton />)} />
+              <Route path="/event-group/:eventName" element={routeElement(<EventGroupPage />, <EventsPageSkeleton variant="compact" />)} />
+              <Route path="/ticket/:ticketId" element={routeElement(<TicketSelectionPage />, <RouteSpinner label="טוען פרטי כרטיס..." />)} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/sell" element={<SellLandingPage />} />
-              <Route path="/sell/new" element={<Sell />} />
-              <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-              <Route path="/profile/wallet" element={<ProtectedRoute><ProfileWallet /></ProtectedRoute>} />
-              <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/sell/new" element={routeElement(<Sell />, <SellFormSkeleton />)} />
+              <Route path="/profile" element={routeElement(<ProtectedRoute><Profile /></ProtectedRoute>, <DashboardSkeleton />)} />
+              <Route path="/profile/wallet" element={routeElement(<ProtectedRoute><ProfileWallet /></ProtectedRoute>, <DashboardSkeleton />)} />
+              <Route path="/dashboard" element={routeElement(<ProtectedRoute><Dashboard /></ProtectedRoute>, <DashboardSkeleton />)} />
               <Route
                 path="/admin-panel/offers"
                 element={
-                  <AdminRoute>
-                    <AdminOffersPage />
-                  </AdminRoute>
+                  routeElement(
+                    <AdminRoute>
+                      <AdminOffersPage />
+                    </AdminRoute>,
+                    <DashboardSkeleton />
+                  )
                 }
               />
               <Route
                 path="/admin-panel/payouts"
                 element={
-                  <AdminRoute>
-                    <AdminPayoutsPage />
-                  </AdminRoute>
+                  routeElement(
+                    <AdminRoute>
+                      <AdminPayoutsPage />
+                    </AdminRoute>,
+                    <DashboardSkeleton />
+                  )
                 }
               />
               <Route
                 path="/admin-panel"
                 element={
-                  <AdminRoute>
-                    <AdminDashboard />
-                  </AdminRoute>
+                  routeElement(
+                    <AdminRoute>
+                      <AdminDashboard />
+                    </AdminRoute>,
+                    <DashboardSkeleton />
+                  )
                 }
               />
-              <Route path="/admin/verification" element={<AdminVerificationPage />} />
-              <Route path="/faq" element={<FAQ />} />
-              <Route path="/contact" element={<Contact />} />
-              <Route path="/terms" element={<TermsPage />} />
-              <Route path="/privacy" element={<PrivacyPage />} />
-              <Route path="/refunds" element={<RefundsPage />} />
-              <Route path="/about" element={<AboutPage />} />
-              <Route path="/buyer-guarantee" element={<BuyerGuaranteePage />} />
-              <Route path="/accessibility" element={<AccessibilityPage />} />
-              <Route path="/checkout/payme/success" element={<PaymeCheckoutSuccess />} />
-              <Route path="/checkout/payme/failure" element={<PaymeCheckoutFailure />} />
-              <Route path="*" element={<NotFoundPage />} />
+              <Route path="/admin/verification" element={routeElement(<AdminVerificationPage />, <DashboardSkeleton />)} />
+              <Route path="/faq" element={routeElement(<FAQ />)} />
+              <Route path="/contact" element={routeElement(<Contact />)} />
+              <Route path="/terms" element={routeElement(<TermsPage />)} />
+              <Route path="/privacy" element={routeElement(<PrivacyPage />)} />
+              <Route path="/refunds" element={routeElement(<RefundsPage />)} />
+              <Route path="/about" element={routeElement(<AboutPage />)} />
+              <Route path="/buyer-guarantee" element={routeElement(<BuyerGuaranteePage />)} />
+              <Route path="/accessibility" element={routeElement(<AccessibilityPage />)} />
+              <Route path="/checkout/payme/success" element={routeElement(<PaymeCheckoutSuccess />, <RouteSpinner label="טוען תוצאת תשלום..." />)} />
+              <Route path="/checkout/payme/failure" element={routeElement(<PaymeCheckoutFailure />, <RouteSpinner label="טוען תוצאת תשלום..." />)} />
+              <Route path="*" element={routeElement(<NotFoundPage />)} />
           </Routes>
         </AppChrome>
       </Router>

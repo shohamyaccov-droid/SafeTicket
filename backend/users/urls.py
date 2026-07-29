@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-from users.coupon_views import launch_promotion_status_view, pricing_settings_view, validate_coupon
+from users.coupon_views import announcement_banner_view, launch_promotion_status_view, pricing_settings_view, validate_coupon
 from users.offer_admin_views import admin_offers_dashboard
 from .payme_views import payme_init_checkout
 from .payout_views import admin_payout_mark_paid, admin_payouts_list, user_wallet
@@ -83,5 +83,6 @@ urlpatterns = [
     path('coupons/validate/', validate_coupon, name='validate_coupon'),
     path('pricing/settings/', pricing_settings_view, name='pricing_settings'),
     path('promotions/launch/', launch_promotion_status_view, name='launch_promotion_status'),
+    path('site/announcement-banner/', announcement_banner_view, name='announcement_banner'),
     path('', include(router.urls)),
 ]

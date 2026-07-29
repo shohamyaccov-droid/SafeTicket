@@ -1022,6 +1022,35 @@ class SellerBonusCampaign(models.Model):
         )
 
 
+class AnnouncementBanner(models.Model):
+    """Singleton site-wide announcement banner controlled from Django admin."""
+
+    banner_text = models.TextField(
+        blank=True,
+        default='',
+        help_text='Top-of-site announcement text shown when active.',
+    )
+    is_active = models.BooleanField(
+        default=False,
+        help_text='When enabled, show the announcement banner across the site.',
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Announcement banner'
+        verbose_name_plural = 'Announcement banner'
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        state = 'active' if self.is_active else 'inactive'
+        text = (self.banner_text or '').strip()
+        return f'Announcement banner ({state}): {text[:60] or "empty"}'
+
+
 # Backward-compatible alias (deprecated — use SellerPayout)
 Payout = SellerPayout
 

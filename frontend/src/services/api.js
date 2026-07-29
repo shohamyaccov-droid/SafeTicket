@@ -16,7 +16,6 @@ let csrfTokenFromApi = null;
 let bearerAccessToken = null;
 let bearerRefreshToken = null;
 const LEGACY_ACCESS_KEY = 'safeticket_jwt_access';
-const LEGACY_REFRESH_KEY = 'safeticket_jwt_refresh';
 /** TradeTix branding — migrated once from safeticket_* keys so users stay logged in. */
 const BEARER_ACCESS_KEY = 'tradetix_jwt_access';
 const BEARER_REFRESH_KEY = 'tradetix_jwt_refresh';
@@ -564,6 +563,12 @@ export const orderAPI = {
   },
   getLaunchPromotion: async () => {
     return api.get('/users/promotions/launch/', { skipAuth: true });
+  },
+};
+
+export const siteAPI = {
+  getAnnouncementBanner: async () => {
+    return api.get('/users/site/announcement-banner/', { skipAuth: true });
   },
 };
 

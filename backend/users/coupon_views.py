@@ -11,7 +11,8 @@ from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 from users.coupons import CouponError, preview_coupon_for_base
 from users.fee_settings import get_fee_rates
-from users.models import Coupon, SellerBonusCampaign
+from users.models import AnnouncementBanner, Coupon, SellerBonusCampaign
+from users.serializers import AnnouncementBannerSerializer
 
 
 def _csrf_passthrough(view):
@@ -103,10 +104,15 @@ def launch_promotion_status_view(request):
     """Public, cache-friendly launch-promo status for marketing banners."""
     campaign = SellerBonusCampaign.load()
     coupon = Coupon.objects.filter(code__iexact='TIX15', is_active=True).first()
+    banner_text = (campaign.banner_text or '').strip() or '🎁 20 ₪ בונוס למוכרים!'
+    banner_coupon = (campaign.banner_coupon_code or '').strip().upper()
     return Response(
         {
             'seller_bonus': {
                 'is_active': bool(campaign.is_active and campaign.remaining_sales > 0),
+                'show_banner': bool(campaign.is_active and campaign.show_on_site),
+                'banner_text': banner_text,
+                'banner_coupon_code': banner_coupon,
                 'bonus_amount': str(campaign.bonus_amount),
                 'max_sales': campaign.max_sales,
                 'claimed_sales': campaign.claimed_sales_count,
@@ -120,3 +126,18 @@ def launch_promotion_status_view(request):
         },
         status=status.HTTP_200_OK,
     )
+
+
+@_csrf_passthrough
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def announcement_banner_view(request):
+    """Public singleton announcement banner config for the site header."""
+    banner = AnnouncementBanner.load()
+    payload = AnnouncementBannerSerializer(
+        {
+            'banner_text': (banner.banner_text or '').strip(),
+            'is_active': bool(banner.is_active and (banner.banner_text or '').strip()),
+        }
+    ).data
+    return Response(payload, status=status.HTTP_200_OK)
