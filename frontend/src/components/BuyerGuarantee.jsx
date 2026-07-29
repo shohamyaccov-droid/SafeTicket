@@ -136,6 +136,9 @@ export default function BuyerGuarantee() {
             </li>
           ))}
         </ul>
+        <p className="buyer-guarantee__disclaimer">
+          TradeTix היא פלטפורמה עצמאית למכירת כרטיסים (יד שנייה). המחירים נקבעים ע״י המוכרים ויכולים להיות שונים מהמחיר המקורי בקופה.
+        </p>
         <p className="buyer-guarantee__legal-link">
           <Link to="/buyer-guarantee">לתנאי הגנת הקונה המלאים</Link>
           {' · '}
