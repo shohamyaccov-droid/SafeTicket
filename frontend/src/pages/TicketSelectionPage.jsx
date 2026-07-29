@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ticketAPI } from '../services/api';
@@ -12,6 +12,7 @@ import {
   formatAmountForCurrency,
 } from '../utils/priceFormat';
 import BuyerListingPrice from '../components/BuyerListingPrice';
+import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import { toastError } from '../utils/toast';
@@ -22,6 +23,7 @@ const TicketSelectionPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const buyerFeePercent = useBuyerServiceFeePercent();
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
@@ -33,40 +35,39 @@ const TicketSelectionPage = () => {
     return eventIdFromState || eventIdFromTicket || null;
   }, [location.state?.eventId, ticket]);
 
+  const fetchTicketById = useCallback(async ({ keepQuantity = false, signal } = {}) => {
+    const response = await ticketAPI.getTicket(ticketId, signal ? { signal } : undefined);
+    return response?.data || null;
+  }, [ticketId]);
+
   useEffect(() => {
-    const fetchTicket = async () => {
+    let cancelled = false;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+
+    const load = async () => {
+      setLoading(true);
       try {
-        const response = await ticketAPI.getTickets();
-        let ticketsData = [];
-        
-        if (response.data) {
-          if (Array.isArray(response.data)) {
-            ticketsData = response.data;
-          } else if (response.data.results && Array.isArray(response.data.results)) {
-            ticketsData = response.data.results;
-          } else if (response.data.tickets && Array.isArray(response.data.tickets)) {
-            ticketsData = response.data.tickets;
-          }
-        }
-        
-        const matchTicketId = (t) =>
-          t &&
-          (String(t.id) === String(ticketId) ||
-            (Number.isFinite(Number(ticketId)) && Number(t.id) === Number(ticketId)));
-        const foundTicket = ticketsData.find(matchTicketId);
+        const foundTicket = await fetchTicketById({ signal: controller?.signal });
+        if (cancelled) return;
+        setTicket(foundTicket);
         if (foundTicket) {
-          setTicket(foundTicket);
           const maxQty = foundTicket.available_quantity ?? foundTicket.quantity ?? 1;
           setQuantity(1);
+          return;
         }
       } catch (error) {
+        if (cancelled || error?.name === 'CanceledError' || error?.name === 'AbortError') return;
         toastError('לא ניתן לטעון את פרטי הכרטיס. חזרו לרשימה ונסו שוב.');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
-    fetchTicket();
-  }, [ticketId]);
+    load();
+    return () => {
+      cancelled = true;
+      controller?.abort();
+    };
+  }, [fetchTicketById]);
 
   const handleQuantityChange = (newQuantity) => {
     // Ensure quantity is within valid range (1 to available_quantity)
@@ -100,28 +101,10 @@ const TicketSelectionPage = () => {
   const handleCloseCheckout = async () => {
     setShowCheckout(false);
     setSelectedTicket(null);
-    
-    // Refresh ticket data to get updated available_quantity
+
+    // Refresh just this ticket instead of the full marketplace list.
     try {
-      const response = await ticketAPI.getTickets();
-      let ticketsData = [];
-      
-      if (response.data) {
-        if (Array.isArray(response.data)) {
-          ticketsData = response.data;
-        } else if (response.data.results && Array.isArray(response.data.results)) {
-          ticketsData = response.data.results;
-        } else if (response.data.tickets && Array.isArray(response.data.tickets)) {
-          ticketsData = response.data.tickets;
-        }
-      }
-      
-      // Find the specific ticket by ID and update state
-      const matchTicketId = (t) =>
-        t &&
-        (String(t.id) === String(ticketId) ||
-          (Number.isFinite(Number(ticketId)) && Number(t.id) === Number(ticketId)));
-      const foundTicket = ticketsData.find(matchTicketId);
+      const foundTicket = await fetchTicketById();
       if (foundTicket) {
         setTicket(foundTicket);
         const maxQty = foundTicket.available_quantity ?? foundTicket.quantity ?? 1;
@@ -311,7 +294,7 @@ const TicketSelectionPage = () => {
                 {selSym}{formatAmountForCurrency(calculateEstimatedTotalWithFee(), selCur)}
               </span>
             </div>
-            <p className="price-summary-note">הסכום כולל דמי שירות ותפעול (10%) — יופיע בפירוט מלא בקופה לפני התשלום.</p>
+            <p className="price-summary-note">הסכום כולל דמי שירות ותפעול ({buyerFeePercent}%) — יופיע בפירוט מלא בקופה לפני התשלום.</p>
           </div>
 
           {/* Validation Message */}

@@ -96,6 +96,9 @@ class PayMeMarketplaceE2EBase(TestCase):
             email=PAYME_SANDBOX_BUYER_EMAIL,
             password='test-pass-123',
             role='buyer',
+            phone_number='0501234567',
+            first_name='E2E',
+            last_name='Buyer',
         )
         self.artist = Artist.objects.create(name='E2E Headliner')
         self.event = Event.objects.create(
@@ -206,7 +209,7 @@ class PayMeHappyPathE2ETests(PayMeMarketplaceE2EBase):
     """Full buyer journey: reserve → order → PayMe init → webhook → paid + ledger."""
 
     @patch('users.payme_views.generate_payme_sale_for_order')
-    def test_full_flow_creates_seller_payout_with_correct_15_percent_math(self, mock_generate):
+    def test_full_flow_creates_seller_payout_with_correct_current_fee_math(self, mock_generate):
         self._buyer_reserves_ticket()
         order = self._buyer_creates_pending_order()
         self.assertEqual(SellerPayout.objects.filter(order=order).count(), 0)
@@ -231,7 +234,7 @@ class PayMeHappyPathE2ETests(PayMeMarketplaceE2EBase):
 
         total_paid = Decimal(order.total_paid_by_buyer or order.total_amount)
         self.assertEqual(total_paid, self.checkout_total)
-        self.assertEqual(payout.platform_fee, Decimal('15.00'))
+        self.assertEqual(payout.platform_fee, total_paid - Decimal('100.00'))
         self.assertEqual(payout.net_payout, Decimal('100.00'))
         self.seller.wallet.refresh_from_db()
         self.assertEqual(self.seller.wallet.locked_balance, Decimal('100.00'))

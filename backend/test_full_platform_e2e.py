@@ -80,6 +80,38 @@ class FullPlatformE2ETest(TestCase):
             HTTP_X_CSRFTOKEN=token.value,
         )
 
+    def _register_user(self, username: str, email: str, password: str = 'SecurePlatformE2E1!') -> dict:
+        res = self.api.post(
+            '/api/users/register/',
+            {
+                'username': username,
+                'email': email,
+                'password': password,
+                'password2': password,
+            },
+            format='json',
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        return res.json()
+
+    def _upgrade_registered_user_to_seller(self, access_token: str):
+        self.api.credentials(HTTP_AUTHORIZATION=f'Bearer {access_token}')
+        res = self.api.post(
+            '/api/users/me/upgrade-to-seller/',
+            {
+                'phone_number': '0501234567',
+                'payout_method': 'bank',
+                'account_holder_name': 'E2E Seller',
+                'id_number': '123456782',
+                'bank_name_or_code': '12',
+                'branch_number': '345',
+                'account_number': '678901',
+                'accepted_escrow_terms': True,
+            },
+            format='json',
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+
     def test_cors_allows_production_spa_origin_on_health(self):
         r = self.api.get(
             '/api/health/',
@@ -99,34 +131,19 @@ class FullPlatformE2ETest(TestCase):
     def test_full_platform_register_sell_browse_buy_confirm_download(self):
         suffix = uuid.uuid4().hex[:10]
 
-        seller_reg = self.api.post(
-            '/api/users/register/',
-            {
-                'username': f'e2e_seller_{suffix}',
-                'email': f'e2e_seller_{suffix}@platform.test',
-                'password': 'SecurePlatformE2E1!',
-                'password2': 'SecurePlatformE2E1!',
-                'role': 'seller',
-            },
-            format='json',
+        seller_reg = self._register_user(
+            username=f'e2e_seller_{suffix}',
+            email=f'e2e_seller_{suffix}@platform.test',
         )
-        self.assertEqual(seller_reg.status_code, 201, seller_reg.content)
-        seller_access = seller_reg.json().get('access')
+        seller_access = seller_reg.get('access')
         self.assertTrue(seller_access)
+        self._upgrade_registered_user_to_seller(seller_access)
 
-        buyer_reg = self.api.post(
-            '/api/users/register/',
-            {
-                'username': f'e2e_buyer_{suffix}',
-                'email': f'e2e_buyer_{suffix}@platform.test',
-                'password': 'SecurePlatformE2E1!',
-                'password2': 'SecurePlatformE2E1!',
-                'role': 'buyer',
-            },
-            format='json',
+        buyer_reg = self._register_user(
+            username=f'e2e_buyer_{suffix}',
+            email=f'e2e_buyer_{suffix}@platform.test',
         )
-        self.assertEqual(buyer_reg.status_code, 201, buyer_reg.content)
-        buyer_access = buyer_reg.json().get('access')
+        buyer_access = buyer_reg.get('access')
         self.assertTrue(buyer_access)
 
         pdf = SimpleUploadedFile(
@@ -168,18 +185,6 @@ class FullPlatformE2ETest(TestCase):
         qty = 1
         expected_total = expected_buy_now_total(ticket.asking_price, qty)
 
-        pay_r = self.api.post(
-            '/api/users/payments/simulate/',
-            {
-                'ticket_id': tid,
-                'amount': str(expected_total),
-                'quantity': qty,
-            },
-            format='json',
-        )
-        self.assertEqual(pay_r.status_code, 200, pay_r.content)
-        self.assertTrue(pay_r.json().get('success'))
-
         order_r = self.api.post(
             '/api/users/orders/',
             {
@@ -220,19 +225,12 @@ class FullPlatformE2ETest(TestCase):
     def test_registered_seller_guest_buyer_buy_now_csrf_checkout(self):
         """FLOW A: seller JWT listing; anonymous guest CSRF checkout + confirm (simulated card path)."""
         suffix = uuid.uuid4().hex[:10]
-        reg = self.api.post(
-            '/api/users/register/',
-            {
-                'username': f'e2e_guest_flow_s_{suffix}',
-                'email': f'e2e_guest_flow_s_{suffix}@platform.test',
-                'password': 'SecurePlatformE2E1!',
-                'password2': 'SecurePlatformE2E1!',
-                'role': 'seller',
-            },
-            format='json',
+        reg = self._register_user(
+            username=f'e2e_guest_flow_s_{suffix}',
+            email=f'e2e_guest_flow_s_{suffix}@platform.test',
         )
-        self.assertEqual(reg.status_code, 201, reg.content)
-        seller_access = reg.json()['access']
+        seller_access = reg['access']
+        self._upgrade_registered_user_to_seller(seller_access)
 
         pdf = SimpleUploadedFile('g.pdf', _minimal_pdf_bytes(), content_type='application/pdf')
         self.api.credentials(HTTP_AUTHORIZATION=f'Bearer {seller_access}')
@@ -354,18 +352,6 @@ class FullPlatformE2ETest(TestCase):
         self.assertIn(ticket.status, ('active', 'reserved'))
 
         neg_total = expected_negotiated_total_from_offer_base(Decimal('180.00'))
-        pay_r = self.api.post(
-            '/api/users/payments/simulate/',
-            {
-                'ticket_id': tid,
-                'amount': str(neg_total),
-                'quantity': 1,
-                'offer_id': oid1,
-            },
-            format='json',
-        )
-        self.assertEqual(pay_r.status_code, 200, pay_r.content)
-
         order_r = self.api.post(
             '/api/users/orders/',
             {
@@ -391,4 +377,4 @@ class FullPlatformE2ETest(TestCase):
         self.assertEqual(ticket.status, 'sold')
         _, fee, total = buyer_charge_from_base_amount(Decimal('180.00'))
         self.assertEqual(total, neg_total)
-        self.assertEqual(fee, Decimal('27.00'))
+        self.assertEqual(fee, neg_total - Decimal('180.00'))

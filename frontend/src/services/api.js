@@ -684,7 +684,7 @@ async function postTicketMultipart(formData) {
 
 export const ticketAPI = {
   getTickets: (config = {}) => api.get('/users/tickets/', config),
-  getTicket: (id) => api.get(`/users/tickets/${id}/`),
+  getTicket: (id, config = {}) => api.get(`/users/tickets/${id}/`, config),
   getTicketDetails: (id) => api.get(`/users/tickets/${id}/details/`),
   /** FormData: native fetch (reliable multipart). Otherwise Axios. */
   createTicket: (data) =>

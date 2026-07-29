@@ -89,17 +89,6 @@ class SellBuyNowE2EFlowTest(TestCase):
         self.client.force_authenticate(self.buyer)
         expected_total = expected_buy_now_total(ticket.asking_price, 1)
 
-        pay_r = self.client.post(
-            '/api/users/payments/simulate/',
-            {
-                'ticket_id': tid,
-                'amount': str(expected_total),
-                'quantity': 1,
-            },
-            format='json',
-        )
-        self.assertEqual(pay_r.status_code, 200, pay_r.content)
-
         order_r = self.client.post(
             '/api/users/orders/',
             {

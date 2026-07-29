@@ -92,6 +92,12 @@ class MobileTicketUploadValidationTests(TestCase):
         self._assert_upload_success(_jpg_file(), '.jpg')
         self._assert_upload_success(_png_file(), '.png')
 
+    def test_mobile_upload_marks_ticket_eligible_for_bonus(self):
+        res = self.client.post(UPLOAD_URL, self._upload_payload(_pdf_file('bonus-eligible.pdf')), format='multipart')
+        self.assertEqual(res.status_code, 201, res.content)
+        ticket = Ticket.objects.latest('id')
+        self.assertTrue(ticket.eligible_for_bonus)
+
     def test_mobile_upload_rejects_invalid_file_type_with_clear_message(self):
         res = self.client.post(
             UPLOAD_URL,

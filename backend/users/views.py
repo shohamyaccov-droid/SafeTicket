@@ -3405,7 +3405,7 @@ class TicketViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(data=ticket_data)
                 serializer.is_valid(raise_exception=True)
                 try:
-                    ticket = serializer.save(seller=request.user)
+                    ticket = serializer.save(seller=request.user, eligible_for_bonus=True)
                 except Exception as e:
                     _log_cloudinary_or_storage_error(e, 'ticket_create_auto_split')
                     payload = {
@@ -3438,11 +3438,6 @@ class TicketViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-                # Mark ticket eligible for seller bonus campaign
-                if not ticket.eligible_for_bonus:
-                    ticket.eligible_for_bonus = True
-                    ticket.save(update_fields=['eligible_for_bonus'])
-
                 logger.debug(f'Ticket {ticket.id} saved (auto-split page {i + 1}/{available_quantity}), Row: {ticket_data.get("row_number", "N/A")}, Seat: {ticket_data.get("seat_number", "N/A")}, Listing Group: {listing_group_id}')
                 created_tickets.append(ticket)
         else:
@@ -3466,7 +3461,7 @@ class TicketViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(data=ticket_data)
                 serializer.is_valid(raise_exception=True)
                 try:
-                    ticket = serializer.save(seller=request.user)
+                    ticket = serializer.save(seller=request.user, eligible_for_bonus=True)
                 except Exception as e:
                     _log_cloudinary_or_storage_error(e, 'ticket_create_multi_pdf')
                     payload = {
@@ -3498,11 +3493,6 @@ class TicketViewSet(viewsets.ModelViewSet):
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
-
-                # Mark ticket eligible for seller bonus campaign
-                if not ticket.eligible_for_bonus:
-                    ticket.eligible_for_bonus = True
-                    ticket.save(update_fields=['eligible_for_bonus'])
 
                 logger.debug(f'Ticket {ticket.id} saved with PDF: {pdf_file.name}, Row: {ticket_data.get("row_number", "N/A")}, Seat: {ticket_data.get("seat_number", "N/A")}, Listing Group: {ticket.listing_group_id}')
                 created_tickets.append(ticket)
