@@ -582,6 +582,13 @@ class Ticket(models.Model):
         help_text="How tickets can be split/sold"
     )
     
+    # Seller bonus campaign eligibility — set True for tickets created via the /sell funnel
+    # during an active ad campaign. Checked at payout time to decide whether to award the bonus.
+    eligible_for_bonus = models.BooleanField(
+        default=False,
+        help_text='Whether this ticket qualifies for the seller bonus when sold.',
+    )
+
     # Status
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending_approval')
     
@@ -968,9 +975,24 @@ class SellerPayout(models.Model):
 
 
 class SellerBonusCampaign(models.Model):
-    """Singleton counter that atomically caps the launch bonus at 100 sales."""
+    """Singleton counter that atomically caps the launch bonus claims."""
 
     is_active = models.BooleanField(default=True)
+    show_on_site = models.BooleanField(
+        default=True,
+        help_text='Show the top marketing banner on the site (independent of remaining bonus slots).',
+    )
+    banner_text = models.TextField(
+        blank=True,
+        default='🎁 20 ₪ בונוס למוכרים!',
+        help_text='Marketing banner message. Edit anytime in Admin — no code deploy needed.',
+    )
+    banner_coupon_code = models.CharField(
+        max_length=40,
+        blank=True,
+        default='SAFE20',
+        help_text='Optional coupon code shown in bold after the banner text (leave blank to hide).',
+    )
     bonus_amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -1348,7 +1370,7 @@ class GlobalFeeSettings(models.Model):
     """
     Singleton admin-editable fee configuration.
 
-    Percents are whole numbers (e.g. 12.0 = 12%). Checkout math converts to rates (/100).
+    Percents are whole numbers (e.g. 7.0 = 7%). Checkout math converts to rates (/100).
     Coupon splits: buyer pays (base_buyer - buyer_coupon_discount); affiliate gets
     affiliate_commission (0 for platform coupons); platform keeps the remainder.
     """
@@ -1356,8 +1378,8 @@ class GlobalFeeSettings(models.Model):
     base_buyer_fee_percent = models.DecimalField(
         max_digits=6,
         decimal_places=2,
-        default=Decimal('12.00'),
-        help_text='Buyer service fee with no coupon (default 12%).',
+        default=Decimal('7.00'),
+        help_text='Buyer service fee with no coupon (default 7%).',
     )
     base_seller_fee_percent = models.DecimalField(
         max_digits=6,
@@ -1374,8 +1396,8 @@ class GlobalFeeSettings(models.Model):
     affiliate_commission_percent = models.DecimalField(
         max_digits=6,
         decimal_places=2,
-        default=Decimal('5.00'),
-        help_text='Affiliate share of listing base when an affiliate coupon applies (default 5%).',
+        default=Decimal('2.00'),
+        help_text='Affiliate share of listing base when an affiliate coupon applies (default 2%).',
     )
     updated_at = models.DateTimeField(auto_now=True)
 

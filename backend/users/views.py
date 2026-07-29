@@ -3438,6 +3438,11 @@ class TicketViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
+                # Mark ticket eligible for seller bonus campaign
+                if not ticket.eligible_for_bonus:
+                    ticket.eligible_for_bonus = True
+                    ticket.save(update_fields=['eligible_for_bonus'])
+
                 logger.debug(f'Ticket {ticket.id} saved (auto-split page {i + 1}/{available_quantity}), Row: {ticket_data.get("row_number", "N/A")}, Seat: {ticket_data.get("seat_number", "N/A")}, Listing Group: {listing_group_id}')
                 created_tickets.append(ticket)
         else:
@@ -3493,6 +3498,11 @@ class TicketViewSet(viewsets.ModelViewSet):
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+
+                # Mark ticket eligible for seller bonus campaign
+                if not ticket.eligible_for_bonus:
+                    ticket.eligible_for_bonus = True
+                    ticket.save(update_fields=['eligible_for_bonus'])
 
                 logger.debug(f'Ticket {ticket.id} saved with PDF: {pdf_file.name}, Row: {ticket_data.get("row_number", "N/A")}, Seat: {ticket_data.get("seat_number", "N/A")}, Listing Group: {ticket.listing_group_id}')
                 created_tickets.append(ticket)

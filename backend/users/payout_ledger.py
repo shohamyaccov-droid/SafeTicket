@@ -64,6 +64,18 @@ def payout_amounts_from_order(order: Order) -> tuple[Decimal, Decimal, Decimal] 
     return total_paid, platform_fee, seller_net
 
 
+def _order_ticket_is_bonus_eligible(order: Order) -> bool:
+    """Check whether any ticket on this order was flagged eligible_for_bonus."""
+    from .models import Ticket
+
+    ticket = order.ticket
+    if ticket is None and order.ticket_ids:
+        ticket = Ticket.objects.filter(pk=order.ticket_ids[0]).first()
+    if ticket is None:
+        return False
+    return bool(getattr(ticket, 'eligible_for_bonus', False))
+
+
 def claim_launch_seller_bonus(payout: SellerPayout) -> bool:
     """
     Atomically attach the platform-funded launch bonus to a newly created payout.
@@ -71,8 +83,15 @@ def claim_launch_seller_bonus(payout: SellerPayout) -> bool:
     The singleton campaign row is locked, so concurrent 100th/101st sales cannot
     both win. The payout field makes this idempotent and keeps ticket-price math
     (`net_payout`) separate from the subsidy.
+
+    Only tickets with eligible_for_bonus=True (created via the /sell funnel during
+    an active campaign) qualify for the bonus.
     """
     if payout.pk is None or Decimal(payout.seller_bonus_amount or 0) > 0:
+        return False
+
+    # Gate: only bonus-flagged tickets qualify
+    if not _order_ticket_is_bonus_eligible(payout.order):
         return False
 
     campaign, _created = SellerBonusCampaign.objects.select_for_update().get_or_create(pk=1)

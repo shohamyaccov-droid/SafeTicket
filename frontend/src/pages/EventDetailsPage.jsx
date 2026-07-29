@@ -6,6 +6,7 @@ import { Analytics } from '../utils/analytics';
 import CheckoutModal from '../components/CheckoutModal';
 import WaitlistSignupModal from '../components/WaitlistSignupModal';
 import Toast from '../components/Toast';
+import EventDetailsSkeleton from '../components/skeletons/EventDetailsSkeleton';
 import VenueMapPin from '../components/VenueMapPin';
 import InteractiveMenoraMap from '../components/InteractiveMenoraMap';
 import CaesareaMap from '../components/CaesareaMap';
@@ -1042,9 +1043,7 @@ const EventDetailsPage = () => {
             content="קנו או מכרו כרטיסים לאירועים בישראל ב-TradeTix. תשלום מאובטח והגנה מלאה על הכסף."
           />
         </Helmet>
-        <div className="loading-state">
-          <p>טוען פרטי אירוע...</p>
-        </div>
+        <EventDetailsSkeleton />
       </div>
     );
   }
