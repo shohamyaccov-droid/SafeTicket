@@ -2614,3 +2614,9 @@
   z-index: 1;
 }
 
+.event-tickets-loading {
+  max-width: 900px;
+  margin: 1rem auto 2rem;
+  padding: 0 1rem;
+}
+

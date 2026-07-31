@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { eventAPI, offerAPI, artistAPI } from '../services/api';
+import { eventAPI, offerAPI } from '../services/api';
 import { Analytics } from '../utils/analytics';
 import CheckoutModal from '../components/CheckoutModal';
 import WaitlistSignupModal from '../components/WaitlistSignupModal';
 import Toast from '../components/Toast';
 import EventDetailsSkeleton from '../components/skeletons/EventDetailsSkeleton';
+import '../components/skeletons/EventDetailsSkeleton.css';
 import VenueMapPin from '../components/VenueMapPin';
 import InteractiveMenoraMap from '../components/InteractiveMenoraMap';
 import CaesareaMap from '../components/CaesareaMap';
@@ -54,6 +55,7 @@ import {
 } from '../utils/ticketAvailability';
 import { buildSectionMapStatus } from '../utils/mapSectionStatus';
 import TakenBuyButton from '../components/TakenBuyButton';
+import { createListFetchAbort } from '../utils/listFetch';
 import './EventDetailsPage.css';
 
 /** Absolute URL for OG/Twitter when the SPA has no event image yet. */
@@ -79,6 +81,7 @@ const EventDetailsPage = () => {
   const [event, setEvent] = useState(null);
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [ticketsLoading, setTicketsLoading] = useState(true);
   const [selectedTicketGroup, setSelectedTicketGroup] = useState(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [quantity, setQuantity] = useState(1);
@@ -107,10 +110,11 @@ const EventDetailsPage = () => {
   /** Ramat Gan map: filter ticket list by stadium section id (e.g. "11A"). */
   const [ramatGanSectionFilter, setRamatGanSectionFilter] = useState(null);
   const [ramatGanSelectedSectionId, setRamatGanSelectedSectionId] = useState(null);
-  const [artists, setArtists] = useState([]);
   /** Prevents double-opens / race when Buy Now refetches listings before showing checkout. */
   const buyOpeningRef = useRef(false);
   const [buyOpeningKey, setBuyOpeningKey] = useState(null);
+  /** Skip the filters/sort effect on the initial mount fetch (already loaded in parallel). */
+  const skipNextTicketsFilterFetchRef = useRef(true);
 
   // Helper function to group tickets by listing
   const groupTicketsByListing = (ticketsArray) => {
@@ -342,12 +346,31 @@ const EventDetailsPage = () => {
   const fetchTicketsRef = useRef(fetchTickets);
   fetchTicketsRef.current = fetchTickets;
 
-  // Fetch event and tickets data (ref avoids re-fetching event when ticket-fetch deps change)
+  // Progressive load: paint event hero as soon as event arrives; tickets fetch in parallel.
   useEffect(() => {
+    if (!eventKey) return undefined;
+
+    let cancelled = false;
+    skipNextTicketsFilterFetchRef.current = true;
+    setLoading(true);
+    setTicketsLoading(true);
+    setEvent(null);
+    setTickets([]);
+
+    const { signal, clear, abort } = createListFetchAbort();
+
     const fetchEventData = async () => {
       try {
-        const eventResponse = await eventAPI.getEvent(eventKey);
+        const ticketsPromise = fetchTicketsRef.current().finally(() => {
+          if (!cancelled) setTicketsLoading(false);
+        });
+
+        const eventResponse = await eventAPI.getEvent(eventKey, { signal });
+        if (cancelled) return;
+
         setEvent(eventResponse.data);
+        setLoading(false);
+
         const resolvedSlug = (eventResponse.data?.slug || '').trim();
         if (resolvedSlug && String(eventKey) !== resolvedSlug) {
           navigate(`/event/${encodeURIComponent(resolvedSlug)}`, { replace: true });
@@ -355,17 +378,30 @@ const EventDetailsPage = () => {
         Analytics.ticketViewed(eventResponse.data?.id ?? eventKey, {
           contentName: eventResponse.data?.name || eventResponse.data?.title,
         });
-        await fetchTicketsRef.current();
+
+        await ticketsPromise;
       } catch (error) {
-        toastError('לא ניתן לטעון את האירוע. בדקו את החיבור או חזרו לדף הבית.');
-      } finally {
+        if (cancelled) return;
+        const aborted =
+          error?.code === 'ERR_CANCELED' ||
+          error?.name === 'CanceledError' ||
+          String(error?.message || '').toLowerCase().includes('canceled');
+        if (!aborted) {
+          toastError('לא ניתן לטעון את האירוע. בדקו את החיבור או חזרו לדף הבית.');
+        }
         setLoading(false);
+        setTicketsLoading(false);
+      } finally {
+        clear();
       }
     };
 
-    if (eventKey) {
-      fetchEventData();
-    }
+    fetchEventData();
+    return () => {
+      cancelled = true;
+      abort();
+      clear();
+    };
   }, [eventKey, navigate]);
 
   // Polling: refresh tickets every 15 seconds to hide sold tickets (prevent stale UI)
@@ -377,26 +413,16 @@ const EventDetailsPage = () => {
     return () => clearInterval(pollInterval);
   }, [eventKey]);
 
-  // Refetch tickets when filters or sort change
+  // Refetch tickets when filters or sort change (skip initial parallel load)
   useEffect(() => {
-    if (eventKey) {
-      fetchTickets();
+    if (!eventKey) return;
+    if (skipNextTicketsFilterFetchRef.current) {
+      skipNextTicketsFilterFetchRef.current = false;
+      return;
     }
+    setTicketsLoading(true);
+    fetchTickets().finally(() => setTicketsLoading(false));
   }, [eventKey, filters, sortBy, fetchTickets]);
-
-  // Fetch artists for fallback image matching
-  useEffect(() => {
-    const fetchArtists = async () => {
-      try {
-        const res = await artistAPI.getArtists();
-        const data = res.data;
-        setArtists(Array.isArray(data) ? data : (data?.results || []));
-      } catch {
-        /* optional artist list for images — non-fatal */
-      }
-    };
-    fetchArtists();
-  }, []);
 
   // Calculate filtered and sorted ticket groups
   const ticketGroups = useMemo(() => {
@@ -1068,20 +1094,14 @@ const EventDetailsPage = () => {
   const offerModalCur = selectedOfferTicket ? resolveTicketCurrency(selectedOfferTicket) : listingCurrency;
   const offerModalSym = currencySymbol(offerModalCur);
 
-  const artistId =
-    typeof event.artist === 'object' ? event.artist?.id : event.artist_id || event.artist;
-  const matchedArtist = artists.find((a) => a.id === artistId);
   const artistDisplayName =
     (typeof event.artist === 'object' && event.artist?.name) ||
     event.artist_name ||
-    matchedArtist?.name ||
     '';
   const heroImageCandidates = [
     event.image_url,
     event.image,
     typeof event.artist === 'object' ? event.artist?.image_url || event.artist?.image : null,
-    matchedArtist?.image_url,
-    matchedArtist?.image,
   ];
   const heroImageRaw = heroImageCandidates.find(Boolean);
   const heroImageSrc = heroImageRaw
@@ -1175,7 +1195,17 @@ const EventDetailsPage = () => {
         </div>
       </div>
 
-      {ticketGroups.length === 0 ? (
+      {ticketsLoading ? (
+        <div className="edsk-tickets event-tickets-loading" aria-busy="true" aria-live="polite">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="edsk-ticket-row">
+              <div className="edsk-shimmer edsk-ticket-section" />
+              <div className="edsk-shimmer edsk-ticket-price" />
+              <div className="edsk-shimmer edsk-ticket-btn" />
+            </div>
+          ))}
+        </div>
+      ) : ticketGroups.length === 0 ? (
         <div className="event-waitlist-hero-banner" dir="rtl">
           <p className="event-waitlist-hero-text">No tickets available right now</p>
           <button type="button" className="event-waitlist-cta" onClick={() => setWaitlistOpen(true)}>
@@ -1185,6 +1215,7 @@ const EventDetailsPage = () => {
       ) : null}
 
       {/* Tickets Section - Split Screen Layout (filters live here so mobile sticky map stacks below sticky filter bar) */}
+      {!ticketsLoading ? (
       <div className="tickets-section">
         {/* Filters and Sort Bar */}
         <div className="filters-sort-bar event-details-filters-sort-bar">
@@ -1689,6 +1720,7 @@ const EventDetailsPage = () => {
           </div>
         </div>
       </div>
+      ) : null}
 
       {/* Checkout Modal */}
       {waitlistOpen && event ? (

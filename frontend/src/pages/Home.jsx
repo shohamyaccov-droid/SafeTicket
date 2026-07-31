@@ -4,6 +4,7 @@ import { Helmet } from 'react-helmet-async';
 import { eventHref } from '../utils/eventSeo';
 import { artistAPI, eventAPI } from '../services/api';
 import { createListFetchAbort } from '../utils/listFetch';
+import { prefetchEventDetailsPage } from '../utils/routePrefetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import EmptyState from '../components/EmptyState';
 import EventCard from '../components/EventCard';
@@ -102,6 +103,7 @@ const Home = () => {
             ? recommendedPayload.results
             : [];
         setRecommendedArtists(recommendedData);
+        prefetchEventDetailsPage();
       } catch (error) {
         if (cancelled) return;
         const msg = error?.message || '';

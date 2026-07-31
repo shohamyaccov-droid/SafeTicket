@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import api, { authAPI, SESSION_EXPIRED_EVENT, siteAPI } from './services/api';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -7,7 +7,6 @@ import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import SellLandingPage from './pages/SellLandingPage';
 import AdminRoute from './components/AdminRoute';
 import FloatingWhatsApp from './components/FloatingWhatsApp';
 import Footer from './components/Footer';
@@ -21,6 +20,7 @@ import { toastError } from './utils/toast';
 import { Analytics } from './utils/analytics';
 import { trackGa4Pageview } from './utils/ga4';
 import { ensureMetaPixel, trackMetaPageView } from './utils/metaPixel';
+import { prefetchCriticalRoutesOnIdle, prefetchSellPage } from './utils/routePrefetch';
 import './App.css';
 
 /* eslint-disable react/prop-types */
@@ -93,6 +93,15 @@ function RouteSpinner({ label = 'טוען עמוד...' }) {
 
 function routeElement(node, fallback = <RouteSpinner />) {
   return <Suspense fallback={fallback}>{node}</Suspense>;
+}
+
+/** Ads / legacy links still hit /sell — send them straight into the upload flow. */
+function SellMarketingRedirect() {
+  const location = useLocation();
+  useEffect(() => {
+    prefetchSellPage();
+  }, []);
+  return <Navigate to={`/sell/new${location.search}${location.hash}`} replace />;
 }
 
 /** Backend funnel analytics + GA4/Meta pageviews on every React Router navigation. */
@@ -209,6 +218,8 @@ function App() {
     return () => window.clearInterval(id);
   }, []);
 
+  useEffect(() => prefetchCriticalRoutesOnIdle(), []);
+
   return (
     <AuthProvider>
       <Router>
@@ -224,7 +235,7 @@ function App() {
               <Route path="/ticket/:ticketId" element={routeElement(<TicketSelectionPage />, <RouteSpinner label="טוען פרטי כרטיס..." />)} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route path="/sell" element={<SellLandingPage />} />
+              <Route path="/sell" element={<SellMarketingRedirect />} />
               <Route path="/sell/new" element={routeElement(<Sell />, <SellFormSkeleton />)} />
               <Route path="/profile" element={routeElement(<ProtectedRoute><Profile /></ProtectedRoute>, <DashboardSkeleton />)} />
               <Route path="/profile/wallet" element={routeElement(<ProtectedRoute><ProfileWallet /></ProtectedRoute>, <DashboardSkeleton />)} />

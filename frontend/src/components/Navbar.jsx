@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { offerAPI } from '../services/api';
 import { isAcceptedOfferCheckoutExpired } from '../utils/offerTimer';
+import { prefetchSellPage } from '../utils/routePrefetch';
 import './Navbar.css';
 
 /** Local part of email / short username for compact navbar greeting */
@@ -135,7 +136,13 @@ const Navbar = () => {
           )}
         </>
       )}
-      <Link to="/sell" className="nav-link sell-btn nav-drawer-link" onClick={closeDrawer}>
+      <Link
+        to="/sell/new"
+        className="nav-link sell-btn nav-drawer-link"
+        onClick={closeDrawer}
+        onMouseEnter={prefetchSellPage}
+        onFocus={prefetchSellPage}
+      >
         מכירת כרטיס
       </Link>
       <Link to="/contact" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
@@ -198,7 +205,14 @@ const Navbar = () => {
 
       <div className="nav-container nav-container--bar">
         <div className="nav-right-cluster">
-          <Link to="/sell" className="nav-sell-cta-inline" onClick={closeDrawer} aria-label="מכירת כרטיסים">
+          <Link
+            to="/sell/new"
+            className="nav-sell-cta-inline"
+            onClick={closeDrawer}
+            onMouseEnter={prefetchSellPage}
+            onFocus={prefetchSellPage}
+            aria-label="מכירת כרטיסים"
+          >
             <span className="nav-sell-cta-icon" aria-hidden="true">+</span>
             <span className="nav-sell-cta-label-full">מכירת כרטיסים</span>
             <span className="nav-sell-cta-label-compact">מכירה</span>
@@ -293,7 +307,14 @@ const Navbar = () => {
         </div>
       </aside>
 
-      <Link to="/sell" className="mobile-sell-fab" aria-label="מכירת כרטיס">
+      <Link
+        to="/sell/new"
+        className="mobile-sell-fab"
+        aria-label="מכירת כרטיס"
+        onMouseEnter={prefetchSellPage}
+        onFocus={prefetchSellPage}
+        onTouchStart={prefetchSellPage}
+      >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>

@@ -379,7 +379,7 @@ function TicketAttachmentPreview({ file }) {
 const Sell = () => {
   const navigate = useNavigate();
   const sellDraft = useMemo(() => readSellListingDraft(), []);
-  const { user, loading: authLoading, refreshProfile, login, register } = useAuth();
+  const { user, refreshProfile, login, register } = useAuth();
   const [wizardStep, setWizardStep] = useState(1);
   const [formData, setFormData] = useState(() => {
     const base = defaultSellFormData();
@@ -828,7 +828,7 @@ const Sell = () => {
       : formData.selectedEvent || {}
   );
 
-  // Success must win over authLoading — a profile refresh must not replace the
+  // Success must win over other loading UI — a profile refresh must not replace the
   // success screen with a skeleton and leave the user without a home CTA.
   if (success) {
     return (
@@ -859,15 +859,8 @@ const Sell = () => {
     );
   }
 
-  // Wait for auth to finish loading — then show listing form for everyone (reverse funnel).
-  if (authLoading) {
-    return (
-      <div className="sell-container">
-        <SellFormSkeleton />
-      </div>
-    );
-  }
-
+  // Reverse funnel: show the listing form immediately. Auth still resolves in the
+  // background; guests can fill the form and sign up/login only at submit/completion.
   const isSeller = Boolean(user && user.role === 'seller');
   const handleCategoryChange = (e) => {
     const newCategory = e.target.value;

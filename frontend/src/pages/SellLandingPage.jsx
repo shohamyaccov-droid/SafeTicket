@@ -1,3 +1,8 @@
+/**
+ * ARCHIVED (Jul 2026): Intermediate /sell marketing page caused paid-traffic friction.
+ * `/sell` now redirects to `/sell/new` (see SellMarketingRedirect in App.jsx).
+ * Kept for copy/reference only — not mounted in the router.
+ */
 import { ArrowLeft, Check, Clock3, LockKeyhole, MessageCircleOff, ShieldCheck, Upload } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import './SellLandingPage.css';

@@ -61,7 +61,7 @@ const Footer = () => {
             <h3>פעולות</h3>
             <ul>
               <li>
-                <Link to="/sell">מכור כרטיסים</Link>
+                <Link to="/sell/new">מכור כרטיסים</Link>
               </li>
               <li>
                 <Link to="/">אירועים</Link>
