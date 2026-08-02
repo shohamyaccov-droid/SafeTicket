@@ -80,3 +80,5 @@ class MenoraAndEmailFlowTests(TestCase):
         self.assertIn('הכרטיס שלך אושר', payload['subject'])
         self.assertIn('html', payload)
         self.assertIn('הכרטיס שלכם אושר', payload['html'])
+        self.assertNotIn('לוגו TradeTix יופיע כאן', payload['html'])
+        self.assertIn('tab=sales', payload['html'])

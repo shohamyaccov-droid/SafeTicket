@@ -2045,3 +2045,117 @@
   color: var(--text-secondary);
   line-height: 1.4;
 }
+
+/* ── My Sales listing cards: minimal collapsed summary ── */
+.sales-listing-card {
+  width: 100%;
+  display: block;
+  margin-bottom: 8px;
+  box-sizing: border-box;
+}
+
+.sales-listing-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px !important;
+  min-height: auto !important;
+  height: auto !important;
+  flex-wrap: nowrap !important;
+}
+
+.sales-listing-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  text-align: right;
+}
+
+.sales-listing-title {
+  font-size: 0.95rem !important;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+  white-space: nowrap !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block !important;
+  -webkit-line-clamp: unset !important;
+  line-clamp: unset !important;
+  max-width: 100%;
+}
+
+.sales-listing-date,
+.sales-listing-seat {
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--text-secondary, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.sales-listing-seat {
+  font-weight: 500;
+}
+
+.sales-listing-row .row-chevron {
+  flex-shrink: 0;
+  margin-inline-start: 0.25rem;
+}
+
+.sales-listing-expanded-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.sales-listing-price {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.sales-listing-qty {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #64748b);
+}
+
+.sales-listing-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.5rem 0 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .sales-listing-row {
+    padding: 12px !important;
+  }
+
+  .sales-listing-title {
+    font-size: 0.92rem !important;
+  }
+
+  .sales-listing-date,
+  .sales-listing-seat {
+    font-size: 0.78rem;
+  }
+
+  /* Prevent older mobile wrap rules from re-breaking sales rows */
+  .sales-listing-card .dashboard-compact-row.sales-listing-row {
+    flex-wrap: nowrap !important;
+  }
+
+  .sales-listing-card .sales-listing-title {
+    white-space: nowrap !important;
+    display: block !important;
+    -webkit-line-clamp: unset !important;
+  }
+}

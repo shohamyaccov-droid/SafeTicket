@@ -449,23 +449,25 @@ const Sell = () => {
     if (!success) return undefined;
 
     let cancelled = false;
-    const goHome = () => {
+    const goToSales = () => {
       if (cancelled) return;
+      const salesUrl = '/dashboard?tab=sales';
       try {
-        navigate('/', { replace: true });
+        navigate(salesUrl, { replace: true });
       } catch {
         /* fall through */
       }
       // Hard fallback if client routing is stuck (common after long upload sessions).
       window.setTimeout(() => {
         if (cancelled) return;
-        if (window.location.pathname !== '/') {
-          window.location.assign('/');
+        const path = `${window.location.pathname}${window.location.search}`;
+        if (!path.startsWith('/dashboard') || !window.location.search.includes('tab=sales')) {
+          window.location.assign(salesUrl);
         }
       }, 250);
     };
 
-    const timer = window.setTimeout(goHome, 3000);
+    const timer = window.setTimeout(goToSales, 3000);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
@@ -475,15 +477,17 @@ const Sell = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate used as imperative escape hatch
   }, [success]);
 
-  const goToHomepage = () => {
+  const goToMySales = () => {
+    const salesUrl = '/dashboard?tab=sales';
     try {
-      navigate('/', { replace: true });
+      navigate(salesUrl, { replace: true });
     } catch {
       /* fall through */
     }
     window.setTimeout(() => {
-      if (window.location.pathname !== '/') {
-        window.location.assign('/');
+      const path = `${window.location.pathname}${window.location.search}`;
+      if (!path.startsWith('/dashboard') || !window.location.search.includes('tab=sales')) {
+        window.location.assign(salesUrl);
       }
     }, 100);
   };
@@ -845,14 +849,14 @@ const Sell = () => {
             <p className="success-text">הכרטיס פורסם באתר וזמין למכירה.</p>
           )}
           <p className="success-redirect-text" role="status" aria-live="polite">
-            מעבירים אותך לדף הבית בעוד 3 שניות...
+            מעבירים אותך למכירות שלי בעוד 3 שניות...
           </p>
           <button
             type="button"
             className="success-home-button"
-            onClick={goToHomepage}
+            onClick={goToMySales}
           >
-            חזרה לדף הבית
+            למכירות שלי
           </button>
         </div>
       </div>

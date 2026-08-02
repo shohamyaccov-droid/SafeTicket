@@ -208,7 +208,8 @@ def notify_ticket_approved(ticket) -> None:
         'seat_numbers': getattr(ticket, 'seat_numbers', '') or getattr(ticket, 'seat_number', '') or '',
         'asking_price_display': format_money_for_email(ticket.asking_price, cur),
         'currency_code': cur,
-        'cta_label': 'צפה בכרטיס',
+        'cta_label': 'למכירות שלי',
+        'cta_url': f'{dashboard_url()}?tab=sales' if dashboard_url() else '',
     }
     subject = f'TradeTix — הכרטיס שלך אושר ועלה לאתר ({ctx["event_name"]})'
     _send_notification(subject, 'ticket_approved', seller.email, ctx)

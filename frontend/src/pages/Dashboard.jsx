@@ -274,8 +274,14 @@ const AccountSettingsTab = () => {
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState('purchases');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (tab === 'settings' || tab === 'sales' || tab === 'purchases' || tab === 'offers' || tab === 'wallet') {
+      return tab;
+    }
+    return 'purchases';
+  });
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -333,13 +339,24 @@ const Dashboard = () => {
     return () => clearInterval(pollInterval);
   }, [user]);
 
-  // Sync activeTab with URL ?tab=settings
+  // Sync activeTab with URL ?tab=
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab === 'settings') {
-      setActiveTab('settings');
+    if (tab === 'settings' || tab === 'sales' || tab === 'purchases' || tab === 'offers' || tab === 'wallet') {
+      setActiveTab(tab);
     }
   }, [searchParams]);
+
+  const selectDashboardTab = (tab) => {
+    setActiveTab(tab);
+    const next = new URLSearchParams(searchParams);
+    if (tab === 'purchases') {
+      next.delete('tab');
+    } else {
+      next.set('tab', tab);
+    }
+    setSearchParams(next, { replace: true });
+  };
 
   // Live countdown timer for accepted offers
   useEffect(() => {
@@ -958,7 +975,7 @@ const Dashboard = () => {
       <div className="dashboard-tabs">
         <button
           className={`dashboard-tab ${activeTab === 'purchases' ? 'active' : ''}`}
-          onClick={() => setActiveTab('purchases')}
+          onClick={() => selectDashboardTab('purchases')}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M9 11L12 14L22 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -968,7 +985,7 @@ const Dashboard = () => {
         </button>
         <button
           className={`dashboard-tab ${activeTab === 'sales' ? 'active' : ''}`}
-          onClick={() => setActiveTab('sales')}
+          onClick={() => selectDashboardTab('sales')}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M12 2V22M2 12H22" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
@@ -977,7 +994,7 @@ const Dashboard = () => {
         </button>
         <button
           className={`dashboard-tab ${activeTab === 'wallet' ? 'active' : ''}`}
-          onClick={() => setActiveTab('wallet')}
+          onClick={() => selectDashboardTab('wallet')}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M20 7H5C3.89543 7 3 7.89543 3 9V18C3 19.1046 3.89543 20 5 20H20C21.1046 20 22 19.1046 22 18V9C22 7.89543 21.1046 7 20 7Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -989,7 +1006,7 @@ const Dashboard = () => {
         </button>
         <button
           className={`dashboard-tab ${activeTab === 'offers' ? 'active' : ''} ${totalActionRequired > 0 ? 'has-notification' : ''}`}
-          onClick={() => setActiveTab('offers')}
+          onClick={() => selectDashboardTab('offers')}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M21 15C21 15.5304 20.7893 16.0391 20.4142 16.4142C20.0391 16.7893 19.5304 17 19 17H7L3 21V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V15Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -999,7 +1016,7 @@ const Dashboard = () => {
         </button>
         <button
           className={`dashboard-tab ${activeTab === 'settings' ? 'active' : ''}`}
-          onClick={() => setActiveTab('settings')}
+          onClick={() => selectDashboardTab('settings')}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
@@ -1578,37 +1595,65 @@ const Dashboard = () => {
                         const listSym = currencySymbol(listCur);
 
                         return (
-                          <div key={listing.id} className={`listing-card enterprise-card dashboard-compact-card ${listing.status === 'sold' ? 'sold' : ''}`} style={{ width: '100%', display: 'block', marginBottom: '8px', boxSizing: 'border-box' }}>
+                          <div key={listing.id} className={`listing-card enterprise-card dashboard-compact-card sales-listing-card ${listing.status === 'sold' ? 'sold' : ''}`}>
                             <div
-                              className="dashboard-compact-row"
-                              style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', boxSizing: 'border-box', padding: '8px 16px' }}
+                              className={`dashboard-compact-row sales-listing-row ${isExpanded ? 'is-expanded' : ''}`}
                               onClick={() =>
                                 setExpandedListingId(isExpanded ? null : listing.id)
                               }
+                              role="button"
+                              tabIndex={0}
+                              aria-expanded={isExpanded}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setExpandedListingId(isExpanded ? null : listing.id);
+                                }
+                              }}
                             >
-                              <div className="row-thumbnail">
-                                {listing.event_image_url ? (
-                                  <img
-                                    src={listing.event_image_url}
-                                    alt={listing.event_name_display || listing.event_name || 'אירוע'}
-                                    loading="lazy"
-                                    decoding="async"
-                                    style={{ width: '36px', height: '36px', minWidth: '36px' }}
-                                  />
-                                ) : (
-                                  <div className="row-thumbnail-placeholder" />
-                                )}
-                              </div>
-                              <div className="row-text" style={{ flex: 1, minWidth: 0 }}>
-                                <div className="row-title">
+                              <div className="sales-listing-summary">
+                                <div className="row-title sales-listing-title">
                                   {listing.event_name_display || listing.event_name || 'אירוע ללא שם'}
                                 </div>
-                                <div className="row-subtitle">
-                                  <span role="img" aria-label="calendar">📅</span>{' '}
+                                <div className="row-subtitle sales-listing-date">
                                   {formatEventDateTimeWithLocality(
                                     listing.event_date_display || listing.event_date,
                                     listing
                                   )}
+                                </div>
+                                <div className="sales-listing-seat">
+                                  {getSeatDisplay(listing)}
+                                </div>
+                              </div>
+                              <span className={`row-chevron ${isExpanded ? 'expanded' : ''}`} aria-hidden="true">▾</span>
+                            </div>
+
+                            {isExpanded && (
+                              <div className="row-details">
+                                <div className="sales-listing-expanded-meta">
+                                  <span className={`status-badge status-${listing.status}`}>
+                                    {listing.status === 'pending_approval'
+                                      ? 'בבדיקה'
+                                      : listing.status === 'active'
+                                      ? 'פעיל'
+                                      : listing.status === 'sold'
+                                      ? 'נמכר'
+                                      : listing.status === 'pending_payout'
+                                      ? 'ממתין לתשלום'
+                                      : listing.status === 'paid_out'
+                                      ? 'שולם'
+                                      : listing.status}
+                                  </span>
+                                  <span className="sales-listing-price">
+                                    {listSym}
+                                    {formatAmountForCurrency(
+                                      ['sold', 'pending_payout', 'paid_out'].includes(listing.status) && listing.expected_payout != null
+                                        ? listing.expected_payout
+                                        : (listing.asking_price || listing.original_price),
+                                      listCur
+                                    )}
+                                  </span>
+                                  <span className="sales-listing-qty">{listing.available_quantity || 1} כרטיסים</span>
                                 </div>
                                 {['sold', 'pending_payout', 'paid_out'].includes(listing.status) && listing.escrow_payout_status && (
                                   <div className="escrow-seller-note" style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.35rem', lineHeight: 1.45 }}>
@@ -1620,85 +1665,55 @@ const Dashboard = () => {
                                       'הכסף בנאמנות עד לאחר האירוע ולפי תנאי הפלטפורמה.'}
                                   </div>
                                 )}
-                              </div>
-                              <span className="row-quantity">{listing.available_quantity || 1} כרטיסים</span>
-                              <span className="row-price">
-                                {listSym}
-                                {formatAmountForCurrency(
-                                  ['sold', 'pending_payout', 'paid_out'].includes(listing.status) && listing.expected_payout != null
-                                    ? listing.expected_payout
-                                    : (listing.asking_price || listing.original_price),
-                                  listCur
-                                )}
-                              </span>
-                              <span className={`status-badge status-${listing.status}`}>
-                                {listing.status === 'pending_approval'
-                                  ? 'בבדיקה'
-                                  : listing.status === 'active'
-                                  ? 'פעיל'
-                                  : listing.status === 'sold'
-                                  ? 'נמכר'
-                                  : listing.status === 'pending_payout'
-                                  ? 'ממתין לתשלום'
-                                  : listing.status === 'paid_out'
-                                  ? 'שולם'
-                                  : listing.status}
-                              </span>
-                              {/* Copy ticket link — only for live/pending listings */}
-                              {!['sold', 'pending_payout', 'paid_out'].includes(listing.status) && (
-                                <button
-                                  className="row-action-button row-copy-link-btn"
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleCopyListingLink(listing);
-                                  }}
-                                  title={copiedListingId === listing.id ? 'הועתק!' : 'העתק קישור לשיתוף'}
-                                  aria-label="Copy ticket link"
-                                  style={{
-                                    color: copiedListingId === listing.id ? '#16a34a' : undefined,
-                                    position: 'relative',
-                                  }}
-                                >
-                                  {copiedListingId === listing.id ? '✓' : '🔗'}
-                                </button>
-                              )}
-                              <button
-                                className="row-action-button"
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (['sold', 'pending_payout', 'paid_out'].includes(listing.status)) {
-                                    handleDeleteListing(
-                                      listing.id,
-                                      listing.event_name_display || listing.event_name
-                                    );
-                                  } else {
-                                    handleEditPrice(listing);
-                                  }
-                                }}
-                                title={
-                                  ['sold', 'pending_payout', 'paid_out'].includes(listing.status)
-                                    ? 'מחק'
-                                    : 'ערוך מחיר'
-                                }
-                                aria-label={
-                                  ['sold', 'pending_payout', 'paid_out'].includes(listing.status)
-                                    ? 'Delete listing'
-                                    : 'Edit price'
-                                }
-                                disabled={listing.status === 'pending_approval'}
-                              >
-                                {['sold', 'pending_payout', 'paid_out'].includes(listing.status)
-                                  ? '🗑️'
-                                  : '✏️'}
-                              </button>
-                              <span className={`row-chevron ${isExpanded ? 'expanded' : ''}`}>▾</span>
-                            </div>
-
-                            {isExpanded && (
-                              <div className="row-details">
-                                {/* Info message for pending verification */}
+                                <div className="sales-listing-row-actions">
+                                  {!['sold', 'pending_payout', 'paid_out'].includes(listing.status) && (
+                                    <button
+                                      className="row-action-button row-copy-link-btn"
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleCopyListingLink(listing);
+                                      }}
+                                      title={copiedListingId === listing.id ? 'הועתק!' : 'העתק קישור לשיתוף'}
+                                      aria-label="Copy ticket link"
+                                      style={{
+                                        color: copiedListingId === listing.id ? '#16a34a' : undefined,
+                                      }}
+                                    >
+                                      {copiedListingId === listing.id ? '✓' : '🔗'}
+                                    </button>
+                                  )}
+                                  <button
+                                    className="row-action-button"
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (['sold', 'pending_payout', 'paid_out'].includes(listing.status)) {
+                                        handleDeleteListing(
+                                          listing.id,
+                                          listing.event_name_display || listing.event_name
+                                        );
+                                      } else {
+                                        handleEditPrice(listing);
+                                      }
+                                    }}
+                                    title={
+                                      ['sold', 'pending_payout', 'paid_out'].includes(listing.status)
+                                        ? 'מחק'
+                                        : 'ערוך מחיר'
+                                    }
+                                    aria-label={
+                                      ['sold', 'pending_payout', 'paid_out'].includes(listing.status)
+                                        ? 'Delete listing'
+                                        : 'Edit price'
+                                    }
+                                    disabled={listing.status === 'pending_approval'}
+                                  >
+                                    {['sold', 'pending_payout', 'paid_out'].includes(listing.status)
+                                      ? '🗑️'
+                                      : '✏️'}
+                                  </button>
+                                </div>
                                 {listing.status === 'pending_approval' && (
                                   <div className="pending-verification-info">
                                     <svg
