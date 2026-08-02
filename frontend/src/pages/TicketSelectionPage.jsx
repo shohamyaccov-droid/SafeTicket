@@ -13,6 +13,7 @@ import {
 } from '../utils/priceFormat';
 import BuyerListingPrice from '../components/BuyerListingPrice';
 import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
+import { formatBuyerFeePercent } from '../services/pricingSettings';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import { toastError } from '../utils/toast';
@@ -24,6 +25,7 @@ const TicketSelectionPage = () => {
   const location = useLocation();
   const { user } = useAuth();
   const buyerFeePercent = useBuyerServiceFeePercent();
+  const buyerFeeLabel = formatBuyerFeePercent(buyerFeePercent);
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
@@ -120,7 +122,7 @@ const TicketSelectionPage = () => {
     if (!ticket) return 0;
     const base = getTicketBaseNumeric(ticket);
     if (Number.isNaN(base) || base <= 0) return 0;
-    return getTotalWithFee(base, quantity);
+    return getTotalWithFee(base, quantity, buyerFeePercent);
   };
 
   if (loading) {
@@ -294,7 +296,7 @@ const TicketSelectionPage = () => {
                 {selSym}{formatAmountForCurrency(calculateEstimatedTotalWithFee(), selCur)}
               </span>
             </div>
-            <p className="price-summary-note">הסכום כולל דמי שירות ותפעול ({buyerFeePercent}%) — יופיע בפירוט מלא בקופה לפני התשלום.</p>
+            <p className="price-summary-note">הסכום כולל דמי שירות ותפעול ({buyerFeeLabel}%) — יופיע בפירוט מלא בקופה לפני התשלום.</p>
           </div>
 
           {/* Validation Message */}

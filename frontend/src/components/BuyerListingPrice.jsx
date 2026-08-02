@@ -4,14 +4,19 @@ import {
   currencySymbol,
   getTicketBaseNumeric,
 } from '../utils/priceFormat';
-import { BUYER_SERVICE_FEE_PERCENT } from '../constants/pricing';
+import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
+import { formatBuyerFeePercent } from '../services/pricingSettings';
 import './BuyerListingPrice.css';
 
 /**
  * Browse surfaces: large seller asking price (base), muted line for buyer service fee.
+ * Fee % comes from the same live pricing settings as checkout.
  * Not used on final checkout summary (CheckoutModal keeps full breakdown).
  */
+/* eslint-disable-next-line react/prop-types */
 const BuyerListingPrice = ({ ticket, compact = false, quantity = null }) => {
+  const feePercent = useBuyerServiceFeePercent();
+  const feeLabel = formatBuyerFeePercent(feePercent);
   const cur = resolveTicketCurrency(ticket);
   const sym = currencySymbol(cur);
   const baseNum = getTicketBaseNumeric(ticket);
@@ -30,7 +35,7 @@ const BuyerListingPrice = ({ ticket, compact = false, quantity = null }) => {
       </div>
       {showFee && (
         <div className="buyer-listing-price-fee">
-          + {BUYER_SERVICE_FEE_PERCENT}% דמי שירות ותפעול
+          + {feeLabel}% דמי שירות ותפעול
         </div>
       )}
     </div>

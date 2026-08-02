@@ -3,13 +3,15 @@ import { useMemo } from 'react';
 import { Filter, Ticket, Gem, CheckSquare } from 'lucide-react';
 import {
   getTicketBaseNumeric,
-  getBuyerServiceFeeShekels,
   resolveTicketCurrency,
   currencySymbol,
   formatAmountForCurrency,
+  buyerChargeFromBase,
 } from '../utils/priceFormat';
 import { isListingGroupTaken } from '../utils/ticketAvailability';
 import TakenBuyButton from './TakenBuyButton';
+import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
+import { formatBuyerFeePercent } from '../services/pricingSettings';
 
 const ZONE_HE = {
   north: 'טריבונה צפון',
@@ -79,6 +81,8 @@ export default function BloomfieldTicketListPanel({
   totalListingsBeforeQuantityFilter = 0,
   cheapestTicketPrice = null,
 }) {
+  const buyerFeePercent = useBuyerServiceFeePercent();
+  const feePercentLabel = formatBuyerFeePercent(buyerFeePercent);
   const resolvedCheapest = useMemo(() => {
     if (cheapestTicketPrice != null && !Number.isNaN(Number(cheapestTicketPrice))) {
       return Number(cheapestTicketPrice);
@@ -168,7 +172,10 @@ export default function BloomfieldTicketListPanel({
             const sym = currencySymbol(cur);
             const baseNum = getTicketBaseNumeric(firstTicket);
             const priceStr = formatAmountForCurrency(baseNum, cur);
-            const feeNum = baseNum > 0 ? getBuyerServiceFeeShekels(baseNum) : 0;
+            const feeNum =
+              baseNum > 0
+                ? buyerChargeFromBase(baseNum, buyerFeePercent).serviceFee
+                : 0;
             const qty = group.available_count || 1;
             const qtyLabel = `${qty} ${qty === 1 ? 'כרטיס' : 'כרטיסים'}`;
 
@@ -269,7 +276,7 @@ export default function BloomfieldTicketListPanel({
                           direction: 'rtl',
                         }}
                       >
-                        + 5% דמי שירות ותפעול
+                        + {feePercentLabel}% דמי שירות ותפעול
                       </span>
                     )}
                   </div>

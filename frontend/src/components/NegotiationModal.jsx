@@ -5,7 +5,7 @@ import {
   formatAmountForCurrency,
   currencySymbol,
 } from '../utils/priceFormat';
-import { orderAPI } from '../services/api';
+import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import { getAcceptedCheckoutSecondsRemaining } from '../utils/offerTimer';
 import './NegotiationModal.css';
@@ -38,8 +38,8 @@ const NegotiationModal = ({
   canCompletePurchase = true,
   onNeedProfileDetails = null,
 }) => {
+  const serviceFeePercent = useBuyerServiceFeePercent();
   const [counterAmount, setCounterAmount] = useState('');
-  const [serviceFeePercent, setServiceFeePercent] = useState(12);
   const bodyRef = useRef(null);
   const footerRef = useRef(null);
   const counterInputRef = useRef(null);
@@ -66,21 +66,6 @@ const NegotiationModal = ({
     };
     vv.addEventListener('resize', onResize);
     return () => vv.removeEventListener('resize', onResize);
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    orderAPI.getPricingSettings()
-      .then((response) => {
-        const next = Number(response?.data?.service_fee_percentage);
-        if (active && Number.isFinite(next) && next >= 0) {
-          setServiceFeePercent(next);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
   }, []);
 
   const ticketDetails = group?.ticketDetails || {};

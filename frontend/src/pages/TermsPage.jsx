@@ -1,10 +1,15 @@
 import { Link } from 'react-router-dom';
+import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
+import { formatBuyerFeePercent } from '../services/pricingSettings';
 import './Terms.css';
 
 /**
  * תקנון ותנאי שימוש — זירת מסחר משנית (Marketplace) + Merchant of Record.
  */
 const TermsPage = () => {
+  const buyerFeePercent = useBuyerServiceFeePercent();
+  const feeLabel = formatBuyerFeePercent(buyerFeePercent);
+
   return (
     <div className="terms-container">
       <div className="terms-card">
@@ -167,7 +172,7 @@ const TermsPage = () => {
           </p>
           <p>
             <strong>6.4. שקיפות עמלות:</strong> דמי שירות ותפעול לרוכש עומדים על{' '}
-            <strong>12%</strong> ממחיר הבסיס של הכרטיס (או שיעור מופחת במסגרת קופון/מבצע שיוצג במפורש
+            <strong>{feeLabel}%</strong> ממחיר הבסיס של הכרטיס (או שיעור מופחת במסגרת קופון/מבצע שיוצג במפורש
             בקופה). עמלת מוכר בעת זו: <strong>0%</strong>. המחיר הסופי לתשלום — כולל דמי שירות — מוצג
             לרוכש בשקיפות במסך התשלום לפני אישור העסקה.
           </p>

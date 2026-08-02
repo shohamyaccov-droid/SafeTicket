@@ -759,7 +759,7 @@ class GlobalFeeSettingsAdmin(admin.ModelAdmin):
                 ),
                 'description': (
                     'base_buyer_fee_percent is the platform service/operation fee shown at checkout '
-                    '(e.g. 12.00 = 12%). Change it here — no code deploy required. '
+                    '(e.g. 7.00 = 7%). Change it here — no code deploy required. '
                     'With a coupon: buyer pays (base buyer − coupon discount); affiliate gets '
                     'affiliate commission (0% for platform coupons); platform keeps the remainder.'
                 ),

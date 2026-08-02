@@ -260,13 +260,13 @@ export const getBuyerServiceFeeShekels = (basePrice) => {
 /**
  * Total for quantity: buyer service fee on (unit base × qty) subtotal.
  */
-export const getTotalWithFee = (basePrice, quantity) => {
+export const getTotalWithFee = (basePrice, quantity, serviceFeePercent = BUYER_SERVICE_FEE_PERCENT) => {
   const qty = typeof quantity === 'string' ? parseInt(quantity, 10) : Number(quantity);
   if (isNaN(qty) || qty <= 0) return 0;
   const unit = parseFloat(String(basePrice ?? 0));
   if (isNaN(unit) || unit <= 0) return 0;
   const baseSubtotal = Math.round(unit * qty * 100) / 100;
-  const { totalAmount } = buyerChargeFromBase(baseSubtotal);
+  const { totalAmount } = buyerChargeFromBase(baseSubtotal, serviceFeePercent);
   return totalAmount;
 };
 

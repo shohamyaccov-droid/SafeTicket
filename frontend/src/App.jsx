@@ -21,6 +21,7 @@ import { Analytics } from './utils/analytics';
 import { trackGa4Pageview } from './utils/ga4';
 import { ensureMetaPixel, trackMetaPageView } from './utils/metaPixel';
 import { prefetchCriticalRoutesOnIdle, prefetchSellPage } from './utils/routePrefetch';
+import { loadPricingSettings } from './services/pricingSettings';
 import './App.css';
 
 /* eslint-disable react/prop-types */
@@ -219,6 +220,10 @@ function App() {
   }, []);
 
   useEffect(() => prefetchCriticalRoutesOnIdle(), []);
+
+  useEffect(() => {
+    loadPricingSettings().catch(() => {});
+  }, []);
 
   return (
     <AuthProvider>

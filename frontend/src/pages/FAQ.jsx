@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
+import { formatBuyerFeePercent } from '../services/pricingSettings';
 import './FAQ.css';
 
 const FAQ = () => {
   const [openIndex, setOpenIndex] = useState(null);
+  const buyerFeePercent = useBuyerServiceFeePercent();
+  const feeLabel = formatBuyerFeePercent(buyerFeePercent);
 
   const faqs = [
     {
@@ -59,7 +63,7 @@ const FAQ = () => {
       question: 'מהן העמלות? (דמי שירות)',
       answer: (
         <>
-          לקונים: דמי שירות ותפעול של <strong>12%</strong> ממחיר הבסיס של הכרטיס (או שיעור מופחת אם
+          לקונים: דמי שירות ותפעול של <strong>{feeLabel}%</strong> ממחיר הבסיס של הכרטיס (או שיעור מופחת אם
           מוצג קופון בקופה). למוכרים: עמלת מכירה <strong>0%</strong> בעת זו. המחיר הסופי כולל עמלות
           מוצג במסך התשלום לפני אישור העסקה — בהתאם לתקנון סעיף שקיפות עמלות.
         </>

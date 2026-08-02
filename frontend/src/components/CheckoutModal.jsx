@@ -23,6 +23,8 @@ import {
   BUYER_FEE_PERCENT_WITH_COUPON,
   BUYER_SERVICE_FEE_PERCENT,
 } from '../constants/pricing';
+import { usePricingSettings } from '../hooks/useBuyerServiceFeePercent';
+import { formatBuyerFeePercent } from '../services/pricingSettings';
 import CheckoutLegalAcceptance, {
   validateLegalAcceptance,
 } from './CheckoutLegalAcceptance';
@@ -222,13 +224,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const [shabbatOpen, setShabbatOpen] = useState(false);
   const [shabbatHavdalah, setShabbatHavdalah] = useState(null);
   const [shabbatMessage, setShabbatMessage] = useState('בצאת שבת תתחדש האפשרות לתשלום');
-  const [feeConfig, setFeeConfig] = useState({
-    serviceFeePercent: BUYER_SERVICE_FEE_PERCENT,
-    feeWithCouponPercent: BUYER_FEE_PERCENT_WITH_COUPON,
-    discountPercent: AFFILIATE_BUYER_DISCOUNT_PERCENT,
-    affiliatePercent: AFFILIATE_COMMISSION_PERCENT,
-    platformNetPercent: AFFILIATE_PLATFORM_NET_PERCENT,
-  });
+  const liveFees = usePricingSettings();
+  const feeConfig = {
+    serviceFeePercent: liveFees.serviceFeePercent ?? BUYER_SERVICE_FEE_PERCENT,
+    feeWithCouponPercent: liveFees.feeWithCouponPercent ?? BUYER_FEE_PERCENT_WITH_COUPON,
+    discountPercent: liveFees.discountPercent ?? AFFILIATE_BUYER_DISCOUNT_PERCENT,
+    affiliatePercent: liveFees.affiliatePercent ?? AFFILIATE_COMMISSION_PERCENT,
+    platformNetPercent: liveFees.platformNetPercent ?? AFFILIATE_PLATFORM_NET_PERCENT,
+  };
   const couponApplyLockRef = useRef(false);
   const timerRef = useRef(null);
   const reservationRef = useRef(false); // Track if reservation was made
@@ -251,57 +254,6 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   useEffect(() => {
     // Keep mount effect for future diagnostics without noisy console logs in production.
   }, [ticket, ticketGroup]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await orderAPI.getPricingSettings();
-        const data = res?.data || {};
-        const serviceFeePercent = parseFloat(
-          data.service_fee_percentage ?? data.base_buyer_fee_percent ?? BUYER_SERVICE_FEE_PERCENT,
-        );
-        const discountPercent = parseFloat(
-          data.buyer_coupon_discount_percent ?? AFFILIATE_BUYER_DISCOUNT_PERCENT,
-        );
-        const affiliatePercent = parseFloat(
-          data.affiliate_commission_percent ?? AFFILIATE_COMMISSION_PERCENT,
-        );
-        const platformNetPercent = parseFloat(
-          data.affiliate_platform_net_percent ?? AFFILIATE_PLATFORM_NET_PERCENT,
-        );
-        const feeWithCouponPercent = parseFloat(
-          data.buyer_fee_percent_with_coupon ??
-            (Number.isFinite(serviceFeePercent) && Number.isFinite(discountPercent)
-              ? serviceFeePercent - discountPercent
-              : BUYER_FEE_PERCENT_WITH_COUPON),
-        );
-        if (cancelled) return;
-        setFeeConfig({
-          serviceFeePercent: Number.isFinite(serviceFeePercent)
-            ? serviceFeePercent
-            : BUYER_SERVICE_FEE_PERCENT,
-          feeWithCouponPercent: Number.isFinite(feeWithCouponPercent)
-            ? feeWithCouponPercent
-            : BUYER_FEE_PERCENT_WITH_COUPON,
-          discountPercent: Number.isFinite(discountPercent)
-            ? discountPercent
-            : AFFILIATE_BUYER_DISCOUNT_PERCENT,
-          affiliatePercent: Number.isFinite(affiliatePercent)
-            ? affiliatePercent
-            : AFFILIATE_COMMISSION_PERCENT,
-          platformNetPercent: Number.isFinite(platformNetPercent)
-            ? platformNetPercent
-            : AFFILIATE_PLATFORM_NET_PERCENT,
-        });
-      } catch {
-        /* Keep compile-time defaults if settings endpoint is unavailable. */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // Get locked quantity from accepted offer if it exists (accepted_at = server truth after accept)
   const isNegotiatedPrice =
@@ -441,11 +393,13 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const standardReceiptBaseTotal = listBreakdown?.baseAmount ?? 0;
   const standardReceiptTotalPay = listBreakdown?.totalAmount ?? 0;
   const standardReceiptFeeTotal = listBreakdown?.serviceFee ?? 0;
-  const feePercentLabel = appliedCoupon
-    ? (appliedCoupon.discount_type === 'fixed'
-      ? feeConfig.serviceFeePercent
-      : feeConfig.feeWithCouponPercent)
-    : feeConfig.serviceFeePercent;
+  const feePercentLabel = formatBuyerFeePercent(
+    appliedCoupon
+      ? (appliedCoupon.discount_type === 'fixed'
+        ? feeConfig.serviceFeePercent
+        : feeConfig.feeWithCouponPercent)
+      : feeConfig.serviceFeePercent,
+  );
   const checkoutBaseForCoupon =
     isNegotiatedPrice && negotiatedBaseTotal != null && negotiatedBaseTotal > 0
       ? negotiatedBaseTotal

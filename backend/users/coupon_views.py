@@ -94,6 +94,11 @@ def pricing_settings_view(request):
             'buyer_fee_percent_with_coupon': with_coupon_pct,
         },
         status=status.HTTP_200_OK,
+        headers={
+            # Admin fee changes must reach the SPA without stale CDN/browser caches.
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma': 'no-cache',
+        },
     )
 
 
