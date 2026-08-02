@@ -41,6 +41,9 @@ echo "[start_render] High-demand Menora events (Odiya & Osher Cohen, Eyal Golan 
 python manage.py seed_odiya_osher_hope_event || true
 python manage.py seed_eyal_golan_menora || true
 
+echo "[start_render] Itay Levi Caesarea Amphitheater (29.08 & 01.09.2026)..."
+python manage.py seed_itay_levi_caesarea || true
+
 echo "[start_render] Deactivate demo coupon AFFILIATE5 (no longer offered)..."
 python manage.py deactivate_affiliate5_coupon || true
 

@@ -49,6 +49,11 @@ BEN_TZUR_CAESAREA_DATES = (
     (2026, 7, 27, 21, 0),
 )
 
+ITAY_LEVI_CAESAREA_DATES = (
+    (2026, 8, 29, 21, 0),
+    (2026, 9, 1, 20, 45),
+)
+
 REMOVED_ARTIST_NAMES = ('עומר אדם',)
 
 
@@ -79,6 +84,10 @@ SHOWS: tuple[ShowSpec, ...] = (
     *(
         ShowSpec('בן צור', y, m, d, h, minute, VENUE_ISRAEL, VENUE_CAESAREA_PLACE, 'קיסריה')
         for y, m, d, h, minute in BEN_TZUR_CAESAREA_DATES
+    ),
+    *(
+        ShowSpec('איתי לוי', y, m, d, h, minute, VENUE_ISRAEL, VENUE_CAESAREA_PLACE, 'קיסריה')
+        for y, m, d, h, minute in ITAY_LEVI_CAESAREA_DATES
     ),
 )
 
