@@ -324,15 +324,25 @@
   }
 }
 
+/* Google Ads reseller policy: must be ≥ benefits/body text (feature-full is 0.64rem). */
 .buyer-guarantee__disclaimer {
   margin: 1rem 0 0.5rem;
   padding: 0 0.15rem;
   text-align: center;
-  font-size: 0.62rem;
-  line-height: 1.45;
+  font-size: 0.68rem;
+  line-height: 1.5;
   font-weight: 400;
-  color: rgba(148, 163, 184, 0.82);
+  color: rgba(148, 163, 184, 0.92);
   text-wrap: balance;
+}
+
+@media (max-width: 768px) {
+  .buyer-guarantee__disclaimer {
+    margin: 0.45rem 0 0.15rem;
+    font-size: 0.68rem;
+    line-height: 1.45;
+    color: rgba(203, 213, 225, 0.88);
+  }
 }
 
 .buyer-guarantee__legal-link {
