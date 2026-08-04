@@ -354,20 +354,22 @@ export default function BloomfieldTicketListPanel({
                           )}
                         </button>
                         {user ? (
-                          <button
-                            type="button"
-                            className="min-h-[44px] rounded-lg border-2 border-emerald-600 bg-white px-5 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
-                            disabled={group.available_count <= 0}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onOffer(group);
-                            }}
-                          >
-                            הצע מחיר
-                          </button>
-                        ) : (
+                          group?.tickets?.[0]?.allow_negotiation !== false ? (
+                            <button
+                              type="button"
+                              className="min-h-[44px] rounded-lg border-2 border-emerald-600 bg-white px-5 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={group.available_count <= 0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOffer(group);
+                              }}
+                            >
+                              הצע מחיר
+                            </button>
+                          ) : null
+                        ) : group?.tickets?.[0]?.allow_negotiation !== false ? (
                           <p className="text-xs text-slate-500">התחברו כדי להציע מחיר</p>
-                        )}
+                        ) : null}
                       </div>
                     )}
                   </div>

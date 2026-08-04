@@ -125,6 +125,7 @@ const defaultSellFormData = () => ({
   ticket_type: 'pdf',
   split_type: 'כל כמות',
   is_obstructed_view: false,
+  allow_negotiation: true,
 });
 
 function readSellListingDraft() {
@@ -169,6 +170,7 @@ function buildSellListingDraftSnapshot({
       ticket_type: formData.ticket_type,
       split_type: formData.split_type,
       is_obstructed_view: formData.is_obstructed_view,
+      allow_negotiation: formData.allow_negotiation !== false,
       ticket_packages: (formData.ticket_packages || []).map((pkg) => ({
         seat_number: pkg?.seat_number || '',
       })),
@@ -1166,6 +1168,10 @@ const Sell = () => {
     submitData.append('ticket_type', 'כרטיס אלקטרוני (PDF או תמונה)');
     submitData.append('split_type', fdText(activeForm.split_type || 'כל כמות'));
     submitData.append('is_obstructed_view', activeForm.is_obstructed_view ? 'true' : 'false');
+    submitData.append(
+      'allow_negotiation',
+      activeForm.allow_negotiation === false ? 'false' : 'true'
+    );
 
     const packages = activeForm.ticket_packages || [];
     const globalRow = activeForm.row || '';
@@ -2103,6 +2109,25 @@ const Sell = () => {
               </div>
               <small className="checkbox-hint">
                 סמן אם הכרטיסים שלך נמצאים באזור עם נוף מוגבל או מוסתר חלקית. זה עוזר למנוע תלונות מהקונים.
+              </small>
+            </div>
+
+            <div className="form-group checkbox-group">
+              <div className="checkbox-wrapper">
+                <input
+                  type="checkbox"
+                  id="allow_negotiation"
+                  name="allow_negotiation"
+                  checked={formData.allow_negotiation !== false}
+                  onChange={handleChange}
+                  className="checkbox-input"
+                />
+                <label htmlFor="allow_negotiation" className="checkbox-label">
+                  לאפשר לקונים להציע מחיר? (כל קונה יוכל לשלוח עד 2 הצעות מחיר)
+                </label>
+              </div>
+              <small className="checkbox-hint">
+                כבוי = רק רכישה במחיר המודעה. דלוק = קונים יוכלו לשלוח הצעות מחיר (עד 2 לכל מודעה).
               </small>
             </div>
           </div>

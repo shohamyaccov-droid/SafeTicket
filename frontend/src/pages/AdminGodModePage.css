@@ -1,0 +1,180 @@
+.god-mode-page {
+  max-width: 1600px;
+}
+
+.god-section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.god-tab {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  border-radius: 999px;
+  padding: 0.55rem 1rem;
+  font-weight: 700;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.god-tab--active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #f8fafc;
+}
+
+.god-section-title {
+  margin: 0 0 0.85rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.god-loading {
+  padding: 1rem;
+  color: #475569;
+}
+
+.god-table-wrap {
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.god-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 920px;
+  font-size: 0.9rem;
+}
+
+.god-table th,
+.god-table td {
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+  text-align: right;
+}
+
+.god-table th {
+  background: #f8fafc;
+  font-weight: 800;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.god-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.god-empty {
+  text-align: center !important;
+  color: #64748b;
+  padding: 1.5rem !important;
+}
+
+.god-party-cell,
+.god-event-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 140px;
+}
+
+.god-party-name {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.god-party-role {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #0369a1;
+  background: #e0f2fe;
+  border-radius: 999px;
+  padding: 0.1rem 0.4rem;
+  margin-left: 0.25rem;
+}
+
+.god-party-email,
+.god-muted {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.god-phone-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.god-phone-number {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+  direction: ltr;
+  unicode-bidi: plaintext;
+}
+
+.god-whatsapp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  background: #25d366;
+  color: #052e16 !important;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-decoration: none !important;
+  white-space: nowrap;
+}
+
+.god-whatsapp-btn:hover {
+  filter: brightness(0.96);
+}
+
+.god-status {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.god-status--pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.god-status--accepted {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.god-status--rejected,
+.god-status--expired {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.god-status--countered {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.god-message-body {
+  max-width: 360px;
+  white-space: pre-wrap;
+  line-height: 1.45;
+  color: #1e293b;
+}

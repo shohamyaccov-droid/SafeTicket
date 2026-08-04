@@ -803,6 +803,7 @@ export const adminAPI = {
   getDashboardStats: () => api.get('/users/admin/dashboard/stats/'),
   getTransactions: (params) => api.get('/users/admin/transactions/', { params }),
   getOffersDashboard: (params) => api.get('/users/admin/offers/', { params }),
+  getGodModeDashboard: (params) => api.get('/users/admin/god-mode/', { params }),
   getPayouts: (params) => api.get('/users/admin/payouts/', { params }),
   markPayoutPaid: async (payoutId) => {
     await ensureCsrfToken();

@@ -877,6 +877,7 @@ class TicketSerializer(serializers.ModelSerializer):
     )
     split_type = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='כל כמות')
     is_obstructed_view = serializers.BooleanField(required=False, default=False)
+    allow_negotiation = serializers.BooleanField(required=False, default=True)
     verification_status = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='ממתין לאישור', read_only=True)
     has_pdf_file = serializers.SerializerMethodField()
     currency = serializers.SerializerMethodField()
@@ -891,7 +892,7 @@ class TicketSerializer(serializers.ModelSerializer):
             'original_price', 'listing_price', 'asking_price', 'currency', 'delivery_method',
             'is_together', 'available_quantity', 'pdf_file', 'pdf_file_url', 'receipt_file', 'receipt_file_url',
             'has_pdf_file', 'status',
-            'ticket_type', 'split_type', 'is_obstructed_view', 'verification_status',
+            'ticket_type', 'split_type', 'is_obstructed_view', 'allow_negotiation', 'verification_status',
             'reserved_at', 'reserved_by', 'reservation_email', 'created_at', 'updated_at'
         )
         read_only_fields = (
@@ -1132,7 +1133,7 @@ class TicketListSerializer(serializers.ModelSerializer):
             'venue', 'event_venue', 'event_city', 'event_country', 'seat_row', 'section', 'row', 'seat_numbers',
             'row_number', 'seat_number', 'listing_group_id',
             'original_price', 'asking_price', 'currency', 'delivery_method',
-            'is_together', 'available_quantity', 'split_type', 'status', 'has_pdf_file',
+            'is_together', 'available_quantity', 'split_type', 'allow_negotiation', 'status', 'has_pdf_file',
             'is_reserved_slot', 'is_taken', 'created_at'
         )
         read_only_fields = fields

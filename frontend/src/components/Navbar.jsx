@@ -130,9 +130,14 @@ const Navbar = () => {
             האזור האישי
           </Link>
           {isAdminUser && (
-            <Link to="/admin-panel" className="nav-link nav-link-admin nav-drawer-link" onClick={closeDrawer}>
-              ניהול
-            </Link>
+            <>
+              <Link to="/admin-panel" className="nav-link nav-link-admin nav-drawer-link" onClick={closeDrawer}>
+                ניהול
+              </Link>
+              <Link to="/admin-dashboard" className="nav-link nav-link-admin nav-drawer-link" onClick={closeDrawer}>
+                God Mode
+              </Link>
+            </>
           )}
         </>
       )}
@@ -286,9 +291,14 @@ const Navbar = () => {
                 שלום, {greetingDisplayName(user)}
               </Link>
               {isAdminUser && (
-                <Link to="/admin-panel" className="nav-link nav-link-admin nav-drawer-link" onClick={closeDrawer}>
-                  לוח ניהול
-                </Link>
+                <>
+                  <Link to="/admin-panel" className="nav-link nav-link-admin nav-drawer-link" onClick={closeDrawer}>
+                    לוח ניהול
+                  </Link>
+                  <Link to="/admin-dashboard" className="nav-link nav-link-admin nav-drawer-link" onClick={closeDrawer}>
+                    God Mode
+                  </Link>
+                </>
               )}
               <button type="button" onClick={handleLogout} className="logout-btn logout-btn--drawer">
                 התנתקות

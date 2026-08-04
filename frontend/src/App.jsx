@@ -37,6 +37,7 @@ const AdminVerificationPage = lazy(() => import('./pages/AdminVerificationPage')
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const AdminPayoutsPage = lazy(() => import('./pages/AdminPayoutsPage'));
 const AdminOffersPage = lazy(() => import('./pages/AdminOffersPage'));
+const AdminGodModePage = lazy(() => import('./pages/AdminGodModePage'));
 const FAQ = lazy(() => import('./pages/FAQ'));
 const Contact = lazy(() => import('./pages/Contact'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
@@ -245,6 +246,17 @@ function App() {
               <Route path="/profile" element={routeElement(<ProtectedRoute><Profile /></ProtectedRoute>, <DashboardSkeleton />)} />
               <Route path="/profile/wallet" element={routeElement(<ProtectedRoute><ProfileWallet /></ProtectedRoute>, <DashboardSkeleton />)} />
               <Route path="/dashboard" element={routeElement(<ProtectedRoute><Dashboard /></ProtectedRoute>, <DashboardSkeleton />)} />
+              <Route
+                path="/admin-dashboard"
+                element={
+                  routeElement(
+                    <AdminRoute>
+                      <AdminGodModePage />
+                    </AdminRoute>,
+                    <DashboardSkeleton />
+                  )
+                }
+              />
               <Route
                 path="/admin-panel/offers"
                 element={

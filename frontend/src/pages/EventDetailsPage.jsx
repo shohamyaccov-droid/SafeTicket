@@ -750,6 +750,10 @@ const EventDetailsPage = () => {
 
   const handleMakeOffer = (ticketGroup) => {
     const first = ticketGroup.tickets[0];
+    if (first?.allow_negotiation === false) {
+      setToast({ message: 'המוכר אינו מאפשר הצעות מחיר על מודעה זו', type: 'error' });
+      return;
+    }
     const offerSplitRaw = first?.split_type || first?.split_option || ticketGroup.split_type || '';
     const offerSplitType = normalizeSplitType(offerSplitRaw);
     const avail = ticketGroup.available_count || 1;
@@ -1558,6 +1562,7 @@ const EventDetailsPage = () => {
               const isOwnListing = Boolean(
                 user && isCurrentUserSellerOfTicket(user, firstTicket, group)
               );
+              const allowsNegotiation = firstTicket?.allow_negotiation !== false;
               const isTakenListing = isListingGroupTaken(group);
               const isUnavailableListing =
                 isOwnListing || isTakenListing || isListingUnavailableForBuyer(group, user);
@@ -1676,21 +1681,23 @@ const EventDetailsPage = () => {
                               </button>
                               <span className="micro-trust-text">🔒 תשלום מאובטח ומוגן</span>
                             </div>
-                            {user ? (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleMakeOffer(group);
-                                }}
-                                className="viagogo-offer-button viagogo-offer-button--prominent"
-                                disabled={group.available_count <= 0}
-                                type="button"
-                              >
-                                הצע מחיר
-                              </button>
-                            ) : (
-                              <p className="offer-login-hint">התחבר כדי להציע מחיר על המודעה</p>
-                            )}
+                            {allowsNegotiation ? (
+                              user ? (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleMakeOffer(group);
+                                  }}
+                                  className="viagogo-offer-button viagogo-offer-button--prominent"
+                                  disabled={group.available_count <= 0}
+                                  type="button"
+                                >
+                                  הצע מחיר
+                                </button>
+                              ) : (
+                                <p className="offer-login-hint">התחבר כדי להציע מחיר על המודעה</p>
+                              )
+                            ) : null}
                           </>
                         )}
                       </div>

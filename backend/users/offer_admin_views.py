@@ -54,9 +54,8 @@ def _offer_row(offer: Offer) -> dict:
     completed_orders = getattr(offer, 'completed_orders', [])
     completed_order = completed_orders[0] if completed_orders else None
     quantity = max(1, int(offer.quantity or 1))
-    asking_total = (
-        Decimal(ticket.asking_price or 0) * Decimal(quantity)
-    ).quantize(Decimal('0.01'))
+    unit_asking = Decimal(ticket.asking_price or 0).quantize(Decimal('0.01'))
+    asking_total = (unit_asking * Decimal(quantity)).quantize(Decimal('0.01'))
     discount_percent = None
     if asking_total > 0:
         discount_percent = (
@@ -66,23 +65,29 @@ def _offer_row(offer: Offer) -> dict:
     round_count = int(offer.offer_round_count or 0)
     sender = offer.buyer if round_count in (0, 2) else ticket.seller
     recipient = ticket.seller if round_count in (0, 2) else offer.buyer
+
+    def _party(user_obj, user_id):
+        return {
+            'id': user_id,
+            'username': getattr(user_obj, 'username', '') or '',
+            'email': getattr(user_obj, 'email', '') or '',
+            'phone_number': (getattr(user_obj, 'phone_number', None) or '').strip(),
+            'full_name': (
+                f'{(getattr(user_obj, "first_name", None) or "").strip()} '
+                f'{(getattr(user_obj, "last_name", None) or "").strip()}'
+            ).strip(),
+        }
+
     return {
         'id': offer.pk,
         'conversation_id': _conversation_root_id(offer),
-        'buyer': {
-            'id': offer.buyer_id,
-            'username': offer.buyer.username,
-            'email': offer.buyer.email or '',
-        },
-        'seller': {
-            'id': ticket.seller_id,
-            'username': ticket.seller.username,
-            'email': ticket.seller.email or '',
-        },
+        'buyer': _party(offer.buyer, offer.buyer_id),
+        'seller': _party(ticket.seller, ticket.seller_id),
         'sender_username': sender.username,
         'recipient_username': recipient.username,
         'ticket_id': ticket.pk,
         'event_name': (getattr(event, 'name', '') or ticket.event_name or '').strip(),
+        'original_price': str(unit_asking),
         'amount': str(offer.amount),
         'asking_total': str(asking_total),
         'discount_percent': str(discount_percent) if discount_percent is not None else None,

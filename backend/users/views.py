@@ -5036,6 +5036,38 @@ class OfferViewSet(viewsets.ModelViewSet):
                     code='invalid',
                 )
 
+            if not bool(getattr(ticket_locked, 'allow_negotiation', True)):
+                raise ValidationError(
+                    {
+                        'non_field_errors': [
+                            'המוכר אינו מאפשר הצעות מחיר על מודעה זו.',
+                        ]
+                    },
+                    code='negotiation_disabled',
+                )
+
+            prior_offer_qs = Offer.objects.filter(
+                buyer=buyer,
+                offer_round_count=0,
+                status__in=['pending', 'rejected'],
+            )
+            if listing_group_id := (getattr(ticket_locked, 'listing_group_id', None) or ''):
+                prior_offer_qs = prior_offer_qs.filter(
+                    ticket__listing_group_id=listing_group_id,
+                    ticket__seller_id=ticket_locked.seller_id,
+                )
+            else:
+                prior_offer_qs = prior_offer_qs.filter(ticket_id=ticket_locked.id)
+            if prior_offer_qs.count() >= 2:
+                raise ValidationError(
+                    {
+                        'non_field_errors': [
+                            'ניתן לשלוח עד 2 הצעות מחיר לכל מודעה (כולל הצעות שנדחו).',
+                        ]
+                    },
+                    code='offer_limit_reached',
+                )
+
             if ticket_locked.listing_group_id:
                 available_units = sum(
                     int(row.available_quantity or 0)

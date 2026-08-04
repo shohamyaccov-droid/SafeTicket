@@ -588,6 +588,10 @@ class Ticket(models.Model):
         default=False,
         help_text='Whether this ticket qualifies for the seller bonus when sold.',
     )
+    allow_negotiation = models.BooleanField(
+        default=True,
+        help_text='When True, buyers may submit price offers on this listing.',
+    )
 
     # Status
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending_approval')
