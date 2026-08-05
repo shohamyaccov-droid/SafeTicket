@@ -147,15 +147,77 @@ def extract_transaction_id(response_data: Any) -> str | None:
 
 
 def normalize_payme_buyer_phone(raw: str | None) -> str:
-    """PayMe expects digits-only phone, preferably with country code (972…)."""
+    """
+    PayMe docs / Bit hosted checkout expect Israeli local mobiles (05xxxxxxxx).
+    International 972… is accepted as input and converted to local form.
+    """
     digits = re.sub(r'\D', '', str(raw or ''))
     if not digits:
         return ''
     if digits.startswith('972'):
-        return digits
+        national = digits[3:]
+        if not national:
+            return ''
+        return national if national.startswith('0') else f'0{national}'
     if digits.startswith('0'):
-        return f'972{digits[1:]}'
+        return digits
+    # Bare 9-digit Israeli mobile (5xxxxxxxx)
+    if len(digits) == 9 and digits.startswith('5'):
+        return f'0{digits}'
     return digits
+
+
+def split_buyer_name(full_name: str | None) -> tuple[str, str]:
+    """Split a full name into (first_name, last_name) for PayMe prefill."""
+    parts = (full_name or '').strip().split(None, 1)
+    if not parts:
+        return '', ''
+    if len(parts) == 1:
+        return parts[0][:100], ''
+    return parts[0][:100], parts[1][:100]
+
+
+def append_payme_sale_url_prefill(
+    sale_url: str,
+    *,
+    first_name: str = '',
+    last_name: str = '',
+    phone: str = '',
+    email: str = '',
+) -> str:
+    """
+    PayMe hosted payment page prefill is done via query params on sale_url:
+    first_name, last_name, phone, email (Apiary / Payment Page docs).
+    """
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+    url = (sale_url or '').strip()
+    if not url:
+        return url
+
+    params: dict[str, str] = {}
+    fn = (first_name or '').strip()
+    ln = (last_name or '').strip()
+    ph = normalize_payme_buyer_phone(phone)
+    em = (email or '').strip()
+    if fn:
+        params['first_name'] = fn[:100]
+    if ln:
+        params['last_name'] = ln[:100]
+    if ph:
+        params['phone'] = ph
+    if em:
+        params['email'] = em[:255]
+    if not params:
+        return url
+
+    parts = urlsplit(url)
+    existing = dict(parse_qsl(parts.query, keep_blank_values=True))
+    # Prefill keys should win over any empty placeholders already on the URL.
+    existing.update(params)
+    return urlunsplit(
+        (parts.scheme, parts.netloc, parts.path, urlencode(existing), parts.fragment)
+    )
 
 
 def _looks_like_email(value: str) -> bool:
@@ -163,7 +225,7 @@ def _looks_like_email(value: str) -> bool:
 
 
 def resolve_buyer_details_for_order(order) -> dict[str, str]:
-    """Buyer identity for PayMe generate-sale (Bit / Apple Pay prefill)."""
+    """Buyer identity for PayMe generate-sale + hosted page prefill (Bit / cards)."""
     if getattr(order, 'user_id', None):
         user = getattr(order, 'user', None)
         if user is None:
@@ -186,23 +248,29 @@ def resolve_buyer_details_for_order(order) -> dict[str, str]:
                 uname = (getattr(user, 'username', None) or '').strip()
                 if uname and not _looks_like_email(uname):
                     full = uname
+                    first, last = split_buyer_name(full)
             phone_raw = (
                 getattr(user, 'phone_number', None)
                 or getattr(user, 'bit_phone_number', None)
                 or ''
             )
+            phone = normalize_payme_buyer_phone(phone_raw)
             return {
+                'buyer_first_name': first,
+                'buyer_last_name': last,
                 'buyer_name': full,
                 'buyer_full_name': full,
                 'buyer_email': (getattr(user, 'email', None) or '').strip(),
-                'buyer_phone': normalize_payme_buyer_phone(phone_raw),
-                'buyer_phone_number': normalize_payme_buyer_phone(phone_raw),
+                'buyer_phone': phone,
+                'buyer_phone_number': phone,
             }
     first = (getattr(order, 'guest_first_name', None) or '').strip()
     last = (getattr(order, 'guest_last_name', None) or '').strip()
     full = f'{first} {last}'.strip()
     phone = normalize_payme_buyer_phone(getattr(order, 'guest_phone', None))
     return {
+        'buyer_first_name': first,
+        'buyer_last_name': last,
         'buyer_name': full,
         'buyer_full_name': full,
         'buyer_email': (getattr(order, 'guest_email', None) or '').strip(),
@@ -223,6 +291,8 @@ def build_standard_generate_sale_body(
     callback_url: str | None = None,
     buyer_name: str | None = None,
     buyer_phone: str | None = None,
+    buyer_first_name: str | None = None,
+    buyer_last_name: str | None = None,
 ) -> dict[str, Any]:
     """Build PayMe standard sale payload (no marketplace split)."""
     cfg = PayMeSettings.from_django()
@@ -242,18 +312,36 @@ def build_standard_generate_sale_body(
         'sale_return_url': success_url or f'{frontend}/checkout/success?order_id={order_id_str}',
         'sale_cancel_url': failure_url or f'{frontend}/checkout/failure?order_id={order_id_str}',
         'sale_callback_url': callback_url or f'{api_origin}/api/payments/webhook/payme/',
+        # multi = cards + Bit (+ other APMs enabled on the merchant account)
         'sale_payment_method': 'multi',
+        # ILS required for Bit; keep explicit for APM routing.
+        'language': 'he',
     }
 
     payme_buyer_name = (buyer_name or '').strip()
+    first = (buyer_first_name or '').strip()
+    last = (buyer_last_name or '').strip()
+    if not first and not last and payme_buyer_name:
+        first, last = split_buyer_name(payme_buyer_name)
+    if not payme_buyer_name and (first or last):
+        payme_buyer_name = f'{first} {last}'.strip()
+
     payme_buyer_phone = normalize_payme_buyer_phone(buyer_phone)
     if payme_buyer_name:
         # Canonical PayMe keys + aliases used by some hosted/Bit payloads.
         body['buyer_name'] = payme_buyer_name[:255]
         body['buyer_full_name'] = payme_buyer_name[:255]
+    if first:
+        body['buyer_first_name'] = first[:100]
+        body['first_name'] = first[:100]
+    if last:
+        body['buyer_last_name'] = last[:100]
+        body['last_name'] = last[:100]
     if payme_buyer_phone:
+        # Local IL format (05…) — Bit rejects / fails (e.g. 420) with bare international in some flows.
         body['buyer_phone'] = payme_buyer_phone
         body['buyer_phone_number'] = payme_buyer_phone
+        body['phone'] = payme_buyer_phone
 
     extra = getattr(settings, 'PAYME_EXTRA_BODY_JSON', None) or {}
     if isinstance(extra, dict) and extra:
@@ -286,6 +374,8 @@ def generate_payme_sale(
     callback_url: str | None = None,
     buyer_name: str | None = None,
     buyer_phone: str | None = None,
+    buyer_first_name: str | None = None,
+    buyer_last_name: str | None = None,
 ) -> dict[str, Any]:
     """
     Call PayMe POST /generate-sale (standard sale flow).
@@ -305,6 +395,11 @@ def generate_payme_sale(
     if not cfg.seller_id:
         raise PayMeError('PAYME_SELLER_ID is not configured')
 
+    first = (buyer_first_name or '').strip()
+    last = (buyer_last_name or '').strip()
+    if not first and not last:
+        first, last = split_buyer_name(buyer_name)
+
     body = build_standard_generate_sale_body(
         amount=amount,
         ticket_name=ticket_name,
@@ -316,6 +411,8 @@ def generate_payme_sale(
         callback_url=callback_url,
         buyer_name=buyer_name,
         buyer_phone=buyer_phone,
+        buyer_first_name=first,
+        buyer_last_name=last,
     )
 
     logger.info(
@@ -378,6 +475,14 @@ def generate_payme_sale(
             payload=data,
         )
 
+    payme_sale_url = append_payme_sale_url_prefill(
+        payme_sale_url,
+        first_name=first or body.get('first_name', ''),
+        last_name=last or body.get('last_name', ''),
+        phone=body.get('buyer_phone') or buyer_phone or '',
+        email=body.get('buyer_email') or customer_email or '',
+    )
+
     transaction_id = extract_transaction_id(data)
     return {
         'payme_sale_url': payme_sale_url,
@@ -395,16 +500,22 @@ def generate_payme_sale_for_order(
     failure_url: str,
     buyer_name: str | None = None,
     buyer_phone: str | None = None,
+    buyer_first_name: str | None = None,
+    buyer_last_name: str | None = None,
 ) -> dict[str, Any]:
     """Create a PayMe hosted checkout session for a pending TradeTix order."""
     total = order.total_paid_by_buyer if order.total_paid_by_buyer is not None else order.total_amount
     if total is None:
         raise PayMeError('Order has no payable total')
 
-    if not buyer_name or not buyer_phone:
-        resolved = resolve_buyer_details_for_order(order)
+    resolved = resolve_buyer_details_for_order(order)
+    if not buyer_name or not buyer_phone or not buyer_first_name:
         buyer_name = buyer_name or resolved.get('buyer_name') or None
         buyer_phone = buyer_phone or resolved.get('buyer_phone') or None
+        buyer_first_name = buyer_first_name or resolved.get('buyer_first_name') or None
+        buyer_last_name = buyer_last_name or resolved.get('buyer_last_name') or None
+    if not buyer_first_name and not buyer_last_name and buyer_name:
+        buyer_first_name, buyer_last_name = split_buyer_name(buyer_name)
 
     ticket_name = f'TradeTix — {order.event_name or "Ticket"}'
     if order.quantity and int(order.quantity) > 1:
@@ -420,6 +531,8 @@ def generate_payme_sale_for_order(
         failure_url=failure_url,
         buyer_name=buyer_name,
         buyer_phone=buyer_phone,
+        buyer_first_name=buyer_first_name,
+        buyer_last_name=buyer_last_name,
     )
 
 

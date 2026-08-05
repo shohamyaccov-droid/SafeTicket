@@ -92,8 +92,10 @@ class PaymeBuyerIdentityTests(TestCase):
         self.user.save()
         details = resolve_buyer_details_for_order(self.order)
         self.assertEqual(details['buyer_full_name'], 'Dana Cohen')
-        self.assertTrue(details['buyer_phone'].startswith('972'))
+        self.assertEqual(details['buyer_phone'], '0527654321')
         self.assertEqual(details['buyer_phone_number'], details['buyer_phone'])
+        self.assertEqual(details['buyer_first_name'], 'Dana')
+        self.assertEqual(details['buyer_last_name'], 'Cohen')
 
     def test_generate_sale_body_includes_name_and_phone_aliases(self):
         body = build_standard_generate_sale_body(
@@ -106,8 +108,11 @@ class PaymeBuyerIdentityTests(TestCase):
         )
         self.assertEqual(body['buyer_name'], 'Dana Cohen')
         self.assertEqual(body['buyer_full_name'], 'Dana Cohen')
-        self.assertEqual(body['buyer_phone'], '972501234567')
-        self.assertEqual(body['buyer_phone_number'], '972501234567')
+        self.assertEqual(body['buyer_phone'], '0501234567')
+        self.assertEqual(body['buyer_phone_number'], '0501234567')
+        self.assertEqual(body['first_name'], 'Dana')
+        self.assertEqual(body['last_name'], 'Cohen')
+        self.assertEqual(body['phone'], '0501234567')
 
     @patch('users.payme_views.generate_payme_sale_for_order')
     def test_payme_init_accepts_body_identity_and_persists(self, mock_generate):

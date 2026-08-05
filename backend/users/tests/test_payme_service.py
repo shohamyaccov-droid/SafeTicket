@@ -120,7 +120,10 @@ class PayMeServiceUnitTests(SimpleTestCase):
             buyer_phone='0501234567',
         )
         self.assertEqual(body['buyer_name'], 'Israel Israeli')
-        self.assertEqual(body['buyer_phone'], '972501234567')
+        self.assertEqual(body['buyer_phone'], '0501234567')
+        self.assertEqual(body['phone'], '0501234567')
+        self.assertEqual(body['first_name'], 'Israel')
+        self.assertEqual(body['last_name'], 'Israeli')
 
     @override_settings(PAYME_SELLER_ID='')
     def test_generate_payme_sale_requires_seller_id(self):
@@ -149,15 +152,23 @@ class PayMeServiceUnitTests(SimpleTestCase):
             ticket_name='VIP Ticket',
             customer_email='buyer@test.invalid',
             order_id='99',
+            buyer_name='Israel Israeli',
+            buyer_phone='0501234567',
         )
 
-        self.assertEqual(result['payme_sale_url'], 'https://testpay.payme.io/hosted/xyz')
+        self.assertTrue(result['payme_sale_url'].startswith('https://testpay.payme.io/hosted/xyz'))
+        self.assertIn('first_name=Israel', result['payme_sale_url'])
+        self.assertIn('last_name=Israeli', result['payme_sale_url'])
+        self.assertIn('phone=0501234567', result['payme_sale_url'])
+        self.assertIn('email=', result['payme_sale_url'])
         self.assertEqual(result['transaction_id'], 'txn_xyz')
         self.assertEqual(result['payme_sale_id'], 'sale_xyz')
         mock_post.assert_called_once()
         sent_body = mock_post.call_args.kwargs['json']
         self.assertEqual(sent_body['sale_price'], 11500)
         self.assertEqual(sent_body['seller_payme_id'], 'MPL-TEST')
+        self.assertEqual(sent_body['buyer_phone'], '0501234567')
+        self.assertEqual(sent_body['first_name'], 'Israel')
 
     @override_settings(
         PAYME_SELLER_ID='MPL-TEST',

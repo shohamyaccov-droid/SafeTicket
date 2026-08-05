@@ -29,6 +29,9 @@ import CheckoutLegalAcceptance, {
   validateLegalAcceptance,
 } from './CheckoutLegalAcceptance';
 import ShabbatModal from './ShabbatModal';
+import BuyerIdentityInlineForm from './BuyerIdentityInlineForm';
+import { buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
+import { useAuth } from '../context/AuthContext';
 import './CheckoutModal.css';
 
 /** Buy Now: server cart hold (see TicketViewSet reserve). Negotiation: post-accept checkout window. */
@@ -116,8 +119,8 @@ function toFriendlyCheckoutMessage(detail) {
   if (/held by another|someone else|reserved|locked|שמור כרגע|בעגלה של מישהו אחר/i.test(text)) {
     return 'הכרטיס שמור כרגע על ידי רוכש אחר. נסו שוב בעוד כמה דקות.';
   }
-  if (/buyer (name|phone) is required|phone is required|name is required/i.test(text)) {
-    return 'חסרים פרטי קונה לתשלום (שם וטלפון). עדכנו את הפרופיל ונסו שוב.';
+  if (/buyer (name|phone) is required|phone is required|name is required|missing_buyer/i.test(text)) {
+    return 'MISSING_BUYER_IDENTITY';
   }
   if (/payment failed|payment error|could not process payment|payment provider/i.test(text)) {
     return 'התשלום לא הושלם. בדקו את פרטי התשלום ונסו שוב.';
@@ -184,6 +187,7 @@ const normalizeSplitType = (rawSplitType) => {
 };
 
 const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 1, onClose, acceptedOffer = null, splitType: splitTypeOverride = null, onErrorToParent = null }) => {
+  const { refreshProfile } = useAuth();
   const [step, setStep] = useState('info'); // 'info', 'payment', 'success'
   const [quantity, setQuantity] = useState(initialQuantity);
   const [guestForm, setGuestForm] = useState({
@@ -192,6 +196,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     email: '',
     phone: '',
   });
+  const [identityOverride, setIdentityOverride] = useState(null);
+  const identityOverrideRef = useRef(null);
+  const [showIdentityForm, setShowIdentityForm] = useState(false);
+  const [retryPayAfterIdentity, setRetryPayAfterIdentity] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
     cardNumber: '',
     expiryDate: '',
@@ -906,14 +914,23 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           }
         }
         // Always send buyer identity for PayMe (dashboard / negotiated checkout).
-        const buyerFullName = user
-          ? `${String(user.first_name || '').trim()} ${String(user.last_name || '').trim()}`.trim()
-            || String(user.full_name || '').trim()
-            || String(user.username || '').trim()
-          : `${guestForm.firstName.trim()} ${guestForm.lastName.trim()}`.trim();
-        const buyerPhone = user
-          ? String(user.phone_number || user.bit_phone_number || '').trim()
-          : String(guestForm.phone || '').trim();
+        const override = identityOverrideRef.current || identityOverride || {};
+        const buyerFirst =
+          String(override.firstName || (user ? user.first_name : guestForm.firstName) || '').trim();
+        const buyerLast =
+          String(override.lastName || (user ? user.last_name : guestForm.lastName) || '').trim();
+        const buyerFullName =
+          `${buyerFirst} ${buyerLast}`.trim()
+          || (user
+            ? String(user.full_name || '').trim() || String(user.username || '').trim()
+            : `${guestForm.firstName.trim()} ${guestForm.lastName.trim()}`.trim());
+        const buyerPhone = String(
+          override.phone
+            || (user ? user.phone_number || user.bit_phone_number : guestForm.phone)
+            || ''
+        ).trim();
+        if (buyerFirst) initPayload.buyer_first_name = buyerFirst;
+        if (buyerLast) initPayload.buyer_last_name = buyerLast;
         if (buyerFullName) {
           initPayload.buyer_full_name = buyerFullName;
           initPayload.buyer_name = buyerFullName;
@@ -1028,9 +1045,33 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         (typeof res?.data === 'string' && !responseDataLooksLikeHtml(res.data) ? res.data : '') ||
         err.message ||
         '';
+      const code = res?.data?.code || '';
+      const missingIdentity =
+        code === 'missing_buyer_name' ||
+        code === 'missing_buyer_phone' ||
+        /missing_buyer|buyer (name|phone) is required/i.test(String(detail));
+      if (missingIdentity) {
+        setShowIdentityForm(true);
+        setRetryPayAfterIdentity(true);
+        setError('חסרים פרטי קונה לתשלום — מלאו אותם כאן והמשיכו.');
+        setLoading(false);
+        setPaymentPhase('idle');
+        paymentSubmittingRef.current = false;
+        return;
+      }
       const userFacing = toFriendlyCheckoutMessage(detail);
-      setError(userFacing);
-      toastError(userFacing);
+      setError(userFacing === 'MISSING_BUYER_IDENTITY'
+        ? 'חסרים פרטי קונה לתשלום — מלאו אותם כאן והמשיכו.'
+        : userFacing);
+      if (userFacing === 'MISSING_BUYER_IDENTITY') {
+        setShowIdentityForm(true);
+        setRetryPayAfterIdentity(true);
+      }
+      toastError(
+        userFacing === 'MISSING_BUYER_IDENTITY'
+          ? 'חסרים פרטי קונה לתשלום — מלאו אותם כאן והמשיכו.'
+          : userFacing
+      );
       // Enterprise UX: Show Toast for "ticket was just sold" - beautiful feedback instead of raw alert
       const isSoldError = /sold|נמכר|just sold/i.test(userFacing);
       if (isSoldError && onErrorToParent) {
@@ -1839,6 +1880,54 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 {error || 'שגיאה לא ידועה'}
               </div>
             )}
+
+            {showIdentityForm ? (
+              <BuyerIdentityInlineForm
+                user={user}
+                initialFirstName={identityOverride?.firstName || (user ? user.first_name : guestForm.firstName)}
+                initialLastName={identityOverride?.lastName || (user ? user.last_name : guestForm.lastName)}
+                initialPhone={identityOverride?.phone || (user ? user.phone_number : guestForm.phone)}
+                missingFields={
+                  user
+                    ? buyerMissingPaymeFields({
+                        ...user,
+                        first_name: identityOverride?.firstName ?? user.first_name,
+                        last_name: identityOverride?.lastName ?? user.last_name,
+                        phone_number: identityOverride?.phone ?? user.phone_number,
+                      })
+                    : ['name', 'phone']
+                }
+                onCancel={() => {
+                  setShowIdentityForm(false);
+                  setRetryPayAfterIdentity(false);
+                }}
+                onSaved={async ({ firstName, lastName, phone }) => {
+                  const next = { firstName, lastName, phone };
+                  identityOverrideRef.current = next;
+                  setIdentityOverride(next);
+                  if (!user) {
+                    setGuestForm((prev) => ({
+                      ...prev,
+                      firstName,
+                      lastName,
+                      phone,
+                    }));
+                  } else {
+                    try {
+                      await refreshProfile?.();
+                    } catch {
+                      /* ignore */
+                    }
+                  }
+                  setShowIdentityForm(false);
+                  setError('');
+                  if (retryPayAfterIdentity) {
+                    setRetryPayAfterIdentity(false);
+                    await executeCheckout(false);
+                  }
+                }}
+              />
+            ) : null}
 
             <div className="button-group checkout-buttons-row modal-actions">
               <button

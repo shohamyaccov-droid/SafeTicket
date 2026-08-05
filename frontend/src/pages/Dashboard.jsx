@@ -23,7 +23,8 @@ import ProfileWalletPage from './ProfileWallet';
 import { toastError, toastSuccess } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
 import { downloadTicketFromAxiosBlob, openBlobForMobile } from '../utils/ticketDownload';
-import { buyerHasPaymeIdentity } from '../utils/buyerPaymeIdentity';
+import { buyerHasPaymeIdentity, buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
+import BuyerIdentityInlineForm from '../components/BuyerIdentityInlineForm';
 import './Dashboard.css';
 
 function offerBuyerId(offer) {
@@ -272,7 +273,7 @@ const AccountSettingsTab = () => {
 };
 
 const Dashboard = () => {
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(() => {
@@ -282,6 +283,8 @@ const Dashboard = () => {
     }
     return 'purchases';
   });
+  const [showIdentityGate, setShowIdentityGate] = useState(false);
+  const pendingPurchaseRef = useRef(null);
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -568,22 +571,11 @@ const Dashboard = () => {
     }
   };
 
-  const handleCompletePurchase = (offer, group) => {
-    if (getAcceptedCheckoutSecondsRemaining(offer, countdownTimers) <= 0) {
-      toastError('פג זמן התשלום להצעה המאושרת.');
-      return;
-    }
-    if (!buyerHasPaymeIdentity(user)) {
-      toastError('יש להשלים שם מלא ומספר טלפון בהגדרות החשבון לפני התשלום.');
-      setActiveTab('settings');
-      navigate('/dashboard?tab=settings', { replace: false });
-      return;
-    }
+  const openCheckoutForOffer = (offer, group) => {
     if (checkoutOpeningRef.current || showCheckout) {
       return;
     }
     checkoutOpeningRef.current = true;
-    // Use existing offer and group data - no API fetch needed
     const ticketId = group?.ticketId || offer.ticket || offer.ticket_details?.id;
     if (!ticketId) {
       checkoutOpeningRef.current = false;
@@ -597,7 +589,6 @@ const Dashboard = () => {
       ...details,
       id: ticketId,
       listing_group_id: details.listing_group_id || null,
-      // Offer qty can exceed a single seat row's available_quantity in grouped listings
       available_quantity: Math.max(seatQty, offerQty),
       status: details.status || 'active',
       asking_price: details.asking_price ?? details.original_price,
@@ -606,6 +597,20 @@ const Dashboard = () => {
     setCheckoutTicket(ticket);
     setCheckoutAcceptedOffer({ ...offer, quantity: offerQty });
     setShowCheckout(true);
+  };
+
+  const handleCompletePurchase = (offer, group) => {
+    if (getAcceptedCheckoutSecondsRemaining(offer, countdownTimers) <= 0) {
+      toastError('פג זמן התשלום להצעה המאושרת.');
+      return;
+    }
+    if (!buyerHasPaymeIdentity(user)) {
+      pendingPurchaseRef.current = { offer, group };
+      setShowIdentityGate(true);
+      setActiveTab('offers');
+      return;
+    }
+    openCheckoutForOffer(offer, group);
   };
 
   const fetchDashboardData = async (opts = {}) => {
@@ -1290,17 +1295,20 @@ const Dashboard = () => {
                   )}
                   {!canPayAcceptedOffers && (
                     <div className="accepted-offer-profile-gate">
-                      <p>יש להשלים את פרטי הפרופיל כדי להמשיך לתשלום.</p>
-                      <button
-                        type="button"
-                        className="accepted-offer-profile-link"
-                        onClick={() => {
-                          setActiveTab('settings');
-                          navigate('/dashboard?tab=settings');
+                      <BuyerIdentityInlineForm
+                        user={user}
+                        missingFields={buyerMissingPaymeFields(user)}
+                        submitLabel="שמור והמשך"
+                        onSaved={async () => {
+                          await refreshProfile?.();
+                          setShowIdentityGate(false);
+                          const pending = pendingPurchaseRef.current;
+                          pendingPurchaseRef.current = null;
+                          if (pending?.offer) {
+                            openCheckoutForOffer(pending.offer, pending.group);
+                          }
                         }}
-                      >
-                        לחצו כאן לעדכון שם מלא ומספר טלפון
-                      </button>
+                      />
                     </div>
                   )}
                 </div>
@@ -1466,20 +1474,17 @@ const Dashboard = () => {
                                   getAcceptedCheckoutSecondsRemaining(acceptedOffer, countdownTimers) > 0 && (
                                   <div className="checkout-cta-wrap">
                                     {!canPayAcceptedOffers && (
-                                      <p className="checkout-profile-hint">
-                                        יש להשלים את פרטי הפרופיל כדי להמשיך לתשלום.{' '}
-                                        <button
-                                          type="button"
-                                          className="checkout-profile-link"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveTab('settings');
-                                            navigate('/dashboard?tab=settings');
+                                      <div className="checkout-profile-hint">
+                                        <BuyerIdentityInlineForm
+                                          user={user}
+                                          missingFields={buyerMissingPaymeFields(user)}
+                                          submitLabel="שמור והמשך לתשלום"
+                                          onSaved={async () => {
+                                            await refreshProfile?.();
+                                            openCheckoutForOffer(acceptedOffer, group);
                                           }}
-                                        >
-                                          לחצו כאן לעדכון שם מלא ומספר טלפון
-                                        </button>
-                                      </p>
+                                        />
+                                      </div>
                                     )}
                                     <button
                                       type="button"
@@ -1488,7 +1493,7 @@ const Dashboard = () => {
                                       title={
                                         canPayAcceptedOffers
                                           ? undefined
-                                          : 'יש להשלים שם מלא ומספר טלפון בהגדרות החשבון'
+                                          : 'יש להשלים שם מלא ומספר טלפון'
                                       }
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -1922,10 +1927,8 @@ const Dashboard = () => {
           countdownTimers={countdownTimers}
           onCompletePurchase={(offer) => { const g = negotiationModalGroup; setNegotiationModalGroup(null); handleCompletePurchase(offer, g); }}
           canCompletePurchase={canPayAcceptedOffers}
-          onNeedProfileDetails={() => {
-            setNegotiationModalGroup(null);
-            setActiveTab('settings');
-            navigate('/dashboard?tab=settings');
+          onNeedProfileDetails={async () => {
+            await refreshProfile?.();
           }}
           getOfferRoundBadge={getOfferRoundBadge}
           formatTimeRemaining={formatTimeRemaining}

@@ -1,0 +1,93 @@
+.buyer-identity-inline {
+  margin: 0.75rem 0 0;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  text-align: right;
+}
+
+.buyer-identity-inline__lead {
+  margin: 0 0 0.75rem;
+  color: #9a3412;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  font-weight: 600;
+}
+
+.buyer-identity-inline__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.buyer-identity-inline__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.65rem;
+}
+
+.buyer-identity-inline__field label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #7c2d12;
+}
+
+.buyer-identity-inline__field input {
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.95rem;
+  background: #fff;
+}
+
+.buyer-identity-inline__field input:focus {
+  outline: 2px solid #fb923c;
+  outline-offset: 1px;
+}
+
+.buyer-identity-inline__error {
+  margin: 0 0 0.65rem;
+  color: #b91c1c;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.buyer-identity-inline__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-start;
+}
+
+.buyer-identity-inline__submit {
+  border: none;
+  border-radius: 999px;
+  background: #0f172a;
+  color: #fff;
+  font-weight: 800;
+  padding: 0.55rem 1.1rem;
+  cursor: pointer;
+}
+
+.buyer-identity-inline__submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.buyer-identity-inline__cancel {
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font-weight: 700;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+}
+
+@media (max-width: 520px) {
+  .buyer-identity-inline__row {
+    grid-template-columns: 1fr;
+  }
+}

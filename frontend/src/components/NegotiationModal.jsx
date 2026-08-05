@@ -8,6 +8,8 @@ import {
 import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import { getAcceptedCheckoutSecondsRemaining } from '../utils/offerTimer';
+import BuyerIdentityInlineForm from './BuyerIdentityInlineForm';
+import { buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
 import './NegotiationModal.css';
 
 /**
@@ -219,16 +221,17 @@ const NegotiationModal = ({
                     {formatTimeRemaining(checkoutSecondsLeft)}
                   </span>
                   {!canCompletePurchase && (
-                    <p className="negotiation-profile-hint">
-                      יש להשלים את פרטי הפרופיל כדי להמשיך לתשלום.{' '}
-                      <button
-                        type="button"
-                        className="negotiation-profile-link"
-                        onClick={() => onNeedProfileDetails?.()}
-                      >
-                        לחצו כאן לעדכון שם מלא ומספר טלפון
-                      </button>
-                    </p>
+                    <div className="negotiation-profile-hint">
+                      <BuyerIdentityInlineForm
+                        user={user}
+                        missingFields={buyerMissingPaymeFields(user)}
+                        submitLabel="שמור והמשך לתשלום"
+                        onSaved={async () => {
+                          await onNeedProfileDetails?.({ saved: true });
+                          onCompletePurchase(acceptedOfferRow);
+                        }}
+                      />
+                    </div>
                   )}
                   <button
                     type="button"
@@ -239,7 +242,7 @@ const NegotiationModal = ({
                     title={
                       canCompletePurchase
                         ? undefined
-                        : 'יש להשלים שם מלא ומספר טלפון בהגדרות החשבון'
+                        : 'יש להשלים שם מלא ומספר טלפון'
                     }
                   >
                     השלם רכישה

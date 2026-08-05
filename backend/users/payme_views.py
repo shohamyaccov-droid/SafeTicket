@@ -576,18 +576,29 @@ def payme_init_checkout(request):
         return Response({'error': 'No buyer email on order.'}, status=status.HTTP_400_BAD_REQUEST)
 
     # Allow checkout to supply / refresh identity (dashboard negotiation path often needs this).
+    body_first = (request.data.get('buyer_first_name') or request.data.get('first_name') or '').strip()
+    body_last = (request.data.get('buyer_last_name') or request.data.get('last_name') or '').strip()
     body_name = (
         (request.data.get('buyer_full_name') or request.data.get('buyer_name') or '')
         .strip()
     )
+    if not body_name and (body_first or body_last):
+        body_name = f'{body_first} {body_last}'.strip()
     body_phone = (
         (request.data.get('buyer_phone_number') or request.data.get('buyer_phone') or '')
         .strip()
     )
-    if order.user_id and (body_name or body_phone):
+    if order.user_id and (body_name or body_first or body_last or body_phone):
         user = order.user
         fields = []
-        if body_name:
+        if body_first or body_last:
+            if body_first:
+                user.first_name = body_first[:150]
+                fields.append('first_name')
+            if body_last:
+                user.last_name = body_last[:150]
+                fields.append('last_name')
+        elif body_name:
             parts = body_name.split(None, 1)
             user.first_name = parts[0][:150]
             user.last_name = (parts[1] if len(parts) > 1 else '')[:150]
@@ -596,13 +607,25 @@ def payme_init_checkout(request):
             user.phone_number = body_phone
             fields.append('phone_number')
         if fields:
-            user.save(update_fields=fields)
+            user.save(update_fields=list(dict.fromkeys(fields)))
             order.user = user
 
     buyer_details = resolve_buyer_details_for_order(order)
-    if body_name:
+    if body_first or body_last:
+        buyer_details['buyer_first_name'] = body_first or buyer_details.get('buyer_first_name', '')
+        buyer_details['buyer_last_name'] = body_last or buyer_details.get('buyer_last_name', '')
+        composed = f"{buyer_details['buyer_first_name']} {buyer_details['buyer_last_name']}".strip()
+        if composed:
+            buyer_details['buyer_name'] = composed
+            buyer_details['buyer_full_name'] = composed
+    elif body_name:
         buyer_details['buyer_name'] = body_name
         buyer_details['buyer_full_name'] = body_name
+        from services.payme_service import split_buyer_name
+
+        bf, bl = split_buyer_name(body_name)
+        buyer_details['buyer_first_name'] = bf
+        buyer_details['buyer_last_name'] = bl
     if body_phone:
         phone_norm = normalize_payme_buyer_phone(body_phone)
         buyer_details['buyer_phone'] = phone_norm
@@ -638,6 +661,8 @@ def payme_init_checkout(request):
             failure_url=failure_url,
             buyer_name=buyer_details.get('buyer_full_name') or buyer_details.get('buyer_name'),
             buyer_phone=buyer_details.get('buyer_phone_number') or buyer_details.get('buyer_phone'),
+            buyer_first_name=buyer_details.get('buyer_first_name'),
+            buyer_last_name=buyer_details.get('buyer_last_name'),
         )
     except PayMeError as exc:
         log_payme(
