@@ -119,7 +119,7 @@ export default function AdminGodModePage() {
       <header className="admin-dash-header">
         <div className="admin-dash-header-inner">
           <div>
-            <h1 className="admin-dash-title">God Mode — מעקב עסקאות בזמן אמת</h1>
+            <h1 className="admin-dash-title">מצב מורחב — מעקב עסקאות בזמן אמת</h1>
             <p className="admin-dash-sub">
               מחובר: <strong>{user?.username}</strong>
               {' · '}הצעות {data.meta.offers_count ?? '—'} · התראות{' '}

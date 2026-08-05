@@ -221,7 +221,7 @@ export default function AdminDashboard() {
               מעקב הצעות
             </Link>
             <Link to="/admin-dashboard" className="admin-dash-link-secondary">
-              God Mode
+              מצב מורחב
             </Link>
             <Link to="/admin/verification" className="admin-dash-link-secondary">
               אימות (דף מלא)

@@ -135,7 +135,7 @@ const Navbar = () => {
                 ניהול
               </Link>
               <Link to="/admin-dashboard" className="nav-link nav-link-admin nav-drawer-link" onClick={closeDrawer}>
-                God Mode
+                מצב מורחב
               </Link>
             </>
           )}
@@ -296,7 +296,7 @@ const Navbar = () => {
                     לוח ניהול
                   </Link>
                   <Link to="/admin-dashboard" className="nav-link nav-link-admin nav-drawer-link" onClick={closeDrawer}>
-                    God Mode
+                    מצב מורחב
                   </Link>
                 </>
               )}
