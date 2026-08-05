@@ -157,6 +157,13 @@ def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, gu
     still_needed = max(0, needed - len(already))
     active_rows = [t for t in group_rows if t.status == 'active']
     if len(active_rows) < still_needed:
+        foreign_holds = [
+            t
+            for t in group_rows
+            if t.status == 'reserved' and not _belongs_to_buyer(t)
+        ]
+        if foreign_holds and len(active_rows) + len(already) < needed:
+            raise ValueError('held_by_other')
         raise ValueError('insufficient_inventory')
 
     newly = []
@@ -3713,6 +3720,20 @@ class TicketViewSet(viewsets.ModelViewSet):
             quantity = 1
         quantity = max(1, min(10, quantity))
 
+        # Anonymous carts need an email identity so the same device/session can
+        # reclaim or release the lock (critical on mobile without cookie auth).
+        # Missing tickets still 404 first so clients get a stable not-found signal.
+        if not request.user.is_authenticated and not guest_email:
+            if not Ticket.objects.filter(pk=pk).exists():
+                return Response({'error': HE_TICKET_NOT_AVAILABLE}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    'error': 'נדרש אימייל כדי לשמור את הכרטיס בעגלה.',
+                    'code': 'guest_email_required',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         negotiated_offer = None
         if offer_id not in (None, '', []):
             try:
@@ -3762,6 +3783,15 @@ class TicketViewSet(viewsets.ModelViewSet):
                             return Response(
                                 {'error': HE_TICKET_NOT_AVAILABLE},
                                 status=status.HTTP_404_NOT_FOUND,
+                            )
+                        if code == 'held_by_other':
+                            return Response(
+                                {
+                                    'error': HE_TICKET_HELD_BY_OTHER,
+                                    'status': 'reserved',
+                                    'code': 'held_by_other',
+                                },
+                                status=status.HTTP_400_BAD_REQUEST,
                             )
                         return Response(
                             {
@@ -3895,7 +3925,8 @@ class TicketViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def release_reservation(self, request, pk=None):
         """
-        Release a ticket reservation (when timer expires or modal closes)
+        Release a ticket reservation (when timer expires or modal closes).
+        For listing groups, releases every seat held by the same buyer identity.
         """
         guest_email = (request.data.get('email') or '').strip().lower()
 
@@ -3903,37 +3934,71 @@ class TicketViewSet(viewsets.ModelViewSet):
             with transaction.atomic():
                 ticket = Ticket.objects.select_for_update().get(pk=pk)
                 if ticket.status != 'reserved':
+                    # Still try to clear sibling group seats if this row was already released.
+                    if not ticket.listing_group_id:
+                        return Response(
+                            {'error': 'הכרטיס אינו שמור כרגע.'},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
+                def _owned_by_requester(t) -> bool:
+                    if t.status != 'reserved':
+                        return False
+                    if request.user.is_authenticated:
+                        return t.reserved_by_id == request.user.id
+                    res_email = (t.reservation_email or '').strip().lower()
+                    return bool(guest_email and res_email and guest_email == res_email)
+
+                if ticket.status == 'reserved' and not _owned_by_requester(ticket):
+                    return Response(
+                        {'error': HE_RESERVATION_RELEASE_FORBIDDEN},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
+                rows = [ticket]
+                if ticket.listing_group_id:
+                    rows = list(
+                        Ticket.objects.select_for_update()
+                        .filter(listing_group_id=ticket.listing_group_id)
+                        .order_by('id')
+                    )
+
+                released_ids = []
+                for t in rows:
+                    if not _owned_by_requester(t) and t.id != ticket.id:
+                        continue
+                    if t.status != 'reserved':
+                        continue
+                    if request.user.is_authenticated:
+                        logger.info('Ticket %s reservation released by user %s', t.id, request.user.id)
+                    else:
+                        logger.info('Ticket %s reservation released by guest email %s', t.id, guest_email)
+                    t.status = 'active'
+                    t.reserved_at = None
+                    t.reserved_by = None
+                    t.reservation_email = None
+                    t.save(
+                        update_fields=[
+                            'status',
+                            'reserved_at',
+                            'reserved_by',
+                            'reservation_email',
+                            'updated_at',
+                        ]
+                    )
+                    released_ids.append(t.id)
+
+                if not released_ids:
                     return Response(
                         {'error': 'הכרטיס אינו שמור כרגע.'},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-                if request.user.is_authenticated:
-                    if ticket.reserved_by_id != request.user.id:
-                        return Response(
-                            {'error': HE_RESERVATION_RELEASE_FORBIDDEN},
-                            status=status.HTTP_403_FORBIDDEN,
-                        )
-                    logger.info('Ticket %s reservation released by user %s', ticket.id, request.user.id)
-                else:
-                    res_email = (ticket.reservation_email or '').strip().lower()
-                    if not guest_email or guest_email != res_email:
-                        return Response(
-                            {'error': HE_RESERVATION_RELEASE_FORBIDDEN},
-                            status=status.HTTP_403_FORBIDDEN,
-                        )
-                    logger.info('Ticket %s reservation released by guest email %s', ticket.id, guest_email)
-
-                ticket.status = 'active'
-                ticket.reserved_at = None
-                ticket.reserved_by = None
-                ticket.reservation_email = None
-                ticket.save(update_fields=['status', 'reserved_at', 'reserved_by', 'reservation_email', 'updated_at'])
-
                 return Response(
                     {
                         'success': True,
                         'message': 'Reservation released successfully',
+                        'released_ticket_ids': released_ids,
                     },
                     status=status.HTTP_200_OK,
                 )

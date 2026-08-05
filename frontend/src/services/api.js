@@ -148,6 +148,9 @@ export function notifySessionExpired() {
 
 function isPublicGuestEndpoint(url = '') {
   const path = String(url || '');
+  // NOTE: /tickets/:id/reserve/ and /release_reservation/ are NOT public here.
+  // Authenticated buyers must keep Bearer JWT (mobile Safari blocks third-party
+  // cookies). Guests pass skipAuth:true explicitly when calling with email.
   return (
     path.includes('/users/csrf/') ||
     path.includes('/users/orders/guest/') ||
@@ -155,8 +158,6 @@ function isPublicGuestEndpoint(url = '') {
     path.includes('/users/pricing/settings/') ||
     path.includes('/users/promotions/launch/') ||
     path.includes('/users/coupons/validate/') ||
-    /\/users\/tickets\/\d+\/reserve\//.test(path) ||
-    /\/users\/tickets\/\d+\/release_reservation\//.test(path) ||
     path.includes('/users/payments/payme/init/')
   );
 }
@@ -720,16 +721,30 @@ export const ticketAPI = {
   reserveTicket: async (id, email = null, options = {}) => {
     await ensureCsrfToken();
     const data = {};
-    if (email) data.email = email;
+    const guestEmail = email != null && String(email).trim() ? String(email).trim() : '';
+    if (guestEmail) data.email = guestEmail;
     if (options.offer_id != null) data.offer_id = options.offer_id;
     if (options.listing_group_id) data.listing_group_id = options.listing_group_id;
-    if (options.quantity != null) data.quantity = options.quantity;
-    return api.post(`/users/tickets/${id}/reserve/`, data, email ? { skipAuth: true } : undefined);
+    // Always send an integer quantity so mobile selects / string state cannot omit it.
+    const qtyRaw = options.quantity != null ? options.quantity : 1;
+    const qty = Math.max(1, Math.min(10, parseInt(String(qtyRaw), 10) || 1));
+    data.quantity = qty;
+    // Guests: skipAuth so we don't attach a stale JWT. Logged-in: keep Bearer.
+    return api.post(
+      `/users/tickets/${id}/reserve/`,
+      data,
+      guestEmail ? { skipAuth: true } : undefined,
+    );
   },
   releaseReservation: async (id, email = null) => {
     await ensureCsrfToken();
-    const data = email ? { email } : {};
-    return api.post(`/users/tickets/${id}/release_reservation/`, data, email ? { skipAuth: true } : undefined);
+    const guestEmail = email != null && String(email).trim() ? String(email).trim() : '';
+    const data = guestEmail ? { email: guestEmail } : {};
+    return api.post(
+      `/users/tickets/${id}/release_reservation/`,
+      data,
+      guestEmail ? { skipAuth: true } : undefined,
+    );
   },
 };
 

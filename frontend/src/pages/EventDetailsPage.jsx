@@ -160,8 +160,8 @@ const EventDetailsPage = () => {
       }
       
       groups[groupKey].tickets.push(ticket);
-      // Count only purchasable seats; permanently taken (נתפס) stay visible but unavailable
-      if (ticket.status !== 'taken') {
+      // Count only active seats for purchase; reserved/taken must not inflate availability.
+      if (ticket.status === 'active') {
         groups[groupKey].available_count += 1;
       }
     });
