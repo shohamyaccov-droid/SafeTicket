@@ -38,21 +38,6 @@ logger = logging.getLogger(__name__)
 _PAYME_WEBHOOK_PARSERS = (FormParser, MultiPartParser, JSONParser)
 
 
-_OPTIONAL_CARD_FIELDS = (
-    'buyer_card_mask',
-    'buyer_card_exp',
-    'buyer_card_is_foreign',
-    'payme_transaction_card_brand',
-    'payme_transaction_card_mask',
-    'payme_transaction_card_exp',
-    'card_brand',
-    'card_mask',
-    'card_exp',
-    'cardSuffix',
-    'card_suffix',
-)
-
-
 def _coerce_payme_payload_dict(data: Any) -> dict[str, Any]:
     """Normalize DRF request.data / Django POST into a flat string-keyed dict."""
     if data is None:
@@ -70,15 +55,15 @@ def _coerce_payme_payload_dict(data: Any) -> dict[str, Any]:
     else:
         return {}
 
-    # Bit / wallet notifies omit card PAN fields (null or empty). Keep them optional —
-    # never let empty strings propagate into numeric parsers downstream.
+    # Bit / wallet notifies include empty card fields in the HMAC string. Keep keys
+    # with empty-string values so signature verification still matches PayMe.
     out: dict[str, Any] = {}
     for key, value in raw.items():
         key_s = str(key)
-        if key_s in _OPTIONAL_CARD_FIELDS or key_s.lower() in {f.lower() for f in _OPTIONAL_CARD_FIELDS}:
-            if value in (None, '', 'null', 'None'):
-                continue
-        out[key_s] = value
+        if value in (None, 'null', 'None'):
+            out[key_s] = ''
+        else:
+            out[key_s] = value
     return out
 
 
@@ -365,6 +350,10 @@ def payme_webhook(request):
         payme_ref = str(order.payme_transaction_id or '').strip()
         payme_ref_source = payme_ref_sources.get(payme_ref) or payme_ref_source or lookup_via
 
+        # HMAC must use the original PayMe fields (before we inject merchant_order_id /
+        # payme_sale_id for Apple Pay / lookup). Injected keys would break bad_signature.
+        signature_payload = dict(payload)
+
         try:
             payload = _canonicalize_webhook_payload_for_order(payload, order)
         except Exception as canon_exc:
@@ -389,6 +378,7 @@ def payme_webhook(request):
                 request,
                 payload=payload,
                 order=order,
+                signature_payload=signature_payload,
             )
         except Exception as verify_exc:
             logger.exception(

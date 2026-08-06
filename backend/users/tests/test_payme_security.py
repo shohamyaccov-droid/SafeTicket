@@ -8,7 +8,11 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIRequestFactory
 
 from users.models import Order
-from users.payments import normalize_payme_webhook_status, verify_payme_webhook_request
+from users.payments import (
+    build_payme_sorted_values_sign_string,
+    normalize_payme_webhook_status,
+    verify_payme_webhook_request,
+)
 from users.views import confirm_order_payment
 
 
@@ -24,10 +28,10 @@ def _signed_request(payload, secret='whsec_test'):
 
 
 def _body_signed_request(payload, secret='whsec_test'):
-    """PayMe production-style: HMAC over payload fields, signature inside JSON body (no header)."""
+    """PayMe production-style: sorted-values HMAC, signature inside JSON body (no header)."""
     unsigned = {k: v for k, v in payload.items() if k not in ('payme_signature', 'paymeSignature', 'signature')}
-    body_for_hmac = json.dumps(unsigned, separators=(',', ':')).encode('utf-8')
-    signature = hmac.new(secret.encode('utf-8'), body_for_hmac, hashlib.sha256).hexdigest()
+    sign_string = build_payme_sorted_values_sign_string(unsigned)
+    signature = hmac.new(secret.encode('utf-8'), sign_string.encode('utf-8'), hashlib.sha256).hexdigest()
     signed_payload = {**unsigned, 'payme_signature': signature}
     body = json.dumps(signed_payload, separators=(',', ':')).encode('utf-8')
     return (
@@ -137,6 +141,83 @@ class PaymeWebhookVerificationTests(TestCase):
             request,
             payload=signed_payload,
             order=_order(),
+        )
+
+        self.assertTrue(ok, reason)
+        self.assertEqual(reason, 'ok')
+
+    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False, DEBUG=False)
+    def test_bit_payload_sorted_values_signature_with_empty_cc_and_social_id(self):
+        """
+        Bit IPN keys from production logs: empty CC fields + buyer_social_id.
+        Signature = HMAC-SHA256(secret, sorted_keys → concatenated values).
+        """
+        payload = {
+            'buyer_card_exp': '',
+            'buyer_card_mask': '',
+            'buyer_social_id': '123456789',
+            'currency': 'ILS',
+            'merchant_order_id': '124',
+            'notify_type': 'sale-complete',
+            'payme_sale_id': 'txn_123',
+            'payme_status': 'completed',
+            'payme_transaction_card_brand': '',
+            'payme_transaction_id': 'txn_123',
+            'sale_price': 11000,
+            'status': '0',
+        }
+        sign_string = build_payme_sorted_values_sign_string(payload)
+        # Alphabetical key order: buyer_card_exp, buyer_card_mask, buyer_social_id, ...
+        self.assertTrue(sign_string.startswith('123456789') or '123456789' in sign_string)
+        signature = hmac.new(
+            b'whsec_test',
+            sign_string.encode('utf-8'),
+            hashlib.sha256,
+        ).hexdigest()
+        signed = {**payload, 'payme_signature': signature}
+        body = json.dumps(signed, separators=(',', ':')).encode('utf-8')
+        request = APIRequestFactory().post(
+            '/api/payments/webhook/payme/',
+            data=body,
+            content_type='application/json',
+        )
+
+        ok, reason = verify_payme_webhook_request(
+            request,
+            payload=signed,
+            order=_order(pk=124, payme_transaction_id='txn_123'),
+            signature_payload=payload,
+        )
+
+        self.assertTrue(ok, reason)
+        self.assertEqual(reason, 'ok')
+
+    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False, DEBUG=False)
+    def test_injected_merchant_order_id_does_not_break_sorted_signature(self):
+        """Canonicalize may append merchant_order_id; HMAC must use original POST fields."""
+        original = {
+            'currency': 'ILS',
+            'notify_type': 'sale-complete',
+            'payme_sale_id': 'txn_123',
+            'sale_price': 11000,
+            'status': 'completed',
+        }
+        sign_string = build_payme_sorted_values_sign_string(original)
+        signature = hmac.new(b'whsec_test', sign_string.encode('utf-8'), hashlib.sha256).hexdigest()
+        # Business payload after canonicalize injects merchant_order_id
+        canonical = {**original, 'merchant_order_id': '123', 'payme_signature': signature}
+        body = json.dumps({**original, 'payme_signature': signature}, separators=(',', ':')).encode('utf-8')
+        request = APIRequestFactory().post(
+            '/api/payments/webhook/payme/',
+            data=body,
+            content_type='application/json',
+        )
+
+        ok, reason = verify_payme_webhook_request(
+            request,
+            payload=canonical,
+            order=_order(),
+            signature_payload=original,
         )
 
         self.assertTrue(ok, reason)

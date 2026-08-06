@@ -508,6 +508,44 @@ def _payme_webhook_hmac_bypassed() -> bool:
 _PAYME_SIGNATURE_BODY_KEYS = ('payme_signature', 'paymeSignature', 'signature')
 
 
+def _payme_signable_value(value: Any) -> str:
+    """PayMe IPN treats null/None as empty string in the HMAC material."""
+    if value is None:
+        return ''
+    if isinstance(value, bool):
+        return 'true' if value else 'false'
+    if isinstance(value, (list, tuple)):
+        # QueryDict multi-value: use last (matches Django .dict())
+        if not value:
+            return ''
+        return _payme_signable_value(value[-1])
+    return str(value)
+
+
+def _payme_signable_items(payload: dict[str, Any]) -> dict[str, str]:
+    """
+    Flatten webhook fields for HMAC: drop signature keys, keep empty strings.
+    """
+    items: dict[str, str] = {}
+    if not isinstance(payload, dict):
+        return items
+    for key, value in payload.items():
+        key_s = str(key)
+        if key_s in _PAYME_SIGNATURE_BODY_KEYS:
+            continue
+        items[key_s] = _payme_signable_value(value)
+    return items
+
+
+def build_payme_sorted_values_sign_string(payload: dict[str, Any]) -> str:
+    """
+    PayMe Bit/IPN HMAC material: all POST keys except payme_signature, sorted
+    alphabetically, then exact string values concatenated (empty string for nulls).
+    """
+    items = _payme_signable_items(payload)
+    return ''.join(items[k] for k in sorted(items.keys()))
+
+
 def _extract_payme_webhook_signature(request, payload: dict[str, Any]) -> str:
     """
     PayMe may send the HMAC in headers (X-Payme-Signature) or inside the POST body
@@ -560,40 +598,49 @@ def _extract_payme_webhook_signature(request, payload: dict[str, Any]) -> str:
     return ''
 
 
-def _payme_hmac_body_candidates(raw_body: bytes, payload: dict[str, Any]) -> list[bytes]:
+def _payme_hmac_body_candidates(
+    raw_body: bytes,
+    payload: dict[str, Any],
+    *,
+    signature_payload: dict[str, Any] | None = None,
+) -> list[bytes]:
     """
-    Bodies PayMe may have signed.
+    Bodies / strings PayMe may have signed.
 
-    Header signatures: HMAC over the raw request bytes.
-    Body-embedded payme_signature: HMAC over the payload *without* the signature field
-    (JSON compact or form-urlencoded), since including the sig would be circular.
+    Primary (Bit / body payme_signature): alphabetical keys → concatenate values.
+    Also try key+value concat and form-urlencoded, plus raw body for header signatures.
+    Use signature_payload (pre-canonicalize) when provided so injected merchant_order_id
+    does not break the hash.
     """
+    from urllib.parse import urlencode
+
     candidates: list[bytes] = []
+    sign_src = signature_payload if isinstance(signature_payload, dict) else payload
+    if not isinstance(sign_src, dict):
+        sign_src = {}
+
+    items = _payme_signable_items(sign_src)
+    sorted_keys = sorted(items.keys())
+
+    # 1) PayMe IPN: sorted keys, join values only
+    if sorted_keys:
+        candidates.append(''.join(items[k] for k in sorted_keys).encode('utf-8'))
+        # 2) key+value concat (some PSP variants)
+        candidates.append(''.join(f'{k}{items[k]}' for k in sorted_keys).encode('utf-8'))
+        # 3) application/x-www-form-urlencoded in sorted key order
+        candidates.append(urlencode([(k, items[k]) for k in sorted_keys]).encode('utf-8'))
+
     if raw_body:
         candidates.append(raw_body)
 
-    if not isinstance(payload, dict):
-        return candidates
-
-    has_body_sig = any(payload.get(k) not in (None, '') for k in _PAYME_SIGNATURE_BODY_KEYS)
-    if not has_body_sig:
-        return candidates
-
-    cleaned = {k: v for k, v in payload.items() if k not in _PAYME_SIGNATURE_BODY_KEYS}
+    # Legacy: JSON without signature field (previous TradeTix behavior)
+    cleaned = {k: v for k, v in sign_src.items() if k not in _PAYME_SIGNATURE_BODY_KEYS}
     try:
         candidates.append(json.dumps(cleaned, separators=(',', ':'), ensure_ascii=False).encode('utf-8'))
-        candidates.append(json.dumps(cleaned, separators=(',', ':')).encode('utf-8'))
+        candidates.append(json.dumps(cleaned, separators=(',', ':'), sort_keys=True).encode('utf-8'))
     except (TypeError, ValueError):
         pass
-    try:
-        from urllib.parse import urlencode
 
-        flat = {str(k): '' if v is None else str(v) for k, v in cleaned.items()}
-        candidates.append(urlencode(flat).encode('utf-8'))
-    except Exception:
-        pass
-
-    # Preserve order, drop empties/dupes
     seen: set[bytes] = set()
     out: list[bytes] = []
     for item in candidates:
@@ -610,6 +657,7 @@ def verify_payme_webhook_request(
     payload: dict[str, Any],
     order,
     raw_body: bytes | None = None,
+    signature_payload: dict[str, Any] | None = None,
 ) -> tuple[bool, str]:
     """
     Validate that a PayMe webhook is both authentic and for this exact order.
@@ -623,6 +671,8 @@ def verify_payme_webhook_request(
     Apple Pay / wallet callbacks often send PayMe-internal `order_id` and a TRAN id that
     differs from the `payme_sale_id` stored at init — verification accepts any matching
     sale/transaction reference and prefers explicit merchant_order_id fields.
+
+    signature_payload: original POST fields for HMAC (before canonicalize injects keys).
     """
     if _payme_webhook_hmac_bypassed():
         is_sandbox = bool(getattr(settings, 'PAYME_IS_SANDBOX', False))
@@ -639,7 +689,13 @@ def verify_payme_webhook_request(
             )
     else:
         secret = (get_payme_config()['webhook_secret'] or '').strip()
-        got = _extract_payme_webhook_signature(request, payload or {})
+        hmac_payload = signature_payload if signature_payload is not None else payload
+        # Signature may live on the raw POST (hmac_payload) or on the business payload
+        # after we attach payme_signature for logging — check both.
+        got = (
+            _extract_payme_webhook_signature(request, hmac_payload or {})
+            or _extract_payme_webhook_signature(request, payload or {})
+        )
         if not got:
             return False, 'missing_signature_header'
         import hmac
@@ -656,7 +712,11 @@ def verify_payme_webhook_request(
         from secrets import compare_digest
 
         matched = False
-        for candidate in _payme_hmac_body_candidates(body, payload or {}):
+        for candidate in _payme_hmac_body_candidates(
+            body,
+            payload or {},
+            signature_payload=hmac_payload or {},
+        ):
             expected = hmac.new(secret.encode('utf-8'), candidate, hashlib.sha256).hexdigest()
             if compare_digest(got, expected) or compare_digest(got, f'sha256={expected}'):
                 matched = True

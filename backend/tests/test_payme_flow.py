@@ -153,6 +153,8 @@ class PaymeWebhookFlowTests(TestCase):
     @override_settings(PAYME_IS_SANDBOX=False, PAYME_WEBHOOK_SECRET='whsec_test', DEBUG=False)
     def test_webhook_marks_paid_with_payme_signature_in_body(self):
         """Production PayMe sends payme_signature in the POST body (not only headers)."""
+        from users.payments import build_payme_sorted_values_sign_string
+
         unsigned = {
             'merchant_order_id': str(self.order.id),
             'status': 'success',
@@ -161,8 +163,11 @@ class PaymeWebhookFlowTests(TestCase):
             'sale_price': 11500,
             'currency': 'ILS',
         }
-        body_for_hmac = json.dumps(unsigned, separators=(',', ':')).encode('utf-8')
-        sig = hmac.new(b'whsec_test', body_for_hmac, hashlib.sha256).hexdigest()
+        sig = hmac.new(
+            b'whsec_test',
+            build_payme_sorted_values_sign_string(unsigned).encode('utf-8'),
+            hashlib.sha256,
+        ).hexdigest()
         payload = {**unsigned, 'payme_signature': sig}
         body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
         res = self.client.post(
