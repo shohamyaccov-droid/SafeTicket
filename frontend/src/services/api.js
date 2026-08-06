@@ -131,8 +131,15 @@ function currentReturnTo() {
   return path && path !== '/login' ? path : '/';
 }
 
+let refreshInFlight = null;
+let lastSessionExpiredNotifyAt = 0;
+
 export function notifySessionExpired() {
   if (typeof window === 'undefined') return;
+  const now = Date.now();
+  // Concurrent 401→refresh failures used to fan out dozens of toasts on iOS.
+  if (now - lastSessionExpiredNotifyAt < 2500) return;
+  lastSessionExpiredNotifyAt = now;
   const returnTo = currentReturnTo();
   try {
     sessionStorage.setItem('tradetix_return_to', returnTo);
@@ -146,20 +153,60 @@ export function notifySessionExpired() {
   );
 }
 
+/**
+ * Single-flight access-token refresh.
+ * ROTATE_REFRESH_TOKENS + BLACKLIST_AFTER_ROTATION: parallel refreshes blacklist
+ * each other and clear a healthy session — especially visible on slow mobile networks.
+ */
+export async function refreshAccessToken() {
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      const rTok = getRefreshForBearerFallback();
+      const refreshRes = await api.post(
+        '/users/token/refresh/',
+        rTok ? { refresh: rTok } : {},
+        { skipAuth: true },
+      );
+      const access = refreshRes.data?.access;
+      if (!access) {
+        const err = new Error('refresh_missing_access');
+        err.response = refreshRes;
+        throw err;
+      }
+      setBearerFallback(access, refreshRes.data.refresh || rTok || undefined);
+      return access;
+    })().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+/** @internal vitest helpers */
+export function __resetAuthSessionStateForTests() {
+  refreshInFlight = null;
+  lastSessionExpiredNotifyAt = 0;
+}
+
 function isPublicGuestEndpoint(url = '') {
   const path = String(url || '');
-  // NOTE: /tickets/:id/reserve/ and /release_reservation/ are NOT public here.
-  // Authenticated buyers must keep Bearer JWT (mobile Safari blocks third-party
-  // cookies). Guests pass skipAuth:true explicitly when calling with email.
+  // Authenticated SPA calls must KEEP Bearer JWT. Safari ITP blocks cross-site
+  // cookies, so stripping Authorization makes request.user anonymous and checkout
+  // returns 403 — which must NOT be treated as "session expired".
+  // Guests pass skipAuth:true explicitly (orders/guest, reserve+email, payme+guest_email).
   return (
     path.includes('/users/csrf/') ||
     path.includes('/users/orders/guest/') ||
     path.includes('/users/shabbat/status/') ||
     path.includes('/users/pricing/settings/') ||
     path.includes('/users/promotions/launch/') ||
-    path.includes('/users/coupons/validate/') ||
-    path.includes('/users/payments/payme/init/')
+    path.includes('/users/coupons/validate/')
   );
+}
+
+/** Whether the request interceptor should omit Authorization (exported for tests). */
+export function shouldStripAuthorization(url = '', skipAuth = false) {
+  return Boolean(skipAuth) || isPublicGuestEndpoint(url);
 }
 
 function stripAuthorizationHeader(config) {
@@ -387,17 +434,7 @@ api.interceptors.response.use(
     if (is401 && noRetryYet && !isAuthEndpoint && !isPublicGuestRequest) {
       originalRequest._retry = true;
       try {
-        const rTok = getRefreshForBearerFallback();
-        const refreshRes = await api.post(
-          '/users/token/refresh/',
-          rTok ? { refresh: rTok } : {},
-        );
-        if (refreshRes.data?.access) {
-          setBearerFallback(
-            refreshRes.data.access,
-            refreshRes.data.refresh || rTok || undefined,
-          );
-        }
+        await refreshAccessToken();
         return api(originalRequest);
       } catch (refreshError) {
         // getProfile 401 = not logged in; let AuthContext handle it (set user null)

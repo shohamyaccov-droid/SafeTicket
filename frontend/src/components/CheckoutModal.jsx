@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
-import { authAPI, orderAPI, paymentAPI, ticketAPI, ensureCsrfToken, getEffectiveBearerAccess, syncAxiosDefaultAuthHeader, notifySessionExpired } from '../services/api';
+import { authAPI, orderAPI, paymentAPI, ticketAPI, ensureCsrfToken, getEffectiveBearerAccess, syncAxiosDefaultAuthHeader, notifySessionExpired, refreshAccessToken } from '../services/api';
 import {
   buyerChargeFromBase,
   buyerChargeFromBaseWithAffiliateCoupon,
@@ -31,6 +31,7 @@ import CheckoutLegalAcceptance, {
 import ShabbatModal from './ShabbatModal';
 import BuyerIdentityInlineForm from './BuyerIdentityInlineForm';
 import { buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
+import { isCheckoutAuthSessionFailure } from '../utils/checkoutAuth';
 import { useAuth } from '../context/AuthContext';
 import './CheckoutModal.css';
 
@@ -103,10 +104,12 @@ function toFriendlyCheckoutMessage(detail) {
   if (/בצאת שבת|שבת|SHABBAT/i.test(text)) {
     return 'בצאת שבת תתחדש האפשרות לתשלום';
   }
-  if (/authentication credentials were not provided|not authenticated|unauthorized|forbidden/i.test(text)) {
+  if (/csrf verification failed|csrf/i.test(text)) return CHECKOUT_CSRF_HTML_MESSAGE;
+  if (/authentication credentials were not provided|not authenticated|unauthorized/i.test(text)) {
     return 'החיבור שלך פג תוקף. אנא התחבר מחדש.';
   }
-  if (/csrf|forbidden|403/i.test(text)) return CHECKOUT_CSRF_HTML_MESSAGE;
+  // Do NOT map bare "forbidden"/403 here — Safari CSRF and PayMe ownership checks
+  // return 403 while the session is still valid.
   if (/amount mismatch|invalid total|does not match/i.test(text)) {
     return 'סכום התשלום לא תואם להצעה. רעננו את העמוד ונסו שוב.';
   }
@@ -689,7 +692,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
     if (user) {
       syncAxiosDefaultAuthHeader();
-      const bearer = getEffectiveBearerAccess();
+      let bearer = getEffectiveBearerAccess();
+      if (!bearer) {
+        try {
+          bearer = await refreshAccessToken();
+        } catch {
+          bearer = null;
+        }
+      }
       if (!bearer) {
         const authMsg = 'החיבור שלך פג תוקף. אנא התחבר מחדש.';
         setError(authMsg);
@@ -1034,13 +1044,28 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         paymentSubmittingRef.current = false;
         return;
       }
-      if (user && (status === 401 || status === 403)) {
+      if (user && isCheckoutAuthSessionFailure(err)) {
         const authMsg = 'החיבור שלך פג תוקף. אנא התחבר מחדש.';
         setError(authMsg);
         toastError(authMsg);
         onClose?.();
         notifySessionExpired();
         return;
+      }
+      if (user && status === 403) {
+        const csrfMsg = formatCheckoutBackendError(err);
+        const looksCsrf =
+          /csrf/i.test(String(csrfMsg || '')) ||
+          responseDataLooksLikeHtml(res?.data) ||
+          /csrf/i.test(JSON.stringify(res?.data || {}));
+        if (looksCsrf) {
+          setError(CHECKOUT_CSRF_HTML_MESSAGE);
+          toastError(CHECKOUT_CSRF_HTML_MESSAGE);
+          setLoading(false);
+          setPaymentPhase('idle');
+          paymentSubmittingRef.current = false;
+          return;
+        }
       }
       const formatted = formatCheckoutBackendError(err);
       const detail =
