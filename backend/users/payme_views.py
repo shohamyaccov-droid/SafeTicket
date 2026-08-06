@@ -38,20 +38,48 @@ logger = logging.getLogger(__name__)
 _PAYME_WEBHOOK_PARSERS = (FormParser, MultiPartParser, JSONParser)
 
 
+_OPTIONAL_CARD_FIELDS = (
+    'buyer_card_mask',
+    'buyer_card_exp',
+    'buyer_card_is_foreign',
+    'payme_transaction_card_brand',
+    'payme_transaction_card_mask',
+    'payme_transaction_card_exp',
+    'card_brand',
+    'card_mask',
+    'card_exp',
+    'cardSuffix',
+    'card_suffix',
+)
+
+
 def _coerce_payme_payload_dict(data: Any) -> dict[str, Any]:
     """Normalize DRF request.data / Django POST into a flat string-keyed dict."""
     if data is None:
         return {}
+    raw: dict[str, Any]
     if hasattr(data, 'dict'):
         try:
-            return data.dict()
+            raw = data.dict()
         except Exception:
-            pass
-    if isinstance(data, dict):
-        return data
-    if hasattr(data, 'keys'):
-        return {str(k): data.get(k) for k in data.keys()}
-    return {}
+            raw = {str(k): data.get(k) for k in data.keys()} if hasattr(data, 'keys') else {}
+    elif isinstance(data, dict):
+        raw = dict(data)
+    elif hasattr(data, 'keys'):
+        raw = {str(k): data.get(k) for k in data.keys()}
+    else:
+        return {}
+
+    # Bit / wallet notifies omit card PAN fields (null or empty). Keep them optional —
+    # never let empty strings propagate into numeric parsers downstream.
+    out: dict[str, Any] = {}
+    for key, value in raw.items():
+        key_s = str(key)
+        if key_s in _OPTIONAL_CARD_FIELDS or key_s.lower() in {f.lower() for f in _OPTIONAL_CARD_FIELDS}:
+            if value in (None, '', 'null', 'None'):
+                continue
+        out[key_s] = value
+    return out
 
 
 def _parse_payme_webhook_payload(request) -> dict[str, Any]:
@@ -485,24 +513,15 @@ def payme_webhook(request):
         if norm == 'failed':
             return Response({'received': True, 'finalized': False, 'order_status': order.status})
 
-        _log_payme_webhook_rejection(
-            'webhook_status_not_finalizable',
-            order_id=order_id,
-            payload={
-                'transaction_id': tid,
-                'normalized_status': norm,
-                'raw_status': payload.get('status')
-                or payload.get('payment_status')
-                or payload.get('state')
-                or payload.get('transaction_status')
-                or payload.get('sale_status')
-                or payload.get('payme_sale_status')
-                or payload.get('payme_status')
-                or payload.get('status_code')
-                or payload.get('payme_status_code'),
-                'order_status': order.status,
-                'lookup_via': lookup_via,
-            },
+        # Bit often sends Authorisation before Capture. If we cannot finalize yet,
+        # ACK 200 so PayMe still delivers the sale/capture notify (409 aborts the chain).
+        logger.info(
+            'PayMe webhook non-final status acknowledged order_id=%s normalized=%s raw_status=%s',
+            order_id,
+            norm,
+            payload.get('notify_type')
+            or payload.get('payme_sale_status')
+            or payload.get('status'),
         )
         return Response(
             {
@@ -512,7 +531,7 @@ def payme_webhook(request):
                 'order_status': order.status,
                 'normalized_status': norm,
             },
-            status=status.HTTP_409_CONFLICT,
+            status=status.HTTP_200_OK,
         )
     except Exception as exc:
         logger.exception(

@@ -300,6 +300,12 @@ def _payload_amount_candidates_agorot(payload: dict[str, Any]) -> set[int]:
         'amount_cents',
         'amount_minor',
         'price',
+        'payme_transaction_total',
+        'paymetransactiontotal',
+        'transaction_total',
+        'transactiontotal',
+        'buyer_total',
+        'buyertotal',
     }
     all_keys = minor_keys | {
         'amount',
@@ -311,14 +317,19 @@ def _payload_amount_candidates_agorot(payload: dict[str, Any]) -> set[int]:
     }
     for source in _nested_dicts(payload):
         for key, value in source.items():
-            key_norm = str(key).lower()
-            if key_norm not in all_keys:
+            key_norm = str(key).lower().replace('-', '').replace('_', '')
+            # Compare against underscore-stripped forms for Bit/wallet field aliases.
+            minor_compact = {k.replace('_', '') for k in minor_keys}
+            all_compact = {k.replace('_', '') for k in all_keys}
+            if key_norm not in all_compact:
+                continue
+            if value in (None, ''):
                 continue
             try:
                 dec = Decimal(str(value)).quantize(QUANT, rounding=ROUND_HALF_UP)
             except Exception:
                 continue
-            if key_norm in minor_keys:
+            if key_norm in minor_compact:
                 candidates.add(int(dec))
             # Also allow decimal major-unit fields; exact comparison below still protects the order.
             candidates.add(int((dec * 100).quantize(Decimal('1'), rounding=ROUND_HALF_UP)))
@@ -372,6 +383,49 @@ def _status_token_match(normalized: str, tokens: tuple[str, ...]) -> bool:
     return any(token in parts for token in tokens)
 
 
+def _normalize_status_text(raw: Any) -> str:
+    s = str(raw or '').strip().lower()
+    # Hebrew PayMe dashboard labels arrive URL-encoded / as UTF-8 in Bit notifies.
+    hebrew_map = {
+        'תפיסת מסגרת': 'authorized',
+        'תפיסת_מסגרת': 'authorized',
+        'מסגרת': 'authorized',
+        'מכירה': 'sale',
+        'הושלם': 'completed',
+        'שולם': 'paid',
+        'בוצע': 'completed',
+        'נכשל': 'failed',
+        'נדחה': 'declined',
+        'בוטל': 'cancelled',
+    }
+    stripped = str(raw or '').strip()
+    if stripped in hebrew_map:
+        s = hebrew_map[stripped]
+    return s.replace(' ', '_').replace('-', '_')
+
+
+def _extract_payme_status_raw(payload: dict[str, Any]) -> Any:
+    """
+    Prefer PayMe notify / sale status fields over a generic `status` / numeric code.
+
+    Bit (and some wallet) IPNs often send status=1 alongside notify_type=sale-complete;
+    reading the first matching key in dict order used to treat that as pending and skip
+    finalization.
+    """
+    priority_groups = (
+        ('notify_type', 'notifyType', 'event', 'event_type', 'eventType'),
+        ('payme_sale_status', 'sale_status', 'saleStatus', 'transaction_status', 'transactionStatus'),
+        ('payme_status', 'payment_status', 'paymentStatus'),
+        ('status_code', 'payme_status_code', 'statusCode'),
+        ('status', 'state'),
+    )
+    for keys in priority_groups:
+        value = _first_payload_value(payload, *keys)
+        if value not in (None, ''):
+            return value
+    return None
+
+
 def normalize_payme_webhook_status(payload: dict[str, Any]) -> tuple[str | None, str | None]:
     """Return (transaction_id, normalized_status) where normalized is success|authorized|failed|pending."""
     tid = None
@@ -390,27 +444,13 @@ def normalize_payme_webhook_status(payload: dict[str, Any]) -> tuple[str | None,
             tid = str(v).strip()
             break
 
-    raw = _first_payload_value(
-        payload,
-        'status',
-        'payment_status',
-        'state',
-        'transaction_status',
-        'sale_status',
-        'payme_sale_status',
-        'payme_status',
-        'notify_type',
-        'notifyType',
-        'event',
-        'event_type',
-        'status_code',
-        'payme_status_code',
-    )
-    s = str(raw or '').strip().lower().replace(' ', '_').replace('-', '_')
+    raw = _extract_payme_status_raw(payload)
+    s = _normalize_status_text(raw)
 
     if s in ('0', '00'):
         return tid, 'success'
     if s in ('1', '01'):
+        # Numeric pending only when no richer notify/sale status was preferred above.
         return tid, 'pending'
 
     success_tokens = (
@@ -421,23 +461,38 @@ def normalize_payme_webhook_status(payload: dict[str, Any]) -> tuple[str | None,
         'paid',
         'captured',
         'capture',
+        'sale',
         'ok',
         'approved',
         'salecomplete',
         'chargesucceeded',
         'paymentcompleted',
+        'sold',
     )
-    auth_tokens = ('authorized', 'authorised', 'auth', 'preauth', 'hold')
+    auth_tokens = (
+        'authorized',
+        'authorised',
+        'authorization',
+        'authorisation',
+        'auth',
+        'preauth',
+        'hold',
+        'saleauthorized',
+        'saleauthorised',
+    )
     fail_tokens = ('fail', 'failed', 'declined', 'error', 'cancel', 'cancelled', 'void', 'rejected')
 
     # Compact form catches sale_complete / charge_succeeded without false positives.
+    # Auth BEFORE success: sale_authorized contains both "sale" and "authorized".
     compact = s.replace('_', '')
     if _status_token_match(s, fail_tokens) or compact in {t.replace('_', '') for t in fail_tokens}:
         return tid, 'failed'
-    if _status_token_match(s, success_tokens) or compact in {t.replace('_', '') for t in success_tokens}:
-        return tid, 'success'
     if _status_token_match(s, auth_tokens) or compact in {t.replace('_', '') for t in auth_tokens}:
         return tid, 'authorized'
+    if s == 'sale' or _status_token_match(s, success_tokens) or compact in {
+        t.replace('_', '') for t in success_tokens
+    }:
+        return tid, 'success'
     return tid, 'pending' if s else None
 
 

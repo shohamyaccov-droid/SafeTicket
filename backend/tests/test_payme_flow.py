@@ -177,6 +177,67 @@ class PaymeWebhookFlowTests(TestCase):
         self.ticket.refresh_from_db()
         self.assertEqual(self.ticket.status, 'sold')
 
+    @override_settings(PAYME_IS_SANDBOX=False, PAYME_WEBHOOK_SECRET='whsec_test', DEBUG=False)
+    def test_bit_auth_then_capture_finalizes_with_empty_card_fields(self):
+        """
+        Bit sends Authorisation (תפיסת מסגרת) then Capture (מכירה) with empty CC fields.
+        Generic status=1 must not hide notify_type=sale-complete.
+        """
+        auth_payload = {
+            'merchant_order_id': str(self.order.id),
+            'status': '1',
+            'notify_type': 'sale-authorized',
+            'payme_sale_status': 'תפיסת מסגרת',
+            'payme_sale_id': 'webhook_txn_1',
+            'payme_transaction_id': 'webhook_txn_1',
+            'sale_price': 11500,
+            'currency': 'ILS',
+            'payment_method': 'bit',
+            'buyer_card_mask': '',
+            'buyer_card_exp': None,
+            'payme_transaction_card_brand': '',
+        }
+        auth_body = json.dumps(auth_payload, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+        auth_sig = hmac.new(b'whsec_test', auth_body, hashlib.sha256).hexdigest()
+        auth_res = self.client.post(
+            '/api/payments/webhook/payme/',
+            auth_body,
+            content_type='application/json',
+            HTTP_X_PAYME_SIGNATURE=auth_sig,
+        )
+        self.assertEqual(auth_res.status_code, 200, auth_res.content)
+        # Authorisation may finalize (escrow-style) or ACK without finalizing — must not 4xx/5xx.
+        self.assertTrue(auth_res.data.get('received'), auth_res.data)
+
+        capture_payload = {
+            'merchant_order_id': str(self.order.id),
+            'status': '1',
+            'notify_type': 'sale-complete',
+            'payme_sale_status': 'מכירה',
+            'payme_sale_id': 'webhook_txn_1',
+            'payme_transaction_id': 'TRAN_BIT_CAPTURE',
+            'payme_transaction_total': 11500,
+            'currency': 'ILS',
+            'payment_method': 'bit',
+            'buyer_card_mask': '',
+            'buyer_card_exp': '',
+            'payme_transaction_card_brand': None,
+        }
+        capture_body = json.dumps(capture_payload, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+        capture_sig = hmac.new(b'whsec_test', capture_body, hashlib.sha256).hexdigest()
+        capture_res = self.client.post(
+            '/api/payments/webhook/payme/',
+            capture_body,
+            content_type='application/json',
+            HTTP_X_PAYME_SIGNATURE=capture_sig,
+        )
+        self.assertEqual(capture_res.status_code, 200, capture_res.content)
+        self.assertTrue(capture_res.data.get('finalized'), capture_res.data)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'paid')
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.status, 'sold')
+
     def test_webhook_marks_paid_form_urlencoded(self):
         """PayMe preprod/live sends application/x-www-form-urlencoded callbacks."""
         payload = {
@@ -242,7 +303,11 @@ class PaymeWebhookFlowTests(TestCase):
         self.ticket.refresh_from_db()
         self.assertEqual(self.ticket.status, 'sold')
 
-    def test_webhook_unknown_status_does_not_silently_return_200(self):
+    def test_webhook_unknown_status_acks_without_finalizing(self):
+        """
+        Non-final statuses must ACK 200 (PayMe Bit: auth before capture) without marking paid.
+        Returning 409 previously aborted the notify chain for wallet payments.
+        """
         payload = {
             'merchant_order_id': str(self.order.id),
             'status': 'processing',
@@ -258,8 +323,10 @@ class PaymeWebhookFlowTests(TestCase):
             content_type='application/json',
             HTTP_X_PAYME_SIGNATURE=sig,
         )
-        self.assertEqual(res.status_code, 409, res.content)
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertTrue(res.data.get('received'))
         self.assertFalse(res.data.get('finalized'))
+        self.assertEqual(res.data.get('reason'), 'webhook_status_not_finalizable')
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, 'pending_payment')
 

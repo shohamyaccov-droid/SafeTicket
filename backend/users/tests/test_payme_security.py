@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIRequestFactory
 
 from users.models import Order
-from users.payments import verify_payme_webhook_request
+from users.payments import normalize_payme_webhook_status, verify_payme_webhook_request
 from users.views import confirm_order_payment
 
 
@@ -167,6 +167,35 @@ class PaymeWebhookVerificationTests(TestCase):
 
         self.assertFalse(ok)
         self.assertEqual(reason, 'bad_signature')
+
+    def test_normalize_prefers_notify_type_over_numeric_status(self):
+        tid, norm = normalize_payme_webhook_status(
+            {
+                'status': '1',
+                'notify_type': 'sale-complete',
+                'payme_sale_id': 'txn_123',
+            }
+        )
+        self.assertEqual(tid, 'txn_123')
+        self.assertEqual(norm, 'success')
+
+    def test_normalize_hebrew_bit_auth_and_sale_labels(self):
+        _, auth_norm = normalize_payme_webhook_status(
+            {
+                'payme_sale_status': 'תפיסת מסגרת',
+                'payme_sale_id': 'txn_bit',
+                'buyer_card_mask': '',
+            }
+        )
+        self.assertEqual(auth_norm, 'authorized')
+        _, sale_norm = normalize_payme_webhook_status(
+            {
+                'payme_sale_status': 'מכירה',
+                'status': '1',
+                'payme_sale_id': 'txn_bit',
+            }
+        )
+        self.assertEqual(sale_norm, 'success')
 
     @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
     def test_webhook_rejects_transaction_mismatch(self):
