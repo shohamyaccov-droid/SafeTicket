@@ -8,8 +8,16 @@ from pathlib import Path
 import json
 import logging
 import os
+import re
 from decimal import Decimal
 from urllib.parse import unquote, urlparse
+
+# Django 6.1 removed cc_delim_re; DRF <=3.17 still imports it at module load.
+# Keep this shim until djangorestframework ships the split_header_value fix (>=3.18).
+import django.utils.cache as _django_cache
+
+if not hasattr(_django_cache, 'cc_delim_re'):
+    _django_cache.cc_delim_re = re.compile(r'\s*,\s*')
 
 from django.core.exceptions import ImproperlyConfigured
 

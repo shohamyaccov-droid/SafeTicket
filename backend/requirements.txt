@@ -1,5 +1,7 @@
-Django>=6.0
-djangorestframework>=3.16
+# Django 6.1 removed django.utils.cache.cc_delim_re; DRF still imports it until 3.18+.
+# Keep Django on 6.0.x until a DRF release includes the split_header_value fix.
+Django>=6.0,<6.1
+djangorestframework>=3.14.0
 djangorestframework_simplejwt>=5.5
 django-cors-headers>=4.9
 Pillow>=12.0
