@@ -1633,28 +1633,24 @@ def update_ticket_price(request, ticket_id):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
                 
-                # Determine which tickets to update
+                # Single-price product: always persist the typed amount on BOTH columns.
+                # (save() only clamps asking down when it exceeds face — it does NOT raise
+                # asking when original alone is updated, which previously left stale asks.)
                 if ticket.listing_group_id:
-                    # Bulk update: Update all tickets in the same group that belong to this user and are active
                     tickets_to_update = Ticket.objects.filter(
                         listing_group_id=ticket.listing_group_id,
                         seller=request.user,
                         status='active'
                     )
-                    
-                    # Update all tickets in the group
-                    # Using .update() bypasses model's save(), so we set both original_price and asking_price
                     updated_count = tickets_to_update.update(
                         original_price=new_price_decimal,
-                        asking_price=new_price_decimal  # asking_price equals original_price per model logic
+                        asking_price=new_price_decimal,
                     )
-                    
-                    # Refresh the original ticket to get updated data
                     ticket.refresh_from_db()
                 else:
-                    # Single ticket update (no group)
                     ticket.original_price = new_price_decimal
-                    ticket.save()  # This will automatically set asking_price = original_price
+                    ticket.asking_price = new_price_decimal
+                    ticket.save()
                     updated_count = 1
                 
                 # Return the updated ticket data

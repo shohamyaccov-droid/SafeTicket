@@ -501,6 +501,8 @@ class Ticket(models.Model):
         if self.asking_price is None and self.original_price is not None:
             self.asking_price = self.original_price
         # IL anti-scalping: never persist asking above face (serializer should already enforce).
+        # Only clamp DOWN when asking exceeds face — never invent a different sell price
+        # when face and ask were intentionally equal (single-price Sell flow).
         elif country == 'IL' and self.original_price is not None and self.asking_price is not None:
             if self.asking_price > self.original_price:
                 self.asking_price = self.original_price

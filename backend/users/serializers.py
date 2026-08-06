@@ -983,22 +983,36 @@ class TicketSerializer(serializers.ModelSerializer):
         cur = iso4217_for_country(country)
 
         original_price = attrs.get('original_price')
-        if original_price is None:
-            if listing_price is None:
-                raise serializers.ValidationError({
-                    'listing_price': 'מחיר מכירה נדרש.'
-                })
-            original_price = listing_price
-            attrs['original_price'] = original_price
+        if original_price is None and listing_price is None:
+            raise serializers.ValidationError({
+                'listing_price': 'מחיר מכירה נדרש.'
+            })
 
         if isinstance(original_price, (int, float, str, Decimal)):
-            attrs['original_price'] = quantize_money_decimal(original_price, cur)
-        original_price = attrs['original_price']
-
-        if listing_price is not None:
+            original_price = quantize_money_decimal(original_price, cur)
+        if listing_price is not None and isinstance(listing_price, (int, float, str, Decimal)):
             listing_price = quantize_money_decimal(listing_price, cur)
+
+        # Sell UI is a single price field: clients send listing_price (and usually the
+        # same value as original_price). Persist that exact amount on BOTH columns so
+        # Ticket.save() IL anti-scalping clamp cannot rewrite asking to a stale face.
+        single_price_payload = (
+            listing_price is not None
+            and (original_price is None or original_price == listing_price)
+        ) or (
+            listing_price is None and original_price is not None
+        )
+        if single_price_payload:
+            sell_price = listing_price if listing_price is not None else original_price
+            attrs['original_price'] = sell_price
+            attrs['asking_price'] = sell_price
+            original_price = sell_price
+            listing_price = sell_price
         else:
-            listing_price = original_price
+            # Dual-price API (face vs ask): keep legacy IL/abroad rules.
+            attrs['original_price'] = original_price
+            if listing_price is None:
+                listing_price = original_price
 
         request = self.context.get('request')
         legal_raw = None
@@ -1089,10 +1103,8 @@ class TicketSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         validated_data.pop('listing_price', None)
         if 'original_price' in validated_data and 'asking_price' not in validated_data:
-            oe = instance.event
-            country = (getattr(oe, 'country', None) or 'IL').strip().upper() if oe else 'IL'
-            if country == 'IL':
-                validated_data['asking_price'] = validated_data['original_price']
+            # Single-price edits: keep face and ask in lockstep.
+            validated_data['asking_price'] = validated_data['original_price']
         return super().update(instance, validated_data)
 
     def to_representation(self, instance):
