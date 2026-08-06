@@ -23,6 +23,23 @@ def _signed_request(payload, secret='whsec_test'):
     )
 
 
+def _body_signed_request(payload, secret='whsec_test'):
+    """PayMe production-style: HMAC over payload fields, signature inside JSON body (no header)."""
+    unsigned = {k: v for k, v in payload.items() if k not in ('payme_signature', 'paymeSignature', 'signature')}
+    body_for_hmac = json.dumps(unsigned, separators=(',', ':')).encode('utf-8')
+    signature = hmac.new(secret.encode('utf-8'), body_for_hmac, hashlib.sha256).hexdigest()
+    signed_payload = {**unsigned, 'payme_signature': signature}
+    body = json.dumps(signed_payload, separators=(',', ':')).encode('utf-8')
+    return (
+        APIRequestFactory().post(
+            '/api/payments/webhook/payme/',
+            data=body,
+            content_type='application/json',
+        ),
+        signed_payload,
+    )
+
+
 def _order(**overrides):
     base = {
         'pk': 123,
@@ -104,6 +121,52 @@ class PaymeWebhookVerificationTests(TestCase):
 
         self.assertFalse(ok)
         self.assertEqual(reason, 'missing_signature_header')
+
+    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False, DEBUG=False)
+    def test_webhook_accepts_payme_signature_in_body(self):
+        payload = {
+            'merchant_order_id': '123',
+            'transaction_id': 'txn_123',
+            'sale_price': 11000,
+            'currency': 'ILS',
+            'status': 'authorized',
+        }
+        request, signed_payload = _body_signed_request(payload)
+
+        ok, reason = verify_payme_webhook_request(
+            request,
+            payload=signed_payload,
+            order=_order(),
+        )
+
+        self.assertTrue(ok, reason)
+        self.assertEqual(reason, 'ok')
+
+    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False, DEBUG=False)
+    def test_webhook_rejects_bad_body_signature(self):
+        payload = {
+            'merchant_order_id': '123',
+            'transaction_id': 'txn_123',
+            'sale_price': 11000,
+            'currency': 'ILS',
+            'status': 'authorized',
+            'payme_signature': 'not-a-valid-hmac',
+        }
+        body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+        request = APIRequestFactory().post(
+            '/api/payments/webhook/payme/',
+            data=body,
+            content_type='application/json',
+        )
+
+        ok, reason = verify_payme_webhook_request(
+            request,
+            payload=payload,
+            order=_order(),
+        )
+
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'bad_signature')
 
     @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
     def test_webhook_rejects_transaction_mismatch(self):

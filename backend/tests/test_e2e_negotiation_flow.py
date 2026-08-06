@@ -85,6 +85,7 @@ class NegotiatedOfferPayMeWalletE2ETests(TestCase):
             password='test-pass-123',
             role='buyer',
             is_email_verified=True,
+            phone_number='0507654321',
         )
         self.artist = Artist.objects.create(name='Negotiation E2E Artist')
         self.event = Event.objects.create(

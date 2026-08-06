@@ -47,6 +47,7 @@ class PaymeWebhookFlowTests(TestCase):
             email='payme_buyer@test.invalid',
             password='x',
             role='buyer',
+            phone_number='0501234567',
         )
         artist = Artist.objects.create(name='Payme Artist')
         self.event = Event.objects.create(
@@ -148,6 +149,33 @@ class PaymeWebhookFlowTests(TestCase):
         self.ticket.refresh_from_db()
         self.assertEqual(self.ticket.status, 'sold')
         self.assertTrue(SellerPayout.objects.filter(order=self.order).exists())
+
+    @override_settings(PAYME_IS_SANDBOX=False, PAYME_WEBHOOK_SECRET='whsec_test', DEBUG=False)
+    def test_webhook_marks_paid_with_payme_signature_in_body(self):
+        """Production PayMe sends payme_signature in the POST body (not only headers)."""
+        unsigned = {
+            'merchant_order_id': str(self.order.id),
+            'status': 'success',
+            'payme_sale_id': 'webhook_txn_1',
+            'payme_status': 'completed',
+            'sale_price': 11500,
+            'currency': 'ILS',
+        }
+        body_for_hmac = json.dumps(unsigned, separators=(',', ':')).encode('utf-8')
+        sig = hmac.new(b'whsec_test', body_for_hmac, hashlib.sha256).hexdigest()
+        payload = {**unsigned, 'payme_signature': sig}
+        body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+        res = self.client.post(
+            '/api/payments/webhook/payme/',
+            body,
+            content_type='application/json',
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertTrue(res.data.get('finalized'), res.data)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'paid')
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.status, 'sold')
 
     def test_webhook_marks_paid_form_urlencoded(self):
         """PayMe preprod/live sends application/x-www-form-urlencoded callbacks."""

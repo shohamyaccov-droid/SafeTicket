@@ -102,6 +102,7 @@ class ProductionPurchaseLifecycleStressTests(TestCase):
             password='test-pass-123',
             role='buyer',
             is_email_verified=True,
+            phone_number=f'050{iteration:07d}'[:10],
         )
         event = Event.objects.create(
             artist=self.artist,
