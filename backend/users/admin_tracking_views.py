@@ -97,6 +97,7 @@ def admin_god_mode_dashboard(request):
                 'event_id': alert.event_id,
                 'artist_id': alert.artist_id,
                 'notified': bool(alert.notified),
+                'desired_quantity': alert.desired_quantity,
                 'created_at': alert.created_at.isoformat() if alert.created_at else None,
             }
         )

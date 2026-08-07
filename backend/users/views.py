@@ -4463,6 +4463,9 @@ def subscribe_ticket_alert(request):
     artist = serializer.validated_data.get('artist')
     email = (serializer.validated_data.get('email') or '').strip().lower()
     phone = (serializer.validated_data.get('phone') or '').strip()
+    desired_quantity = serializer.validated_data.get('desired_quantity', None)
+    if desired_quantity is not None and desired_quantity <= 0:
+        desired_quantity = None
 
     user = getattr(request, 'user', None)
     if user and user.is_authenticated:
@@ -4479,6 +4482,13 @@ def subscribe_ticket_alert(request):
         )
 
     from django.db.models import Sum
+
+    defaults = {
+        'notified': False,
+        'phone': phone,
+        'user': linked_user,
+        'desired_quantity': desired_quantity,
+    }
 
     if event:
         listed = (
@@ -4498,14 +4508,14 @@ def subscribe_ticket_alert(request):
         alert, created = TicketAlert.objects.get_or_create(
             event=event,
             email=email,
-            defaults={'notified': False, 'phone': phone, 'user': linked_user},
+            defaults=defaults,
         )
     else:
         alert, created = TicketAlert.objects.get_or_create(
             artist=artist,
             event=None,
             email=email,
-            defaults={'notified': False, 'phone': phone, 'user': linked_user},
+            defaults=defaults,
         )
 
     update_fields = []
@@ -4516,6 +4526,9 @@ def subscribe_ticket_alert(request):
         if linked_user and alert.user_id != linked_user.pk:
             alert.user = linked_user
             update_fields.append('user')
+        if alert.desired_quantity != desired_quantity:
+            alert.desired_quantity = desired_quantity
+            update_fields.append('desired_quantity')
         if update_fields:
             alert.save(update_fields=update_fields)
 

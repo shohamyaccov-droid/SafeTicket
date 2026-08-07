@@ -94,3 +94,51 @@
   opacity: 0.65;
   cursor: not-allowed;
 }
+
+.waitlist-modal-quantity {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.waitlist-modal-quantity-legend {
+  margin: 0 0 0.45rem;
+  font-size: 0.9rem;
+  color: #334155;
+  padding: 0;
+}
+
+.waitlist-modal-quantity-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.waitlist-modal-qty-btn {
+  min-width: 2.6rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.waitlist-modal-qty-btn:hover:not(:disabled) {
+  border-color: #f97316;
+  color: #c2410c;
+}
+
+.waitlist-modal-qty-btn.is-selected {
+  border-color: #ea580c;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.waitlist-modal-qty-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}

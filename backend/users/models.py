@@ -1096,6 +1096,12 @@ class TicketAlert(models.Model):
         default='',
         help_text='Optional phone for SMS / WhatsApp follow-up',
     )
+    desired_quantity = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text='Desired ticket count. Null/0 = any quantity (ברירת מחדל).',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     notified = models.BooleanField(default=False, help_text="Whether this alert has been sent")
     notified_at = models.DateTimeField(null=True, blank=True, help_text="When the notification was sent")

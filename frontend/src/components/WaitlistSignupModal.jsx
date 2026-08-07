@@ -17,12 +17,23 @@ function validatePhone(phone) {
   return null;
 }
 
+/** null = any quantity (ברירת מחדל); 5 = 5+ */
+const QUANTITY_OPTIONS = [
+  { value: null, label: 'כל כמות' },
+  { value: 1, label: '1' },
+  { value: 2, label: '2' },
+  { value: 3, label: '3' },
+  { value: 4, label: '4' },
+  { value: 5, label: '5+' },
+];
+
 /**
- * Modal: collect email + optional phone for ticket alert subscription (event or artist).
+ * Modal: collect email + optional phone + desired quantity for ticket alert subscription.
  */
 export default function WaitlistSignupModal({ event, artist, onClose }) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [desiredQuantity, setDesiredQuantity] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -57,6 +68,7 @@ export default function WaitlistSignupModal({ event, artist, onClose }) {
       const payload = {
         email: String(email).trim(),
         phone: String(phone).trim(),
+        desired_quantity: desiredQuantity,
       };
       if (isEventScope) payload.event = event.id;
       if (isArtistScope) payload.artist = artist.id;
@@ -124,6 +136,27 @@ export default function WaitlistSignupModal({ event, artist, onClose }) {
               dir="ltr"
             />
           </label>
+          <fieldset className="waitlist-modal-quantity">
+            <legend className="waitlist-modal-quantity-legend">כמה כרטיסים אתם מחפשים?</legend>
+            <div className="waitlist-modal-quantity-options" role="radiogroup" aria-label="כמות כרטיסים">
+              {QUANTITY_OPTIONS.map((opt) => {
+                const selected = desiredQuantity === opt.value;
+                return (
+                  <button
+                    key={String(opt.value)}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    className={`waitlist-modal-qty-btn${selected ? ' is-selected' : ''}`}
+                    onClick={() => setDesiredQuantity(opt.value)}
+                    disabled={busy}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
           {error ? (
             <p className="waitlist-modal-error" role="alert">
               {error}

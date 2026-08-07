@@ -1,8 +1,9 @@
 """
-Tests for TicketAlert subscribe API (event + artist scopes).
+Tests for TicketAlert subscribe API (event + artist scopes) and quantity matching.
 """
 
 from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -10,6 +11,11 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from users.models import Artist, Event, Ticket, TicketAlert, Venue
+from users.ticket_alert_matching import (
+    alert_matches_desired_quantity,
+    listing_available_quantity,
+    prioritize_alerts,
+)
 
 User = get_user_model()
 
@@ -49,6 +55,33 @@ class TicketAlertSubscribeTests(TestCase):
         alert = TicketAlert.objects.get(event=self.event, email='fan@example.com')
         self.assertIsNone(alert.artist_id)
         self.assertFalse(alert.notified)
+        self.assertIsNone(alert.desired_quantity)
+
+    def test_subscribe_with_desired_quantity(self):
+        resp = self._subscribe(
+            {'event': self.event.id, 'email': 'qty@example.com', 'desired_quantity': 2}
+        )
+        self.assertEqual(resp.status_code, 201, getattr(resp, 'data', resp.content))
+        alert = TicketAlert.objects.get(event=self.event, email='qty@example.com')
+        self.assertEqual(alert.desired_quantity, 2)
+        self.assertEqual(resp.data['alert']['desired_quantity'], 2)
+
+    def test_subscribe_zero_quantity_means_any(self):
+        resp = self._subscribe(
+            {'event': self.event.id, 'email': 'any@example.com', 'desired_quantity': 0}
+        )
+        self.assertEqual(resp.status_code, 201)
+        alert = TicketAlert.objects.get(event=self.event, email='any@example.com')
+        self.assertIsNone(alert.desired_quantity)
+
+    def test_resubscribe_updates_desired_quantity(self):
+        self._subscribe({'event': self.event.id, 'email': 'upd@example.com', 'desired_quantity': 1})
+        resp = self._subscribe(
+            {'event': self.event.id, 'email': 'upd@example.com', 'desired_quantity': 4}
+        )
+        self.assertEqual(resp.status_code, 200)
+        alert = TicketAlert.objects.get(event=self.event, email='upd@example.com')
+        self.assertEqual(alert.desired_quantity, 4)
 
     def test_subscribe_artist_alert_success(self):
         resp = self._subscribe({'artist': self.artist.id, 'email': 'fan@example.com'})
@@ -73,8 +106,6 @@ class TicketAlertSubscribeTests(TestCase):
         self.assertEqual(TicketAlert.objects.filter(event=self.event, email='fan@example.com').count(), 1)
 
     def test_subscribe_rejects_when_event_has_active_tickets(self):
-        from decimal import Decimal
-
         Ticket.objects.create(
             seller=self.user,
             event=self.event,
@@ -99,6 +130,114 @@ class TicketAlertSubscribeTests(TestCase):
             format='json',
         )
         self.assertIn(resp.status_code, (200, 201))
+
+
+@override_settings(DEBUG=True, SECRET_KEY='test-secret-key-for-local')
+class TicketAlertQuantityMatchingTests(TestCase):
+    def setUp(self):
+        self.artist = Artist.objects.create(name='Match Artist')
+        self.venue = Venue.objects.create(name='Match Venue', city='Tel Aviv')
+        self.event = Event.objects.create(
+            artist=self.artist,
+            name='Match Show',
+            date=timezone.now() + timedelta(days=20),
+            venue='ישראל',
+            venue_place=self.venue,
+            city='Tel Aviv',
+            category='concert',
+            status='פעיל',
+        )
+        self.seller = User.objects.create_user(
+            username='seller_alert',
+            email='seller@example.com',
+            password='testpass123',
+        )
+
+    def test_unit_match_helpers(self):
+        self.assertTrue(alert_matches_desired_quantity(None, 1))
+        self.assertTrue(alert_matches_desired_quantity(0, 1))
+        self.assertTrue(alert_matches_desired_quantity(2, 2))
+        self.assertTrue(alert_matches_desired_quantity(2, 5))
+        self.assertFalse(alert_matches_desired_quantity(2, 1))
+        self.assertFalse(alert_matches_desired_quantity(5, 4))
+
+    def test_wanting_two_not_notified_for_single_ticket(self):
+        any_alert = TicketAlert.objects.create(
+            event=self.event,
+            email='any@example.com',
+            desired_quantity=None,
+        )
+        want_two = TicketAlert.objects.create(
+            event=self.event,
+            email='two@example.com',
+            desired_quantity=2,
+        )
+        Ticket.objects.create(
+            seller=self.seller,
+            event=self.event,
+            original_price=Decimal('100.00'),
+            asking_price=Decimal('100.00'),
+            available_quantity=1,
+            status='active',
+        )
+        any_alert.refresh_from_db()
+        want_two.refresh_from_db()
+        self.assertTrue(any_alert.notified)
+        self.assertFalse(want_two.notified)
+
+    def test_wanting_two_notified_when_listing_has_two(self):
+        want_two = TicketAlert.objects.create(
+            event=self.event,
+            email='two@example.com',
+            desired_quantity=2,
+        )
+        Ticket.objects.create(
+            seller=self.seller,
+            event=self.event,
+            original_price=Decimal('100.00'),
+            asking_price=Decimal('100.00'),
+            available_quantity=2,
+            status='active',
+        )
+        want_two.refresh_from_db()
+        self.assertTrue(want_two.notified)
+
+    def test_prioritize_specific_over_any(self):
+        any_alert = TicketAlert.objects.create(
+            event=self.event,
+            email='any@example.com',
+            desired_quantity=None,
+        )
+        want_two = TicketAlert.objects.create(
+            event=self.event,
+            email='two@example.com',
+            desired_quantity=2,
+        )
+        ordered = prioritize_alerts([any_alert, want_two])
+        self.assertEqual(ordered[0].email, 'two@example.com')
+        self.assertEqual(ordered[1].email, 'any@example.com')
+
+    def test_listing_group_quantity_sums(self):
+        group = 'group-alert-qty-1'
+        t1 = Ticket.objects.create(
+            seller=self.seller,
+            event=self.event,
+            original_price=Decimal('100.00'),
+            asking_price=Decimal('100.00'),
+            available_quantity=1,
+            status='active',
+            listing_group_id=group,
+        )
+        Ticket.objects.create(
+            seller=self.seller,
+            event=self.event,
+            original_price=Decimal('100.00'),
+            asking_price=Decimal('100.00'),
+            available_quantity=1,
+            status='active',
+            listing_group_id=group,
+        )
+        self.assertEqual(listing_available_quantity(t1), 2)
 
 
 @override_settings(DEBUG=True, SECRET_KEY='test-secret-key-for-local')

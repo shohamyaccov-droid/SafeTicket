@@ -1447,6 +1447,14 @@ class TicketAlertSubscribeSerializer(serializers.Serializer):
     )
     email = serializers.EmailField(required=False, allow_blank=True)
     phone = serializers.CharField(required=False, allow_blank=True, max_length=32, default='')
+    desired_quantity = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=0,
+        max_value=50,
+        default=None,
+        help_text='Desired ticket count. Null/0 = any quantity.',
+    )
 
     def validate(self, attrs):
         event = attrs.get('event')
@@ -1455,6 +1463,9 @@ class TicketAlertSubscribeSerializer(serializers.Serializer):
             raise serializers.ValidationError('Provide either event or artist, not both.')
         if not event and not artist:
             raise serializers.ValidationError('event or artist is required.')
+        qty = attrs.get('desired_quantity', None)
+        if qty is not None and qty <= 0:
+            attrs['desired_quantity'] = None
         return attrs
 
 
@@ -1464,18 +1475,26 @@ class TicketAlertSerializer(serializers.ModelSerializer):
     artist_name = serializers.CharField(source='artist.name', read_only=True, allow_null=True)
     email = serializers.EmailField(required=False, allow_blank=True)
     phone = serializers.CharField(required=False, allow_blank=True, max_length=32, default='')
+    desired_quantity = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=0,
+        max_value=50,
+        default=None,
+    )
 
     class Meta:
         model = TicketAlert
         fields = (
             'id', 'user', 'event', 'event_name', 'artist', 'artist_name',
-            'email', 'phone', 'created_at', 'notified', 'notified_at',
+            'email', 'phone', 'desired_quantity', 'created_at', 'notified', 'notified_at',
         )
         read_only_fields = ('id', 'user', 'created_at', 'notified', 'notified_at')
         extra_kwargs = {
             'event': {'required': False, 'allow_null': True},
             'artist': {'required': False, 'allow_null': True},
             'email': {'required': False, 'allow_blank': True},
+            'desired_quantity': {'required': False, 'allow_null': True},
         }
 
     def validate(self, attrs):

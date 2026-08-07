@@ -8,47 +8,60 @@ import logging
 
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
 
 from .models import Order, Ticket, TicketAlert
 from .payout_ledger import ensure_seller_payout_for_order
+from .ticket_alert_matching import (
+    listing_available_quantity,
+    matching_alerts_filter,
+    prioritize_alerts,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _notify_matching_alerts(alerts_qs, available: int, scope_label: str):
+    """Mark matching waitlist entries as notified, specific quantities first."""
+    matching = alerts_qs.filter(matching_alerts_filter(available))
+    for alert in prioritize_alerts(matching):
+        print(
+            f'Alerting {alert.email} ({scope_label}) '
+            f'desired={alert.desired_quantity!r} available={available}'
+        )
+        alert.notified = True
+        alert.notified_at = timezone.now()
+        alert.save(update_fields=['notified', 'notified_at'])
 
 
 @receiver(post_save, sender=Ticket)
 def notify_ticket_alerts(sender, instance, created, **kwargs):
     """
-    When a new ticket is created for an event, notify event-level and artist-level subscribers.
+    When a new ticket is created for an event, notify event-level and artist-level
+    subscribers whose desired_quantity fits the listing size (null/0 = any).
     """
     try:
         if created and instance.status == 'active' and instance.event:
             event = instance.event
-            alerts = TicketAlert.objects.filter(
-                event=event,
-                notified=False,
+            available = listing_available_quantity(instance)
+            _notify_matching_alerts(
+                TicketAlert.objects.filter(event=event, notified=False),
+                available,
+                f'event {event.pk}',
             )
-            for alert in alerts:
-                print(f'Alerting {alert.email} (event {event.pk})')
-                alert.notified = True
-                from django.utils import timezone
-                alert.notified_at = timezone.now()
-                alert.save(update_fields=['notified', 'notified_at'])
 
             if event.artist_id:
-                artist_alerts = TicketAlert.objects.filter(
-                    artist_id=event.artist_id,
-                    event__isnull=True,
-                    notified=False,
+                _notify_matching_alerts(
+                    TicketAlert.objects.filter(
+                        artist_id=event.artist_id,
+                        event__isnull=True,
+                        notified=False,
+                    ),
+                    available,
+                    f'artist {event.artist_id}',
                 )
-                for alert in artist_alerts:
-                    print(f'Alerting {alert.email} (artist {event.artist_id})')
-                    alert.notified = True
-                    from django.utils import timezone
-                    alert.notified_at = timezone.now()
-                    alert.save(update_fields=['notified', 'notified_at'])
     except Exception:
         logger.exception('notify_ticket_alerts: suppressed error (ticket save must not fail)')
-
 
 @receiver(post_save, sender=Order)
 def create_seller_payout_ledger_on_paid_order(sender, instance, **kwargs):
