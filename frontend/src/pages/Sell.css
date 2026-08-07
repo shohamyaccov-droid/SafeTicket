@@ -43,12 +43,75 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* Ad-landing trust strip — reinforce 0% fee + waitlist + escrow without bloating the form */
+.sell-trust-strip {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid #bbf7d0;
+  background: linear-gradient(180deg, #f0fdf4 0%, #ecfdf5 100%);
+}
+
+.sell-trust-strip__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem 0.55rem;
+}
+
+.sell-trust-strip__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid #d1fae5;
+  color: #166534;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.sell-trust-strip__icon {
+  display: inline-flex;
+  color: var(--success-green);
+  flex-shrink: 0;
+}
+
+@media (max-width: 560px) {
+  .sell-trust-strip {
+    padding: 0.5rem;
+    margin-bottom: 0.55rem;
+  }
+
+  .sell-trust-strip__list {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.3rem;
+  }
+
+  .sell-trust-strip__item {
+    justify-content: flex-start;
+    white-space: normal;
+    font-size: 0.8rem;
+    padding: 0.35rem 0.55rem;
+  }
+}
+
 /* Sell form: tighter vertical rhythm */
 .sell-form-compact {
   padding: var(--spacing-md) var(--spacing-md);
 }
 .sell-form-compact .listing-card-header {
   margin-bottom: var(--spacing-sm);
+}
+.sell-form-compact .sell-trust-strip {
+  margin-bottom: 0.55rem;
 }
 .sell-form-compact .secure-listing-header h2 {
   font-size: 1.45rem;

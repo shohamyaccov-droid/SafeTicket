@@ -1510,6 +1510,39 @@ const Sell = () => {
       )}
       <TicketUploadWizard step={completionOpen ? 3 : wizardStep}>
       <div className="listing-card sell-form-compact sell-listing-card--mobile-cta">
+        <aside className="sell-trust-strip" aria-label="יתרונות למוכרים">
+          <ul className="sell-trust-strip__list">
+            <li className="sell-trust-strip__item">
+              <span className="sell-trust-strip__icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.75" />
+                  <path d="M8 12.5L10.5 15L16 9.5" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+              <span>0% עמלה למוכרים</span>
+            </li>
+            <li className="sell-trust-strip__item">
+              <span className="sell-trust-strip__icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M16 11a3.5 3.5 0 1 0-3.2-4.9" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+                  <circle cx="9" cy="9" r="3.25" stroke="currentColor" strokeWidth="1.75" />
+                  <path d="M3.5 18.5c.7-2.4 2.9-4 5.5-4s4.8 1.6 5.5 4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+                  <path d="M16 14.5c1.9.2 3.5 1.4 4.1 3.2" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+                </svg>
+              </span>
+              <span>קונים כבר מחכים ברשימת ההמתנה</span>
+            </li>
+            <li className="sell-trust-strip__item">
+              <span className="sell-trust-strip__icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3L5 6v5c0 4.4 3.1 8.4 7 9.5 3.9-1.1 7-5.1 7-9.5V6l-7-3Z" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
+                  <path d="M9.5 12l1.8 1.8L15 10.2" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+              <span>תשלום מוגן באמינות</span>
+            </li>
+          </ul>
+        </aside>
         <div className="listing-card-header">
           <div className="secure-listing-header">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
