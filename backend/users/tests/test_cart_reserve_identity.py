@@ -118,3 +118,34 @@ class CartReserveIdentityTests(TestCase):
         self.assertEqual(b.status, 'active')
         self.assertIsNone(a.reserved_by_id)
         self.assertIsNone(b.reserved_by_id)
+
+    def test_release_is_idempotent_when_already_active(self):
+        ticket = self._ticket()
+        self.client.force_authenticate(self.buyer)
+        release = self.client.post(
+            f'/api/users/tickets/{ticket.id}/release_reservation/',
+            {},
+            format='json',
+        )
+        self.assertEqual(release.status_code, 200, release.data)
+        self.assertTrue(release.data.get('success'))
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'active')
+
+    def test_release_after_reserve_unlocks_immediately(self):
+        ticket = self._ticket()
+        self.client.force_authenticate(self.buyer)
+        lock = self.client.post(f'/api/users/tickets/{ticket.id}/reserve/', {'quantity': 1}, format='json')
+        self.assertEqual(lock.status_code, 200, lock.data)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'reserved')
+        release = self.client.post(
+            f'/api/users/tickets/{ticket.id}/release_reservation/',
+            {},
+            format='json',
+        )
+        self.assertEqual(release.status_code, 200, release.data)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'active')
+        self.assertIsNone(ticket.reserved_at)
+        self.assertIsNone(ticket.reserved_by_id)

@@ -845,6 +845,7 @@ const EventDetailsPage = () => {
   const handleCloseCheckout = async () => {
     setShowCheckout(false);
     setSelectedTicketGroup(null);
+    // Refresh after modal release so unlocked seats reappear immediately.
     await fetchTickets();
   };
 

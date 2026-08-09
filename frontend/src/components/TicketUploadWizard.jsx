@@ -1,4 +1,5 @@
 import { Check, FileUp, ShieldCheck, UserRound } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import './TicketUploadWizard.css';
 
 const STEPS = [
@@ -15,6 +16,11 @@ const STEPS = [
 export default function TicketUploadWizard({ step, children }) {
   return (
     <section className="ticket-upload-wizard" aria-label="תהליך העלאת כרטיס">
+      <div className="ticket-upload-wizard__topbar">
+        <Link to="/" className="ticket-upload-wizard__home-link">
+          ← חזרה לדף הבית
+        </Link>
+      </div>
       <div className="ticket-upload-wizard__progress">
         <p className="ticket-upload-wizard__eyebrow">שלב {step} מתוך {STEPS.length}</p>
         <ol className="ticket-upload-wizard__steps">

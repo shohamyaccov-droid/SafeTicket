@@ -3923,6 +3923,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         """
         Release a ticket reservation (when timer expires or modal closes).
         For listing groups, releases every seat held by the same buyer identity.
+        Idempotent: already-active tickets return success so abandon/close is safe to retry.
         """
         guest_email = (request.data.get('email') or '').strip().lower()
 
@@ -3933,8 +3934,12 @@ class TicketViewSet(viewsets.ModelViewSet):
                     # Still try to clear sibling group seats if this row was already released.
                     if not ticket.listing_group_id:
                         return Response(
-                            {'error': 'הכרטיס אינו שמור כרגע.'},
-                            status=status.HTTP_400_BAD_REQUEST,
+                            {
+                                'success': True,
+                                'message': 'Reservation already released',
+                                'released_ticket_ids': [],
+                            },
+                            status=status.HTTP_200_OK,
                         )
 
                 def _owned_by_requester(t) -> bool:
@@ -3985,9 +3990,14 @@ class TicketViewSet(viewsets.ModelViewSet):
                     released_ids.append(t.id)
 
                 if not released_ids:
+                    # Anchor or siblings were already active — treat as successful unlock.
                     return Response(
-                        {'error': 'הכרטיס אינו שמור כרגע.'},
-                        status=status.HTTP_400_BAD_REQUEST,
+                        {
+                            'success': True,
+                            'message': 'Reservation already released',
+                            'released_ticket_ids': [],
+                        },
+                        status=status.HTTP_200_OK,
                     )
 
                 return Response(

@@ -257,6 +257,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const reserveGenerationRef = useRef(0);
   const transactionCompleteRef = useRef(false); // Prevents timer/cleanup from reverting UI after successful order
   const paymentSubmittingRef = useRef(false); // Pause reservation timer while payment API runs
+  /** True while Close/X is releasing the hold — in-flight reserve must unlock when it lands. */
+  const checkoutClosingRef = useRef(false);
   /** Synchronous snapshot so success UI never waits on PDF download or lost React state */
   const successSnapshotRef = useRef(null);
   const navigate = useNavigate();
@@ -270,6 +272,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   useEffect(() => {
     guestEmailRef.current = (guestForm.email || '').trim();
   }, [guestForm.email]);
+  const ticketIdRef = useRef(ticket?.id);
+  ticketIdRef.current = ticket?.id;
+  const userRef = useRef(user);
+  userRef.current = user;
+  const skipCartReserveRef = useRef(false);
 
   useEffect(() => {
     // Keep mount effect for future diagnostics without noisy console logs in production.
@@ -284,6 +291,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
    * 10-minute cart reservation as buy-now so the listing stays visible until checkout starts.
    */
   const skipCartReserveForNegotiatedOffer = false;
+  skipCartReserveRef.current = skipCartReserveForNegotiatedOffer;
   const offerQtyParsed = acceptedOffer?.quantity != null
     ? parseInt(String(acceptedOffer.quantity), 10)
     : NaN;
@@ -1150,6 +1158,26 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     }
   };
 
+  const guestCheckoutEmail = () => {
+    if (userRef.current) return null;
+    return guestEmailRef.current || (guestForm.email || '').trim() || null;
+  };
+
+  const fireReleaseHold = ({ keepalive = false } = {}) => {
+    const tid = ticketIdRef.current;
+    if (!tid || skipCartReserveRef.current || transactionCompleteRef.current) return null;
+    const email = guestCheckoutEmail();
+    reservationRef.current = false;
+    setReservationActive(false);
+    if (keepalive) {
+      ticketAPI.releaseReservationKeepalive(tid, email);
+      return null;
+    }
+    return ticketAPI.releaseReservation(tid, email).catch(() => {
+      ticketAPI.releaseReservationKeepalive(tid, email);
+    });
+  };
+
   // Reserve only after the buyer completes the info step (details + TOS) and
   // enters payment — never lock inventory while they are still reviewing.
   // Negotiated offers already hold inventory from accept; skip cart /reserve.
@@ -1166,6 +1194,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
     const reserveTicket = async () => {
       if (stepRef.current === 'success') return;
+      if (checkoutClosingRef.current) return;
       // Already holding a cart lock for this checkout session — do not re-lock.
       if (reservationRef.current || reserveInFlightRef.current) return;
 
@@ -1210,9 +1239,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         reserveOpts.quantity = reserveQty;
         const response = await ticketAPI.reserveTicket(tid, email, reserveOpts);
 
-        if (cancelled || generation !== reserveGenerationRef.current) {
-          // Stale async result (effect re-ran / left payment). Release orphan lock.
+        if (cancelled || generation !== reserveGenerationRef.current || checkoutClosingRef.current) {
+          // Stale async result (effect re-ran / left payment / closed modal). Release orphan lock.
           if (response?.data?.success) {
+            ticketAPI.releaseReservationKeepalive(tid, email);
             void ticketAPI.releaseReservation(tid, email).catch(() => {});
           }
           return;
@@ -1233,7 +1263,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           }
         }
       } catch (err) {
-        if (cancelled || generation !== reserveGenerationRef.current) return;
+        if (cancelled || generation !== reserveGenerationRef.current || checkoutClosingRef.current) return;
         const res = err.response;
         const errCode = res?.data?.code || '';
         if (
@@ -1282,15 +1312,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       reserveInFlightRef.current = false;
       // Quantity / identity re-renders while still on payment must NOT drop the cart lock
       // (mobile remounts were releasing anonymously and then failing re-reserve).
+      // True unmount / abandon is handled by the dedicated unmount + pagehide effects.
       if (stepRef.current === 'payment' || skipCartReserveForNegotiatedOffer) {
         return;
       }
-      if (transactionCompleteRef.current) return;
+      if (transactionCompleteRef.current || checkoutClosingRef.current) return;
       if (reservationRef.current) {
-        const email = user ? null : guestEmailRef.current || null;
-        reservationRef.current = false;
-        setReservationActive(false);
-        void ticketAPI.releaseReservation(tid, email).catch(() => {});
+        fireReleaseHold({ keepalive: true });
+        void fireReleaseHold();
       }
     };
   }, [ticket?.id, ticket?.listing_group_id, ticketGroup?.listing_group_id, user, skipCartReserveForNegotiatedOffer, acceptedOffer?.id, lockedQuantity, quantity, isNegotiatedPrice, step]);
@@ -1298,15 +1327,43 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   // Leaving the payment step (or closing modal via step change) releases the cart hold.
   useEffect(() => {
     if (step === 'payment' || skipCartReserveForNegotiatedOffer) return undefined;
-    if (transactionCompleteRef.current) return undefined;
+    if (transactionCompleteRef.current || checkoutClosingRef.current) return undefined;
     if (!reservationRef.current || !ticket?.id) return undefined;
-    const tid = ticket.id;
-    const email = user ? null : guestEmailRef.current || null;
-    reservationRef.current = false;
-    setReservationActive(false);
-    void ticketAPI.releaseReservation(tid, email).catch(() => {});
+    void fireReleaseHold();
     return undefined;
   }, [step, skipCartReserveForNegotiatedOffer, ticket?.id, user]);
+
+  // True component unmount: always unlock so route changes / parent dismiss don't leave false scarcity.
+  useEffect(() => {
+    return () => {
+      if (transactionCompleteRef.current || skipCartReserveRef.current) return;
+      if (!reservationRef.current && !reserveInFlightRef.current && !checkoutClosingRef.current) return;
+      const tid = ticketIdRef.current;
+      if (!tid) return;
+      const email = userRef.current ? null : guestEmailRef.current || null;
+      reservationRef.current = false;
+      ticketAPI.releaseReservationKeepalive(tid, email);
+    };
+  }, []);
+
+  // Tab close / browser back / BFCache: axios may be cancelled; keepalive fetch survives.
+  useEffect(() => {
+    const releaseOnLeave = () => {
+      if (transactionCompleteRef.current || skipCartReserveRef.current) return;
+      if (!reservationRef.current && !reserveInFlightRef.current) return;
+      const tid = ticketIdRef.current;
+      if (!tid) return;
+      const email = userRef.current ? null : guestEmailRef.current || null;
+      reservationRef.current = false;
+      ticketAPI.releaseReservationKeepalive(tid, email);
+    };
+    window.addEventListener('pagehide', releaseOnLeave);
+    window.addEventListener('beforeunload', releaseOnLeave);
+    return () => {
+      window.removeEventListener('pagehide', releaseOnLeave);
+      window.removeEventListener('beforeunload', releaseOnLeave);
+    };
+  }, []);
 
   /** Countdown: 10m cart lock ticks after reserve; 24h offer window ticks from open (info + payment). */
   useEffect(() => {
@@ -1413,26 +1470,28 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     !legalAccepted;
 
   const handleClose = async () => {
+    checkoutClosingRef.current = true;
     if (pdfUrl) {
       window.URL.revokeObjectURL(pdfUrl);
     }
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
-    
-    // Release reservation if not completed
+
+    // Release reservation if not completed (keepalive first so unlock survives unmount).
     if (transactionCompleteRef.current) {
       onClose();
       return;
     }
-    if (!skipCartReserveForNegotiatedOffer && reservationRef.current && step !== 'success') {
-      try {
-        const email = user ? null : guestForm.email || null;
-        await ticketAPI.releaseReservation(ticket.id, email);
-        reservationRef.current = false;
-        setReservationActive(false);
-      } catch {
-        /* best-effort release */
+    if (!skipCartReserveForNegotiatedOffer && step !== 'success') {
+      const hadHold = reservationRef.current || reserveInFlightRef.current || reservationActive;
+      if (hadHold || step === 'payment') {
+        fireReleaseHold({ keepalive: true });
+        try {
+          await fireReleaseHold();
+        } catch {
+          /* best-effort release */
+        }
       }
     }
 

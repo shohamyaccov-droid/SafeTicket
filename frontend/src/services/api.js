@@ -783,6 +783,49 @@ export const ticketAPI = {
       guestEmail ? { skipAuth: true } : undefined,
     );
   },
+  /**
+   * Best-effort release that survives tab close / navigation (axios is often aborted).
+   * Uses fetch keepalive + optional sendBeacon; includes CSRF and Bearer when available.
+   */
+  releaseReservationKeepalive: (id, email = null) => {
+    if (id == null || id === '') return false;
+    const guestEmail = email != null && String(email).trim() ? String(email).trim() : '';
+    const payload = guestEmail ? { email: guestEmail } : {};
+    const body = JSON.stringify(payload);
+    const base = String(API_URL || '').replace(/\/+$/, '');
+    const url = `${base}/users/tickets/${id}/release_reservation/`;
+    const headers = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    const csrf = getCsrfTokenForRequest();
+    if (csrf) headers['X-CSRFToken'] = csrf;
+    if (!guestEmail) {
+      const bearer = getEffectiveBearerAccess();
+      if (bearer) headers.Authorization = `Bearer ${bearer}`;
+    }
+    try {
+      void fetch(url, {
+        method: 'POST',
+        headers,
+        body,
+        credentials: 'include',
+        keepalive: true,
+        mode: 'cors',
+      }).catch(() => {});
+      return true;
+    } catch {
+      try {
+        if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+          const blob = new Blob([body], { type: 'application/json' });
+          return navigator.sendBeacon(url, blob);
+        }
+      } catch {
+        /* ignore */
+      }
+      return false;
+    }
+  },
 };
 
 export const eventAPI = {
