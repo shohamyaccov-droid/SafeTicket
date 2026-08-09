@@ -509,16 +509,33 @@ _PAYME_SIGNATURE_BODY_KEYS = ('payme_signature', 'paymeSignature', 'signature')
 
 
 def _payme_signable_value(value: Any) -> str:
-    """PayMe IPN treats null/None as empty string in the HMAC material."""
+    """
+    Normalize a field for PayMe IPN HMAC material.
+
+    Prefer values that are already strings (raw POST). Never emit Python's
+    ``str(True)`` / ``str(False)`` (``'True'``/``'False'``) — PayMe uses lowercase.
+    ``None`` becomes ``''`` (empty card fields on Apple Pay / Bit).
+    """
     if value is None:
         return ''
     if isinstance(value, bool):
+        # JSON booleans only — form POST keeps the literal 'true'/'false' string.
         return 'true' if value else 'false'
     if isinstance(value, (list, tuple)):
-        # QueryDict multi-value: use last (matches Django .dict())
         if not value:
             return ''
         return _payme_signable_value(value[-1])
+    if isinstance(value, str):
+        return value
+    # Last resort for leftover parsed numbers — avoid float repr surprises when possible.
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    if isinstance(value, float):
+        # Decimal-ish: prefer non-scientific repr; still inferior to raw POST strings.
+        text = format(value, 'f')
+        if '.' in text:
+            text = text.rstrip('0').rstrip('.')
+        return text or '0'
     return str(value)
 
 
@@ -544,6 +561,74 @@ def build_payme_sorted_values_sign_string(payload: dict[str, Any]) -> str:
     """
     items = _payme_signable_items(payload)
     return ''.join(items[k] for k in sorted(items.keys()))
+
+
+def extract_payme_raw_sign_fields(request) -> dict[str, str]:
+    """
+    Exact PayMe POST fields as strings for HMAC — never DRF-cast Python types.
+
+    Priority:
+    1) ``request.POST`` (form-urlencoded / multipart) — Django keeps raw strings
+    2) Raw body parsed with ``parse_qsl(keep_blank_values=True)``
+    3) JSON body with ``parse_int=str`` / ``parse_float=str`` so decimals stay textual
+    """
+    out: dict[str, str] = {}
+
+    try:
+        post = getattr(request, 'POST', None)
+        if post is not None and len(post) > 0:
+            for key in post.keys():
+                key_s = str(key)
+                if key_s in _PAYME_SIGNATURE_BODY_KEYS:
+                    continue
+                if hasattr(post, 'getlist'):
+                    vals = post.getlist(key_s)
+                    val = vals[-1] if vals else ''
+                else:
+                    val = post.get(key_s)
+                out[key_s] = '' if val is None else str(val)
+            if out:
+                return out
+    except Exception as exc:
+        logger.warning('PayMe raw sign fields: request.POST read failed: %s', exc)
+
+    try:
+        body = getattr(request, 'body', None) or b''
+        if not body:
+            return out
+        text = body.decode('utf-8', errors='replace')
+        stripped = text.lstrip()
+        # Form body (PayMe IPN / Apple Pay notify default)
+        if stripped and not stripped.startswith('{') and not stripped.startswith('[') and '=' in stripped:
+            from urllib.parse import parse_qsl
+
+            for key, val in parse_qsl(text, keep_blank_values=True):
+                key_s = str(key)
+                if key_s in _PAYME_SIGNATURE_BODY_KEYS:
+                    continue
+                out[key_s] = '' if val is None else str(val)
+            if out:
+                return out
+        # JSON: preserve number tokens as strings (avoid float 110.5 vs "110.50")
+        if stripped.startswith('{'):
+            data = json.loads(text, parse_int=str, parse_float=str)
+            if isinstance(data, dict):
+                for key, val in data.items():
+                    key_s = str(key)
+                    if key_s in _PAYME_SIGNATURE_BODY_KEYS:
+                        continue
+                    if isinstance(val, bool):
+                        out[key_s] = 'true' if val else 'false'
+                    elif val is None:
+                        out[key_s] = ''
+                    elif isinstance(val, (dict, list)):
+                        continue
+                    else:
+                        out[key_s] = str(val)
+    except Exception as exc:
+        logger.warning('PayMe raw sign fields: body parse failed: %s', exc)
+
+    return out
 
 
 def _extract_payme_webhook_signature(request, payload: dict[str, Any]) -> str:
@@ -610,12 +695,14 @@ def _payme_hmac_body_candidates(
     Primary (Bit / body payme_signature): alphabetical keys → concatenate values.
     Also try key+value concat and form-urlencoded, plus raw body for header signatures.
 
-    Prefer signature_payload (pre-canonicalize). Always also try a variant that drops
-    merchant_order_id / merchantOrderId so backend-injected merchant ids never poison HMAC.
+    Prefer signature_payload (pre-canonicalize / raw POST strings). Always also try a
+    variant that drops merchant_order_id / merchantOrderId so backend-injected merchant
+    ids never poison HMAC.
     """
     from urllib.parse import urlencode
 
     candidates: list[bytes] = []
+    primary_string_to_hash = ''
     sign_src = signature_payload if isinstance(signature_payload, dict) else payload
     if not isinstance(sign_src, dict):
         sign_src = {}
@@ -639,7 +726,10 @@ def _payme_hmac_body_candidates(
         if not sorted_keys:
             continue
         # 1) PayMe IPN: sorted keys, join values only
-        candidates.append(''.join(items[k] for k in sorted_keys).encode('utf-8'))
+        string_to_hash = ''.join(items[k] for k in sorted_keys)
+        if not primary_string_to_hash:
+            primary_string_to_hash = string_to_hash
+        candidates.append(string_to_hash.encode('utf-8'))
         # 2) key+value concat (some PSP variants)
         candidates.append(''.join(f'{k}{items[k]}' for k in sorted_keys).encode('utf-8'))
         # 3) application/x-www-form-urlencoded in sorted key order
@@ -663,7 +753,7 @@ def _payme_hmac_body_candidates(
             continue
         seen.add(item)
         out.append(item)
-    return out
+    return out, primary_string_to_hash
 
 
 def verify_payme_webhook_request(
@@ -687,6 +777,9 @@ def verify_payme_webhook_request(
     differs from the `payme_sale_id` stored at init — verification accepts any matching
     sale/transaction reference and prefers explicit merchant_order_id fields.
 
+    HMAC uses raw unparsed POST strings from the request whenever available so DRF
+    type-casting (bool/float/None) cannot alter the hash material.
+
     signature_payload: original POST fields for HMAC (before canonicalize injects keys).
     When omitted, HMAC still ignores merchant_order_id variants so injected ids cannot
     cause bad_signature.
@@ -706,17 +799,25 @@ def verify_payme_webhook_request(
             )
     else:
         secret = (get_payme_config()['webhook_secret'] or '').strip()
-        # Prefer an explicit pristine copy; never hash the post-canonicalize business payload
-        # when a signature_payload was provided.
-        if isinstance(signature_payload, dict):
+        # 1) Raw request strings win (no DRF casting).
+        # 2) Else explicit pristine signature_payload.
+        # 3) Else business payload (last resort; merchant_order_id strip still applies).
+        raw_fields = extract_payme_raw_sign_fields(request)
+        if raw_fields:
+            sign_source = dict(raw_fields)
+            sign_source_origin = 'request_raw'
+        elif isinstance(signature_payload, dict) and signature_payload:
             sign_source = dict(signature_payload)
+            sign_source_origin = 'signature_payload'
         else:
             sign_source = dict(payload) if isinstance(payload, dict) else {}
+            sign_source_origin = 'parsed_payload'
 
         # Signature may live on the raw POST or on the business payload.
         got = (
             _extract_payme_webhook_signature(request, sign_source)
             or _extract_payme_webhook_signature(request, payload or {})
+            or _extract_payme_webhook_signature(request, signature_payload or {})
         )
         if not got:
             return False, 'missing_signature_header'
@@ -733,28 +834,40 @@ def verify_payme_webhook_request(
             return False, 'body_unavailable_for_signature'
         from secrets import compare_digest
 
-        # Candidates include full sign_source and a merchant_order_id-stripped variant so
-        # backend-injected merchant ids cannot uniquely define the hash.
-        matched = False
-        for candidate in _payme_hmac_body_candidates(
+        candidates, string_to_hash = _payme_hmac_body_candidates(
             body,
             {},
             signature_payload=sign_source,
-        ):
+        )
+        # Fail-safe: exact material we hash — compare visually to PayMe's raw notify on failure.
+        logger.warning(
+            'PayMe webhook string_to_hash order_id=%s origin=%s keys=%s string_to_hash=%r',
+            getattr(order, 'pk', None),
+            sign_source_origin,
+            sorted(str(k) for k in sign_source.keys() if str(k) not in _PAYME_SIGNATURE_BODY_KEYS),
+            string_to_hash,
+        )
+
+        matched = False
+        for candidate in candidates:
             expected = hmac.new(secret.encode('utf-8'), candidate, hashlib.sha256).hexdigest()
             if compare_digest(got, expected) or compare_digest(got, f'sha256={expected}'):
                 matched = True
                 break
         if not matched:
             logger.warning(
-                'PayMe webhook bad_signature order_id=%s signature_keys=%s had_merchant_order_id=%s',
+                'PayMe webhook bad_signature order_id=%s origin=%s signature_keys=%s '
+                'had_merchant_order_id=%s string_to_hash=%r got_sig_prefix=%s',
                 getattr(order, 'pk', None),
+                sign_source_origin,
                 sorted(
                     str(k)
                     for k in sign_source.keys()
                     if str(k) not in _PAYME_SIGNATURE_BODY_KEYS
                 ),
                 'merchant_order_id' in sign_source or 'merchantOrderId' in sign_source,
+                string_to_hash,
+                (got[:12] + '…') if len(got) > 12 else got,
             )
             return False, 'bad_signature'
 

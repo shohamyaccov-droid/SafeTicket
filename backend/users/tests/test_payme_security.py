@@ -10,6 +10,7 @@ from rest_framework.test import APIRequestFactory
 from users.models import Order
 from users.payments import (
     build_payme_sorted_values_sign_string,
+    extract_payme_raw_sign_fields,
     normalize_payme_webhook_status,
     verify_payme_webhook_request,
 )
@@ -191,6 +192,93 @@ class PaymeWebhookVerificationTests(TestCase):
 
         self.assertTrue(ok, reason)
         self.assertEqual(reason, 'ok')
+
+    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False, DEBUG=False)
+    def test_apple_pay_form_urlencoded_raw_strings_survive_drf_casting(self):
+        """
+        Apple Pay IPN: form-urlencoded strings must drive HMAC even if a casted
+        business payload (bool/float/None) is passed alongside the request.
+        """
+        from urllib.parse import urlencode
+
+        # Exact strings PayMe would POST (including trailing decimal + lowercase bool).
+        raw_fields = {
+            'buyer_card_exp': '',
+            'buyer_card_mask': '',
+            'currency': 'ILS',
+            'is_token_sale': 'true',
+            'notify_type': 'sale-complete',
+            'payme_sale_id': 'txn_apple_raw_1',
+            'payme_transaction_card_brand': '',
+            'sale_payment_method': 'apple-pay',
+            'sale_price': '110.50',
+            'status': '0',
+        }
+        expected_string_to_hash = build_payme_sorted_values_sign_string(raw_fields)
+        # Mathematical lock: alphabetical concat of the exact raw strings above.
+        self.assertEqual(
+            expected_string_to_hash,
+            ''
+            + ''  # buyer_card_exp
+            + ''  # buyer_card_mask
+            + 'ILS'
+            + 'true'
+            + 'sale-complete'
+            + 'txn_apple_raw_1'
+            + ''  # payme_transaction_card_brand
+            + 'apple-pay'
+            + '110.50'
+            + '0',
+        )
+        signature = hmac.new(
+            b'whsec_test',
+            expected_string_to_hash.encode('utf-8'),
+            hashlib.sha256,
+        ).hexdigest()
+
+        form_body = urlencode({**raw_fields, 'payme_signature': signature})
+        request = APIRequestFactory().post(
+            '/api/payments/webhook/payme/',
+            data=form_body,
+            content_type='application/x-www-form-urlencoded',
+        )
+
+        # What DRF/business code often sees after casting — must NOT control HMAC.
+        casted_payload = {
+            'buyer_card_exp': None,
+            'buyer_card_mask': None,
+            'currency': 'ILS',
+            'is_token_sale': True,  # would become 'True' with naive str()
+            'notify_type': 'sale-complete',
+            'payme_sale_id': 'txn_apple_raw_1',
+            'payme_transaction_card_brand': None,
+            'sale_payment_method': 'apple-pay',
+            'sale_price': 110.5,  # would become '110.5' and break vs '110.50'
+            'status': 0,
+            'merchant_order_id': '126',  # injected — must be ignored for HMAC
+            'payme_signature': signature,
+        }
+
+        raw_extracted = extract_payme_raw_sign_fields(request)
+        self.assertEqual(raw_extracted.get('is_token_sale'), 'true')
+        self.assertEqual(raw_extracted.get('sale_price'), '110.50')
+        self.assertIsInstance(raw_extracted.get('is_token_sale'), str)
+        self.assertIsInstance(raw_extracted.get('sale_price'), str)
+
+        ok, reason = verify_payme_webhook_request(
+            request,
+            payload=casted_payload,
+            order=_order(pk=126, payme_transaction_id='txn_apple_raw_1', total_amount=Decimal('110.50')),
+            signature_payload=casted_payload,  # poisoned on purpose — raw POST must win
+        )
+        self.assertTrue(ok, reason)
+        self.assertEqual(reason, 'ok')
+
+        # Casting path alone must NOT match PayMe's signature.
+        casted_hash = build_payme_sorted_values_sign_string(
+            {k: v for k, v in casted_payload.items() if k != 'payme_signature'}
+        )
+        self.assertNotEqual(casted_hash, expected_string_to_hash)
 
     @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False, DEBUG=False)
     def test_injected_merchant_order_id_does_not_break_sorted_signature(self):

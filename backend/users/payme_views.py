@@ -25,6 +25,7 @@ from services.payme_service import (
 
 from .models import Order
 from .payments import (
+    extract_payme_raw_sign_fields,
     finalize_pending_order_to_paid,
     log_payme,
     log_payme_dev,
@@ -350,9 +351,10 @@ def payme_webhook(request):
         payme_ref = str(order.payme_transaction_id or '').strip()
         payme_ref_source = payme_ref_sources.get(payme_ref) or payme_ref_source or lookup_via
 
-        # HMAC must use the original PayMe fields only. Copy before canonicalize injects
-        # merchant_order_id / sale ids for Apple Pay business checks.
-        signature_payload = dict(payload)
+        # HMAC must use the original PayMe fields only. Prefer raw POST strings
+        # (no DRF bool/float casting); fall back to a shallow copy before canonicalize.
+        raw_sign_fields = extract_payme_raw_sign_fields(request)
+        signature_payload = raw_sign_fields if raw_sign_fields else dict(payload)
 
         try:
             payload = _canonicalize_webhook_payload_for_order(payload, order)
