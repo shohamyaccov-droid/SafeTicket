@@ -350,8 +350,8 @@ def payme_webhook(request):
         payme_ref = str(order.payme_transaction_id or '').strip()
         payme_ref_source = payme_ref_sources.get(payme_ref) or payme_ref_source or lookup_via
 
-        # HMAC must use the original PayMe fields (before we inject merchant_order_id /
-        # payme_sale_id for Apple Pay / lookup). Injected keys would break bad_signature.
+        # HMAC must use the original PayMe fields only. Copy before canonicalize injects
+        # merchant_order_id / sale ids for Apple Pay business checks.
         signature_payload = dict(payload)
 
         try:
@@ -365,7 +365,7 @@ def payme_webhook(request):
             _log_payme_webhook_rejection(
                 'canonicalize_failed',
                 order_id=order_id,
-                payload={'error': str(canon_exc), 'raw_keys': list(payload.keys())},
+                payload={'error': str(canon_exc), 'raw_keys': list(signature_payload.keys())},
             )
             return Response(
                 {'error': 'webhook failed', 'reason': 'canonicalize_failed'},
@@ -414,6 +414,8 @@ def payme_webhook(request):
                     'order_currency': order.currency,
                     'order_total_paid_by_buyer': str(order.total_paid_by_buyer),
                     'order_total_amount': str(order.total_amount),
+                    # Distinguish pristine HMAC keys from post-canonicalize business keys.
+                    'signature_payload_keys': list(signature_payload.keys()),
                     'canonical_payload_keys': list(payload.keys()),
                 },
             )

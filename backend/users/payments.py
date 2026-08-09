@@ -609,8 +609,9 @@ def _payme_hmac_body_candidates(
 
     Primary (Bit / body payme_signature): alphabetical keys → concatenate values.
     Also try key+value concat and form-urlencoded, plus raw body for header signatures.
-    Use signature_payload (pre-canonicalize) when provided so injected merchant_order_id
-    does not break the hash.
+
+    Prefer signature_payload (pre-canonicalize). Always also try a variant that drops
+    merchant_order_id / merchantOrderId so backend-injected merchant ids never poison HMAC.
     """
     from urllib.parse import urlencode
 
@@ -618,28 +619,42 @@ def _payme_hmac_body_candidates(
     sign_src = signature_payload if isinstance(signature_payload, dict) else payload
     if not isinstance(sign_src, dict):
         sign_src = {}
+    else:
+        # Shallow copy so callers cannot mutate HMAC input via the business payload.
+        sign_src = dict(sign_src)
 
-    items = _payme_signable_items(sign_src)
-    sorted_keys = sorted(items.keys())
+    # Never hash PayMe signature fields; also prepare a merchant-id-free variant.
+    base_sources: list[dict[str, Any]] = [sign_src]
+    stripped_merchant = {
+        k: v
+        for k, v in sign_src.items()
+        if str(k) not in ('merchant_order_id', 'merchantOrderId')
+    }
+    if stripped_merchant.keys() != sign_src.keys():
+        base_sources.append(stripped_merchant)
 
-    # 1) PayMe IPN: sorted keys, join values only
-    if sorted_keys:
+    for src in base_sources:
+        items = _payme_signable_items(src)
+        sorted_keys = sorted(items.keys())
+        if not sorted_keys:
+            continue
+        # 1) PayMe IPN: sorted keys, join values only
         candidates.append(''.join(items[k] for k in sorted_keys).encode('utf-8'))
         # 2) key+value concat (some PSP variants)
         candidates.append(''.join(f'{k}{items[k]}' for k in sorted_keys).encode('utf-8'))
         # 3) application/x-www-form-urlencoded in sorted key order
         candidates.append(urlencode([(k, items[k]) for k in sorted_keys]).encode('utf-8'))
 
+        # Legacy: JSON without signature field (previous TradeTix behavior)
+        cleaned = {k: v for k, v in src.items() if k not in _PAYME_SIGNATURE_BODY_KEYS}
+        try:
+            candidates.append(json.dumps(cleaned, separators=(',', ':'), ensure_ascii=False).encode('utf-8'))
+            candidates.append(json.dumps(cleaned, separators=(',', ':'), sort_keys=True).encode('utf-8'))
+        except (TypeError, ValueError):
+            pass
+
     if raw_body:
         candidates.append(raw_body)
-
-    # Legacy: JSON without signature field (previous TradeTix behavior)
-    cleaned = {k: v for k, v in sign_src.items() if k not in _PAYME_SIGNATURE_BODY_KEYS}
-    try:
-        candidates.append(json.dumps(cleaned, separators=(',', ':'), ensure_ascii=False).encode('utf-8'))
-        candidates.append(json.dumps(cleaned, separators=(',', ':'), sort_keys=True).encode('utf-8'))
-    except (TypeError, ValueError):
-        pass
 
     seen: set[bytes] = set()
     out: list[bytes] = []
@@ -673,6 +688,8 @@ def verify_payme_webhook_request(
     sale/transaction reference and prefers explicit merchant_order_id fields.
 
     signature_payload: original POST fields for HMAC (before canonicalize injects keys).
+    When omitted, HMAC still ignores merchant_order_id variants so injected ids cannot
+    cause bad_signature.
     """
     if _payme_webhook_hmac_bypassed():
         is_sandbox = bool(getattr(settings, 'PAYME_IS_SANDBOX', False))
@@ -689,11 +706,16 @@ def verify_payme_webhook_request(
             )
     else:
         secret = (get_payme_config()['webhook_secret'] or '').strip()
-        hmac_payload = signature_payload if signature_payload is not None else payload
-        # Signature may live on the raw POST (hmac_payload) or on the business payload
-        # after we attach payme_signature for logging — check both.
+        # Prefer an explicit pristine copy; never hash the post-canonicalize business payload
+        # when a signature_payload was provided.
+        if isinstance(signature_payload, dict):
+            sign_source = dict(signature_payload)
+        else:
+            sign_source = dict(payload) if isinstance(payload, dict) else {}
+
+        # Signature may live on the raw POST or on the business payload.
         got = (
-            _extract_payme_webhook_signature(request, hmac_payload or {})
+            _extract_payme_webhook_signature(request, sign_source)
             or _extract_payme_webhook_signature(request, payload or {})
         )
         if not got:
@@ -711,17 +733,29 @@ def verify_payme_webhook_request(
             return False, 'body_unavailable_for_signature'
         from secrets import compare_digest
 
+        # Candidates include full sign_source and a merchant_order_id-stripped variant so
+        # backend-injected merchant ids cannot uniquely define the hash.
         matched = False
         for candidate in _payme_hmac_body_candidates(
             body,
-            payload or {},
-            signature_payload=hmac_payload or {},
+            {},
+            signature_payload=sign_source,
         ):
             expected = hmac.new(secret.encode('utf-8'), candidate, hashlib.sha256).hexdigest()
             if compare_digest(got, expected) or compare_digest(got, f'sha256={expected}'):
                 matched = True
                 break
         if not matched:
+            logger.warning(
+                'PayMe webhook bad_signature order_id=%s signature_keys=%s had_merchant_order_id=%s',
+                getattr(order, 'pk', None),
+                sorted(
+                    str(k)
+                    for k in sign_source.keys()
+                    if str(k) not in _PAYME_SIGNATURE_BODY_KEYS
+                ),
+                'merchant_order_id' in sign_source or 'merchantOrderId' in sign_source,
+            )
             return False, 'bad_signature'
 
     # Prefer explicit merchant order fields. Generic order_id is often PayMe-internal

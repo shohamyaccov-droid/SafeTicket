@@ -224,6 +224,51 @@ class PaymeWebhookVerificationTests(TestCase):
         self.assertEqual(reason, 'ok')
 
     @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False, DEBUG=False)
+    def test_injected_merchant_order_id_ignored_even_without_signature_payload(self):
+        """
+        If the view accidentally passes a mutated payload as the only HMAC source,
+        verification must still succeed by ignoring the injected merchant_order_id.
+        """
+        original = {
+            'currency': 'ILS',
+            'notify_type': 'sale-complete',
+            'payme_sale_id': 'txn_apple_126',
+            'sale_price': 11000,
+            'status': 'completed',
+        }
+        sign_string = build_payme_sorted_values_sign_string(original)
+        signature = hmac.new(b'whsec_test', sign_string.encode('utf-8'), hashlib.sha256).hexdigest()
+        # Simulate production bug: merchant_order_id filled after order lookup, then hashed.
+        mutated = {
+            **original,
+            'merchant_order_id': '126',
+            'payme_signature': signature,
+        }
+        body = json.dumps(mutated, separators=(',', ':')).encode('utf-8')
+        request = APIRequestFactory().post(
+            '/api/payments/webhook/payme/',
+            data=body,
+            content_type='application/json',
+        )
+
+        ok, reason = verify_payme_webhook_request(
+            request,
+            payload=mutated,
+            order=_order(pk=126, payme_transaction_id='txn_apple_126'),
+            # Intentionally omit signature_payload — strip path must still pass.
+        )
+
+        self.assertTrue(ok, reason)
+        self.assertEqual(reason, 'ok')
+
+        # Sanity: hashing the mutated payload (including merchant_order_id) must NOT
+        # equal the PayMe signature we generated from the pristine fields.
+        mutated_sign = build_payme_sorted_values_sign_string(
+            {k: v for k, v in mutated.items() if k != 'payme_signature'}
+        )
+        self.assertNotEqual(mutated_sign, sign_string)
+
+    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False, DEBUG=False)
     def test_webhook_rejects_bad_body_signature(self):
         payload = {
             'merchant_order_id': '123',
