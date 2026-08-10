@@ -24,6 +24,7 @@ from .models import (
     GlobalFeeSettings,
     Offer,
     Order,
+    PayMeWebhookLog,
     SellerBonusCampaign,
     SellerPayout,
     Ticket,
@@ -1113,6 +1114,26 @@ class ContactMessageAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+
+# ── PayMe webhook capture (offline HMAC debug / replay) ───────────────────────
+
+@admin.register(PayMeWebhookLog)
+class PayMeWebhookLogAdmin(admin.ModelAdmin):
+    list_display = ['id', 'created_at', 'is_valid', 'error_message_short', 'raw_body_len']
+    list_filter = ['is_valid', 'created_at']
+    search_fields = ['error_message', 'raw_body']
+    readonly_fields = ['created_at', 'raw_body', 'headers', 'is_valid', 'error_message']
+    ordering = ['-created_at']
+
+    @admin.display(description='error')
+    def error_message_short(self, obj):
+        msg = obj.error_message or ''
+        return msg if len(msg) <= 80 else msg[:77] + '…'
+
+    @admin.display(description='body bytes')
+    def raw_body_len(self, obj):
+        return len(obj.raw_body or '')
 
 
 # ── Analytics Admin ────────────────────────────────────────────────────────────

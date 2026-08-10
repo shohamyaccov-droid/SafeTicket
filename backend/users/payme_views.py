@@ -23,13 +23,14 @@ from services.payme_service import (
     resolve_buyer_details_for_order,
 )
 
-from .models import Order
+from .models import Order, PayMeWebhookLog
 from .payments import (
     extract_payme_raw_sign_fields,
     finalize_pending_order_to_paid,
     log_payme,
     log_payme_dev,
     normalize_payme_webhook_status,
+    parse_payme_raw_body_fields,
     verify_payme_webhook_request,
 )
 from .shabbat import shabbat_forbidden_response
@@ -37,6 +38,50 @@ from .shabbat import shabbat_forbidden_response
 logger = logging.getLogger(__name__)
 
 _PAYME_WEBHOOK_PARSERS = (FormParser, MultiPartParser, JSONParser)
+
+
+def _headers_to_jsonable(request) -> dict[str, str]:
+    try:
+        return {str(k): str(v) for k, v in request.headers.items()}
+    except Exception:
+        return {}
+
+
+def _capture_payme_webhook_log(request) -> PayMeWebhookLog | None:
+    """
+    Persist exact wire bytes + headers before any business parsing / HMAC.
+    Must be the first side-effect in payme_webhook.
+    """
+    try:
+        raw_bytes = getattr(request, 'body', None) or b''
+        if isinstance(raw_bytes, memoryview):
+            raw_bytes = raw_bytes.tobytes()
+        raw_text = raw_bytes.decode('utf-8', errors='replace') if isinstance(raw_bytes, (bytes, bytearray)) else str(raw_bytes)
+        return PayMeWebhookLog.objects.create(
+            raw_body=raw_text,
+            headers=_headers_to_jsonable(request),
+            is_valid=False,
+            error_message='unprocessed',
+        )
+    except Exception:
+        logger.exception('PayMe webhook: failed to persist PayMeWebhookLog (continuing without log)')
+        return None
+
+
+def _finalize_payme_webhook_log(
+    webhook_log: PayMeWebhookLog | None,
+    *,
+    is_valid: bool,
+    error_message: str | None,
+) -> None:
+    if webhook_log is None:
+        return
+    try:
+        webhook_log.is_valid = bool(is_valid)
+        webhook_log.error_message = error_message
+        webhook_log.save(update_fields=['is_valid', 'error_message'])
+    except Exception:
+        logger.exception('PayMe webhook: failed to update PayMeWebhookLog id=%s', getattr(webhook_log, 'pk', None))
 
 
 def _coerce_payme_payload_dict(data: Any) -> dict[str, Any]:
@@ -68,11 +113,16 @@ def _coerce_payme_payload_dict(data: Any) -> dict[str, Any]:
     return out
 
 
-def _parse_payme_webhook_payload(request) -> dict[str, Any]:
-    """Use Django/DRF parsed request data for PayMe callbacks."""
+def _parse_payme_webhook_payload(request, *, raw_body: bytes | None = None) -> dict[str, Any]:
+    """
+    Business payload from the raw body only (parse_qsl / JSON), not request.POST.
+    Falls back to DRF data only when the body is empty.
+    """
     try:
-        if hasattr(request, 'POST') and request.POST:
-            return _coerce_payme_payload_dict(request.POST)
+        body = raw_body if raw_body is not None else (getattr(request, 'body', None) or b'')
+        fields = parse_payme_raw_body_fields(body)
+        if fields:
+            return dict(fields)
         if hasattr(request, 'data') and request.data:
             return _coerce_payme_payload_dict(request.data)
     except Exception as exc:
@@ -235,34 +285,53 @@ def payme_webhook(request):
     Handles card and Apple Pay / wallet notifies. Apple Pay often differs by:
     PayMe-internal order_id, nested sale.status, alternate TRAN vs init payme_sale_id,
     and sometimes omitted amount fields.
+
+    Every notify is persisted to PayMeWebhookLog (raw body + headers) before parsing/HMAC
+    so production bad_signature cases can be replayed offline.
     """
+    # Absolute first side-effect: capture exact wire bytes before any business logic.
+    webhook_log = _capture_payme_webhook_log(request)
+    outcome: dict[str, Any] = {'is_valid': False, 'error_message': 'unprocessed'}
+
     payload: dict[str, Any] | None = None
     order_id: int | None = None
     try:
         try:
-            incoming_for_log = request.POST if getattr(request, 'POST', None) else getattr(request, 'data', {})
+            raw_body = getattr(request, 'body', None) or b''
+            if isinstance(raw_body, memoryview):
+                raw_body = raw_body.tobytes()
         except Exception as exc:
-            logger.warning('PayMe webhook incoming payload parse error: %s', exc)
+            logger.warning('PayMe webhook body read error: %s', exc)
+            outcome['error_message'] = 'payload_parse_error'
             _log_payme_webhook_rejection('payload_parse_error', payload={'error': str(exc)})
             return Response({'error': 'empty payload', 'reason': 'payload_parse_error'}, status=status.HTTP_400_BAD_REQUEST)
 
+        incoming_for_log = parse_payme_raw_body_fields(raw_body)
+
         logger.info(
-            'PayMe webhook incoming content_type=%s remote_addr=%s',
+            'PayMe webhook incoming content_type=%s remote_addr=%s log_id=%s',
             request.content_type,
             request.META.get('REMOTE_ADDR'),
+            getattr(webhook_log, 'pk', None),
         )
         log_payme(
             'webhook_incoming',
-            payload={'content_type': request.content_type, 'raw': incoming_for_log},
+            payload={
+                'content_type': request.content_type,
+                'webhook_log_id': getattr(webhook_log, 'pk', None),
+                'raw': incoming_for_log,
+            },
         )
 
-        payload = _parse_payme_webhook_payload(request)
+        payload = _parse_payme_webhook_payload(request, raw_body=raw_body)
         if not payload:
+            outcome['error_message'] = 'empty_payload'
             _log_payme_webhook_rejection('empty_payload', payload={'content_type': request.content_type})
             return Response({'error': 'empty payload', 'reason': 'empty_payload'}, status=status.HTTP_400_BAD_REQUEST)
 
         if not isinstance(payload, dict):
             reason = f'invalid_payload_type:{type(payload).__name__}'
+            outcome['error_message'] = reason
             _log_payme_webhook_rejection(reason)
             return Response({'error': 'expected object', 'reason': reason}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -315,6 +384,7 @@ def payme_webhook(request):
         )
 
         if not possible_payme_refs and oid_raw in (None, ''):
+            outcome['error_message'] = 'payme_transaction_reference_required'
             _log_payme_webhook_rejection('payme_transaction_reference_required', payload=payload)
             return Response(
                 {'error': 'payme transaction reference required', 'reason': 'payme_transaction_reference_required'},
@@ -333,6 +403,7 @@ def payme_webhook(request):
             oid_raw=oid_raw,
         )
         if not order:
+            outcome['error_message'] = 'order_not_found_for_payme_transaction_id'
             _log_payme_webhook_rejection(
                 'order_not_found_for_payme_transaction_id',
                 payload={
@@ -351,9 +422,8 @@ def payme_webhook(request):
         payme_ref = str(order.payme_transaction_id or '').strip()
         payme_ref_source = payme_ref_sources.get(payme_ref) or payme_ref_source or lookup_via
 
-        # HMAC must use the original PayMe fields only. Prefer raw POST strings
-        # (no DRF bool/float casting); fall back to a shallow copy before canonicalize.
-        raw_sign_fields = extract_payme_raw_sign_fields(request)
+        # HMAC must use the original PayMe fields from raw body only (parse_qsl).
+        raw_sign_fields = extract_payme_raw_sign_fields(request, raw_body=raw_body)
         signature_payload = raw_sign_fields if raw_sign_fields else dict(payload)
 
         try:
@@ -364,6 +434,7 @@ def payme_webhook(request):
                 order_id,
                 canon_exc,
             )
+            outcome['error_message'] = 'canonicalize_failed'
             _log_payme_webhook_rejection(
                 'canonicalize_failed',
                 order_id=order_id,
@@ -380,6 +451,7 @@ def payme_webhook(request):
                 request,
                 payload=payload,
                 order=order,
+                raw_body=raw_body,
                 signature_payload=signature_payload,
             )
         except Exception as verify_exc:
@@ -389,6 +461,7 @@ def payme_webhook(request):
                 verify_exc,
                 payload,
             )
+            outcome['error_message'] = 'verify_exception'
             _log_payme_webhook_rejection(
                 'verify_exception',
                 order_id=order_id,
@@ -400,6 +473,7 @@ def payme_webhook(request):
             )
 
         if not verified:
+            outcome['error_message'] = verify_reason or 'bad_signature'
             _log_payme_webhook_rejection(
                 verify_reason,
                 order_id=order_id,
@@ -419,9 +493,14 @@ def payme_webhook(request):
                     # Distinguish pristine HMAC keys from post-canonicalize business keys.
                     'signature_payload_keys': list(signature_payload.keys()),
                     'canonical_payload_keys': list(payload.keys()),
+                    'webhook_log_id': getattr(webhook_log, 'pk', None),
                 },
             )
             return Response({'error': 'invalid webhook', 'reason': verify_reason}, status=status.HTTP_403_FORBIDDEN)
+
+        # HMAC + order checks passed (finalize may still be deferred for non-final status).
+        outcome['is_valid'] = True
+        outcome['error_message'] = None
 
         if order.status == 'paid':
             try:
@@ -539,8 +618,15 @@ def payme_webhook(request):
             order_id=order_id,
             payload={'error': str(exc), 'payload': payload or {}},
         )
+        outcome['error_message'] = str(exc) if settings.DEBUG else 'internal_error'
         reason = str(exc) if settings.DEBUG else 'internal_error'
         return Response({'error': 'webhook failed', 'reason': reason}, status=status.HTTP_400_BAD_REQUEST)
+    finally:
+        _finalize_payme_webhook_log(
+            webhook_log,
+            is_valid=bool(outcome.get('is_valid')),
+            error_message=outcome.get('error_message'),
+        )
 
 
 @csrf_exempt

@@ -563,60 +563,40 @@ def build_payme_sorted_values_sign_string(payload: dict[str, Any]) -> str:
     return ''.join(items[k] for k in sorted(items.keys()))
 
 
-def extract_payme_raw_sign_fields(request) -> dict[str, str]:
+def parse_payme_raw_body_fields(raw_body: bytes | str | None) -> dict[str, str]:
     """
-    Exact PayMe POST fields as strings for HMAC — never DRF-cast Python types.
+    Parse PayMe notify body with zero Django/DRF interference.
 
-    Priority:
-    1) ``request.POST`` (form-urlencoded / multipart) — Django keeps raw strings
-    2) Raw body parsed with ``parse_qsl(keep_blank_values=True)``
-    3) JSON body with ``parse_int=str`` / ``parse_float=str`` so decimals stay textual
+    Form-urlencoded (PayMe IPN / Apple Pay default): ``urllib.parse.parse_qsl``
+    with ``keep_blank_values=True`` so empty card fields stay in the dict.
+    JSON: ``parse_int=str`` / ``parse_float=str`` so decimals stay textual.
+
+    Never uses ``request.POST`` / ``request.data`` (QueryDict drops blanks / casts).
     """
     out: dict[str, str] = {}
-
+    if raw_body is None:
+        return out
     try:
-        post = getattr(request, 'POST', None)
-        if post is not None and len(post) > 0:
-            for key in post.keys():
-                key_s = str(key)
-                if key_s in _PAYME_SIGNATURE_BODY_KEYS:
-                    continue
-                if hasattr(post, 'getlist'):
-                    vals = post.getlist(key_s)
-                    val = vals[-1] if vals else ''
-                else:
-                    val = post.get(key_s)
-                out[key_s] = '' if val is None else str(val)
-            if out:
-                return out
-    except Exception as exc:
-        logger.warning('PayMe raw sign fields: request.POST read failed: %s', exc)
-
-    try:
-        body = getattr(request, 'body', None) or b''
-        if not body:
+        if isinstance(raw_body, bytes):
+            text = raw_body.decode('utf-8', errors='replace')
+        else:
+            text = str(raw_body)
+        if not text:
             return out
-        text = body.decode('utf-8', errors='replace')
         stripped = text.lstrip()
         # Form body (PayMe IPN / Apple Pay notify default)
         if stripped and not stripped.startswith('{') and not stripped.startswith('[') and '=' in stripped:
             from urllib.parse import parse_qsl
 
             for key, val in parse_qsl(text, keep_blank_values=True):
-                key_s = str(key)
-                if key_s in _PAYME_SIGNATURE_BODY_KEYS:
-                    continue
-                out[key_s] = '' if val is None else str(val)
-            if out:
-                return out
+                out[str(key)] = '' if val is None else str(val)
+            return out
         # JSON: preserve number tokens as strings (avoid float 110.5 vs "110.50")
         if stripped.startswith('{'):
             data = json.loads(text, parse_int=str, parse_float=str)
             if isinstance(data, dict):
                 for key, val in data.items():
                     key_s = str(key)
-                    if key_s in _PAYME_SIGNATURE_BODY_KEYS:
-                        continue
                     if isinstance(val, bool):
                         out[key_s] = 'true' if val else 'false'
                     elif val is None:
@@ -626,15 +606,36 @@ def extract_payme_raw_sign_fields(request) -> dict[str, str]:
                     else:
                         out[key_s] = str(val)
     except Exception as exc:
-        logger.warning('PayMe raw sign fields: body parse failed: %s', exc)
-
+        logger.warning('PayMe raw body parse failed: %s', exc)
     return out
 
 
-def _extract_payme_webhook_signature(request, payload: dict[str, Any]) -> str:
+def extract_payme_raw_sign_fields(request=None, *, raw_body: bytes | None = None) -> dict[str, str]:
+    """
+    Exact PayMe POST fields as strings for HMAC — never DRF/Django QueryDict.
+
+    Source of truth is the raw request body via ``parse_payme_raw_body_fields``
+    (``parse_qsl(keep_blank_values=True)``). Signature keys are excluded.
+    """
+    try:
+        body = raw_body if raw_body is not None else (getattr(request, 'body', None) or b'')
+    except Exception as exc:
+        logger.warning('PayMe raw sign fields: request.body read failed: %s', exc)
+        body = b''
+    fields = parse_payme_raw_body_fields(body)
+    return {k: v for k, v in fields.items() if k not in _PAYME_SIGNATURE_BODY_KEYS}
+
+
+def _extract_payme_webhook_signature(
+    request,
+    payload: dict[str, Any],
+    *,
+    raw_body: bytes | None = None,
+) -> str:
     """
     PayMe may send the HMAC in headers (X-Payme-Signature) or inside the POST body
-    as payme_signature (production IPN / form callbacks). Prefer header, then body.
+    as payme_signature (production IPN / form callbacks). Prefer header, then raw body,
+    then payload dict — never request.POST / request.data.
     """
     header_sig = (
         request.headers.get('X-Payme-Signature')
@@ -645,6 +646,16 @@ def _extract_payme_webhook_signature(request, payload: dict[str, Any]) -> str:
     )
     if str(header_sig).strip():
         return str(header_sig).strip()
+
+    try:
+        body = raw_body if raw_body is not None else (getattr(request, 'body', None) or b'')
+    except Exception:
+        body = b''
+    raw_fields = parse_payme_raw_body_fields(body)
+    for key in _PAYME_SIGNATURE_BODY_KEYS:
+        value = raw_fields.get(key)
+        if value not in (None, ''):
+            return str(value).strip()
 
     if isinstance(payload, dict):
         for key in _PAYME_SIGNATURE_BODY_KEYS:
@@ -660,26 +671,6 @@ def _extract_payme_webhook_signature(request, payload: dict[str, Any]) -> str:
                 value = nested.get(key)
                 if value not in (None, ''):
                     return str(value).strip()
-
-    # Last resort: DRF / Django parsed body (same keys)
-    try:
-        data = getattr(request, 'data', None)
-        if data is not None:
-            for key in _PAYME_SIGNATURE_BODY_KEYS:
-                value = data.get(key) if hasattr(data, 'get') else None
-                if value not in (None, ''):
-                    return str(value).strip()
-    except Exception:
-        pass
-    try:
-        post = getattr(request, 'POST', None)
-        if post:
-            for key in _PAYME_SIGNATURE_BODY_KEYS:
-                value = post.get(key)
-                if value not in (None, ''):
-                    return str(value).strip()
-    except Exception:
-        pass
     return ''
 
 
@@ -777,8 +768,8 @@ def verify_payme_webhook_request(
     differs from the `payme_sale_id` stored at init — verification accepts any matching
     sale/transaction reference and prefers explicit merchant_order_id fields.
 
-    HMAC uses raw unparsed POST strings from the request whenever available so DRF
-    type-casting (bool/float/None) cannot alter the hash material.
+    HMAC uses the raw request body via ``parse_qsl(keep_blank_values=True)`` so
+    Django QueryDict / DRF casting cannot alter the hash material.
 
     signature_payload: original POST fields for HMAC (before canonicalize injects keys).
     When omitted, HMAC still ignores merchant_order_id variants so injected ids cannot
@@ -799,30 +790,6 @@ def verify_payme_webhook_request(
             )
     else:
         secret = (get_payme_config()['webhook_secret'] or '').strip()
-        # 1) Raw request strings win (no DRF casting).
-        # 2) Else explicit pristine signature_payload.
-        # 3) Else business payload (last resort; merchant_order_id strip still applies).
-        raw_fields = extract_payme_raw_sign_fields(request)
-        if raw_fields:
-            sign_source = dict(raw_fields)
-            sign_source_origin = 'request_raw'
-        elif isinstance(signature_payload, dict) and signature_payload:
-            sign_source = dict(signature_payload)
-            sign_source_origin = 'signature_payload'
-        else:
-            sign_source = dict(payload) if isinstance(payload, dict) else {}
-            sign_source_origin = 'parsed_payload'
-
-        # Signature may live on the raw POST or on the business payload.
-        got = (
-            _extract_payme_webhook_signature(request, sign_source)
-            or _extract_payme_webhook_signature(request, payload or {})
-            or _extract_payme_webhook_signature(request, signature_payload or {})
-        )
-        if not got:
-            return False, 'missing_signature_header'
-        import hmac
-
         try:
             body = raw_body if raw_body is not None else (request.body or b'')
         except Exception as exc:
@@ -832,6 +799,30 @@ def verify_payme_webhook_request(
                 exc,
             )
             return False, 'body_unavailable_for_signature'
+
+        # 1) Raw body via parse_qsl (no Django/DRF).
+        # 2) Else explicit pristine signature_payload.
+        # 3) Else business payload (last resort; merchant_order_id strip still applies).
+        raw_fields = extract_payme_raw_sign_fields(request, raw_body=body)
+        if raw_fields:
+            sign_source = dict(raw_fields)
+            sign_source_origin = 'request_raw_body'
+        elif isinstance(signature_payload, dict) and signature_payload:
+            sign_source = dict(signature_payload)
+            sign_source_origin = 'signature_payload'
+        else:
+            sign_source = dict(payload) if isinstance(payload, dict) else {}
+            sign_source_origin = 'parsed_payload'
+
+        # Signature from header or raw body — never request.POST / request.data.
+        got = (
+            _extract_payme_webhook_signature(request, sign_source, raw_body=body)
+            or _extract_payme_webhook_signature(request, payload or {}, raw_body=body)
+            or _extract_payme_webhook_signature(request, signature_payload or {}, raw_body=body)
+        )
+        if not got:
+            return False, 'missing_signature_header'
+        import hmac
         from secrets import compare_digest
 
         candidates, string_to_hash = _payme_hmac_body_candidates(

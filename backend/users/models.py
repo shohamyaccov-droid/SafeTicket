@@ -1722,3 +1722,28 @@ class CouponRedemption(models.Model):
 
     def __str__(self):
         return f'{self.coupon_id}:{self.buyer_key}:{self.status}'
+
+
+class PayMeWebhookLog(models.Model):
+    """
+    Immutable capture of every PayMe IPN/notify for offline HMAC debug + replay.
+    Saved before any DRF/business parsing so raw_body matches the wire bytes.
+    """
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    raw_body = models.TextField(help_text='Exact request.body decoded as UTF-8')
+    headers = models.JSONField(default=dict, blank=True)
+    is_valid = models.BooleanField(
+        default=False,
+        help_text='True when webhook processing completed without a rejection reason',
+    )
+    error_message = models.TextField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at', 'is_valid']),
+        ]
+
+    def __str__(self):
+        status = 'valid' if self.is_valid else (self.error_message or 'invalid')
+        return f'PayMeWebhookLog#{self.pk} {status}'
