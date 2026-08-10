@@ -563,6 +563,75 @@ def build_payme_sorted_values_sign_string(payload: dict[str, Any]) -> str:
     return ''.join(items[k] for k in sorted(items.keys()))
 
 
+def compute_payme_md5_signature(string_to_hash: str, secret: str) -> str:
+    """
+    Production PayMe notify signature: MD5(string_to_hash + secret) as lowercase hex.
+
+    ``string_to_hash`` is the alphabetical concatenation of POST field values
+    (excluding payme_signature), using form-decoded strings (``parse_qsl`` /
+    ``unquote_plus`` so ``+`` → space and ``%XX`` are decoded).
+    """
+    material = f'{string_to_hash or ""}{secret or ""}'
+    return hashlib.md5(material.encode('utf-8')).hexdigest()
+
+
+def _payme_md5_signature_candidates(
+    *,
+    string_to_hash: str,
+    secret: str,
+    sign_source: dict[str, Any],
+    raw_body: bytes,
+) -> list[tuple[str, str]]:
+    """
+    Build (label, hex_digest) candidates for PayMe MD5 verification.
+
+    Primary (PayMe docs / production Apple Pay): md5(string_to_hash + secret).
+    Also try alternate decode / hyperswitch-style txn+sale digests.
+    """
+    from urllib.parse import parse_qsl, unquote
+
+    out: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    def add(label: str, digest: str) -> None:
+        if digest and digest not in seen:
+            seen.add(digest)
+            out.append((label, digest))
+
+    add('md5_sth_plus_secret', compute_payme_md5_signature(string_to_hash, secret))
+    add('md5_secret_plus_sth', compute_payme_md5_signature(secret, string_to_hash))
+
+    # Alternate: unquote (keep literal '+') instead of unquote_plus.
+    try:
+        text = raw_body.decode('utf-8', errors='replace') if isinstance(raw_body, (bytes, bytearray)) else str(raw_body or '')
+        alt: dict[str, str] = {}
+        for part in text.split('&'):
+            if '=' not in part:
+                continue
+            key, _, val = part.partition('=')
+            key_s = str(key)
+            if key_s in _PAYME_SIGNATURE_BODY_KEYS:
+                continue
+            alt[key_s] = unquote(val)
+        if alt:
+            alt_sth = ''.join(alt[k] for k in sorted(alt.keys()))
+            add('md5_unquote_sth_plus_secret', compute_payme_md5_signature(alt_sth, secret))
+    except Exception:
+        pass
+
+    txn = ''
+    sale = ''
+    if isinstance(sign_source, dict):
+        txn = str(sign_source.get('payme_transaction_id') or '').strip()
+        sale = str(sign_source.get('payme_sale_id') or '').strip()
+    if txn and sale:
+        # Hyperswitch PayMe connector: MD5(secret + txn + sale)
+        add('md5_secret_txn_sale', compute_payme_md5_signature(secret + txn + sale, ''))
+        add('md5_txn_sale_secret', compute_payme_md5_signature(txn + sale, secret))
+
+    return out
+
+
 def parse_payme_raw_body_fields(raw_body: bytes | str | None) -> dict[str, str]:
     """
     Parse PayMe notify body with zero Django/DRF interference.
@@ -839,16 +908,39 @@ def verify_payme_webhook_request(
             string_to_hash,
         )
 
+        got_norm = str(got).strip().lower().removeprefix('md5=')
         matched = False
-        for candidate in candidates:
-            expected = hmac.new(secret.encode('utf-8'), candidate, hashlib.sha256).hexdigest()
-            if compare_digest(got, expected) or compare_digest(got, f'sha256={expected}'):
-                matched = True
-                break
+        # Production PayMe (Apple Pay / Bit notify): 32-char MD5(string_to_hash + secret).
+        if len(got_norm) == 32 and all(c in '0123456789abcdef' for c in got_norm):
+            for label, digest in _payme_md5_signature_candidates(
+                string_to_hash=string_to_hash,
+                secret=secret,
+                sign_source=sign_source,
+                raw_body=body if isinstance(body, (bytes, bytearray)) else b'',
+            ):
+                if compare_digest(got_norm, digest):
+                    matched = True
+                    logger.info(
+                        'PayMe webhook MD5 signature matched order_id=%s via=%s',
+                        getattr(order, 'pk', None),
+                        label,
+                    )
+                    break
+
+        # Legacy / header-style: HMAC-SHA256 over candidate bodies (64-char hex).
+        if not matched:
+            for candidate in candidates:
+                expected = hmac.new(secret.encode('utf-8'), candidate, hashlib.sha256).hexdigest()
+                if compare_digest(got, expected) or compare_digest(got, f'sha256={expected}'):
+                    matched = True
+                    break
+                if compare_digest(got_norm, expected):
+                    matched = True
+                    break
         if not matched:
             logger.warning(
                 'PayMe webhook bad_signature order_id=%s origin=%s signature_keys=%s '
-                'had_merchant_order_id=%s string_to_hash=%r got_sig_prefix=%s',
+                'had_merchant_order_id=%s string_to_hash=%r got_sig_prefix=%s md5_primary=%s',
                 getattr(order, 'pk', None),
                 sign_source_origin,
                 sorted(
@@ -859,6 +951,7 @@ def verify_payme_webhook_request(
                 'merchant_order_id' in sign_source or 'merchantOrderId' in sign_source,
                 string_to_hash,
                 (got[:12] + '…') if len(got) > 12 else got,
+                compute_payme_md5_signature(string_to_hash, secret),
             )
             return False, 'bad_signature'
 

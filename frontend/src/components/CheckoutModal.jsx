@@ -257,6 +257,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const reserveGenerationRef = useRef(0);
   const transactionCompleteRef = useRef(false); // Prevents timer/cleanup from reverting UI after successful order
   const paymentSubmittingRef = useRef(false); // Pause reservation timer while payment API runs
+  /**
+   * True once the buyer starts checkout / PayMe (incl. Apple Pay sheet).
+   * Must block reservation release: iOS Apple Pay + PayMe redirect fire pagehide/blur/unmount
+   * which previously unlocked inventory mid-payment.
+   */
+  const isProcessingPaymentRef = useRef(false);
   /** True while Close/X is releasing the hold — in-flight reserve must unlock when it lands. */
   const checkoutClosingRef = useRef(false);
   /** Synchronous snapshot so success UI never waits on PDF download or lost React state */
@@ -721,6 +727,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     setLoading(true);
     setPaymentPhase('idle');
     paymentSubmittingRef.current = true;
+    isProcessingPaymentRef.current = true;
+    let paymeRedirectStarted = false;
 
     try {
       // Validate quantity before processing payment
@@ -969,6 +977,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             paymeRes.data?.error || 'Payme לא החזיר כתובת תשלום — בדקו הגדרות PAYME_* בשרת',
           );
         }
+        // Keep isProcessingPaymentRef=true through navigation so pagehide/unmount
+        // cannot release the cart hold while the buyer pays on PayMe / Apple Pay.
+        paymeRedirectStarted = true;
         window.location.assign(redirectUrl);
         return;
       }
@@ -1116,6 +1127,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         onErrorToParent({ message: 'הכרטיס נמכר ברגע זה. ריעננו את הרשימה – נסה כרטיס אחר.', type: 'error' });
       }
     } finally {
+      if (paymeRedirectStarted) {
+        // Stay locked: unload handlers must not release inventory mid-PayMe.
+        setLoading(false);
+        return;
+      }
+      isProcessingPaymentRef.current = false;
       paymentSubmittingRef.current = false;
       setLoading(false);
       setPaymentPhase('idle');
@@ -1166,6 +1183,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const fireReleaseHold = ({ keepalive = false } = {}) => {
     const tid = ticketIdRef.current;
     if (!tid || skipCartReserveRef.current || transactionCompleteRef.current) return null;
+    // Never unlock while PayMe / Apple Pay is in flight (sheet blur, redirect, remount).
+    if (isProcessingPaymentRef.current || paymentSubmittingRef.current) return null;
     const email = guestCheckoutEmail();
     reservationRef.current = false;
     setReservationActive(false);
@@ -1241,7 +1260,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
         if (cancelled || generation !== reserveGenerationRef.current || checkoutClosingRef.current) {
           // Stale async result (effect re-ran / left payment / closed modal). Release orphan lock.
-          if (response?.data?.success) {
+          if (
+            response?.data?.success
+            && !isProcessingPaymentRef.current
+            && !paymentSubmittingRef.current
+            && !transactionCompleteRef.current
+          ) {
             ticketAPI.releaseReservationKeepalive(tid, email);
             void ticketAPI.releaseReservation(tid, email).catch(() => {});
           }
@@ -1333,10 +1357,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     return undefined;
   }, [step, skipCartReserveForNegotiatedOffer, ticket?.id, user]);
 
-  // True component unmount: always unlock so route changes / parent dismiss don't leave false scarcity.
+  // True component unmount: unlock only if payment is not in flight.
   useEffect(() => {
     return () => {
       if (transactionCompleteRef.current || skipCartReserveRef.current) return;
+      if (isProcessingPaymentRef.current || paymentSubmittingRef.current) return;
       if (!reservationRef.current && !reserveInFlightRef.current && !checkoutClosingRef.current) return;
       const tid = ticketIdRef.current;
       if (!tid) return;
@@ -1347,9 +1372,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   }, []);
 
   // Tab close / browser back / BFCache: axios may be cancelled; keepalive fetch survives.
+  // Apple Pay sheet / PayMe redirect must NOT unlock — guarded by isProcessingPaymentRef.
   useEffect(() => {
     const releaseOnLeave = () => {
       if (transactionCompleteRef.current || skipCartReserveRef.current) return;
+      if (isProcessingPaymentRef.current || paymentSubmittingRef.current) return;
       if (!reservationRef.current && !reserveInFlightRef.current) return;
       const tid = ticketIdRef.current;
       if (!tid) return;
@@ -1390,18 +1417,23 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
     timerRef.current = setInterval(() => {
       setTimeRemaining((prev) => {
-        if (paymentSubmittingRef.current || transactionCompleteRef.current) {
+        if (paymentSubmittingRef.current || isProcessingPaymentRef.current || transactionCompleteRef.current) {
           return prev;
         }
         if (prev <= 1) {
           clearInterval(timerRef.current);
           timerRef.current = null;
-          if (transactionCompleteRef.current || paymentSubmittingRef.current) {
+          if (
+            transactionCompleteRef.current
+            || paymentSubmittingRef.current
+            || isProcessingPaymentRef.current
+          ) {
             return prev;
           }
           if (!skipCartReserveForNegotiatedOffer) {
             const releaseReservation = async () => {
               try {
+                if (isProcessingPaymentRef.current || paymentSubmittingRef.current) return;
                 const email = user ? null : guestForm.email || null;
                 await ticketAPI.releaseReservation(ticket?.id, email);
                 reservationRef.current = false;
@@ -1470,6 +1502,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     !legalAccepted;
 
   const handleClose = async () => {
+    if (isProcessingPaymentRef.current || paymentSubmittingRef.current) {
+      // Do not unlock or dismiss while PayMe / Apple Pay is processing.
+      return;
+    }
     checkoutClosingRef.current = true;
     if (pdfUrl) {
       window.URL.revokeObjectURL(pdfUrl);
