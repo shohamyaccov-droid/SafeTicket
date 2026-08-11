@@ -50,6 +50,12 @@ class PayMeSettings:
         seller_id = (
             getattr(settings, 'PAYME_SELLER_ID', '')
             or getattr(settings, 'PAYME_MERCHANT_ID', '')
+            or getattr(settings, 'PAYME_API_KEY', '')
+            or ''
+        ).strip()
+        api_key = (
+            getattr(settings, 'PAYME_API_KEY', '')
+            or seller_id
             or ''
         ).strip()
         api_url = getattr(settings, 'PAYME_API_URL', 'https://testpay.payme.io/api').strip().rstrip('/')
@@ -61,8 +67,12 @@ class PayMeSettings:
             api_url=api_url,
             generate_sale_url=generate_sale_url,
             webhook_secret=(getattr(settings, 'PAYME_WEBHOOK_SECRET', '') or '').strip(),
-            api_key=(getattr(settings, 'PAYME_API_KEY', '') or '').strip(),
-            api_secret=(getattr(settings, 'PAYME_API_SECRET', '') or '').strip(),
+            api_key=api_key,
+            api_secret=(
+                getattr(settings, 'PAYME_API_PASSWORD', '')
+                or getattr(settings, 'PAYME_API_SECRET', '')
+                or ''
+            ).strip(),
         )
 
     @property
@@ -490,6 +500,147 @@ def generate_payme_sale(
         'payme_sale_id': data.get('payme_sale_id') or data.get('sale_id'),
         'raw': data,
     }
+
+
+def confirm_payme_sale_status(
+    *,
+    payme_sale_id: str | None = None,
+    payme_transaction_id: str | None = None,
+) -> dict[str, Any]:
+    """
+    Re-query PayMe (get-sales / get-transactions) after an IPN webhook.
+
+    PayMe support + their integration kit recommend acting on the server-side status,
+    not only the webhook body. Returns::
+
+        {
+            'ok': bool,           # HTTP/API call succeeded
+            'found': bool,
+            'status': str | None, # normalized: success|authorized|failed|pending|None
+            'raw': dict | None,
+            'error': str | None,
+        }
+    """
+    cfg = PayMeSettings.from_django()
+    if not cfg.seller_id:
+        return {'ok': False, 'found': False, 'status': None, 'raw': None, 'error': 'seller_not_configured'}
+
+    sale_id = (payme_sale_id or '').strip()
+    txn_id = (payme_transaction_id or '').strip()
+    if not sale_id and not txn_id:
+        return {'ok': False, 'found': False, 'status': None, 'raw': None, 'error': 'missing_ids'}
+
+    api_url = (cfg.api_url or '').rstrip('/')
+    headers = _request_headers(cfg)
+
+    # Prefer get-sales filtered by sale_payme_id when we have a SALE id.
+    if sale_id:
+        body: dict[str, Any] = {
+            'seller_payme_id': cfg.seller_id,
+            'sale_payme_id': sale_id,
+            'page_size': 10,
+            'page': 1,
+        }
+        try:
+            response = requests.post(f'{api_url}/get-sales', json=body, headers=headers, timeout=20)
+            data = response.json()
+        except (requests.RequestException, ValueError) as exc:
+            logger.warning('PayMe get-sales confirm failed sale_id=%s error=%s', sale_id, exc)
+            return {'ok': False, 'found': False, 'status': None, 'raw': None, 'error': str(exc)}
+
+        if response.status_code >= 400 or (data.get('status_code') not in (None, 0)):
+            return {
+                'ok': False,
+                'found': False,
+                'status': None,
+                'raw': data if isinstance(data, dict) else None,
+                'error': data.get('status_error_details') or data.get('error') or 'get_sales_failed',
+            }
+
+        items = data.get('items') if isinstance(data, dict) else None
+        if not isinstance(items, list):
+            items = []
+        match = None
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            item_sale = str(
+                item.get('sale_payme_id') or item.get('payme_sale_id') or item.get('id') or ''
+            ).strip()
+            if item_sale == sale_id:
+                match = item
+                break
+        if match is None and len(items) == 1 and isinstance(items[0], dict):
+            match = items[0]
+
+        if not match:
+            return {'ok': True, 'found': False, 'status': None, 'raw': data, 'error': None}
+
+        raw_status = (
+            match.get('sale_status')
+            or match.get('payme_sale_status')
+            or match.get('status')
+            or ''
+        )
+        norm = _normalize_payme_api_status(raw_status)
+        return {'ok': True, 'found': True, 'status': norm, 'raw': match, 'error': None}
+
+    # Fallback: get-transactions and match payme_transaction_id in the page.
+    body = {
+        'seller_payme_id': cfg.seller_id,
+        'page_size': 50,
+        'page': 1,
+    }
+    try:
+        response = requests.post(f'{api_url}/get-transactions', json=body, headers=headers, timeout=20)
+        data = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning('PayMe get-transactions confirm failed txn_id=%s error=%s', txn_id, exc)
+        return {'ok': False, 'found': False, 'status': None, 'raw': None, 'error': str(exc)}
+
+    if response.status_code >= 400 or (data.get('status_code') not in (None, 0)):
+        return {
+            'ok': False,
+            'found': False,
+            'status': None,
+            'raw': data if isinstance(data, dict) else None,
+            'error': data.get('status_error_details') or data.get('error') or 'get_transactions_failed',
+        }
+
+    items = data.get('items') if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        items = []
+    match = None
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item_txn = str(
+            item.get('payme_transaction_id') or item.get('transaction_id') or item.get('id') or ''
+        ).strip()
+        if item_txn == txn_id:
+            match = item
+            break
+
+    if not match:
+        return {'ok': True, 'found': False, 'status': None, 'raw': data, 'error': None}
+
+    raw_status = match.get('transaction_status') or match.get('status') or ''
+    norm = _normalize_payme_api_status(raw_status)
+    return {'ok': True, 'found': True, 'status': norm, 'raw': match, 'error': None}
+
+
+def _normalize_payme_api_status(raw: Any) -> str | None:
+    """Lightweight status normalize for get-sales / get-transactions responses."""
+    s = str(raw or '').strip().lower().replace('_', '').replace('-', '').replace(' ', '')
+    if not s:
+        return None
+    if s in ('0', '00', 'success', 'succeeded', 'completed', 'complete', 'paid', 'captured', 'sale', 'sold', 'ok'):
+        return 'success'
+    if s in ('authorized', 'authorised', 'authorization', 'authorisation', 'auth', 'preauth', 'hold'):
+        return 'authorized'
+    if any(tok in s for tok in ('fail', 'declin', 'error', 'cancel', 'void', 'reject')):
+        return 'failed'
+    return 'pending'
 
 
 def generate_payme_sale_for_order(

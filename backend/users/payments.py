@@ -126,11 +126,17 @@ def _payme_api_password() -> str:
 
 
 def get_payme_config() -> dict[str, Any]:
-    seller_id = getattr(settings, 'PAYME_SELLER_ID', '') or getattr(settings, 'PAYME_MERCHANT_ID', '') or ''
+    seller_id = (
+        getattr(settings, 'PAYME_SELLER_ID', '')
+        or getattr(settings, 'PAYME_MERCHANT_ID', '')
+        or getattr(settings, 'PAYME_API_KEY', '')
+        or ''
+    )
+    api_key = (getattr(settings, 'PAYME_API_KEY', '') or seller_id or '').strip()
     return {
-        'seller_id': seller_id,
-        'merchant_id': getattr(settings, 'PAYME_MERCHANT_ID', '') or seller_id,
-        'api_key': getattr(settings, 'PAYME_API_KEY', '') or '',
+        'seller_id': (seller_id or '').strip(),
+        'merchant_id': (getattr(settings, 'PAYME_MERCHANT_ID', '') or seller_id or '').strip(),
+        'api_key': api_key,
         'api_secret': getattr(settings, 'PAYME_API_SECRET', '') or '',
         'api_password': _payme_api_password(),
         'api_url': getattr(settings, 'PAYME_API_URL', 'https://testpay.payme.io/api'),

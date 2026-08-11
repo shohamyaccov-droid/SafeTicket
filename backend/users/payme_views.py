@@ -18,6 +18,7 @@ from rest_framework.response import Response
 from services.payme_service import (
     PayMeError,
     PayMeSettings,
+    confirm_payme_sale_status,
     generate_payme_sale_for_order,
     normalize_payme_buyer_phone,
     resolve_buyer_details_for_order,
@@ -497,6 +498,77 @@ def payme_webhook(request):
                 },
             )
             return Response({'error': 'invalid webhook', 'reason': verify_reason}, status=status.HTTP_403_FORBIDDEN)
+
+        # Optional authoritative re-query (PayMe support + integration kit).
+        if (
+            getattr(settings, 'PAYME_CONFIRM_SUCCESS_VIA_API', False)
+            and (norm in ('success', 'authorized') or not norm)
+        ):
+            sale_for_confirm = str(
+                payload.get('payme_sale_id')
+                or order.payme_transaction_id
+                or ''
+            ).strip()
+            txn_for_confirm = str(
+                payload.get('payme_transaction_id')
+                or payload.get('transaction_id')
+                or ''
+            ).strip()
+            # Prefer SALE… for get-sales; fall back to TRAN… for get-transactions.
+            confirm_sale = sale_for_confirm if sale_for_confirm.startswith('SALE') else ''
+            if not confirm_sale and order.payme_transaction_id and str(order.payme_transaction_id).startswith('SALE'):
+                confirm_sale = str(order.payme_transaction_id).strip()
+            try:
+                confirmed = confirm_payme_sale_status(
+                    payme_sale_id=confirm_sale or None,
+                    payme_transaction_id=(txn_for_confirm if not confirm_sale else None),
+                )
+            except Exception as confirm_exc:
+                logger.warning(
+                    'PayMe webhook API confirm crashed order_id=%s: %s',
+                    order_id,
+                    confirm_exc,
+                )
+                confirmed = {'ok': False, 'found': False, 'status': None, 'error': str(confirm_exc)}
+
+            if confirmed.get('ok') and confirmed.get('found'):
+                api_status = confirmed.get('status')
+                if api_status == 'failed':
+                    outcome['error_message'] = 'api_status_failed'
+                    _log_payme_webhook_rejection(
+                        'api_status_failed',
+                        order_id=order_id,
+                        payload={'api_status': api_status, 'sale': confirm_sale, 'txn': txn_for_confirm},
+                    )
+                    return Response(
+                        {'received': True, 'finalized': False, 'reason': 'api_status_failed'},
+                        status=status.HTTP_200_OK,
+                    )
+                if api_status in ('success', 'authorized'):
+                    norm = api_status
+                elif api_status == 'pending':
+                    logger.info(
+                        'PayMe webhook API still pending order_id=%s sale=%s',
+                        order_id,
+                        confirm_sale or txn_for_confirm,
+                    )
+                    return Response(
+                        {'received': True, 'finalized': False, 'reason': 'api_status_pending'},
+                        status=status.HTTP_200_OK,
+                    )
+            elif confirmed.get('ok') and not confirmed.get('found'):
+                logger.warning(
+                    'PayMe webhook API confirm: sale/txn not found order_id=%s sale=%s txn=%s',
+                    order_id,
+                    confirm_sale,
+                    txn_for_confirm,
+                )
+            else:
+                logger.warning(
+                    'PayMe webhook API confirm unavailable order_id=%s error=%s — proceeding on IPN signature',
+                    order_id,
+                    confirmed.get('error'),
+                )
 
         # HMAC + order checks passed (finalize may still be deferred for non-final status).
         outcome['is_valid'] = True

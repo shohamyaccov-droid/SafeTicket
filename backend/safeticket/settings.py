@@ -582,8 +582,16 @@ else:
 PAYME_SANDBOX_ACCOUNT_EMAIL = (
     os.environ.get('PAYME_SANDBOX_ACCOUNT_EMAIL') or 'tradetix.support+1@gmail.com'
 ).strip().lower()
-PAYME_SELLER_ID = (os.environ.get('PAYME_SELLER_ID') or '').strip()
-_PAYME_SANDBOX_HOSTS = ('testpay.payme.io', 'preprod.paymeservice.com', 'sandbox.payme.io')
+_PAYME_SELLER_RAW = (os.environ.get('PAYME_SELLER_ID') or '').strip()
+_PAYME_API_KEY_RAW = (os.environ.get('PAYME_API_KEY') or '').strip()
+# PayMe dashboard MPL is both seller_payme_id (generate-sale) and merchant_key (IPN MD5).
+PAYME_SELLER_ID = _PAYME_SELLER_RAW or _PAYME_API_KEY_RAW
+PAYME_API_KEY = _PAYME_API_KEY_RAW or _PAYME_SELLER_RAW
+_PAYME_SANDBOX_HOSTS = (
+    'testpay.payme.io',
+    'preprod.paymeservice.com',
+    'sandbox.payme.io',
+)
 _raw_payme_api_url = (os.environ.get('PAYME_API_URL') or '').strip().rstrip('/')
 if not DEBUG:
     if _raw_payme_api_url and any(host in _raw_payme_api_url for host in _PAYME_SANDBOX_HOSTS):
@@ -598,7 +606,6 @@ PAYME_IS_SANDBOX = bool(PAYME_API_URL) and any(
     host in PAYME_API_URL for host in _PAYME_SANDBOX_HOSTS
 )
 PAYME_MERCHANT_ID = (os.environ.get('PAYME_MERCHANT_ID') or PAYME_SELLER_ID).strip()
-PAYME_API_KEY = (os.environ.get('PAYME_API_KEY') or '').strip()
 PAYME_API_SECRET = (os.environ.get('PAYME_API_SECRET') or '').strip()
 # PayMe IPN payme_signature uses merchant_key + merchant_password (same dashboard API creds).
 PAYME_API_PASSWORD = (
@@ -622,6 +629,15 @@ except ValueError:
 PAYME_CONFIRM_FAILURE_VIA_API = (
     os.environ.get('PAYME_CONFIRM_FAILURE_VIA_API', '').strip().lower() in ('1', 'true', 'yes')
 )
+# After IPN signature OK, re-query get-sales / get-transactions before finalizing (PayMe support).
+# Default on in production; set PAYME_CONFIRM_SUCCESS_VIA_API=false to disable.
+_payme_confirm_success_raw = (os.environ.get('PAYME_CONFIRM_SUCCESS_VIA_API') or '').strip().lower()
+if _payme_confirm_success_raw in ('0', 'false', 'no'):
+    PAYME_CONFIRM_SUCCESS_VIA_API = False
+elif _payme_confirm_success_raw in ('1', 'true', 'yes'):
+    PAYME_CONFIRM_SUCCESS_VIA_API = True
+else:
+    PAYME_CONFIRM_SUCCESS_VIA_API = not DEBUG
 _VITE_USE_PAYME = (os.environ.get('VITE_USE_PAYME') or '').strip().lower() in ('1', 'true', 'yes')
 _PAYME_CONFIGURED = bool(PAYME_SELLER_ID or PAYME_API_KEY or PAYME_MERCHANT_ID)
 # Production: only a verified PayMe webhook may finalize inventory (never client mock ack).
