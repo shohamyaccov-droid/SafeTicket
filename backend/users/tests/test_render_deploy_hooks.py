@@ -28,7 +28,11 @@ class RenderDeployHooksTests(SimpleTestCase):
         self.assertIn('RUN_FOMO_SEED', text)
         self.assertNotIn('python manage.py seed_affiliate_coupon', text)
         self.assertNotIn('flush --no-input', text)
-        self.assertNotIn('wipe_events_catalog', text)
+        # Destructive wipe must never be invoked on boot.
+        self.assertNotIn('manage.py reset_test_data', text)
+        self.assertNotIn('manage.py wipe_events_catalog', text)
+        self.assertNotIn('manage.py prune_stadium_catalog', text)
+        self.assertNotIn('manage.py reset_all_tickets', text)
         # Failsafe: backup must run before migrate and before seed_production
         backup_idx = text.index('python manage.py backup_critical_data')
         migrate_idx = text.index('python manage.py migrate --noinput')
@@ -47,6 +51,16 @@ class RenderDeployHooksTests(SimpleTestCase):
         text = _BUILD_RENDER.read_text(encoding='utf-8')
         self.assertIn('python manage.py backup_critical_data', text)
         self.assertIn('python manage.py migrate --noinput', text)
+        self.assertNotIn('manage.py reset_test_data', text)
+        self.assertNotIn('manage.py wipe_events_catalog', text)
         backup_idx = text.index('python manage.py backup_critical_data')
         migrate_idx = text.index('python manage.py migrate --noinput')
         self.assertLess(backup_idx, migrate_idx)
+
+    def test_render_yaml_start_command_is_safe(self):
+        yaml_path = _REPO_ROOT / 'render.yaml'
+        self.assertTrue(yaml_path.is_file(), f'missing {yaml_path}')
+        text = yaml_path.read_text(encoding='utf-8')
+        self.assertIn('startCommand: bash start_render.sh', text)
+        self.assertNotIn('manage.py reset_test_data', text)
+        self.assertNotIn('manage.py wipe_events_catalog', text)

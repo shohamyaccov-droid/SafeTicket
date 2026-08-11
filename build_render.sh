@@ -40,6 +40,7 @@ if [ "${RENDER:-}" = "true" ] && [ -z "${DATABASE_URL:-}" ]; then
 fi
 
 # FAILSAFE: hard-copy critical marketplace rows BEFORE migrate (and any ORM mutations).
+# Do not invoke wipe/reset manage.py helpers in this script.
 echo "build_render.sh: CRITICAL BACKUP (before migrate)..."
 python manage.py backup_critical_data
 

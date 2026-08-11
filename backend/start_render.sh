@@ -38,6 +38,9 @@ fi
 echo "[start_render] CRITICAL BACKUP (before migrate/seed/ORM mutations)..."
 python manage.py backup_critical_data
 
+# NEVER run destructive wipe/reset manage.py commands on boot (production_safety blocks them
+# and/or they erase live orders). Keep wipe helpers out of this script entirely.
+
 echo "[start_render] Applying database migrations..."
 python manage.py migrate --noinput
 

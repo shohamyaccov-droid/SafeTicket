@@ -105,7 +105,16 @@ class Command(BaseCommand):
         rng = random.Random(random_seed) if random_seed is not None else random
 
         from django.core.exceptions import ImproperlyConfigured
-        from users.production_safety import refuse_destructive
+        from users.production_safety import is_production_locked, refuse_destructive
+
+        if is_production_locked():
+            self.stdout.write(
+                self.style.WARNING(
+                    'seed_dummy_tickets: SKIPPED — production safety lock active '
+                    '(local DEBUG only; do not set RUN_DUMMY_SEED on Render).'
+                )
+            )
+            return
 
         try:
             refuse_destructive('seed_dummy_tickets')

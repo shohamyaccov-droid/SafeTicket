@@ -17,7 +17,8 @@ services:
     buildCommand: bash ../build_render.sh
     # Runs against live DATABASE_URL before traffic switches — helps after Payme/migration deploys if build DB differed.
     preDeployCommand: python manage.py migrate --noinput
-    # Runtime: migrate + idempotent seeds (August 2026, Odiya/Osher Menora, Eyal Golan Menora x4) + fix_admin, then Gunicorn (backend/start_render.sh).
+    # Runtime: migrate + idempotent seeds + fix_admin, then Gunicorn (backend/start_render.sh).
+    # Do not add wipe/reset manage.py helpers to start or preDeploy — production_safety blocks them.
     startCommand: bash start_render.sh
     plan: free
     envVars:

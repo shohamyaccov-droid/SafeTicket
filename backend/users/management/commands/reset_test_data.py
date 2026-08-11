@@ -1,6 +1,8 @@
 """
 One-off cleanup: remove all Orders and reset every non-active Ticket back to "active".
 
+LOCAL / DEBUG ONLY. Never invoked from Render build or start scripts.
+
 Usage:
     python manage.py reset_test_data              # dry-run (shows counts only)
     python manage.py reset_test_data --execute    # actually wipes the data
@@ -9,11 +11,15 @@ from __future__ import annotations
 
 from django.core.management.base import BaseCommand
 
+from users.production_safety import is_production_locked
 from users.reset_test_data_core import get_reset_test_data_preview, run_reset_test_data
 
 
 class Command(BaseCommand):
-    help = "Delete all Orders and reset sold/reserved Ticket rows back to active."
+    help = (
+        "Delete all Orders and reset sold/reserved Ticket rows back to active. "
+        "Blocked in production (RENDER / non-DEBUG); exits 0 so a stray deploy hook cannot crash boot."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -23,6 +29,18 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        # Soft-skip on production lock: never raise during boot if a Render Start Command
+        # still lists this manage.py command. Destructive wipe remains impossible here.
+        if is_production_locked():
+            self.stdout.write(
+                self.style.WARNING(
+                    "[reset_test_data] SKIPPED — production safety lock is active "
+                    "(RENDER=true and/or DEBUG=False). This command is local/DEBUG only "
+                    "and must not appear in build_render.sh / start_render.sh / Render Start Command."
+                )
+            )
+            return
+
         execute = options["execute"]
 
         preview = get_reset_test_data_preview()

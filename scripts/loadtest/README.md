@@ -77,6 +77,6 @@ gunicorn safeticket.wsgi:application -b 0.0.0.0:8000 -w 4 --threads 2
 
 ```powershell
 cd C:\Users\user\Desktop\SafeTicket\backend
-python manage.py reset_test_data --execute   # if you use that command in this repo
+python manage.py reset_test_data --execute   # LOCAL DEBUG ONLY — never on Render / production
 # or wipe loadtest guest orders manually
 ```

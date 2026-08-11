@@ -109,3 +109,11 @@ class ResetTestDataProductionLockTests(TestCase):
             with mock.patch('users.production_safety._running_tests', return_value=False):
                 with self.assertRaises(ImproperlyConfigured):
                     run_reset_test_data()
+
+    @override_settings(DEBUG=False)
+    def test_reset_test_data_command_soft_skips_when_locked(self):
+        """Stray deploy hooks must not crash boot — command exits 0 without wiping."""
+        with mock.patch.dict(os.environ, {'RENDER': 'true'}, clear=False):
+            # Should not raise even though lock is active.
+            call_command('reset_test_data', execute=True)
+            call_command('reset_test_data')
