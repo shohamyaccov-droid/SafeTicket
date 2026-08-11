@@ -6,11 +6,17 @@
 export const TICKET_STATUS_TAKEN = 'taken';
 
 export function isTicketTaken(ticket) {
-  return ticket != null && ticket.status === TICKET_STATUS_TAKEN;
+  if (!ticket) return false;
+  if (ticket.is_taken === true) return true;
+  return (
+    ticket.status === TICKET_STATUS_TAKEN ||
+    ticket.status === 'sold' ||
+    ticket.status === 'pending_payout'
+  );
 }
 
 /**
- * A listing group is "taken" when every ticket in it is permanently taken,
+ * A listing group is "taken" when every ticket in it is permanently taken/sold,
  * or when the group was flagged `is_taken` with no purchasable seats.
  */
 export function isListingGroupTaken(group) {
@@ -21,13 +27,13 @@ export function isListingGroupTaken(group) {
   return tickets.every((t) => isTicketTaken(t));
 }
 
-/** Keep marketplace rows that are buyable or permanently taken (for נתפס UI). */
+/** Keep marketplace rows that are buyable, permanently taken, or sold (נתפס UI). */
 export function filterMarketplaceTickets(raw) {
   const list = Array.isArray(raw) ? raw : [];
   return list.filter((t) => {
     if (!t) return false;
-    if (isTicketTaken(t)) return true;
-    if (t.status === 'sold' || t.status === 'pending_payout') return false;
+    if (isTicketTaken(t) || t.is_taken === true) return true;
+    if (t.status === 'sold' || t.status === 'pending_payout') return true;
     return Number(t.available_quantity) > 0;
   });
 }

@@ -1157,7 +1157,9 @@ class TicketListSerializer(serializers.ModelSerializer):
         return obj.status == 'reserved'
 
     def get_is_taken(self, obj):
-        return obj.status == 'taken'
+        from users.ticket_status import ticket_is_taken_flag
+
+        return ticket_is_taken_flag(obj)
     
     def get_event_name(self, obj):
         return obj.event.name if obj.event else (obj.event_name or '')

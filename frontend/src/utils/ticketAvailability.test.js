@@ -10,18 +10,20 @@ import {
 describe('ticketAvailability', () => {
   it('detects permanently taken tickets', () => {
     expect(isTicketTaken({ status: 'taken' })).toBe(true);
+    expect(isTicketTaken({ status: 'sold' })).toBe(true);
+    expect(isTicketTaken({ is_taken: true, status: 'active' })).toBe(true);
     expect(isTicketTaken({ status: 'active' })).toBe(false);
     expect(isTicketTaken({ status: 'reserved' })).toBe(false);
   });
 
-  it('keeps taken tickets in marketplace filter and drops sold', () => {
+  it('keeps taken and sold tickets in marketplace filter', () => {
     const rows = filterMarketplaceTickets([
       { id: 1, status: 'active', available_quantity: 2 },
       { id: 2, status: 'taken', available_quantity: 1 },
       { id: 3, status: 'sold', available_quantity: 0 },
       { id: 4, status: 'active', available_quantity: 0 },
     ]);
-    expect(rows.map((t) => t.id)).toEqual([1, 2]);
+    expect(rows.map((t) => t.id)).toEqual([1, 2, 3]);
   });
 
   it('marks a listing group as taken when every seat is taken', () => {

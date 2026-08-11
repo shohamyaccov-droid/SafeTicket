@@ -1168,6 +1168,16 @@ def finalize_pending_order_to_paid(
                 return False, 'order_missing'
             if order.status == 'paid':
                 _fulfill_paid_order_ticket_rows(order)
+                try:
+                    from users.payout_ledger import ensure_seller_payout_for_order
+
+                    ensure_seller_payout_for_order(order)
+                except Exception as payout_exc:
+                    logger.warning(
+                        'finalize_pending_order_to_paid payout reconcile failed order_id=%s: %s',
+                        order_id,
+                        payout_exc,
+                    )
                 return True, None
 
             allowed = _FINALIZE_ADMIN_FORCE_STATUSES if force_from_admin else _FINALIZE_DEFAULT_STATUSES

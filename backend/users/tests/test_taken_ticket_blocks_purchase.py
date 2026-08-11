@@ -73,7 +73,7 @@ class TakenTicketPurchaseBlockTests(TestCase):
             {
                 'ticket': self.ticket.id,
                 'quantity': 1,
-                'total_amount': '112.00',
+                'total_amount': '107.00',
                 'accepted_terms': True,
             },
             format='json',
@@ -89,7 +89,7 @@ class TakenTicketPurchaseBlockTests(TestCase):
             {
                 'ticket_id': self.ticket.id,
                 'quantity': 1,
-                'total_amount': '112.00',
+                'total_amount': '107.00',
                 'guest_email': 'guest@example.com',
                 'guest_phone': '0501234567',
                 'guest_first_name': 'ישראל',
@@ -109,7 +109,7 @@ class TakenTicketPurchaseBlockTests(TestCase):
                 'ticket': self.ticket.id,
                 'listing_group_id': 'taken-group-1',
                 'quantity': 1,
-                'total_amount': '112.00',
+                'total_amount': '107.00',
                 'accepted_terms': True,
             },
             format='json',
@@ -128,3 +128,26 @@ class TakenTicketPurchaseBlockTests(TestCase):
         self.assertIn(TICKET_STATUS_TAKEN, statuses)
         taken_row = next(r for r in rows if r.get('status') == TICKET_STATUS_TAKEN)
         self.assertEqual(taken_row['id'], self.ticket.id)
+        self.assertTrue(taken_row.get('is_taken'))
+
+    def test_event_tickets_list_includes_sold_rows_as_taken(self):
+        sold = Ticket.objects.create(
+            seller=self.seller,
+            event=self.event,
+            original_price=Decimal('100.00'),
+            asking_price=Decimal('100.00'),
+            pdf_file='tickets/pdfs/sold-test.pdf',
+            status='sold',
+            verification_status='מאומת',
+            available_quantity=0,
+            custom_section_text='אזור נמכר',
+            seat_row='2',
+            listing_group_id='sold-group-1',
+        )
+        res = self.client.get(f'/api/users/events/{self.event.pk}/tickets/')
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        rows = data if isinstance(data, list) else data.get('results', [])
+        sold_row = next(r for r in rows if r.get('id') == sold.id)
+        self.assertEqual(sold_row['status'], 'sold')
+        self.assertTrue(sold_row.get('is_taken'))

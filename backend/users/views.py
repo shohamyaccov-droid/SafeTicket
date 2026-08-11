@@ -3128,7 +3128,11 @@ class TicketViewSet(viewsets.ModelViewSet):
             Q(event__isnull=True, event_date__isnull=True)
         )
         queryset = ticket_queryset_defer_event_rollout_columns(
-            Ticket.objects.filter(status='active')
+            Ticket.objects.filter(
+                Q(status='active')
+                | Q(status=TICKET_STATUS_TAKEN)
+                | Q(status__in=('sold', 'pending_payout'))
+            )
             .filter(upcoming_filter)
             .select_related('event', 'event__venue_place', 'seller', 'venue_section')
         )
@@ -4191,7 +4195,7 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
         )
         # Lazy cart abandonment cleanup
         release_abandoned_carts()
-        # Public marketplace: active inventory + permanently taken (נתפס) for disabled UI
+        # Public marketplace: active + permanently taken + sold (grayed as is_taken)
         from django.db.models import Q
 
         tickets = ticket_queryset_defer_event_rollout_columns(
@@ -4199,6 +4203,7 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
             .filter(
                 Q(status='active', available_quantity__gt=0)
                 | Q(status=TICKET_STATUS_TAKEN)
+                | Q(status__in=('sold', 'pending_payout'))
             )
             .select_related('event', 'event__venue_place', 'seller', 'venue_section')
         )

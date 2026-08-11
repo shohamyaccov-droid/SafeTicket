@@ -607,12 +607,84 @@ class OrderAdmin(admin.ModelAdmin):
         'payme_transaction_id',
     ]
     readonly_fields = ['created_at', 'updated_at', 'payment_confirm_token']
-    actions = ['finalize_stuck_payme_orders']
+    actions = ['finalize_stuck_payme_orders', 'reconcile_paid_order_inventory']
     list_per_page = 50
     show_full_result_count = True
     ordering = ['-id']
 
     _FINALIZE_MAX_ORDERS = 25
+
+    def save_model(self, request, obj, form, change):
+        """
+        Manual status→paid in Django admin must run the same fulfillment path as
+        the PayMe webhook: mark tickets sold + ensure SellerPayout / wallet ledger.
+        """
+        super().save_model(request, obj, form, change)
+        if obj.status != 'paid':
+            return
+        from users.payments import finalize_pending_order_to_paid
+
+        ok, err = finalize_pending_order_to_paid(
+            obj.pk,
+            source=f'admin_save_model:user={getattr(request.user, "pk", None)}',
+            force_from_admin=True,
+        )
+        if ok:
+            self.message_user(
+                request,
+                f'Order #{obj.pk}: inventory marked sold and seller payout ledger updated.',
+                level=messages.SUCCESS,
+            )
+            return
+        self.message_user(
+            request,
+            f'Order #{obj.pk}: paid, but fulfillment/payout reconcile failed: {err}',
+            level=messages.ERROR,
+        )
+        _admin_log.warning(
+            'OrderAdmin.save_model finalize failed order_id=%s err=%s',
+            obj.pk,
+            err,
+        )
+
+    @admin.action(description='Reconcile paid orders (sold tickets + seller payout)')
+    def reconcile_paid_order_inventory(self, request, queryset):
+        """Fix orders already marked paid without inventory/payout side-effects."""
+        from django.db import transaction
+
+        from users.payments import _fulfill_paid_order_ticket_rows
+        from users.payout_ledger import ensure_seller_payout_for_order
+
+        ok_count = 0
+        fail_details: list[str] = []
+        for order in queryset.filter(status='paid').order_by('id')[: self._FINALIZE_MAX_ORDERS]:
+            try:
+                with transaction.atomic():
+                    locked = Order.objects.select_for_update().get(pk=order.pk)
+                    _fulfill_paid_order_ticket_rows(locked)
+                    ensure_seller_payout_for_order(locked)
+                ok_count += 1
+            except Exception as exc:
+                fail_details.append(f'#{order.pk}: {exc}')
+        if ok_count:
+            self.message_user(
+                request,
+                f'Reconciled {ok_count} paid order(s): tickets sold + seller payout ensured.',
+                level=messages.SUCCESS,
+            )
+        if fail_details:
+            self.message_user(
+                request,
+                'Failed: ' + '; '.join(fail_details[:10]),
+                level=messages.ERROR,
+            )
+        skipped = queryset.exclude(status='paid').count()
+        if skipped:
+            self.message_user(
+                request,
+                f'Skipped {skipped} non-paid order(s).',
+                level=messages.WARNING,
+            )
 
     @admin.display(description='PayMe sale id', ordering='payme_transaction_id')
     def payme_transaction_id_short(self, obj):
