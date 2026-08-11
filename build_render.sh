@@ -29,7 +29,12 @@ fi
 echo "Using node=$(node -v) npm=$(npm -v) VITE_API_URL=$VITE_API_URL VITE_BUILD_ID=$VITE_BUILD_ID VITE_STATIC_BASE=$VITE_STATIC_BASE"
 
 cd "$ROOT/frontend"
-npm ci
+# Prefer reproducible npm ci; if package-lock.json drifts (common with optional platform
+# packages like esbuild/@emnapi), fall back to npm install so deploys are not blocked.
+if ! npm ci --no-audit --no-fund; then
+  echo "build_render.sh: npm ci failed (lockfile out of sync) — falling back to npm install..."
+  npm install --no-audit --no-fund
+fi
 npm run build
 
 cd "$ROOT/backend"
