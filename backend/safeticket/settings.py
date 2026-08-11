@@ -221,6 +221,13 @@ if _on_render and not _db_config:
         'ensure Postgres is linked (or paste the Internal Database URL as DATABASE_URL). '
         'After creating or replacing a database instance, update this value and redeploy.'
     )
+if _on_render and _db_config:
+    _engine = (_db_config.get('ENGINE') or '').lower()
+    if 'sqlite' in _engine:
+        raise ImproperlyConfigured(
+            'DATABASE_URL resolves to SQLite while RENDER=true. Production must use PostgreSQL. '
+            'Link the Render Postgres instance (Internal Database URL) to this web service and redeploy.'
+        )
 
 DATABASES = {
     'default': _db_config if _db_config else {

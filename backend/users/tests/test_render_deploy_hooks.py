@@ -22,7 +22,11 @@ class RenderDeployHooksTests(SimpleTestCase):
         self.assertIn('python manage.py seed_dummy_tickets', text)
         self.assertIn('python manage.py mark_tickets_taken', text)
         self.assertIn('python manage.py seed_taken_tickets', text)
+        self.assertIn('RUN_DUMMY_SEED', text)
+        self.assertIn('RUN_FOMO_SEED', text)
         self.assertNotIn('python manage.py seed_affiliate_coupon', text)
+        self.assertNotIn('flush --no-input', text)
+        self.assertNotIn('wipe_events_catalog', text)
         # taken lock must run after dummy seed re-creates active inventory
         seed_idx = text.index('python manage.py seed_dummy_tickets')
         taken_idx = text.index('python manage.py mark_tickets_taken')

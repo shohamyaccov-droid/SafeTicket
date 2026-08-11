@@ -210,19 +210,21 @@ class Command(BaseCommand):
 
         for ev in events:
             with transaction.atomic():
-                # Re-check inside the transaction so concurrent inserts cannot race us.
+                # PostgreSQL forbids SELECT FOR UPDATE with GROUP BY (Count annotate).
+                # Lock the event row first, then count tickets in a separate query.
                 locked = (
                     Event.objects.select_for_update()
-                    .annotate(ticket_count=Count('tickets'))
+                    .select_related('venue_place', 'artist')
                     .filter(pk=ev.pk)
                     .first()
                 )
                 if locked is None:
                     continue
-                if locked.ticket_count > 0:
+                ticket_count = Ticket.objects.filter(event_id=locked.pk).count()
+                if ticket_count > 0:
                     self.stdout.write(
                         self.style.WARNING(
-                            f'  skip event_id={ev.pk} — tickets appeared before seed (count={locked.ticket_count})'
+                            f'  skip event_id={ev.pk} — tickets appeared before seed (count={ticket_count})'
                         )
                     )
                     continue

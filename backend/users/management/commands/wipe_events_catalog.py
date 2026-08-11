@@ -6,7 +6,9 @@ Usage:
   python manage.py wipe_events_catalog
 """
 
-from django.core.management.base import BaseCommand
+import os
+
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from users.models import Event, Offer, Order, Ticket, TicketAlert
@@ -16,6 +18,11 @@ class Command(BaseCommand):
     help = "Remove all orders, offers, tickets, ticket alerts, and events (no seed)."
 
     def handle(self, *args, **options):
+        if (os.environ.get('RENDER', '') or '').lower() == 'true':
+            raise CommandError(
+                'Refusing wipe_events_catalog on Render (RENDER=true). '
+                'This command deletes all orders and catalog data.'
+            )
         self.stdout.write(
             self.style.WARNING(
                 "Deleting Order -> Offer -> Ticket -> TicketAlert -> Event ..."

@@ -343,6 +343,14 @@ def prune_stadium_catalog_refresh_targets(*, dry_run: bool = False) -> list[dict
 
 def prune_legacy_placeholder_events() -> None:
     """Remove old demo / duplicate catalog rows before re-seeding (production-safe names only)."""
+    from users.models import Order
+
+    # Never prune when the marketplace already has order history — deleting Events can
+    # cascade tickets and erase live inventory referenced by paid/pending checkouts.
+    if Order.objects.exists():
+        _seed_log('[seed] prune_legacy_placeholder_events: skipped (orders exist — refusing destructive prune)')
+        return
+
     deleted = 0
     for ev in Event.objects.all().iterator():
         name = (ev.name or '').strip()

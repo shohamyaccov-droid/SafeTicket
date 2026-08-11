@@ -31,6 +31,21 @@ fi
 echo "[start_render] Applying database migrations..."
 python manage.py migrate --noinput
 
+# Persistence sanity check — if this prints 0 after a redeploy that should have history,
+# DATABASE_URL likely points at a new/empty Postgres instance (not a code flush).
+echo "[start_render] Marketplace persistence check (Order count)..."
+python -c "
+import django, os
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'safeticket.settings')
+django.setup()
+from django.conf import settings
+from users.models import Order
+engine = settings.DATABASES['default'].get('ENGINE', '')
+name = settings.DATABASES['default'].get('NAME', '')
+host = settings.DATABASES['default'].get('HOST', '') or '(local/file)'
+print(f'[start_render] DB engine={engine} host={host} name={name} order_count={Order.objects.count()}')
+" || true
+
 echo "[start_render] Idempotent production seed (skips if DB unavailable)..."
 python seed_production.py
 
@@ -66,9 +81,15 @@ else
   echo "[start_render] Skipping seed_dummy_tickets (set RUN_DUMMY_SEED=true only for non-prod)."
 fi
 
-# FOMO / map QA: taken-only listings for empty active events (never touches stocked events).
-echo "[start_render] Seed taken FOMO tickets for empty active events..."
-python manage.py seed_taken_tickets || true
+# FOMO / map QA taken tickets — OFF by default. Enable with RUN_FOMO_SEED=true only on staging.
+# Never run destructive catalog wipes on boot; seed_taken_tickets only fills empty events, but
+# it must not block Gunicorn if Postgres rejects FOR UPDATE + GROUP BY (fixed in ORM).
+if [ "${RUN_FOMO_SEED:-}" = "true" ]; then
+  echo "[start_render] RUN_FOMO_SEED=true — seed taken FOMO tickets for empty active events..."
+  python manage.py seed_taken_tickets || true
+else
+  echo "[start_render] Skipping seed_taken_tickets (set RUN_FOMO_SEED=true only for non-prod FOMO QA)."
+fi
 
 echo "[start_render] Admin promotion hook..."
 python fix_admin.py
