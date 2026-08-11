@@ -1,5 +1,5 @@
 """
-Replay a saved PayMeWebhookLog through the live webhook handler (offline HMAC debug).
+Replay a saved PayMeWebhookLog through the live webhook handler (offline IPN debug).
 
 Usage (from backend/):
 
@@ -19,8 +19,9 @@ from rest_framework.test import APIRequestFactory
 from users.models import PayMeWebhookLog
 from users.payme_views import payme_webhook
 from users.payments import (
-    build_payme_sorted_values_sign_string,
+    compute_payme_ipn_md5_signature,
     extract_payme_raw_sign_fields,
+    get_payme_config,
     parse_payme_raw_body_fields,
 )
 
@@ -33,7 +34,7 @@ class Command(BaseCommand):
         parser.add_argument(
             '--dry-run',
             action='store_true',
-            help='Only print parsed fields / string_to_hash; do not call the webhook view.',
+            help='Only print parsed fields / expected IPN MD5; do not call the webhook view.',
         )
 
     def handle(self, *args, **options):
@@ -55,14 +56,25 @@ class Command(BaseCommand):
         )
 
         fields = parse_payme_raw_body_fields(raw_body)
-        sign_fields = {k: v for k, v in fields.items() if k not in ('payme_signature', 'paymeSignature', 'signature')}
-        string_to_hash = build_payme_sorted_values_sign_string(sign_fields)
+        txn = fields.get('payme_transaction_id', '')
+        sale = fields.get('payme_sale_id', '')
+        cfg = get_payme_config()
+        expected = ''
+        if (cfg['api_key'] or '').strip() and (cfg['api_password'] or '').strip():
+            expected = compute_payme_ipn_md5_signature(
+                merchant_key=cfg['api_key'],
+                merchant_password=cfg['api_password'],
+                payme_transaction_id=txn,
+                payme_sale_id=sale,
+            )
 
         self.stdout.write(self.style.NOTICE(f'PayMeWebhookLog#{log.pk} created_at={log.created_at}'))
         self.stdout.write(f'  is_valid={log.is_valid} error_message={log.error_message!r}')
         self.stdout.write(f'  content_type={content_type}')
         self.stdout.write(f'  raw_body_len={len(raw_text)} keys={sorted(fields.keys())}')
-        self.stdout.write(f'  string_to_hash={string_to_hash!r}')
+        self.stdout.write(f'  payme_transaction_id={txn!r} payme_sale_id={sale!r}')
+        if expected:
+            self.stdout.write(f'  expected_ipn_md5={expected!r}')
         sig = fields.get('payme_signature') or fields.get('paymeSignature') or fields.get('signature') or ''
         if sig:
             self.stdout.write(f'  payme_signature_prefix={(sig[:16] + "…") if len(sig) > 16 else sig}')
@@ -78,7 +90,6 @@ class Command(BaseCommand):
             data=raw_body,
             content_type=content_type,
         )
-        # Restore useful headers for signature extraction / logging
         for key, value in headers.items():
             key_s = str(key)
             if key_s.lower() in ('content-type', 'content-length', 'host'):
@@ -86,7 +97,6 @@ class Command(BaseCommand):
             meta_key = 'HTTP_' + key_s.upper().replace('-', '_')
             request.META[meta_key] = str(value)
 
-        # Confirm extract path sees the same material
         extracted = extract_payme_raw_sign_fields(request, raw_body=raw_body)
         self.stdout.write(f'  extract_payme_raw_sign_fields keys={sorted(extracted.keys())}')
 

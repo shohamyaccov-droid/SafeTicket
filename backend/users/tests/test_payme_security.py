@@ -1,5 +1,3 @@
-import hashlib
-import hmac
 import json
 from decimal import Decimal
 from types import SimpleNamespace
@@ -9,40 +7,27 @@ from rest_framework.test import APIRequestFactory
 
 from users.models import Order
 from users.payments import (
-    build_payme_sorted_values_sign_string,
     extract_payme_raw_sign_fields,
     normalize_payme_webhook_status,
     verify_payme_webhook_request,
 )
+from users.tests.payme_ipn_test_helpers import (
+    PAYME_IPN_TEST_SETTINGS,
+    payme_ipn_form_request,
+    payme_ipn_json_request,
+    sign_payme_ipn_payload,
+)
 from users.views import confirm_order_payment
 
 
-def _signed_request(payload, secret='whsec_test'):
-    body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
-    signature = hmac.new(secret.encode('utf-8'), body, hashlib.sha256).hexdigest()
-    return APIRequestFactory().post(
-        '/api/payments/webhook/payme/',
-        data=body,
-        content_type='application/json',
-        HTTP_X_PAYME_SIGNATURE=signature,
-    )
+def _signed_request(payload):
+    request, signed_payload, _body = payme_ipn_json_request(payload)
+    return request
 
 
-def _body_signed_request(payload, secret='whsec_test'):
-    """PayMe production-style: sorted-values HMAC, signature inside JSON body (no header)."""
-    unsigned = {k: v for k, v in payload.items() if k not in ('payme_signature', 'paymeSignature', 'signature')}
-    sign_string = build_payme_sorted_values_sign_string(unsigned)
-    signature = hmac.new(secret.encode('utf-8'), sign_string.encode('utf-8'), hashlib.sha256).hexdigest()
-    signed_payload = {**unsigned, 'payme_signature': signature}
-    body = json.dumps(signed_payload, separators=(',', ':')).encode('utf-8')
-    return (
-        APIRequestFactory().post(
-            '/api/payments/webhook/payme/',
-            data=body,
-            content_type='application/json',
-        ),
-        signed_payload,
-    )
+def _body_signed_request(payload):
+    request, signed_payload, _body = payme_ipn_json_request(payload)
+    return request, signed_payload
 
 
 def _order(**overrides):
@@ -59,7 +44,7 @@ def _order(**overrides):
 
 class PaymeWebhookVerificationTests(TestCase):
     @override_settings(PAYME_WEBHOOK_SECRET='', PAYME_IS_SANDBOX=True, DEBUG=True)
-    def test_webhook_bypasses_hmac_when_secret_empty_in_sandbox(self):
+    def test_webhook_bypasses_signature_when_credentials_empty_in_sandbox(self):
         payload = {
             'merchant_order_id': '123',
             'transaction_id': 'txn_123',
@@ -81,8 +66,8 @@ class PaymeWebhookVerificationTests(TestCase):
         self.assertTrue(ok)
         self.assertEqual(reason, 'ok')
 
-    @override_settings(PAYME_WEBHOOK_SECRET='', PAYME_IS_SANDBOX=True, DEBUG=False)
-    def test_webhook_rejects_when_secret_missing_in_production(self):
+    @override_settings(PAYME_IS_SANDBOX=True, DEBUG=False)
+    def test_webhook_rejects_when_api_credentials_missing_in_production(self):
         payload = {
             'merchant_order_id': '123',
             'transaction_id': 'txn_123',
@@ -102,9 +87,9 @@ class PaymeWebhookVerificationTests(TestCase):
         )
 
         self.assertFalse(ok)
-        self.assertEqual(reason, 'missing_signature_header')
+        self.assertEqual(reason, 'missing_api_credentials')
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
+    @override_settings(**PAYME_IPN_TEST_SETTINGS)
     def test_webhook_rejects_missing_signature_in_production(self):
         payload = {
             'merchant_order_id': '123',
@@ -127,11 +112,13 @@ class PaymeWebhookVerificationTests(TestCase):
         self.assertFalse(ok)
         self.assertEqual(reason, 'missing_signature_header')
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False, DEBUG=False)
+    @override_settings(**PAYME_IPN_TEST_SETTINGS)
     def test_webhook_accepts_payme_signature_in_body(self):
         payload = {
             'merchant_order_id': '123',
             'transaction_id': 'txn_123',
+            'payme_transaction_id': 'txn_123',
+            'payme_sale_id': 'txn_123',
             'sale_price': 11000,
             'currency': 'ILS',
             'status': 'authorized',
@@ -147,11 +134,10 @@ class PaymeWebhookVerificationTests(TestCase):
         self.assertTrue(ok, reason)
         self.assertEqual(reason, 'ok')
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False, DEBUG=False)
-    def test_bit_payload_sorted_values_signature_with_empty_cc_and_social_id(self):
+    @override_settings(**PAYME_IPN_TEST_SETTINGS)
+    def test_bit_payload_ipn_signature_with_empty_cc_and_social_id(self):
         """
-        Bit IPN keys from production logs: empty CC fields + buyer_social_id.
-        Signature = HMAC-SHA256(secret, sorted_keys → concatenated values).
+        Bit IPN: payme_signature = MD5(key + password + payme_transaction_id + payme_sale_id).
         """
         payload = {
             'buyer_card_exp': '',
@@ -167,21 +153,7 @@ class PaymeWebhookVerificationTests(TestCase):
             'sale_price': 11000,
             'status': '0',
         }
-        sign_string = build_payme_sorted_values_sign_string(payload)
-        # Alphabetical key order: buyer_card_exp, buyer_card_mask, buyer_social_id, ...
-        self.assertTrue(sign_string.startswith('123456789') or '123456789' in sign_string)
-        signature = hmac.new(
-            b'whsec_test',
-            sign_string.encode('utf-8'),
-            hashlib.sha256,
-        ).hexdigest()
-        signed = {**payload, 'payme_signature': signature}
-        body = json.dumps(signed, separators=(',', ':')).encode('utf-8')
-        request = APIRequestFactory().post(
-            '/api/payments/webhook/payme/',
-            data=body,
-            content_type='application/json',
-        )
+        request, signed = _body_signed_request(payload)
 
         ok, reason = verify_payme_webhook_request(
             request,
@@ -193,15 +165,11 @@ class PaymeWebhookVerificationTests(TestCase):
         self.assertTrue(ok, reason)
         self.assertEqual(reason, 'ok')
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False, DEBUG=False)
-    def test_apple_pay_form_urlencoded_raw_strings_survive_drf_casting(self):
+    @override_settings(**PAYME_IPN_TEST_SETTINGS)
+    def test_apple_pay_form_urlencoded_ipn_signature(self):
         """
-        Apple Pay IPN: form-urlencoded strings must drive HMAC even if a casted
-        business payload (bool/float/None) is passed alongside the request.
+        Apple Pay IPN: signature uses payme_transaction_id + payme_sale_id from raw POST.
         """
-        from urllib.parse import urlencode
-
-        # Exact strings PayMe would POST (including trailing decimal + lowercase bool).
         raw_fields = {
             'buyer_card_exp': '',
             'buyer_card_mask': '',
@@ -209,97 +177,50 @@ class PaymeWebhookVerificationTests(TestCase):
             'is_token_sale': 'true',
             'notify_type': 'sale-complete',
             'payme_sale_id': 'txn_apple_raw_1',
+            'payme_transaction_id': 'txn_apple_raw_1',
             'payme_transaction_card_brand': '',
             'sale_payment_method': 'apple-pay',
             'sale_price': '110.50',
             'status': '0',
         }
-        expected_string_to_hash = build_payme_sorted_values_sign_string(raw_fields)
-        # Mathematical lock: alphabetical concat of the exact raw strings above.
-        self.assertEqual(
-            expected_string_to_hash,
-            ''
-            + ''  # buyer_card_exp
-            + ''  # buyer_card_mask
-            + 'ILS'
-            + 'true'
-            + 'sale-complete'
-            + 'txn_apple_raw_1'
-            + ''  # payme_transaction_card_brand
-            + 'apple-pay'
-            + '110.50'
-            + '0',
-        )
-        signature = hmac.new(
-            b'whsec_test',
-            expected_string_to_hash.encode('utf-8'),
-            hashlib.sha256,
-        ).hexdigest()
+        request, signed, _form = payme_ipn_form_request(raw_fields)
 
-        form_body = urlencode({**raw_fields, 'payme_signature': signature})
-        request = APIRequestFactory().post(
-            '/api/payments/webhook/payme/',
-            data=form_body,
-            content_type='application/x-www-form-urlencoded',
-        )
-
-        # What DRF/business code often sees after casting — must NOT control HMAC.
         casted_payload = {
+            **signed,
             'buyer_card_exp': None,
             'buyer_card_mask': None,
-            'currency': 'ILS',
-            'is_token_sale': True,  # would become 'True' with naive str()
-            'notify_type': 'sale-complete',
-            'payme_sale_id': 'txn_apple_raw_1',
-            'payme_transaction_card_brand': None,
-            'sale_payment_method': 'apple-pay',
-            'sale_price': 110.5,  # would become '110.5' and break vs '110.50'
+            'is_token_sale': True,
+            'sale_price': 110.5,
             'status': 0,
-            'merchant_order_id': '126',  # injected — must be ignored for HMAC
-            'payme_signature': signature,
+            'merchant_order_id': '126',
         }
 
         raw_extracted = extract_payme_raw_sign_fields(request)
-        self.assertEqual(raw_extracted.get('is_token_sale'), 'true')
-        self.assertEqual(raw_extracted.get('sale_price'), '110.50')
-        self.assertIsInstance(raw_extracted.get('is_token_sale'), str)
-        self.assertIsInstance(raw_extracted.get('sale_price'), str)
+        self.assertEqual(raw_extracted.get('payme_transaction_id'), 'txn_apple_raw_1')
+        self.assertEqual(raw_extracted.get('payme_sale_id'), 'txn_apple_raw_1')
 
         ok, reason = verify_payme_webhook_request(
             request,
             payload=casted_payload,
             order=_order(pk=126, payme_transaction_id='txn_apple_raw_1', total_amount=Decimal('110.50')),
-            signature_payload=casted_payload,  # poisoned on purpose — raw POST must win
+            signature_payload=casted_payload,
         )
         self.assertTrue(ok, reason)
         self.assertEqual(reason, 'ok')
 
-        # Casting path alone must NOT match PayMe's signature.
-        casted_hash = build_payme_sorted_values_sign_string(
-            {k: v for k, v in casted_payload.items() if k != 'payme_signature'}
-        )
-        self.assertNotEqual(casted_hash, expected_string_to_hash)
-
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False, DEBUG=False)
-    def test_injected_merchant_order_id_does_not_break_sorted_signature(self):
-        """Canonicalize may append merchant_order_id; HMAC must use original POST fields."""
+    @override_settings(**PAYME_IPN_TEST_SETTINGS)
+    def test_injected_merchant_order_id_does_not_affect_ipn_signature(self):
+        """merchant_order_id is not part of the IPN signature material."""
         original = {
             'currency': 'ILS',
             'notify_type': 'sale-complete',
             'payme_sale_id': 'txn_123',
+            'payme_transaction_id': 'txn_123',
             'sale_price': 11000,
             'status': 'completed',
         }
-        sign_string = build_payme_sorted_values_sign_string(original)
-        signature = hmac.new(b'whsec_test', sign_string.encode('utf-8'), hashlib.sha256).hexdigest()
-        # Business payload after canonicalize injects merchant_order_id
-        canonical = {**original, 'merchant_order_id': '123', 'payme_signature': signature}
-        body = json.dumps({**original, 'payme_signature': signature}, separators=(',', ':')).encode('utf-8')
-        request = APIRequestFactory().post(
-            '/api/payments/webhook/payme/',
-            data=body,
-            content_type='application/json',
-        )
+        request, signed = _body_signed_request(original)
+        canonical = {**signed, 'merchant_order_id': '123'}
 
         ok, reason = verify_payme_webhook_request(
             request,
@@ -311,60 +232,40 @@ class PaymeWebhookVerificationTests(TestCase):
         self.assertTrue(ok, reason)
         self.assertEqual(reason, 'ok')
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False, DEBUG=False)
+    @override_settings(**PAYME_IPN_TEST_SETTINGS)
     def test_injected_merchant_order_id_ignored_even_without_signature_payload(self):
-        """
-        If the view accidentally passes a mutated payload as the only HMAC source,
-        verification must still succeed by ignoring the injected merchant_order_id.
-        """
+        """Raw POST txn/sale ids drive IPN verification even if payload was mutated."""
         original = {
             'currency': 'ILS',
             'notify_type': 'sale-complete',
             'payme_sale_id': 'txn_apple_126',
+            'payme_transaction_id': 'txn_apple_126',
             'sale_price': 11000,
             'status': 'completed',
         }
-        sign_string = build_payme_sorted_values_sign_string(original)
-        signature = hmac.new(b'whsec_test', sign_string.encode('utf-8'), hashlib.sha256).hexdigest()
-        # Simulate production bug: merchant_order_id filled after order lookup, then hashed.
-        mutated = {
-            **original,
-            'merchant_order_id': '126',
-            'payme_signature': signature,
-        }
-        body = json.dumps(mutated, separators=(',', ':')).encode('utf-8')
-        request = APIRequestFactory().post(
-            '/api/payments/webhook/payme/',
-            data=body,
-            content_type='application/json',
-        )
+        request, signed = _body_signed_request(original)
+        mutated = {**signed, 'merchant_order_id': '126'}
 
         ok, reason = verify_payme_webhook_request(
             request,
             payload=mutated,
             order=_order(pk=126, payme_transaction_id='txn_apple_126'),
-            # Intentionally omit signature_payload — strip path must still pass.
         )
 
         self.assertTrue(ok, reason)
         self.assertEqual(reason, 'ok')
 
-        # Sanity: hashing the mutated payload (including merchant_order_id) must NOT
-        # equal the PayMe signature we generated from the pristine fields.
-        mutated_sign = build_payme_sorted_values_sign_string(
-            {k: v for k, v in mutated.items() if k != 'payme_signature'}
-        )
-        self.assertNotEqual(mutated_sign, sign_string)
-
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False, DEBUG=False)
+    @override_settings(**PAYME_IPN_TEST_SETTINGS)
     def test_webhook_rejects_bad_body_signature(self):
         payload = {
             'merchant_order_id': '123',
             'transaction_id': 'txn_123',
+            'payme_transaction_id': 'txn_123',
+            'payme_sale_id': 'txn_123',
             'sale_price': 11000,
             'currency': 'ILS',
             'status': 'authorized',
-            'payme_signature': 'not-a-valid-hmac',
+            'payme_signature': 'not-a-valid-signature',
         }
         body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
         request = APIRequestFactory().post(
@@ -411,7 +312,7 @@ class PaymeWebhookVerificationTests(TestCase):
         )
         self.assertEqual(sale_norm, 'success')
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
+    @override_settings(**PAYME_IPN_TEST_SETTINGS)
     def test_webhook_rejects_transaction_mismatch(self):
         payload = {
             'merchant_order_id': '123',
@@ -430,7 +331,7 @@ class PaymeWebhookVerificationTests(TestCase):
         self.assertFalse(ok)
         self.assertEqual(reason, 'transaction_id_mismatch')
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
+    @override_settings(**PAYME_IPN_TEST_SETTINGS)
     def test_webhook_rejects_amount_mismatch(self):
         payload = {
             'merchant_order_id': '123',
@@ -449,7 +350,7 @@ class PaymeWebhookVerificationTests(TestCase):
         self.assertFalse(ok)
         self.assertEqual(reason, 'amount_mismatch')
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
+    @override_settings(**PAYME_IPN_TEST_SETTINGS)
     def test_webhook_accepts_sale_id_when_transaction_id_differs(self):
         """Apple Pay often sends TRAN + original payme_sale_id; either must verify."""
         payload = {
@@ -470,7 +371,7 @@ class PaymeWebhookVerificationTests(TestCase):
         self.assertTrue(ok)
         self.assertEqual(reason, 'ok')
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
+    @override_settings(**PAYME_IPN_TEST_SETTINGS)
     def test_webhook_ignores_mismatched_generic_order_id_when_sale_matches(self):
         """PayMe-internal order_id must not reject a valid sale-id callback."""
         payload = {
@@ -490,7 +391,7 @@ class PaymeWebhookVerificationTests(TestCase):
         self.assertTrue(ok)
         self.assertEqual(reason, 'ok')
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
+    @override_settings(**PAYME_IPN_TEST_SETTINGS)
     def test_webhook_skips_amount_when_omitted(self):
         payload = {
             'merchant_order_id': '123',
@@ -508,7 +409,7 @@ class PaymeWebhookVerificationTests(TestCase):
         self.assertTrue(ok)
         self.assertEqual(reason, 'ok')
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False)
+    @override_settings(**PAYME_IPN_TEST_SETTINGS)
     def test_webhook_rejects_explicit_merchant_order_mismatch(self):
         payload = {
             'merchant_order_id': '999999',

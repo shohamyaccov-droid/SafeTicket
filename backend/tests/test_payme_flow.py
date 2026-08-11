@@ -19,6 +19,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from users.models import Artist, Event, Order, SellerPayout, Ticket
+from users.tests.payme_ipn_test_helpers import PAYME_IPN_TEST_SETTINGS, sign_payme_ipn_payload
 
 User = get_user_model()
 
@@ -150,25 +151,19 @@ class PaymeWebhookFlowTests(TestCase):
         self.assertEqual(self.ticket.status, 'sold')
         self.assertTrue(SellerPayout.objects.filter(order=self.order).exists())
 
-    @override_settings(PAYME_IS_SANDBOX=False, PAYME_WEBHOOK_SECRET='whsec_test', DEBUG=False)
+    @override_settings(**PAYME_IPN_TEST_SETTINGS)
     def test_webhook_marks_paid_with_payme_signature_in_body(self):
-        """Production PayMe sends payme_signature in the POST body (not only headers)."""
-        from users.payments import build_payme_sorted_values_sign_string
-
+        """Production PayMe sends payme_signature in the POST body (IPN MD5)."""
         unsigned = {
             'merchant_order_id': str(self.order.id),
             'status': 'success',
             'payme_sale_id': 'webhook_txn_1',
+            'payme_transaction_id': 'webhook_txn_1',
             'payme_status': 'completed',
             'sale_price': 11500,
             'currency': 'ILS',
         }
-        sig = hmac.new(
-            b'whsec_test',
-            build_payme_sorted_values_sign_string(unsigned).encode('utf-8'),
-            hashlib.sha256,
-        ).hexdigest()
-        payload = {**unsigned, 'payme_signature': sig}
+        payload = sign_payme_ipn_payload(unsigned)
         body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
         res = self.client.post(
             '/api/payments/webhook/payme/',
@@ -182,7 +177,7 @@ class PaymeWebhookFlowTests(TestCase):
         self.ticket.refresh_from_db()
         self.assertEqual(self.ticket.status, 'sold')
 
-    @override_settings(PAYME_IS_SANDBOX=False, PAYME_WEBHOOK_SECRET='whsec_test', DEBUG=False)
+    @override_settings(**PAYME_IPN_TEST_SETTINGS)
     def test_bit_auth_then_capture_finalizes_with_empty_card_fields(self):
         """
         Bit sends Authorisation (תפיסת מסגרת) then Capture (מכירה) with empty CC fields.
@@ -202,13 +197,12 @@ class PaymeWebhookFlowTests(TestCase):
             'buyer_card_exp': None,
             'payme_transaction_card_brand': '',
         }
+        auth_payload = sign_payme_ipn_payload(auth_payload)
         auth_body = json.dumps(auth_payload, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
-        auth_sig = hmac.new(b'whsec_test', auth_body, hashlib.sha256).hexdigest()
         auth_res = self.client.post(
             '/api/payments/webhook/payme/',
             auth_body,
             content_type='application/json',
-            HTTP_X_PAYME_SIGNATURE=auth_sig,
         )
         self.assertEqual(auth_res.status_code, 200, auth_res.content)
         # Authorisation may finalize (escrow-style) or ACK without finalizing — must not 4xx/5xx.
@@ -228,13 +222,12 @@ class PaymeWebhookFlowTests(TestCase):
             'buyer_card_exp': '',
             'payme_transaction_card_brand': None,
         }
+        capture_payload = sign_payme_ipn_payload(capture_payload)
         capture_body = json.dumps(capture_payload, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
-        capture_sig = hmac.new(b'whsec_test', capture_body, hashlib.sha256).hexdigest()
         capture_res = self.client.post(
             '/api/payments/webhook/payme/',
             capture_body,
             content_type='application/json',
-            HTTP_X_PAYME_SIGNATURE=capture_sig,
         )
         self.assertEqual(capture_res.status_code, 200, capture_res.content)
         self.assertTrue(capture_res.data.get('finalized'), capture_res.data)
@@ -369,6 +362,7 @@ class PaymeWebhookFlowTests(TestCase):
             'order_id': 'payme-internal-wallet-oid',
             'transaction_id': 'TRAN-APPLE-WALLET-99',
             'payme_sale_id': 'SALE-APPLE-INIT',
+            'notify_type': 'sale-complete',
             'payment_method': 'apple_pay',
             'currency': 'ILS',
             'sale': {'status': 'completed'},
@@ -394,6 +388,7 @@ class PaymeWebhookFlowTests(TestCase):
         payload = {
             'payme_sale_id': 'webhook_txn_1',
             'order_id': 'payme-internal-not-our-pk',
+            'notify_type': 'sale-complete',
             'sale_price': 11500,
             'currency': 'ILS',
             'payment': {'status': 'completed'},
@@ -432,20 +427,22 @@ class PaymeWebhookFlowTests(TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertTrue(res.data.get('finalized'))
 
-    @override_settings(PAYME_IS_SANDBOX=False)
+    @override_settings(**PAYME_IPN_TEST_SETTINGS)
     def test_webhook_rejects_bad_signature(self):
         payload = {
             'merchant_order_id': str(self.order.id),
             'status': 'success',
             'transaction_id': 'webhook_txn_1',
+            'payme_transaction_id': 'webhook_txn_1',
+            'payme_sale_id': 'webhook_txn_1',
             'sale_price': 11500,
             'currency': 'ILS',
+            'payme_signature': 'deadbeefdeadbeefdeadbeefdeadbeef',
         }
         body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
         res = self.client.post(
             '/api/payments/webhook/payme/',
             body,
             content_type='application/json',
-            HTTP_X_PAYME_SIGNATURE='bad-signature',
         )
         self.assertEqual(res.status_code, 403)

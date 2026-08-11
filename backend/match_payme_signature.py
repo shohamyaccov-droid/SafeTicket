@@ -1,22 +1,24 @@
 """
-Offline matcher for PayMe Apple Pay payme_signature.
+Offline verifier for PayMe IPN payme_signature (official PayMe support rule).
 
 Usage (from backend/):
-  set PAYME_WEBHOOK_SECRET=your_secret
+  set PAYME_API_KEY=your_mpl_key
+  set PAYME_API_PASSWORD=your_api_password
   python match_payme_signature.py
 
 Or:
-  python match_payme_signature.py YOUR_SECRET
+  python match_payme_signature.py YOUR_MPL_KEY YOUR_API_PASSWORD
 """
 from __future__ import annotations
 
-import hashlib
-import hmac
 import os
 import sys
-from urllib.parse import parse_qsl, unquote, unquote_plus
+from urllib.parse import parse_qsl
 
-RAW = (
+from users.payments import compute_payme_ipn_md5_signature
+
+# Order ~129 / Log #1 Apple Pay capture
+RAW_ORDER_129 = (
     'payme_status=success&status_error_code=0&status_code=0'
     '&payme_sale_id=SALE1786-378288U7-ZKNHJCKI-1NH0A43E&payme_sale_code=106406565'
     '&sale_created=2026-08-10+19%3A11%3A28&payme_sale_status=completed&sale_status=completed'
@@ -35,83 +37,69 @@ RAW = (
     '&transaction_periodical_payment=0&transaction_arn=26081019113719921984027'
     '&sale_paid_date=2026-08-10+19%3A11%3A36&sale_3ds=0&notify_type=sale-complete'
 )
-TARGET = 'd061550eeb2184b59d51ceb8c2c62f34'
-SIG_KEYS = {'payme_signature', 'paymeSignature', 'signature'}
+TARGET_ORDER_129 = 'd061550eeb2184b59d51ceb8c2c62f34'
+
+# PayMeWebhookLog #6 / Order 131 Apple Pay capture
+RAW_LOG6 = (
+    'payme_status=success&status_error_code=0&status_code=0'
+    '&payme_sale_id=SALE1786-385799DM-ZQAI1IJ2-54HZYKQT&payme_sale_code=106414297'
+    '&sale_created=2026-08-10+21%3A16%3A39&payme_sale_status=completed&sale_status=completed'
+    '&currency=ILS&sale_payment_method=apple-pay&is_token_sale=0&price=535'
+    '&payme_signature=ce7c84801d5b3822c514b2b3a312facc'
+    '&sale_description=TradeTix+%E2%80%94+%D7%9E%D7%95%D7%A8+%D7%A8%D7%91%D7%99%D7%A2%D7%99+-+%D7%94%D7%99%D7%9B%D7%9C+%D7%9E%D7%A0%D7%95%D7%A8%D7%94+%D7%9E%D7%91%D7%98%D7%97%D7%99%D7%9D+%E2%80%94+13.08.2026'
+    '&sale_type=Sale&payme_transaction_id=TRAN1786-385808HA-B1NSVCOX-ZMQ9FHAP'
+    '&payme_transaction_total=535&payme_transaction_card_brand=Visa'
+    '&payme_transaction_auth_number=+072725&payme_transaction_voucher=77005986'
+    '&payme_transaction_emv_uid=26081021164919921985050&payme_transaction_acquirer=PayMe'
+    '&payme_transaction_auth_source=Issuer&payme_transaction_card_issuer=Max'
+    '&payme_transaction_credit_type=RegularCredit&buyer_name=Shoham+Yakov'
+    '&buyer_email=shohamyaccov%40gmail.com&buyer_phone=0509003638'
+    '&buyer_card_mask=401047%2A%2A%2A%2A%2A%2A0511&buyer_card_exp=1231'
+    '&buyer_card_is_foreign=0&installments=1&transaction_first_payment=535'
+    '&transaction_periodical_payment=0&transaction_arn=26081021164919921985050'
+    '&sale_paid_date=2026-08-10+21%3A16%3A48&sale_3ds=0&notify_type=sale-complete'
+)
+TARGET_LOG6 = 'ce7c84801d5b3822c514b2b3a312facc'
 
 
-def md5_hex(s: str) -> str:
-    return hashlib.md5(s.encode('utf-8')).hexdigest()
-
-
-def sorted_values(fields: dict[str, str]) -> str:
-    return ''.join(fields[k] for k in sorted(fields) if k not in SIG_KEYS)
-
-
-def fields_parse_qsl() -> dict[str, str]:
-    return {k: v for k, v in parse_qsl(RAW, keep_blank_values=True)}
-
-
-def fields_unquote() -> dict[str, str]:
-    out: dict[str, str] = {}
-    for part in RAW.split('&'):
-        k, _, v = part.partition('=')
-        out[k] = unquote(v)
-    return out
-
-
-def fields_unquote_plus_manual() -> dict[str, str]:
-    out: dict[str, str] = {}
-    for part in RAW.split('&'):
-        k, _, v = part.partition('=')
-        out[k] = unquote_plus(v)
-    return out
-
-
-def fields_raw_encoded() -> dict[str, str]:
-    out: dict[str, str] = {}
-    for part in RAW.split('&'):
-        k, _, v = part.partition('=')
-        out[k] = v
-    return out
+def verify_raw(raw: str, target: str, merchant_key: str, merchant_password: str, label: str) -> bool:
+    fields = {k: v for k, v in parse_qsl(raw, keep_blank_values=True)}
+    txn = fields.get('payme_transaction_id', '')
+    sale = fields.get('payme_sale_id', '')
+    digest = compute_payme_ipn_md5_signature(
+        merchant_key=merchant_key,
+        merchant_password=merchant_password,
+        payme_transaction_id=txn,
+        payme_sale_id=sale,
+    )
+    hit = digest == target
+    mark = ' HIT' if hit else ''
+    print(f'{label}: txn={txn} sale={sale}')
+    print(f'  computed={digest}{mark}')
+    print(f'  target  ={target}')
+    return hit
 
 
 def main() -> int:
-    secret = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get('PAYME_WEBHOOK_SECRET', '')).strip()
-    if not secret:
-        print('ERROR: pass secret as argv1 or set PAYME_WEBHOOK_SECRET', file=sys.stderr)
+    merchant_key = (
+        sys.argv[1] if len(sys.argv) > 1 else os.environ.get('PAYME_API_KEY', '')
+    ).strip()
+    merchant_password = (
+        sys.argv[2] if len(sys.argv) > 2 else os.environ.get('PAYME_API_PASSWORD', '')
+    ).strip()
+    if not merchant_key or not merchant_password:
+        print(
+            'ERROR: pass MPL key + API password as argv or set PAYME_API_KEY and PAYME_API_PASSWORD',
+            file=sys.stderr,
+        )
         return 2
 
-    variants: list[tuple[str, dict[str, str]]] = [
-        ('parse_qsl', fields_parse_qsl()),
-        ('unquote', fields_unquote()),
-        ('unquote_plus', fields_unquote_plus_manual()),
-        ('raw_encoded', fields_raw_encoded()),
+    hits = [
+        verify_raw(RAW_ORDER_129, TARGET_ORDER_129, merchant_key, merchant_password, 'Order ~129'),
+        verify_raw(RAW_LOG6, TARGET_LOG6, merchant_key, merchant_password, 'Log #6 / Order 131'),
     ]
-
-    hits: list[str] = []
-    for name, fields in variants:
-        sth = sorted_values(fields)
-        trials = {
-            f'{name}: md5(sth+secret)': md5_hex(sth + secret),
-            f'{name}: md5(secret+sth)': md5_hex(secret + sth),
-            f'{name}: hmac_sha256(sth)': hmac.new(secret.encode(), sth.encode(), hashlib.sha256).hexdigest(),
-            f'{name}: md5(sth) alone': md5_hex(sth),
-        }
-        txn = fields.get('payme_transaction_id', '')
-        sale = fields.get('payme_sale_id', '')
-        trials[f'{name}: md5(secret+txn+sale)'] = md5_hex(secret + txn + sale)
-        trials[f'{name}: md5(txn+sale+secret)'] = md5_hex(txn + sale + secret)
-        trials[f'{name}: md5(sale+txn+secret)'] = md5_hex(sale + txn + secret)
-        for label, digest in trials.items():
-            mark = ' HIT' if digest == TARGET else ''
-            if mark:
-                hits.append(label)
-            print(f'{digest}{mark}  {label}')
-        print(f'  string_to_hash[{name}] len={len(sth)}')
-
-    print('TARGET', TARGET)
-    if hits:
-        print('MATCHED:', hits)
+    if all(hits):
+        print('ALL MATCH')
         return 0
     print('NO MATCH')
     return 1

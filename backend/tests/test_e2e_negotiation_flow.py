@@ -4,8 +4,6 @@ seller upload -> buyer offer -> seller acceptance -> PayMe webhook -> wallet led
 """
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import time
 from datetime import timedelta
@@ -21,6 +19,7 @@ from rest_framework.test import APIClient
 from users.models import Artist, Event, Offer, Order, SellerPayout, Ticket
 from users.pricing import buyer_charge_from_base_amount
 from users.serializers import user_can_access_ticket_pdf
+from users.tests.payme_ipn_test_helpers import sign_payme_ipn_payload
 from wallets.models import WalletTransaction
 
 User = get_user_model()
@@ -139,12 +138,12 @@ class NegotiatedOfferPayMeWalletE2ETests(TestCase):
             'sale_price': int(amount * 100),
             'currency': order.currency or 'ILS',
         }
-        body, sig = _sign_payme_payload(payload)
+        signed = sign_payme_ipn_payload(payload)
+        body = json.dumps(signed, separators=(',', ':')).encode('utf-8')
         return self.client.post(
             WEBHOOK_URL,
             body,
             content_type='application/json',
-            HTTP_X_PAYME_SIGNATURE=sig,
         )
 
     def _wait_for_receipt_email(self, mock_resend_send):

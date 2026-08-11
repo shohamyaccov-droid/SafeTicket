@@ -600,6 +600,10 @@ PAYME_IS_SANDBOX = bool(PAYME_API_URL) and any(
 PAYME_MERCHANT_ID = (os.environ.get('PAYME_MERCHANT_ID') or PAYME_SELLER_ID).strip()
 PAYME_API_KEY = (os.environ.get('PAYME_API_KEY') or '').strip()
 PAYME_API_SECRET = (os.environ.get('PAYME_API_SECRET') or '').strip()
+# PayMe IPN payme_signature uses merchant_key + merchant_password (same dashboard API creds).
+PAYME_API_PASSWORD = (
+    os.environ.get('PAYME_API_PASSWORD') or os.environ.get('PAYME_API_SECRET') or ''
+).strip()
 PAYME_GENERATE_SALE_URL = (
     os.environ.get('PAYME_GENERATE_SALE_URL')
     or (f'{PAYME_API_URL}/generate-sale' if PAYME_API_URL else '')

@@ -1,8 +1,6 @@
-"""PayMeWebhookLog capture + raw-body HMAC + replay command."""
+"""PayMeWebhookLog capture + raw-body IPN verification + replay command."""
 from __future__ import annotations
 
-import hashlib
-import hmac
 from decimal import Decimal
 from io import StringIO
 from urllib.parse import urlencode
@@ -13,10 +11,10 @@ from rest_framework.test import APIClient, APIRequestFactory
 
 from users.models import Order, PayMeWebhookLog, User
 from users.payments import (
-    build_payme_sorted_values_sign_string,
     extract_payme_raw_sign_fields,
     parse_payme_raw_body_fields,
 )
+from users.tests.payme_ipn_test_helpers import PAYME_IPN_TEST_SETTINGS, sign_payme_ipn_payload
 
 
 class ParsePaymeRawBodyFieldsTests(TestCase):
@@ -60,7 +58,10 @@ class ParsePaymeRawBodyFieldsTests(TestCase):
         self.assertNotIn('payme_signature', fields)
 
 
-@override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False, DEBUG=False)
+from users.tests.payme_ipn_test_helpers import PAYME_IPN_TEST_SETTINGS, sign_payme_ipn_payload
+
+
+@override_settings(**PAYME_IPN_TEST_SETTINGS)
 class PayMeWebhookLogCaptureTests(TestCase):
     def setUp(self):
         self.seller = User.objects.create_user(username='seller_wh', password='x', role='seller')
@@ -78,12 +79,13 @@ class PayMeWebhookLogCaptureTests(TestCase):
         body = urlencode(
             {
                 'payme_sale_id': 'txn_log_capture_1',
+                'payme_transaction_id': 'txn_log_capture_1',
                 'notify_type': 'sale-complete',
                 'currency': 'ILS',
                 'sale_price': '110.50',
                 'status': '0',
                 'buyer_card_mask': '',
-                'payme_signature': 'deadbeef',
+                'payme_signature': 'deadbeefdeadbeefdeadbeefdeadbeef',
             }
         )
         before = PayMeWebhookLog.objects.count()
@@ -101,20 +103,20 @@ class PayMeWebhookLogCaptureTests(TestCase):
         self.assertIn(response.status_code, (400, 403))
 
 
-@override_settings(PAYME_WEBHOOK_SECRET='whsec_test', PAYME_IS_SANDBOX=False, DEBUG=False)
+@override_settings(**PAYME_IPN_TEST_SETTINGS)
 class ReplayPaymeWebhookCommandTests(TestCase):
     def test_dry_run_and_replay_command(self):
         raw_fields = {
             'currency': 'ILS',
             'notify_type': 'sale-complete',
             'payme_sale_id': 'txn_replay_1',
+            'payme_transaction_id': 'txn_replay_1',
             'sale_price': '50.00',
             'status': '0',
             'buyer_card_mask': '',
         }
-        string_to_hash = build_payme_sorted_values_sign_string(raw_fields)
-        signature = hmac.new(b'whsec_test', string_to_hash.encode('utf-8'), hashlib.sha256).hexdigest()
-        raw_body = urlencode({**raw_fields, 'payme_signature': signature})
+        signed = sign_payme_ipn_payload(raw_fields)
+        raw_body = urlencode(signed)
         log = PayMeWebhookLog.objects.create(
             raw_body=raw_body,
             headers={'Content-Type': 'application/x-www-form-urlencoded'},
@@ -124,7 +126,7 @@ class ReplayPaymeWebhookCommandTests(TestCase):
 
         out = StringIO()
         call_command('replay_payme_webhook', str(log.pk), '--dry-run', stdout=out)
-        self.assertIn('string_to_hash=', out.getvalue())
+        self.assertIn('payme_transaction_id=', out.getvalue())
         self.assertIn('[DRY RUN]', out.getvalue())
 
         # Full replay hits the view (order may 404 — still exercises the command path).

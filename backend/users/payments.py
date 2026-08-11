@@ -117,6 +117,14 @@ def log_payme(stage: str, *, order_id: int | None = None, payload: Any = None, r
     )
 
 
+def _payme_api_password() -> str:
+    """Merchant password for PayMe API + IPN signature (PAYME_API_PASSWORD or PAYME_API_SECRET)."""
+    return (
+        (getattr(settings, 'PAYME_API_PASSWORD', '') or '').strip()
+        or (getattr(settings, 'PAYME_API_SECRET', '') or '').strip()
+    )
+
+
 def get_payme_config() -> dict[str, Any]:
     seller_id = getattr(settings, 'PAYME_SELLER_ID', '') or getattr(settings, 'PAYME_MERCHANT_ID', '') or ''
     return {
@@ -124,6 +132,7 @@ def get_payme_config() -> dict[str, Any]:
         'merchant_id': getattr(settings, 'PAYME_MERCHANT_ID', '') or seller_id,
         'api_key': getattr(settings, 'PAYME_API_KEY', '') or '',
         'api_secret': getattr(settings, 'PAYME_API_SECRET', '') or '',
+        'api_password': _payme_api_password(),
         'api_url': getattr(settings, 'PAYME_API_URL', 'https://testpay.payme.io/api'),
         'generate_sale_url': getattr(settings, 'PAYME_GENERATE_SALE_URL', 'https://testpay.payme.io/api/generate-sale'),
         'webhook_secret': getattr(settings, 'PAYME_WEBHOOK_SECRET', '') or '',
@@ -497,12 +506,36 @@ def normalize_payme_webhook_status(payload: dict[str, Any]) -> tuple[str | None,
 
 
 def _payme_webhook_hmac_bypassed() -> bool:
-    """Skip HMAC only in DEBUG dev/sandbox. Production (DEBUG=False) never bypasses."""
+    """Skip IPN signature check only in DEBUG dev/sandbox. Production (DEBUG=False) never bypasses."""
     if not getattr(settings, 'DEBUG', False):
         return False
-    secret = (get_payme_config()['webhook_secret'] or '').strip()
+    cfg = get_payme_config()
+    has_creds = bool((cfg['api_key'] or '').strip() and (cfg['api_password'] or '').strip())
     is_sandbox = bool(getattr(settings, 'PAYME_IS_SANDBOX', False))
-    return is_sandbox or not secret
+    return is_sandbox or not has_creds
+
+
+def compute_payme_ipn_md5_signature(
+    *,
+    merchant_key: str,
+    merchant_password: str,
+    payme_transaction_id: str,
+    payme_sale_id: str,
+) -> str:
+    """
+    Official PayMe IPN ``payme_signature`` for one-time sales (PayMe support):
+
+    MD5(merchant_key + merchant_password + payme_transaction_id + payme_sale_id)
+
+    Values are concatenated with no separators. Digest is lowercase hex.
+    """
+    material = (
+        f'{merchant_key or ""}'
+        f'{merchant_password or ""}'
+        f'{payme_transaction_id or ""}'
+        f'{payme_sale_id or ""}'
+    )
+    return hashlib.md5(material.encode('utf-8')).hexdigest()
 
 
 _PAYME_SIGNATURE_BODY_KEYS = ('payme_signature', 'paymeSignature', 'signature')
@@ -831,7 +864,8 @@ def verify_payme_webhook_request(
     and PDFs are released), so every success webhook must prove:
     signature (production only), merchant order id, PayMe transaction id, amount, and currency.
 
-    HMAC verification is skipped when PAYME_IS_SANDBOX is True or PAYME_WEBHOOK_SECRET is unset.
+    HMAC verification is skipped when PAYME_IS_SANDBOX is True or PAYME_API_KEY /
+    PAYME_API_PASSWORD are unset (DEBUG dev only).
 
     Apple Pay / wallet callbacks often send PayMe-internal `order_id` and a TRAN id that
     differs from the `payme_sale_id` stored at init — verification accepts any matching
@@ -846,44 +880,47 @@ def verify_payme_webhook_request(
     """
     if _payme_webhook_hmac_bypassed():
         is_sandbox = bool(getattr(settings, 'PAYME_IS_SANDBOX', False))
-        secret = (get_payme_config()['webhook_secret'] or '').strip()
+        cfg = get_payme_config()
+        has_creds = bool((cfg['api_key'] or '').strip() and (cfg['api_password'] or '').strip())
         if is_sandbox:
             logger.warning(
-                'PayMe webhook: bypassing HMAC signature verification (sandbox/preprod mode) order_id=%s',
+                'PayMe webhook: bypassing IPN signature verification (sandbox/preprod mode) order_id=%s',
                 getattr(order, 'pk', None),
             )
         else:
             logger.warning(
-                'PayMe webhook: bypassing HMAC signature verification (PAYME_WEBHOOK_SECRET not set) order_id=%s',
+                'PayMe webhook: bypassing IPN signature verification (PAYME_API_KEY/PAYME_API_PASSWORD not set) order_id=%s',
                 getattr(order, 'pk', None),
             )
     else:
-        secret = (get_payme_config()['webhook_secret'] or '').strip()
+        cfg = get_payme_config()
+        merchant_key = (cfg['api_key'] or '').strip()
+        merchant_password = (cfg['api_password'] or '').strip()
+        if not merchant_key or not merchant_password:
+            logger.warning(
+                'PayMe webhook: missing PAYME_API_KEY or PAYME_API_PASSWORD order_id=%s',
+                getattr(order, 'pk', None),
+            )
+            return False, 'missing_api_credentials'
+
         try:
             body = raw_body if raw_body is not None else (request.body or b'')
         except Exception as exc:
             logger.warning(
-                'PayMe webhook: unable to read request body for HMAC verification order_id=%s error=%s',
+                'PayMe webhook: unable to read request body for IPN verification order_id=%s error=%s',
                 getattr(order, 'pk', None),
                 exc,
             )
             return False, 'body_unavailable_for_signature'
 
-        # 1) Raw body via parse_qsl (no Django/DRF).
-        # 2) Else explicit pristine signature_payload.
-        # 3) Else business payload (last resort; merchant_order_id strip still applies).
-        raw_fields = extract_payme_raw_sign_fields(request, raw_body=body)
+        raw_fields = parse_payme_raw_body_fields(body)
         if raw_fields:
             sign_source = dict(raw_fields)
-            sign_source_origin = 'request_raw_body'
         elif isinstance(signature_payload, dict) and signature_payload:
             sign_source = dict(signature_payload)
-            sign_source_origin = 'signature_payload'
         else:
             sign_source = dict(payload) if isinstance(payload, dict) else {}
-            sign_source_origin = 'parsed_payload'
 
-        # Signature from header or raw body — never request.POST / request.data.
         got = (
             _extract_payme_webhook_signature(request, sign_source, raw_body=body)
             or _extract_payme_webhook_signature(request, payload or {}, raw_body=body)
@@ -891,69 +928,46 @@ def verify_payme_webhook_request(
         )
         if not got:
             return False, 'missing_signature_header'
-        import hmac
+
         from secrets import compare_digest
 
-        candidates, string_to_hash = _payme_hmac_body_candidates(
-            body,
-            {},
-            signature_payload=sign_source,
-        )
-        # Fail-safe: exact material we hash — compare visually to PayMe's raw notify on failure.
-        logger.warning(
-            'PayMe webhook string_to_hash order_id=%s origin=%s keys=%s string_to_hash=%r',
-            getattr(order, 'pk', None),
-            sign_source_origin,
-            sorted(str(k) for k in sign_source.keys() if str(k) not in _PAYME_SIGNATURE_BODY_KEYS),
-            string_to_hash,
-        )
+        txn = str(
+            _first_payload_value(sign_source, 'payme_transaction_id', 'transaction_id', 'transactionId') or ''
+        ).strip()
+        sale = str(_first_payload_value(sign_source, 'payme_sale_id', 'sale_id') or '').strip()
+        if (not txn or not sale) and isinstance(payload, dict):
+            if not txn:
+                txn = str(
+                    _first_payload_value(payload, 'payme_transaction_id', 'transaction_id', 'transactionId') or ''
+                ).strip()
+            if not sale:
+                sale = str(_first_payload_value(payload, 'payme_sale_id', 'sale_id') or '').strip()
 
-        got_norm = str(got).strip().lower().removeprefix('md5=')
-        matched = False
-        # Production PayMe (Apple Pay / Bit notify): 32-char MD5(string_to_hash + secret).
-        if len(got_norm) == 32 and all(c in '0123456789abcdef' for c in got_norm):
-            for label, digest in _payme_md5_signature_candidates(
-                string_to_hash=string_to_hash,
-                secret=secret,
-                sign_source=sign_source,
-                raw_body=body if isinstance(body, (bytes, bytearray)) else b'',
-            ):
-                if compare_digest(got_norm, digest):
-                    matched = True
-                    logger.info(
-                        'PayMe webhook MD5 signature matched order_id=%s via=%s',
-                        getattr(order, 'pk', None),
-                        label,
-                    )
-                    break
-
-        # Legacy / header-style: HMAC-SHA256 over candidate bodies (64-char hex).
-        if not matched:
-            for candidate in candidates:
-                expected = hmac.new(secret.encode('utf-8'), candidate, hashlib.sha256).hexdigest()
-                if compare_digest(got, expected) or compare_digest(got, f'sha256={expected}'):
-                    matched = True
-                    break
-                if compare_digest(got_norm, expected):
-                    matched = True
-                    break
-        if not matched:
+        if not txn or not sale:
             logger.warning(
-                'PayMe webhook bad_signature order_id=%s origin=%s signature_keys=%s '
-                'had_merchant_order_id=%s string_to_hash=%r got_sig_prefix=%s md5_primary=%s',
+                'PayMe webhook: missing payme_transaction_id or payme_sale_id for IPN signature order_id=%s',
                 getattr(order, 'pk', None),
-                sign_source_origin,
-                sorted(
-                    str(k)
-                    for k in sign_source.keys()
-                    if str(k) not in _PAYME_SIGNATURE_BODY_KEYS
-                ),
-                'merchant_order_id' in sign_source or 'merchantOrderId' in sign_source,
-                string_to_hash,
-                (got[:12] + '…') if len(got) > 12 else got,
-                compute_payme_md5_signature(string_to_hash, secret),
+            )
+            return False, 'missing_ipn_ids'
+
+        expected = compute_payme_ipn_md5_signature(
+            merchant_key=merchant_key,
+            merchant_password=merchant_password,
+            payme_transaction_id=txn,
+            payme_sale_id=sale,
+        )
+        got_norm = str(got).strip().lower().removeprefix('md5=')
+        if not compare_digest(got_norm, expected):
+            logger.warning(
+                'PayMe webhook bad_signature order_id=%s txn=%s sale=%s got_prefix=%s expected_prefix=%s',
+                getattr(order, 'pk', None),
+                txn,
+                sale,
+                (got_norm[:12] + '…') if len(got_norm) > 12 else got_norm,
+                (expected[:12] + '…') if len(expected) > 12 else expected,
             )
             return False, 'bad_signature'
+        logger.info('PayMe webhook IPN MD5 signature matched order_id=%s', getattr(order, 'pk', None))
 
     # Prefer explicit merchant order fields. Generic order_id is often PayMe-internal
     # (especially Apple Pay / Bit notify) and must not reject a sale-id match.

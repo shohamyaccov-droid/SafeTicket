@@ -9,8 +9,6 @@ Run:
 """
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 from datetime import timedelta
 from decimal import Decimal
@@ -25,6 +23,11 @@ from rest_framework.test import APIClient, APIRequestFactory
 from users.models import Artist, Event, Order, SellerPayout, Ticket
 from users.payme_views import payme_webhook
 from users.pricing import expected_buy_now_total
+from users.tests.payme_ipn_test_helpers import (
+    TEST_PAYME_API_KEY,
+    TEST_PAYME_API_PASSWORD,
+    sign_payme_ipn_payload,
+)
 
 User = get_user_model()
 
@@ -41,10 +44,10 @@ MINOR_PDF = SimpleUploadedFile(
 )
 
 
-def sign_payme_payload(payload: dict, secret: str = 'whsec_test') -> tuple[bytes, str]:
-    body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
-    signature = hmac.new(secret.encode('utf-8'), body, hashlib.sha256).hexdigest()
-    return body, signature
+def sign_payme_payload(payload: dict) -> tuple[bytes, str]:
+    signed = sign_payme_ipn_payload(payload)
+    body = json.dumps(signed, separators=(',', ':')).encode('utf-8')
+    return body, signed['payme_signature']
 
 
 def assert_ledger_math(test_case, total_paid: Decimal, payout: SellerPayout) -> None:
@@ -70,7 +73,8 @@ def assert_ledger_math(test_case, total_paid: Decimal, payout: SellerPayout) -> 
     PAYME_API_URL='https://testpay.payme.io/api',
     PAYME_IS_SANDBOX=True,
     PAYME_SANDBOX_ACCOUNT_EMAIL=PAYME_SANDBOX_BUYER_EMAIL,
-    PAYME_WEBHOOK_SECRET='whsec_test',
+    PAYME_API_KEY=TEST_PAYME_API_KEY,
+    PAYME_API_PASSWORD=TEST_PAYME_API_PASSWORD,
 )
 class PayMeMarketplaceE2EBase(TestCase):
     """Shared marketplace fixture: seller event + verified active listing."""
@@ -183,14 +187,14 @@ class PayMeMarketplaceE2EBase(TestCase):
         return res
 
     def _post_signed_webhook(self, payload: dict, *, signature: str | None = None):
-        body, sig = sign_payme_payload(payload)
+        signed = sign_payme_ipn_payload(payload)
         if signature is not None:
-            sig = signature
+            signed['payme_signature'] = signature
+        body = json.dumps(signed, separators=(',', ':')).encode('utf-8')
         return self.client.post(
             WEBHOOK_URL,
             body,
             content_type='application/json',
-            HTTP_X_PAYME_SIGNATURE=sig,
         )
 
     def _success_webhook_payload(self, order: Order, *, transaction_id: str | None = None) -> dict:
@@ -200,6 +204,8 @@ class PayMeMarketplaceE2EBase(TestCase):
             'merchant_order_id': str(order.id),
             'status': 'success',
             'transaction_id': tid,
+            'payme_transaction_id': tid,
+            'payme_sale_id': tid,
             'sale_price': sale_price_minor,
             'currency': order.currency or 'ILS',
         }
@@ -307,10 +313,10 @@ class PayMeFraudFailureE2ETests(PayMeMarketplaceE2EBase):
         self.assertEqual(res.status_code, 403)
         self._assert_checkout_still_pending()
 
-    @override_settings(PAYME_IS_SANDBOX=False)
+    @override_settings(PAYME_IS_SANDBOX=False, DEBUG=False)
     def test_webhook_bad_signature_does_not_finalize(self):
         payload = self._success_webhook_payload(self.order)
-        res = self._post_signed_webhook(payload, signature='totally-wrong-signature')
+        res = self._post_signed_webhook(payload, signature='deadbeefdeadbeefdeadbeefdeadbeef')
         self.assertEqual(res.status_code, 403)
         self._assert_checkout_still_pending()
 
@@ -341,8 +347,8 @@ class PayMeFraudFailureE2ETests(PayMeMarketplaceE2EBase):
         self.assertFalse(res.data.get('finalized'))
         self._assert_checkout_still_pending()
 
-    @override_settings(PAYME_WEBHOOK_SECRET='', DEBUG=True)
-    def test_webhook_without_configured_secret_finalizes_in_sandbox(self):
+    @override_settings(PAYME_API_KEY='', PAYME_API_PASSWORD='', DEBUG=True, PAYME_IS_SANDBOX=True)
+    def test_webhook_without_configured_credentials_finalizes_in_sandbox(self):
         payload = self._success_webhook_payload(self.order)
         body, _ = sign_payme_payload(payload)
         res = self.client.post(
@@ -370,16 +376,14 @@ class PayMeFraudFailureE2ETests(PayMeMarketplaceE2EBase):
 class PayMeDirectViewFailureTests(TestCase):
     """Direct view-level checks using APIRequestFactory (no DB marketplace setup)."""
 
-    @override_settings(PAYME_WEBHOOK_SECRET='whsec_test')
+    @override_settings(PAYME_IS_SANDBOX=True, DEBUG=True)
     def test_webhook_non_object_payload_rejected(self):
         factory = APIRequestFactory()
         body = json.dumps(['not', 'an', 'object']).encode('utf-8')
-        sig = hmac.new(b'whsec_test', body, hashlib.sha256).hexdigest()
         request = factory.post(
             WEBHOOK_URL,
             data=body,
             content_type='application/json',
-            HTTP_X_PAYME_SIGNATURE=sig,
         )
         response = payme_webhook(request)
         self.assertEqual(response.status_code, 400)

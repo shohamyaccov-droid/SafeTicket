@@ -5,8 +5,6 @@ seller listing -> buyer discovery/reservation/order -> PayMe init -> webhook ful
 """
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import logging
 import random
@@ -23,6 +21,7 @@ from rest_framework.test import APIClient
 
 from users.models import Artist, Event, Order, SellerPayout, Ticket
 from users.pricing import buyer_charge_from_base_amount, expected_buy_now_total
+from users.tests.payme_ipn_test_helpers import sign_payme_ipn_payload
 from wallets.models import WalletTransaction
 
 logger = logging.getLogger(__name__)
@@ -194,12 +193,12 @@ class ProductionPurchaseLifecycleStressTests(TestCase):
             'sale_price': int(amount * 100),
             'currency': order.currency or 'ILS',
         }
-        body, sig = _sign_payme_payload(payload)
+        signed = sign_payme_ipn_payload(payload)
+        body = json.dumps(signed, separators=(',', ':')).encode('utf-8')
         return self.client.post(
             WEBHOOK_URL,
             body,
             content_type='application/json',
-            HTTP_X_PAYME_SIGNATURE=sig,
         )
 
     def _wait_for_receipt_email(self, mock_resend_send, buyer_email: str):
