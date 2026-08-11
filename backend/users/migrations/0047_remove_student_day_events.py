@@ -1,9 +1,18 @@
 # Data migration: remove Technion Student Day catalog row (seed no longer includes it).
+# PRODUCTION SAFETY: no-op when production lock is active.
 
 from django.db import migrations
 
 
 def remove_student_day_events(apps, schema_editor):
+    try:
+        from users.production_safety import is_production_locked
+
+        if is_production_locked():
+            return
+    except Exception:
+        return
+
     Event = apps.get_model('users', 'Event')
     Event.objects.filter(name__contains='יום הסטודנט').delete()
 

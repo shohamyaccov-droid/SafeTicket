@@ -106,6 +106,14 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        from django.core.exceptions import ImproperlyConfigured
+        from users.production_safety import refuse_destructive
+
+        try:
+            refuse_destructive('seed_viagogo_data')
+        except ImproperlyConfigured as exc:
+            raise SystemExit(str(exc)) from exc
+
         skip_images = options['skip_images']
         now = timezone.now()
         self.stdout.write(self.style.NOTICE(f'Seeding from {now.isoformat()}'))

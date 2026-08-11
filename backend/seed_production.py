@@ -292,6 +292,11 @@ def prune_stadium_catalog_refresh_targets(*, dry_run: bool = False) -> list[dict
     """
     from django.core.cache import cache
 
+    from users.production_safety import refuse_destructive
+
+    if not dry_run:
+        refuse_destructive('prune_stadium_catalog_refresh_targets')
+
     matches: list[dict] = []
     for ev in Event.objects.select_related('artist', 'venue_place').all().iterator():
         artist = (ev.artist.name if ev.artist else '') or ''
@@ -343,6 +348,13 @@ def prune_stadium_catalog_refresh_targets(*, dry_run: bool = False) -> list[dict
 
 def prune_legacy_placeholder_events() -> None:
     """Remove old demo / duplicate catalog rows before re-seeding (production-safe names only)."""
+    from users.production_safety import is_production_locked
+
+    # Nuclear block: never prune placeholders in production / non-DEBUG.
+    if is_production_locked():
+        _seed_log('[seed] prune_legacy_placeholder_events: skipped (production safety lock)')
+        return
+
     from users.models import Order
 
     # Never prune when the marketplace already has order history — deleting Events can

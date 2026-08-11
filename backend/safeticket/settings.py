@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import re
+import sys
 from decimal import Decimal
 from urllib.parse import unquote, urlparse
 
@@ -63,6 +64,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: don't run with debug turned on in production!
 # Set DEBUG=true in .env only for local dev. On Render, leave unset or false so errors are not leaked.
 DEBUG = os.environ.get('DEBUG', 'False').lower() in ('1', 'true', 'yes')
+# True while `manage.py test` / pytest run — production wipe lock must not block unit tests.
+TESTING = (
+    any(arg == 'test' or arg.endswith('pytest') for arg in sys.argv)
+    or os.environ.get('DJANGO_TEST', '').lower() in ('1', 'true', 'yes')
+)
 
 # SECURITY WARNING: keep the secret key used in production secret!
 _secret_key = (os.environ.get('SECRET_KEY') or '').strip()
@@ -235,6 +241,13 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# Pre-deploy critical marketplace JSON hard-copies (Orders/Tickets/Users/Events).
+# On Render, mount a persistent disk and set CRITICAL_BACKUP_DIR to that mount path
+# so backups survive container rebuilds. Cloudinary raw upload is attempted as a second copy.
+CRITICAL_BACKUP_DIR = Path(
+    (os.environ.get('CRITICAL_BACKUP_DIR') or '').strip() or (BASE_DIR / 'critical_backups')
+)
 
 
 # Password validation

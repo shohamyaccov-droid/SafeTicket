@@ -148,6 +148,15 @@ class Command(BaseCommand):
         map_path = (opts['map'] or '').strip()
         update_kept = opts['update_kept']
 
+        if not dry:
+            from django.core.exceptions import ImproperlyConfigured
+            from users.production_safety import refuse_destructive
+
+            try:
+                refuse_destructive('sync_artists')
+            except ImproperlyConfigured as exc:
+                raise CommandError(str(exc)) from exc
+
         if not images_dir.is_dir():
             raise CommandError(
                 f'Images directory does not exist: {images_dir}\n'

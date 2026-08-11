@@ -23,6 +23,15 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         dry_run = options['dry_run']
+
+        from django.core.exceptions import ImproperlyConfigured
+        from users.production_safety import refuse_destructive
+
+        if not dry_run:
+            try:
+                refuse_destructive('reset_all_tickets')
+            except ImproperlyConfigured as exc:
+                raise SystemExit(str(exc)) from exc
         
         # Get all tickets
         all_tickets = Ticket.objects.all()
@@ -30,7 +39,7 @@ class Command(BaseCommand):
         
         # Count tickets that need resetting
         reserved_tickets = Ticket.objects.filter(status='reserved')
-        reserved_count = reserved_count = reserved_tickets.count()
+        reserved_count = reserved_tickets.count()
         
         tickets_with_reservations = Ticket.objects.exclude(reserved_at__isnull=True)
         reservation_count = tickets_with_reservations.count()

@@ -297,6 +297,13 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         if options['reset']:
+            from django.core.exceptions import ImproperlyConfigured
+            from users.production_safety import refuse_destructive
+
+            try:
+                refuse_destructive('seed_realistic_data --reset')
+            except ImproperlyConfigured as exc:
+                raise SystemExit(str(exc)) from exc
             u = User.objects.filter(email=SELLER_EMAIL).first()
             if u:
                 n = Ticket.objects.filter(seller=u).delete()[0]

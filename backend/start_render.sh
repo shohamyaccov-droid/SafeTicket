@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Render web start: migrate against live Postgres, then seed/idempotency hooks, then Gunicorn.
+# Render web start: critical backup → migrate → seed/idempotency hooks → Gunicorn.
 # Build phase also runs migrate in ../build_render.sh; this guarantees runtime schema matches code.
+# CRITICAL: backup_critical_data runs BEFORE migrate/seed so a hard-copy survives wipe bugs.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,6 +28,15 @@ else:
     print(f'[start_render] DATABASE_URL -> {u.scheme}://{host}:{port}/{db} (user={unquote(u.username) if u.username else \"?\"})')
 " || true
 fi
+
+# ---------------------------------------------------------------------------
+# FAILSAFE: hard-copy Orders/Tickets/Users/Events OUTSIDE Postgres first.
+# Local path: CRITICAL_BACKUP_DIR (default backend/critical_backups/).
+# Second copy: Cloudinary raw folder critical_backups/ when USE_CLOUDINARY is on.
+# Mount a Render persistent disk at CRITICAL_BACKUP_DIR so files survive rebuilds.
+# ---------------------------------------------------------------------------
+echo "[start_render] CRITICAL BACKUP (before migrate/seed/ORM mutations)..."
+python manage.py backup_critical_data
 
 echo "[start_render] Applying database migrations..."
 python manage.py migrate --noinput

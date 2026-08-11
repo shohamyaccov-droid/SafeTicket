@@ -38,6 +38,11 @@ if [ "${RENDER:-}" = "true" ] && [ -z "${DATABASE_URL:-}" ]; then
   echo "build_render.sh FATAL: DATABASE_URL is empty on Render — link Postgres to the web service."
   exit 1
 fi
+
+# FAILSAFE: hard-copy critical marketplace rows BEFORE migrate (and any ORM mutations).
+echo "build_render.sh: CRITICAL BACKUP (before migrate)..."
+python manage.py backup_critical_data
+
 python manage.py migrate --noinput
 python manage.py collectstatic --noinput
 

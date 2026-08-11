@@ -1294,7 +1294,11 @@ class AnalyticsEventAdmin(admin.ModelAdmin):
         """
         Superuser-only: same behaviour as ``manage.py reset_test_data --execute``.
         GET shows a confirmation page; POST runs the wipe and redirects to the dashboard.
+        Blocked in production (RENDER / DEBUG=False).
         """
+        from django.core.exceptions import ImproperlyConfigured
+
+        from users.production_safety import refuse_destructive
         from users.reset_test_data_core import get_reset_test_data_preview, run_reset_test_data
 
         if not request.user.is_superuser:
@@ -1303,6 +1307,12 @@ class AnalyticsEventAdmin(admin.ModelAdmin):
                 'Only Django superusers can reset test data.',
                 level=messages.ERROR,
             )
+            return redirect('admin:index')
+
+        try:
+            refuse_destructive('admin reset_test_data')
+        except ImproperlyConfigured as exc:
+            self.message_user(request, str(exc), level=messages.ERROR)
             return redirect('admin:index')
 
         if request.method == 'POST':

@@ -1,7 +1,7 @@
 # Data migration: pre-launch catalog reset — delete all Event/Ticket rows, then re-seed from seed_production.
 #
-# PRODUCTION SAFETY (updated): if any Order rows already exist, skip the wipe entirely.
-# Never re-run a destructive catalog reset against a live marketplace database.
+# PRODUCTION SAFETY: never wipe when production lock is active (RENDER=true or DEBUG=False),
+# and never wipe when any Order rows already exist.
 
 from django.db import migrations
 
@@ -11,6 +11,16 @@ def nuke_events_and_tickets_then_reseed(apps, schema_editor):
     Seed creates users. Wallet post_save must not touch DB until wallets.0001 creates tables —
     wallets.signals sets SKIP_WALLET_SIGNAL while seeding.
     """
+    try:
+        from users.production_safety import is_production_locked
+
+        if is_production_locked():
+            # Live / Render / non-debug — historical nuke must never execute.
+            return
+    except Exception:
+        # If safety module cannot load, refuse wipe rather than risk production.
+        return
+
     Order = apps.get_model('users', 'Order')
     if Order.objects.exists():
         # Live / restored DB with marketplace history — do not delete Events/Tickets.
@@ -47,8 +57,8 @@ class Migration(migrations.Migration):
     """
     Historical pre-launch wipe. Kept for migration graph compatibility.
 
-    On fresh empty DBs (no orders) it reseeds the catalog once.
-    If any Order exists, the wipe is skipped (protects production data).
+    On local DEBUG fresh DBs (no orders) it may reseed the catalog once.
+    On production / RENDER / any DB with orders: no-op.
     """
 
     atomic = False  # seed performs HTTP image fetches; avoid holding one DB transaction open

@@ -25,3 +25,8 @@ __pycache__/
 # Media & static
 media/
 staticfiles/
+
+# Pre-deploy critical marketplace JSON hard-copies (contain PII / order data)
+critical_backups/
+*.json.meta.json
+

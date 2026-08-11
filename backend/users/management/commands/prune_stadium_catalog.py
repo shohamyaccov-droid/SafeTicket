@@ -45,14 +45,22 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        from django.core.exceptions import ImproperlyConfigured
         from seed_production import (
             assert_catalog_event_inventory,
             prune_stadium_catalog_refresh_targets,
             _seed_all,
         )
+        from users.production_safety import refuse_destructive
 
         dry = options['dry_run']
         reseed = options['reseed']
+
+        if not dry:
+            try:
+                refuse_destructive('prune_stadium_catalog')
+            except ImproperlyConfigured as exc:
+                raise SystemExit(str(exc)) from exc
 
         result = prune_stadium_catalog_refresh_targets(dry_run=dry)
         if dry:

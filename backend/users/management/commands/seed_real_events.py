@@ -84,15 +84,15 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         do_wipe = options["wipe"]
         if do_wipe:
-            import os
-
+            from django.core.exceptions import ImproperlyConfigured
             from django.core.management.base import CommandError
 
-            if (os.environ.get('RENDER', '') or '').lower() == 'true':
-                raise CommandError(
-                    'Refusing seed_real_events --wipe on Render (RENDER=true). '
-                    'This flag deletes all orders and catalog data.'
-                )
+            from users.production_safety import refuse_destructive
+
+            try:
+                refuse_destructive('seed_real_events --wipe')
+            except ImproperlyConfigured as exc:
+                raise CommandError(str(exc)) from exc
             self._wipe_catalog()
         with transaction.atomic():
             seller = self._get_seller()

@@ -2,27 +2,27 @@
 Delete all marketplace catalog rows: Order -> Offer -> Ticket -> TicketAlert -> Event.
 Does not seed data. Use when the platform should show zero events (homepage empty state).
 
-Usage:
+Usage (local DEBUG only):
   python manage.py wipe_events_catalog
 """
 
-import os
-
+from django.core.exceptions import ImproperlyConfigured
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from users.models import Event, Offer, Order, Ticket, TicketAlert
+from users.production_safety import refuse_destructive
 
 
 class Command(BaseCommand):
-    help = "Remove all orders, offers, tickets, ticket alerts, and events (no seed)."
+    help = "Remove all orders, offers, tickets, ticket alerts, and events (no seed). LOCAL DEBUG ONLY."
 
     def handle(self, *args, **options):
-        if (os.environ.get('RENDER', '') or '').lower() == 'true':
-            raise CommandError(
-                'Refusing wipe_events_catalog on Render (RENDER=true). '
-                'This command deletes all orders and catalog data.'
-            )
+        try:
+            refuse_destructive('wipe_events_catalog')
+        except ImproperlyConfigured as exc:
+            raise CommandError(str(exc)) from exc
+
         self.stdout.write(
             self.style.WARNING(
                 "Deleting Order -> Offer -> Ticket -> TicketAlert -> Event ..."

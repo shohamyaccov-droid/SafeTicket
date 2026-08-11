@@ -104,6 +104,14 @@ class Command(BaseCommand):
         random_seed = options.get("random_seed")
         rng = random.Random(random_seed) if random_seed is not None else random
 
+        from django.core.exceptions import ImproperlyConfigured
+        from users.production_safety import refuse_destructive
+
+        try:
+            refuse_destructive('seed_dummy_tickets')
+        except ImproperlyConfigured as exc:
+            raise SystemExit(str(exc)) from exc
+
         # 0) Auto-scrub any checkout test artists (and cascaded events) from DB.
         with transaction.atomic():
             deleted, _ = Artist.objects.filter(name__icontains="checkout").delete()

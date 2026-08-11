@@ -38,7 +38,10 @@ def run_reset_test_data():
     Returns a dict of integers suitable for logging / admin messages.
     """
     from users.models import Offer, Order, SellerPayout, Ticket
+    from users.production_safety import refuse_destructive
     from wallets.models import UserWallet, WalletTransaction
+
+    refuse_destructive('reset_test_data')
 
     with transaction.atomic():
         dirty_qs = Ticket.objects.filter(status__in=DIRTY_TICKET_STATUSES)
