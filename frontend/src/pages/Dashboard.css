@@ -2106,7 +2106,60 @@
 
 .sales-listing-row .row-chevron {
   flex-shrink: 0;
-  margin-inline-start: 0.25rem;
+  margin-inline-start: 0.15rem;
+}
+
+.sales-listing-row-end {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0.4rem;
+  max-width: 58%;
+}
+
+.sales-listing-status-badge {
+  flex-shrink: 0;
+  padding: 0.28rem 0.65rem !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  border-radius: 999px !important;
+  line-height: 1.2;
+}
+
+.status-badge.status-sold,
+.status-badge.status-paid_out {
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.status-badge.status-active {
+  background: rgba(100, 116, 139, 0.12);
+  color: #475569;
+  border: 1px solid rgba(100, 116, 139, 0.28);
+}
+
+.status-badge.status-pending_payout,
+.status-badge.status-pending_approval {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.sales-listing-row-qty {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  white-space: nowrap;
+}
+
+.sales-listing-row-price {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+  white-space: nowrap;
 }
 
 .sales-listing-expanded-meta {
@@ -2125,6 +2178,7 @@
 .sales-listing-qty {
   font-size: 0.8rem;
   color: var(--text-secondary, #64748b);
+  font-weight: 600;
 }
 
 .sales-listing-row-actions {
@@ -2137,25 +2191,33 @@
 @media (max-width: 640px) {
   .sales-listing-row {
     padding: 12px !important;
+    align-items: flex-start !important;
+    flex-wrap: wrap !important;
+  }
+
+  .sales-listing-summary {
+    flex: 1 1 100%;
+  }
+
+  .sales-listing-row-end {
+    flex: 1 1 100%;
+    max-width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .sales-listing-title {
     font-size: 0.92rem !important;
+    white-space: normal !important;
   }
 
   .sales-listing-date,
   .sales-listing-seat {
     font-size: 0.78rem;
+    white-space: normal;
   }
 
-  /* Prevent older mobile wrap rules from re-breaking sales rows */
   .sales-listing-card .dashboard-compact-row.sales-listing-row {
-    flex-wrap: nowrap !important;
-  }
-
-  .sales-listing-card .sales-listing-title {
-    white-space: nowrap !important;
-    display: block !important;
-    -webkit-line-clamp: unset !important;
+    flex-wrap: wrap !important;
   }
 }

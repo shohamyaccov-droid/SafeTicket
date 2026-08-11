@@ -25,6 +25,14 @@ import { apiErrorMessageHe } from '../utils/apiErrors';
 import { downloadTicketFromAxiosBlob, openBlobForMobile } from '../utils/ticketDownload';
 import { buyerHasPaymeIdentity, buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
 import BuyerIdentityInlineForm from '../components/BuyerIdentityInlineForm';
+import {
+  formatTicketsCountHe,
+  groupSellerListings,
+  listingDisplayQuantity,
+  salesListingStatusClass,
+  salesListingStatusLabel,
+  SOLD_LISTING_STATUSES,
+} from '../utils/sellerSalesListings';
 import './Dashboard.css';
 
 function offerBuyerId(offer) {
@@ -801,27 +809,24 @@ const Dashboard = () => {
   };
 
   const getSeatDisplay = (ticket) => {
-    const section = ticket.section || ticket.section_legacy || ticket.custom_section_text || '';
-    const row = ticket.row || ticket.row_number || '';
-    const seat = ticket.seat_number || ticket.seat_numbers || ticket.seat || '';
-    const parts = [];
-
-    if (section) {
-      parts.push(`גוש ${translateSectionDisplay(section)}`);
-    }
-    if (row) {
-      parts.push(`שורה ${row}`);
-    }
-    if (seat) {
-      parts.push(`מושב ${seat}`);
-    }
-    if (parts.length > 0) {
-      return parts.join(', ');
-    }
-    if (ticket.seat_row) {
-      return ticket.seat_row;
-    }
-    return 'מיקום לא צוין';
+    const partsList = Array.isArray(ticket?._seatParts) && ticket._seatParts.length
+      ? ticket._seatParts
+      : [ticket];
+    const labels = partsList.map((t) => {
+      const section = t.section || t.section_legacy || t.custom_section_text || '';
+      const row = t.row || t.row_number || '';
+      const seat = t.seat_number || t.seat_numbers || t.seat || '';
+      const parts = [];
+      if (section) parts.push(`גוש ${translateSectionDisplay(section)}`);
+      if (row) parts.push(`שורה ${row}`);
+      if (seat) parts.push(`מושב ${seat}`);
+      if (parts.length > 0) return parts.join(', ');
+      if (t.seat_row) return t.seat_row;
+      return '';
+    }).filter(Boolean);
+    if (labels.length === 0) return 'מיקום לא צוין';
+    // Deduplicate identical seat strings; join distinct seats for multi-ticket groups.
+    return [...new Set(labels)].join(' · ');
   };
 
   if (loading) {
@@ -1594,17 +1599,26 @@ const Dashboard = () => {
                       </div>
                     )}
                     <div className="dashboard-list-container" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {[...(listings.active || []), ...(listings.sold || [])].map((listing) => {
-                        const isExpanded = expandedListingId === listing.id;
+                      {groupSellerListings([...(listings.active || []), ...(listings.sold || [])]).map((listing) => {
+                        const cardKey = listing._groupKey || listing.id;
+                        const isExpanded = expandedListingId === cardKey;
                         const listCur = String(listing.currency || resolveTicketCurrency(listing) || 'ILS').toUpperCase();
                         const listSym = currencySymbol(listCur);
+                        const qty = listingDisplayQuantity(listing);
+                        const isSoldLike = SOLD_LISTING_STATUSES.includes(listing.status);
+                        const unitPrice = listing.asking_price || listing.original_price;
+                        const displayAmount = isSoldLike && listing.expected_payout != null
+                          ? listing.expected_payout
+                          : unitPrice;
+                        const statusLabel = salesListingStatusLabel(listing.status);
+                        const statusClass = salesListingStatusClass(listing.status);
 
                         return (
-                          <div key={listing.id} className={`listing-card enterprise-card dashboard-compact-card sales-listing-card ${listing.status === 'sold' ? 'sold' : ''}`}>
+                          <div key={cardKey} className={`listing-card enterprise-card dashboard-compact-card sales-listing-card ${isSoldLike ? 'sold' : ''}`}>
                             <div
                               className={`dashboard-compact-row sales-listing-row ${isExpanded ? 'is-expanded' : ''}`}
                               onClick={() =>
-                                setExpandedListingId(isExpanded ? null : listing.id)
+                                setExpandedListingId(isExpanded ? null : cardKey)
                               }
                               role="button"
                               tabIndex={0}
@@ -1612,7 +1626,7 @@ const Dashboard = () => {
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault();
-                                  setExpandedListingId(isExpanded ? null : listing.id);
+                                  setExpandedListingId(isExpanded ? null : cardKey);
                                 }
                               }}
                             >
@@ -1630,37 +1644,39 @@ const Dashboard = () => {
                                   {getSeatDisplay(listing)}
                                 </div>
                               </div>
-                              <span className={`row-chevron ${isExpanded ? 'expanded' : ''}`} aria-hidden="true">▾</span>
+                              <div className="sales-listing-row-end">
+                                <span
+                                  className={`status-badge sales-listing-status-badge ${statusClass}`}
+                                  title={statusLabel}
+                                >
+                                  {statusLabel}
+                                </span>
+                                <span className="sales-listing-row-qty">
+                                  {formatTicketsCountHe(qty)}
+                                </span>
+                                <span className="sales-listing-row-price" dir="ltr">
+                                  {listSym}
+                                  {formatAmountForCurrency(displayAmount, listCur)}
+                                </span>
+                                <span className={`row-chevron ${isExpanded ? 'expanded' : ''}`} aria-hidden="true">▾</span>
+                              </div>
                             </div>
 
                             {isExpanded && (
                               <div className="row-details">
                                 <div className="sales-listing-expanded-meta">
-                                  <span className={`status-badge status-${listing.status}`}>
-                                    {listing.status === 'pending_approval'
-                                      ? 'בבדיקה'
-                                      : listing.status === 'active'
-                                      ? 'פעיל'
-                                      : listing.status === 'sold'
-                                      ? 'נמכר'
-                                      : listing.status === 'pending_payout'
-                                      ? 'ממתין לתשלום'
-                                      : listing.status === 'paid_out'
-                                      ? 'שולם'
-                                      : listing.status}
+                                  <span className={`status-badge ${statusClass}`}>
+                                    {statusLabel}
                                   </span>
-                                  <span className="sales-listing-price">
+                                  <span className="sales-listing-price" dir="ltr">
+                                    {isSoldLike ? 'נטו למוכר: ' : ''}
                                     {listSym}
-                                    {formatAmountForCurrency(
-                                      ['sold', 'pending_payout', 'paid_out'].includes(listing.status) && listing.expected_payout != null
-                                        ? listing.expected_payout
-                                        : (listing.asking_price || listing.original_price),
-                                      listCur
-                                    )}
+                                    {formatAmountForCurrency(displayAmount, listCur)}
+                                    {qty > 1 && !isSoldLike ? ` × ${qty}` : ''}
                                   </span>
-                                  <span className="sales-listing-qty">{listing.available_quantity || 1} כרטיסים</span>
+                                  <span className="sales-listing-qty">{formatTicketsCountHe(qty)}</span>
                                 </div>
-                                {['sold', 'pending_payout', 'paid_out'].includes(listing.status) && listing.escrow_payout_status && (
+                                {isSoldLike && listing.escrow_payout_status && (
                                   <div className="escrow-seller-note" style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.35rem', lineHeight: 1.45 }}>
                                     {listing.escrow_payout_status === 'paid' && 'התשלום שוחרר למוכר.'}
                                     {listing.escrow_payout_status === 'eligible' && 'הכסף בנאמנות — זכאי לשחרור תשלום (לאחר האירוע).'}
@@ -1671,7 +1687,7 @@ const Dashboard = () => {
                                   </div>
                                 )}
                                 <div className="sales-listing-row-actions">
-                                  {!['sold', 'pending_payout', 'paid_out'].includes(listing.status) && (
+                                  {!isSoldLike && (
                                     <button
                                       className="row-action-button row-copy-link-btn"
                                       type="button"
@@ -1693,7 +1709,7 @@ const Dashboard = () => {
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      if (['sold', 'pending_payout', 'paid_out'].includes(listing.status)) {
+                                      if (isSoldLike) {
                                         handleDeleteListing(
                                           listing.id,
                                           listing.event_name_display || listing.event_name
@@ -1702,21 +1718,11 @@ const Dashboard = () => {
                                         handleEditPrice(listing);
                                       }
                                     }}
-                                    title={
-                                      ['sold', 'pending_payout', 'paid_out'].includes(listing.status)
-                                        ? 'מחק'
-                                        : 'ערוך מחיר'
-                                    }
-                                    aria-label={
-                                      ['sold', 'pending_payout', 'paid_out'].includes(listing.status)
-                                        ? 'Delete listing'
-                                        : 'Edit price'
-                                    }
+                                    title={isSoldLike ? 'מחק' : 'ערוך מחיר'}
+                                    aria-label={isSoldLike ? 'Delete listing' : 'Edit price'}
                                     disabled={listing.status === 'pending_approval'}
                                   >
-                                    {['sold', 'pending_payout', 'paid_out'].includes(listing.status)
-                                      ? '🗑️'
-                                      : '✏️'}
+                                    {isSoldLike ? '🗑️' : '✏️'}
                                   </button>
                                 </div>
                                 {listing.status === 'pending_approval' && (
@@ -1785,25 +1791,27 @@ const Dashboard = () => {
                                           ביטול
                                         </button>
                                       </div>
-                                    ) : ['sold', 'pending_payout', 'paid_out'].includes(listing.status) ? (
+                                    ) : isSoldLike ? (
                                       <div className="detail-value" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                         <span className="price-value">
-                                          נטו למוכר: {listSym}{formatAmountForCurrency(listing.expected_payout ?? listing.asking_price, listCur)}
+                                          נטו למוכר ({formatTicketsCountHe(qty)}): {listSym}{formatAmountForCurrency(listing.expected_payout ?? listing.asking_price, listCur)}
                                         </span>
                                         <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                                          מחיר מודעה מקורי: {listSym}{formatAmountForCurrency(listing.asking_price || listing.original_price, listCur)}
+                                          מחיר מודעה ליחידה: {listSym}{formatAmountForCurrency(unitPrice, listCur)}
+                                          {qty > 1 ? ` × ${qty}` : ''}
                                         </span>
                                       </div>
                                     ) : (
                                       <span className="detail-value price-value">
-                                        {listSym}{formatAmountForCurrency(listing.asking_price || listing.original_price, listCur)}
+                                        {listSym}{formatAmountForCurrency(unitPrice, listCur)}
+                                        {qty > 1 ? ` × ${qty}` : ''}
                                       </span>
                                     )}
                                   </div>
                                   <div className="detail-row">
-                                    <span className="detail-label">🎫 כמות זמינה:</span>
+                                    <span className="detail-label">🎫 כמות:</span>
                                     <span className="detail-value">
-                                      {listing.available_quantity || 1}
+                                      {formatTicketsCountHe(qty)}
                                     </span>
                                   </div>
                                 </div>

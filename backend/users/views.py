@@ -1454,14 +1454,23 @@ def user_activity(request):
                 sold_listings.append(listing)
         
         payout_by_currency = defaultdict(float)
+        seen_order_payouts = set()
         for l in sold_listings:
             cur = str(l.get('currency') or 'ILS').strip().upper()
             ep = l.get('expected_payout')
-            if ep is not None and ep != '':
-                try:
-                    payout_by_currency[cur] += float(ep)
-                except (TypeError, ValueError):
-                    pass
+            if ep is None or ep == '':
+                continue
+            # One order can cover multiple sold ticket rows — count payout once per order.
+            oid = l.get('order_id')
+            if oid is not None:
+                dedupe_key = (cur, int(oid))
+                if dedupe_key in seen_order_payouts:
+                    continue
+                seen_order_payouts.add(dedupe_key)
+            try:
+                payout_by_currency[cur] += float(ep)
+            except (TypeError, ValueError):
+                pass
 
         return Response({
             'purchases': purchases_serializer.data,

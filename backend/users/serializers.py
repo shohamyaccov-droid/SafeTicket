@@ -1339,6 +1339,9 @@ class ProfileListingSerializer(serializers.ModelSerializer):
     escrow_payout_status = serializers.SerializerMethodField()
     escrow_payout_eligible_date = serializers.SerializerMethodField()
     currency = serializers.SerializerMethodField()
+    quantity = serializers.SerializerMethodField()
+    order_id = serializers.SerializerMethodField()
+    listing_group_id = serializers.CharField(read_only=True, allow_null=True)
     
     event_id = serializers.SerializerMethodField()
 
@@ -1346,8 +1349,10 @@ class ProfileListingSerializer(serializers.ModelSerializer):
         model = Ticket
         fields = (
             'id', 'event_id', 'event_name', 'event_date', 'venue', 'seat_row',
-            'section', 'row', 'seat_numbers',
-            'original_price', 'asking_price', 'is_together', 'available_quantity', 'status', 'created_at',
+            'section', 'row', 'seat_numbers', 'row_number', 'seat_number',
+            'original_price', 'asking_price', 'is_together', 'available_quantity',
+            'quantity', 'order_id', 'listing_group_id',
+            'status', 'created_at',
             'event_image_url', 'event_name_display', 'event_date_display', 'venue_display',
             'event_city', 'event_country',
             'expected_payout', 'order_count',
@@ -1376,6 +1381,32 @@ class ProfileListingSerializer(serializers.ModelSerializer):
                     order = o
                     break
         return order
+
+    def get_order_id(self, obj):
+        order = self._primary_order_for_sold_ticket(obj)
+        return order.id if order else None
+
+    def get_quantity(self, obj):
+        """
+        Tickets sold in a multi-seat order must report order quantity — not available_quantity
+        (which is 0 after sale and was incorrectly falling back to 1 in the UI).
+        """
+        if obj.status in ['sold', 'pending_payout', 'paid_out']:
+            order = self._primary_order_for_sold_ticket(obj)
+            if order is not None:
+                ids = order.ticket_ids or []
+                n_ids = len(ids) if isinstance(ids, (list, tuple)) else 0
+                try:
+                    n_qty = int(order.quantity or 0)
+                except (TypeError, ValueError):
+                    n_qty = 0
+                return max(n_qty, n_ids, 1)
+            return 1
+        try:
+            avail = int(obj.available_quantity or 0)
+        except (TypeError, ValueError):
+            avail = 0
+        return avail if avail > 0 else 1
     
     def get_event_image_url(self, obj):
         if obj.event and obj.event.image:
