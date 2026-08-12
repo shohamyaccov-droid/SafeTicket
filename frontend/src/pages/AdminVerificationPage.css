@@ -256,3 +256,26 @@
 
 
 
+
+.admin-verification-phone {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.admin-verification-whatsapp {
+  display: inline-flex;
+  align-items: center;
+  background: #25d366;
+  color: #fff !important;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: none !important;
+}
+
+.admin-verification-seller {
+  font-weight: 700;
+}

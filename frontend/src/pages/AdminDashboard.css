@@ -137,6 +137,64 @@
   color: #0f172a;
 }
 
+.admin-seller-contact {
+  display: grid;
+  gap: 0.28rem;
+  min-width: 160px;
+  max-width: 260px;
+  font-size: 0.84rem;
+  line-height: 1.35;
+  color: #334155;
+}
+
+.admin-seller-contact-name {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.admin-seller-contact-line,
+.admin-seller-contact-phone-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.admin-seller-contact-link {
+  color: #1d4ed8;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.admin-seller-contact-link:hover {
+  text-decoration: underline;
+}
+
+.admin-seller-contact-missing {
+  color: #94a3b8;
+  font-size: 0.78rem;
+}
+
+.admin-btn-whatsapp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #25d366;
+  color: #fff !important;
+  border: none;
+  border-radius: 999px;
+  padding: 0.18rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-decoration: none !important;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+.admin-btn-whatsapp:hover {
+  filter: brightness(0.95);
+}
+
 .admin-btn-approve-ticket {
   background: linear-gradient(135deg, #059669 0%, #047857 100%);
   color: #fff;

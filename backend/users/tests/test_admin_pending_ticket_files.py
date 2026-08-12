@@ -26,6 +26,9 @@ class AdminPendingTicketFileUrlTests(TestCase):
             email='seller-files@example.com',
             password='pass',
             role='seller',
+            first_name='נועה',
+            last_name='לוי',
+            phone_number='0501234567',
         )
         artist = Artist.objects.create(name='Admin Files Artist')
         venue = Venue.objects.create(name='Admin Files Venue', city='Tel Aviv')
@@ -69,6 +72,13 @@ class AdminPendingTicketFileUrlTests(TestCase):
         self.assertEqual(ticket['section'], 'Block 12')
         self.assertEqual(ticket['row'], '7')
         self.assertEqual(ticket['seat_numbers'], '22')
+        self.assertEqual(ticket['seller_full_name'], 'נועה לוי')
+        self.assertEqual(ticket['seller_email'], 'seller-files@example.com')
+        self.assertEqual(ticket['seller_phone'], '0501234567')
+        self.assertEqual(ticket['seller_phone_number'], '0501234567')
+        self.assertEqual(ticket['seller_contact']['full_name'], 'נועה לוי')
+        self.assertEqual(ticket['seller_contact']['email'], 'seller-files@example.com')
+        self.assertEqual(ticket['seller_contact']['phone_number'], '0501234567')
 
     @patch('users.notifications.notify_ticket_approved')
     def test_approve_ticket_triggers_seller_email_notification(self, mock_notify):

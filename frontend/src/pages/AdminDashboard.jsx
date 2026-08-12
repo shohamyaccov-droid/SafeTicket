@@ -5,7 +5,72 @@ import { adminAPI, ticketAPI, ensureCsrfToken } from '../services/api';
 import { currencySymbol, formatAmountForCurrency, resolveTicketCurrency } from '../utils/priceFormat';
 import { toastError, toastSuccess } from '../utils/toast';
 import { openAxiosBlobForMobile } from '../utils/ticketDownload';
+import {
+  mailtoHref,
+  sellerDisplayName,
+  telHref,
+  whatsAppChatUrl,
+} from '../utils/adminSellerContact';
 import './AdminDashboard.css';
+
+function AdminSellerContactCell({ ticket }) {
+  const contact = ticket?.seller_contact || {};
+  const name = sellerDisplayName(
+    contact,
+    ticket?.seller_full_name || ticket?.seller_username || ''
+  );
+  const email = contact.email || ticket?.seller_email || '';
+  const phone = contact.phone_number || ticket?.seller_phone || ticket?.seller_phone_number || '';
+  const wa = whatsAppChatUrl(
+    phone,
+    `שלום, פונים אליך מ-TradeTix לגבי כרטיס #${ticket?.id || ''} שממתין לאימות.`
+  );
+  const tel = telHref(phone);
+  const mail = mailtoHref(email);
+
+  return (
+    <div className="admin-seller-contact">
+      <div className="admin-seller-contact-name">{name || '—'}</div>
+      {email ? (
+        <div className="admin-seller-contact-line">
+          {mail ? (
+            <a className="admin-seller-contact-link" href={mail}>
+              {email}
+            </a>
+          ) : (
+            <span>{email}</span>
+          )}
+        </div>
+      ) : (
+        <div className="admin-seller-contact-missing">אין אימייל</div>
+      )}
+      {phone ? (
+        <div className="admin-seller-contact-phone-row">
+          {tel ? (
+            <a className="admin-seller-contact-link" href={tel} dir="ltr">
+              {phone}
+            </a>
+          ) : (
+            <span dir="ltr">{phone}</span>
+          )}
+          {wa ? (
+            <a
+              className="admin-btn-whatsapp"
+              href={wa}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="פתח WhatsApp"
+            >
+              WhatsApp
+            </a>
+          ) : null}
+        </div>
+      ) : (
+        <div className="admin-seller-contact-missing">אין טלפון</div>
+      )}
+    </div>
+  );
+}
 
 /** Platform totals split by order currency (no FX conversion). */
 function AdminCurrencyBreakdown({ title, period }) {
@@ -258,6 +323,7 @@ export default function AdminDashboard() {
                   <tr>
                     <th>ID</th>
                     <th>אירוע</th>
+                    <th>מוכר / יצירת קשר</th>
                     <th>פרטי מושב</th>
                     <th>מחיר פנים</th>
                     <th>מחיר מבוקש</th>
@@ -270,6 +336,9 @@ export default function AdminDashboard() {
                       <td data-label="ID">{t.id}</td>
                       <td data-label="אירוע" className="admin-td-clip">
                         {t.event?.name || t.event_name || '—'}
+                      </td>
+                      <td data-label="מוכר / יצירת קשר">
+                        <AdminSellerContactCell ticket={t} />
                       </td>
                       <td data-label="פרטי מושב">
                         <AdminSeatDetails ticket={t} />

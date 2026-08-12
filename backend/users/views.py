@@ -4900,6 +4900,17 @@ def admin_pending_tickets(request):
     serializer = TicketSerializer(pending_tickets, many=True, context={'request': request})
     tickets = list(serializer.data)
 
+    from .admin_seller_contact import seller_contact_payload
+
+    # Staff-only PII: attach seller contact for outreach when a ticket looks invalid.
+    for ticket_data, ticket in zip(tickets, pending_tickets):
+        contact = seller_contact_payload(ticket.seller)
+        ticket_data['seller_contact'] = contact
+        ticket_data['seller_full_name'] = contact['full_name']
+        ticket_data['seller_email'] = contact['email']
+        ticket_data['seller_phone'] = contact['phone_number']
+        ticket_data['seller_phone_number'] = contact['phone_number']
+
     if request.user.is_staff:
         from .admin_pdf_url import get_ticket_pdf_admin_url, get_ticket_receipt_admin_url
 

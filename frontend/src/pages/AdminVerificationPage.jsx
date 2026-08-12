@@ -6,6 +6,12 @@ import { translateSectionDisplay } from '../utils/venueMaps';
 import { currencySymbol, formatAmountForCurrency, resolveTicketCurrency } from '../utils/priceFormat';
 import { toastError, toastSuccess } from '../utils/toast';
 import { openAxiosBlobForMobile, ticketFileMimeFromAxiosHeaders } from '../utils/ticketDownload';
+import {
+  mailtoHref,
+  sellerDisplayName,
+  telHref,
+  whatsAppChatUrl,
+} from '../utils/adminSellerContact';
 import './AdminVerificationPage.css';
 
 const AdminVerificationPage = () => {
@@ -217,8 +223,66 @@ const AdminVerificationPage = () => {
                     )}
                   <div className="detail-row">
                     <span className="detail-label">👤 מוכר:</span>
-                    <span className="detail-value">{ticket.seller_username || 'לא זמין'}</span>
+                    <span className="detail-value admin-verification-seller">
+                      {sellerDisplayName(
+                        ticket.seller_contact,
+                        ticket.seller_full_name || ticket.seller_username || 'לא זמין'
+                      )}
+                    </span>
                   </div>
+                  {(ticket.seller_contact?.email || ticket.seller_email) && (
+                    <div className="detail-row">
+                      <span className="detail-label">✉️ אימייל:</span>
+                      <span className="detail-value">
+                        {mailtoHref(ticket.seller_contact?.email || ticket.seller_email) ? (
+                          <a href={mailtoHref(ticket.seller_contact?.email || ticket.seller_email)}>
+                            {ticket.seller_contact?.email || ticket.seller_email}
+                          </a>
+                        ) : (
+                          ticket.seller_contact?.email || ticket.seller_email
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  {(ticket.seller_contact?.phone_number || ticket.seller_phone || ticket.seller_phone_number) && (
+                    <div className="detail-row">
+                      <span className="detail-label">📞 טלפון:</span>
+                      <span className="detail-value admin-verification-phone">
+                        {(() => {
+                          const phone =
+                            ticket.seller_contact?.phone_number ||
+                            ticket.seller_phone ||
+                            ticket.seller_phone_number;
+                          const tel = telHref(phone);
+                          const wa = whatsAppChatUrl(
+                            phone,
+                            `שלום, פונים אליך מ-TradeTix לגבי כרטיס #${ticket.id} שממתין לאימות.`
+                          );
+                          return (
+                            <>
+                              {tel ? (
+                                <a href={tel} dir="ltr">
+                                  {phone}
+                                </a>
+                              ) : (
+                                <span dir="ltr">{phone}</span>
+                              )}
+                              {wa ? (
+                                <a
+                                  className="admin-verification-whatsapp"
+                                  href={wa}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  WhatsApp
+                                </a>
+                              ) : null}
+                            </>
+                          );
+                        })()}
+                      </span>
+                    </div>
+                  )}
                   {ticket.section && (
                     <div className="detail-row">
                       <span className="detail-label">💺 מושב:</span>
