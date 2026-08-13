@@ -21,7 +21,7 @@ from rest_framework.test import APIClient
 
 from users.models import Artist, Event, Order, SellerPayout, Ticket
 from users.pricing import buyer_charge_from_base_amount, expected_buy_now_total
-from users.tests.payme_ipn_test_helpers import sign_payme_ipn_payload
+from users.tests.payme_ipn_test_helpers import MockPayMeSaleConfirmMixin, sign_payme_ipn_payload
 from wallets.models import WalletTransaction
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ def _sign_payme_payload(payload: dict, secret: str = 'whsec_stress') -> tuple[by
     FRONTEND_ORIGIN='https://example.test',
     API_PUBLIC_ORIGIN='https://api.example.test',
 )
-class ProductionPurchaseLifecycleStressTests(TestCase):
+class ProductionPurchaseLifecycleStressTests(MockPayMeSaleConfirmMixin, TestCase):
     """
     Runs 10 randomized purchase lifecycles and verifies all durable side effects.
     Duplicate webhook calls are included on every iteration to prove idempotency.

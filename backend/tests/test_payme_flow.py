@@ -19,7 +19,16 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from users.models import Artist, Event, Order, SellerPayout, Ticket
-from users.tests.payme_ipn_test_helpers import PAYME_IPN_TEST_SETTINGS, sign_payme_ipn_payload
+from users.tests.payme_ipn_test_helpers import (
+    MOCK_PAYME_SALE_AUTHORIZED,
+    MOCK_PAYME_SALE_NOT_FOUND,
+    MOCK_PAYME_SALE_PENDING,
+    MOCK_PAYME_SALE_SUCCESS,
+    MOCK_PAYME_SALE_TIMEOUT,
+    PAYME_IPN_TEST_SETTINGS,
+    MockPayMeSaleConfirmMixin,
+    sign_payme_ipn_payload,
+)
 
 User = get_user_model()
 
@@ -32,7 +41,7 @@ User = get_user_model()
     PAYME_API_URL='https://testpay.payme.io/api',
     PAYME_WEBHOOK_SECRET='whsec_test',
 )
-class PaymeWebhookFlowTests(TestCase):
+class PaymeWebhookFlowTests(MockPayMeSaleConfirmMixin, TestCase):
     def setUp(self):
         self.client = APIClient()
         self.client.enforce_csrf_checks = False
@@ -199,14 +208,17 @@ class PaymeWebhookFlowTests(TestCase):
         }
         auth_payload = sign_payme_ipn_payload(auth_payload)
         auth_body = json.dumps(auth_payload, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+        self.mock_confirm_payme_sale_status.return_value = dict(MOCK_PAYME_SALE_AUTHORIZED)
         auth_res = self.client.post(
             '/api/payments/webhook/payme/',
             auth_body,
             content_type='application/json',
         )
         self.assertEqual(auth_res.status_code, 200, auth_res.content)
-        # Authorisation may finalize (escrow-style) or ACK without finalizing — must not 4xx/5xx.
         self.assertTrue(auth_res.data.get('received'), auth_res.data)
+        self.assertFalse(auth_res.data.get('finalized'), auth_res.data)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'pending_payment')
 
         capture_payload = {
             'merchant_order_id': str(self.order.id),
@@ -224,6 +236,7 @@ class PaymeWebhookFlowTests(TestCase):
         }
         capture_payload = sign_payme_ipn_payload(capture_payload)
         capture_body = json.dumps(capture_payload, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+        self.mock_confirm_payme_sale_status.return_value = dict(MOCK_PAYME_SALE_SUCCESS)
         capture_res = self.client.post(
             '/api/payments/webhook/payme/',
             capture_body,
@@ -315,6 +328,7 @@ class PaymeWebhookFlowTests(TestCase):
         }
         body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
         sig = hmac.new(b'whsec_test', body, hashlib.sha256).hexdigest()
+        self.mock_confirm_payme_sale_status.return_value = dict(MOCK_PAYME_SALE_PENDING)
         res = self.client.post(
             '/api/payments/webhook/payme/',
             body,
@@ -324,7 +338,7 @@ class PaymeWebhookFlowTests(TestCase):
         self.assertEqual(res.status_code, 200, res.content)
         self.assertTrue(res.data.get('received'))
         self.assertFalse(res.data.get('finalized'))
-        self.assertEqual(res.data.get('reason'), 'webhook_status_not_finalizable')
+        self.assertEqual(res.data.get('reason'), 'api_status_pending')
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, 'pending_payment')
 
@@ -427,8 +441,7 @@ class PaymeWebhookFlowTests(TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertTrue(res.data.get('finalized'))
 
-    @override_settings(**PAYME_IPN_TEST_SETTINGS)
-    def test_webhook_rejects_bad_signature(self):
+    def test_webhook_fake_success_ignored_when_payme_api_unpaid(self):
         payload = {
             'merchant_order_id': str(self.order.id),
             'status': 'success',
@@ -437,12 +450,37 @@ class PaymeWebhookFlowTests(TestCase):
             'payme_sale_id': 'webhook_txn_1',
             'sale_price': 11500,
             'currency': 'ILS',
-            'payme_signature': 'deadbeefdeadbeefdeadbeefdeadbeef',
         }
         body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+        self.mock_confirm_payme_sale_status.return_value = dict(MOCK_PAYME_SALE_NOT_FOUND)
         res = self.client.post(
             '/api/payments/webhook/payme/',
             body,
             content_type='application/json',
         )
-        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertFalse(res.data.get('finalized'))
+        self.assertEqual(res.data.get('reason'), 'payme_sale_not_found')
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'pending_payment')
+
+    def test_webhook_returns_503_when_payme_api_times_out(self):
+        payload = {
+            'merchant_order_id': str(self.order.id),
+            'status': 'success',
+            'transaction_id': 'webhook_txn_1',
+            'sale_price': 11500,
+            'currency': 'ILS',
+        }
+        body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+        self.mock_confirm_payme_sale_status.return_value = dict(MOCK_PAYME_SALE_TIMEOUT)
+        res = self.client.post(
+            '/api/payments/webhook/payme/',
+            body,
+            content_type='application/json',
+        )
+        self.assertEqual(res.status_code, 503, res.content)
+        self.assertFalse(res.data.get('finalized'))
+        self.assertEqual(res.data.get('reason'), 'payme_api_unavailable')
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'pending_payment')

@@ -270,6 +270,28 @@ def _canonicalize_webhook_payload_for_order(payload: dict[str, Any], order: Orde
     return out
 
 
+def _payme_ids_for_api_confirm(payload: dict[str, Any], order: Order) -> tuple[str | None, str | None]:
+    """Extract sale/transaction ids for the authoritative PayMe get-sales lookup."""
+    sale = str(
+        payload.get('payme_sale_id')
+        or payload.get('sale_id')
+        or payload.get('saleId')
+        or ''
+    ).strip()
+    txn = str(
+        payload.get('payme_transaction_id')
+        or payload.get('transaction_id')
+        or payload.get('transactionId')
+        or ''
+    ).strip()
+    stored = str(getattr(order, 'payme_transaction_id', '') or '').strip()
+    if not sale and stored:
+        sale = stored
+    if not txn and stored:
+        txn = stored
+    return (sale or None, txn or None)
+
+
 def _log_payme_webhook_rejection(reason: str, *, order_id: int | None = None, payload: dict[str, Any] | None = None):
     logger.warning('PayMe webhook rejection reason: %s order_id=%s payload=%s', reason, order_id, payload)
     log_payme('webhook_rejected', order_id=order_id, payload={'reason': reason, 'payload': payload or {}})
@@ -287,8 +309,9 @@ def payme_webhook(request):
     PayMe-internal order_id, nested sale.status, alternate TRAN vs init payme_sale_id,
     and sometimes omitted amount fields.
 
-    Every notify is persisted to PayMeWebhookLog (raw body + headers) before parsing/HMAC
-    so production bad_signature cases can be replayed offline.
+    Every notify is persisted to PayMeWebhookLog (raw body + headers) before parsing
+    so unpaid / fake callbacks can be replayed offline. Fulfillment is gated on a
+    direct PayMe get-sales / get-transactions lookup — not the webhook body.
     """
     # Absolute first side-effect: capture exact wire bytes before any business logic.
     webhook_log = _capture_payme_webhook_log(request)
@@ -474,7 +497,7 @@ def payme_webhook(request):
             )
 
         if not verified:
-            outcome['error_message'] = verify_reason or 'bad_signature'
+            outcome['error_message'] = verify_reason or 'order_binding_failed'
             _log_payme_webhook_rejection(
                 verify_reason,
                 order_id=order_id,
@@ -491,7 +514,6 @@ def payme_webhook(request):
                     'order_currency': order.currency,
                     'order_total_paid_by_buyer': str(order.total_paid_by_buyer),
                     'order_total_amount': str(order.total_amount),
-                    # Distinguish pristine HMAC keys from post-canonicalize business keys.
                     'signature_payload_keys': list(signature_payload.keys()),
                     'canonical_payload_keys': list(payload.keys()),
                     'webhook_log_id': getattr(webhook_log, 'pk', None),
@@ -499,78 +521,86 @@ def payme_webhook(request):
             )
             return Response({'error': 'invalid webhook', 'reason': verify_reason}, status=status.HTTP_403_FORBIDDEN)
 
-        # Optional authoritative re-query (PayMe support + integration kit).
-        if (
-            getattr(settings, 'PAYME_CONFIRM_SUCCESS_VIA_API', False)
-            and (norm in ('success', 'authorized') or not norm)
-        ):
-            sale_for_confirm = str(
-                payload.get('payme_sale_id')
-                or order.payme_transaction_id
-                or ''
-            ).strip()
-            txn_for_confirm = str(
-                payload.get('payme_transaction_id')
-                or payload.get('transaction_id')
-                or ''
-            ).strip()
-            # Prefer SALE… for get-sales; fall back to TRAN… for get-transactions.
-            confirm_sale = sale_for_confirm if sale_for_confirm.startswith('SALE') else ''
-            if not confirm_sale and order.payme_transaction_id and str(order.payme_transaction_id).startswith('SALE'):
-                confirm_sale = str(order.payme_transaction_id).strip()
-            try:
-                confirmed = confirm_payme_sale_status(
-                    payme_sale_id=confirm_sale or None,
-                    payme_transaction_id=(txn_for_confirm if not confirm_sale else None),
-                )
-            except Exception as confirm_exc:
-                logger.warning(
-                    'PayMe webhook API confirm crashed order_id=%s: %s',
-                    order_id,
-                    confirm_exc,
-                )
-                confirmed = {'ok': False, 'found': False, 'status': None, 'error': str(confirm_exc)}
+        sale_for_confirm, txn_for_confirm = _payme_ids_for_api_confirm(payload, order)
+        try:
+            confirmed = confirm_payme_sale_status(
+                payme_sale_id=sale_for_confirm,
+                payme_transaction_id=txn_for_confirm,
+            )
+        except Exception as confirm_exc:
+            logger.warning(
+                'PayMe webhook API confirm crashed order_id=%s: %s',
+                order_id,
+                confirm_exc,
+            )
+            confirmed = {'ok': False, 'found': False, 'status': None, 'error': str(confirm_exc)}
 
-            if confirmed.get('ok') and confirmed.get('found'):
-                api_status = confirmed.get('status')
-                if api_status == 'failed':
-                    outcome['error_message'] = 'api_status_failed'
-                    _log_payme_webhook_rejection(
-                        'api_status_failed',
-                        order_id=order_id,
-                        payload={'api_status': api_status, 'sale': confirm_sale, 'txn': txn_for_confirm},
-                    )
-                    return Response(
-                        {'received': True, 'finalized': False, 'reason': 'api_status_failed'},
-                        status=status.HTTP_200_OK,
-                    )
-                if api_status in ('success', 'authorized'):
-                    norm = api_status
-                elif api_status == 'pending':
-                    logger.info(
-                        'PayMe webhook API still pending order_id=%s sale=%s',
-                        order_id,
-                        confirm_sale or txn_for_confirm,
-                    )
-                    return Response(
-                        {'received': True, 'finalized': False, 'reason': 'api_status_pending'},
-                        status=status.HTTP_200_OK,
-                    )
-            elif confirmed.get('ok') and not confirmed.get('found'):
-                logger.warning(
-                    'PayMe webhook API confirm: sale/txn not found order_id=%s sale=%s txn=%s',
-                    order_id,
-                    confirm_sale,
-                    txn_for_confirm,
-                )
-            else:
-                logger.warning(
-                    'PayMe webhook API confirm unavailable order_id=%s error=%s — proceeding on IPN signature',
-                    order_id,
-                    confirmed.get('error'),
-                )
+        if not isinstance(confirmed, dict):
+            confirmed = {'ok': False, 'found': False, 'status': None, 'error': 'confirm_failed'}
+        api_status = confirmed.get('status')
+        confirm_error = confirmed.get('error') or 'confirm_failed'
+        if not confirmed.get('ok'):
+            outcome['error_message'] = 'payme_api_unavailable'
+            _log_payme_webhook_rejection(
+                'payme_api_unavailable',
+                order_id=order_id,
+                payload={
+                    'error': confirm_error,
+                    'sale': sale_for_confirm,
+                    'txn': txn_for_confirm,
+                },
+            )
+            return Response(
+                {
+                    'received': True,
+                    'finalized': False,
+                    'reason': 'payme_api_unavailable',
+                    'error': confirm_error,
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
-        # HMAC + order checks passed (finalize may still be deferred for non-final status).
+        if not confirmed.get('found'):
+            outcome['error_message'] = 'payme_sale_not_found'
+            _log_payme_webhook_rejection(
+                'payme_sale_not_found',
+                order_id=order_id,
+                payload={'sale': sale_for_confirm, 'txn': txn_for_confirm},
+            )
+            if order.status == 'paid':
+                return Response(
+                    {'received': True, 'finalized': True, 'reason': 'already_paid', 'order_status': 'paid'},
+                    status=status.HTTP_200_OK,
+                )
+            return Response(
+                {'received': True, 'finalized': False, 'reason': 'payme_sale_not_found'},
+                status=status.HTTP_200_OK,
+            )
+
+        if api_status != 'success':
+            reason = f'api_status_{api_status or "unknown"}'
+            outcome['error_message'] = reason
+            _log_payme_webhook_rejection(
+                reason,
+                order_id=order_id,
+                payload={
+                    'api_status': api_status,
+                    'sale': sale_for_confirm,
+                    'txn': txn_for_confirm,
+                },
+            )
+            if order.status == 'paid':
+                return Response(
+                    {'received': True, 'finalized': True, 'reason': 'already_paid', 'order_status': 'paid'},
+                    status=status.HTTP_200_OK,
+                )
+            return Response(
+                {'received': True, 'finalized': False, 'reason': reason},
+                status=status.HTTP_200_OK,
+            )
+
+        # Direct PayMe API confirmed completed/paid. Ignore webhook-claimed status.
+        norm = 'success'
         outcome['is_valid'] = True
         outcome['error_message'] = None
 
@@ -619,7 +649,7 @@ def payme_webhook(request):
             lookup_via=lookup_via,
         )
 
-        if norm in ('success', 'authorized') and order.status == 'pending_payment':
+        if norm == 'success' and order.status == 'pending_payment':
             try:
                 ok, err = finalize_pending_order_to_paid(order_id, source='payme_webhook')
             except Exception as fin_exc:

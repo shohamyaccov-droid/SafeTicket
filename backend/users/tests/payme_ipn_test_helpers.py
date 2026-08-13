@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 from urllib.parse import urlencode
 
 from rest_framework.test import APIRequestFactory
@@ -16,8 +17,77 @@ PAYME_IPN_TEST_SETTINGS = {
     'PAYME_API_PASSWORD': TEST_PAYME_API_PASSWORD,
     'PAYME_IS_SANDBOX': False,
     'DEBUG': False,
-    'PAYME_CONFIRM_SUCCESS_VIA_API': False,
 }
+
+MOCK_PAYME_SALE_SUCCESS = {
+    'ok': True,
+    'found': True,
+    'status': 'success',
+    'raw': {'sale_status': 'completed'},
+    'error': None,
+}
+
+MOCK_PAYME_SALE_PENDING = {
+    'ok': True,
+    'found': True,
+    'status': 'pending',
+    'raw': {'sale_status': 'pending'},
+    'error': None,
+}
+
+MOCK_PAYME_SALE_AUTHORIZED = {
+    'ok': True,
+    'found': True,
+    'status': 'authorized',
+    'raw': {'sale_status': 'authorized'},
+    'error': None,
+}
+
+MOCK_PAYME_SALE_FAILED = {
+    'ok': True,
+    'found': True,
+    'status': 'failed',
+    'raw': {'sale_status': 'failed'},
+    'error': None,
+}
+
+MOCK_PAYME_SALE_NOT_FOUND = {
+    'ok': True,
+    'found': False,
+    'status': None,
+    'raw': {'items': [], 'status_code': 0},
+    'error': None,
+}
+
+MOCK_PAYME_SALE_TIMEOUT = {
+    'ok': False,
+    'found': False,
+    'status': None,
+    'raw': None,
+    'error': 'timeout',
+}
+
+
+class MockPayMeSaleConfirmMixin:
+    """Fulfillment is gated on get-sales/get-transactions; tests mock that lookup."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._payme_confirm_patcher = patch(
+            'users.payme_views.confirm_payme_sale_status',
+            return_value=dict(MOCK_PAYME_SALE_SUCCESS),
+        )
+        cls.mock_confirm_payme_sale_status = cls._payme_confirm_patcher.start()
+        cls.addClassCleanup(cls._payme_confirm_patcher.stop)
+
+    def _pre_setup(self):
+        super()._pre_setup()
+        mock = getattr(type(self), 'mock_confirm_payme_sale_status', None)
+        if mock is not None:
+            mock.reset_mock(return_value=True, side_effect=True)
+            mock.return_value = dict(MOCK_PAYME_SALE_SUCCESS)
+            mock.side_effect = None
 
 
 def _ipn_ids_from_payload(payload: dict) -> tuple[str, str]:

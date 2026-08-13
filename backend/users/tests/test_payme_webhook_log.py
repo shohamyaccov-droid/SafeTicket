@@ -14,7 +14,12 @@ from users.payments import (
     extract_payme_raw_sign_fields,
     parse_payme_raw_body_fields,
 )
-from users.tests.payme_ipn_test_helpers import PAYME_IPN_TEST_SETTINGS, sign_payme_ipn_payload
+from users.tests.payme_ipn_test_helpers import (
+    MOCK_PAYME_SALE_FAILED,
+    PAYME_IPN_TEST_SETTINGS,
+    MockPayMeSaleConfirmMixin,
+    sign_payme_ipn_payload,
+)
 
 
 class ParsePaymeRawBodyFieldsTests(TestCase):
@@ -58,11 +63,8 @@ class ParsePaymeRawBodyFieldsTests(TestCase):
         self.assertNotIn('payme_signature', fields)
 
 
-from users.tests.payme_ipn_test_helpers import PAYME_IPN_TEST_SETTINGS, sign_payme_ipn_payload
-
-
 @override_settings(**PAYME_IPN_TEST_SETTINGS)
-class PayMeWebhookLogCaptureTests(TestCase):
+class PayMeWebhookLogCaptureTests(MockPayMeSaleConfirmMixin, TestCase):
     def setUp(self):
         self.seller = User.objects.create_user(username='seller_wh', password='x', role='seller')
         self.order = Order.objects.create(
@@ -89,6 +91,7 @@ class PayMeWebhookLogCaptureTests(TestCase):
             }
         )
         before = PayMeWebhookLog.objects.count()
+        self.mock_confirm_payme_sale_status.return_value = dict(MOCK_PAYME_SALE_FAILED)
         response = client.post(
             '/api/payments/webhook/payme/',
             data=body,
@@ -99,8 +102,8 @@ class PayMeWebhookLogCaptureTests(TestCase):
         self.assertIn('payme_sale_id=txn_log_capture_1', log.raw_body)
         self.assertIn('buyer_card_mask=', log.raw_body)
         self.assertFalse(log.is_valid)
-        self.assertEqual(log.error_message, 'bad_signature')
-        self.assertIn(response.status_code, (400, 403))
+        self.assertEqual(log.error_message, 'api_status_failed')
+        self.assertEqual(response.status_code, 200)
 
 
 @override_settings(**PAYME_IPN_TEST_SETTINGS)

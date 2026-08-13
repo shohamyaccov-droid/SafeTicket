@@ -24,8 +24,11 @@ from users.models import Artist, Event, Order, SellerPayout, Ticket
 from users.payme_views import payme_webhook
 from users.pricing import expected_buy_now_total
 from users.tests.payme_ipn_test_helpers import (
+    MOCK_PAYME_SALE_FAILED,
+    MOCK_PAYME_SALE_NOT_FOUND,
     TEST_PAYME_API_KEY,
     TEST_PAYME_API_PASSWORD,
+    MockPayMeSaleConfirmMixin,
     sign_payme_ipn_payload,
 )
 
@@ -76,7 +79,7 @@ def assert_ledger_math(test_case, total_paid: Decimal, payout: SellerPayout) -> 
     PAYME_API_KEY=TEST_PAYME_API_KEY,
     PAYME_API_PASSWORD=TEST_PAYME_API_PASSWORD,
 )
-class PayMeMarketplaceE2EBase(TestCase):
+class PayMeMarketplaceE2EBase(MockPayMeSaleConfirmMixin, TestCase):
     """Shared marketplace fixture: seller event + verified active listing."""
 
     def setUp(self):
@@ -313,11 +316,12 @@ class PayMeFraudFailureE2ETests(PayMeMarketplaceE2EBase):
         self.assertEqual(res.status_code, 403)
         self._assert_checkout_still_pending()
 
-    @override_settings(PAYME_IS_SANDBOX=False, DEBUG=False)
-    def test_webhook_bad_signature_does_not_finalize(self):
+    def test_webhook_unpaid_payme_api_does_not_finalize(self):
         payload = self._success_webhook_payload(self.order)
+        self.mock_confirm_payme_sale_status.return_value = dict(MOCK_PAYME_SALE_NOT_FOUND)
         res = self._post_signed_webhook(payload, signature='deadbeefdeadbeefdeadbeefdeadbeef')
-        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(res.data.get('finalized'))
         self._assert_checkout_still_pending()
 
     def test_webhook_transaction_id_mismatch_does_not_finalize(self):
@@ -342,24 +346,30 @@ class PayMeFraudFailureE2ETests(PayMeMarketplaceE2EBase):
             'sale_price': int(self.checkout_total * 100),
             'currency': 'ILS',
         }
+        self.mock_confirm_payme_sale_status.return_value = dict(MOCK_PAYME_SALE_FAILED)
         res = self._post_signed_webhook(payload)
         self.assertEqual(res.status_code, 200)
         self.assertFalse(res.data.get('finalized'))
         self._assert_checkout_still_pending()
 
-    @override_settings(PAYME_API_KEY='', PAYME_API_PASSWORD='', DEBUG=True, PAYME_IS_SANDBOX=True)
-    def test_webhook_without_configured_credentials_finalizes_in_sandbox(self):
+    def test_webhook_without_payme_api_confirm_does_not_finalize(self):
         payload = self._success_webhook_payload(self.order)
         body, _ = sign_payme_payload(payload)
+        self.mock_confirm_payme_sale_status.return_value = {
+            'ok': False,
+            'found': False,
+            'status': None,
+            'raw': None,
+            'error': 'seller_not_configured',
+        }
         res = self.client.post(
             WEBHOOK_URL,
             body,
             content_type='application/json',
         )
-        self.assertEqual(res.status_code, 200, res.content)
-        self.assertTrue(res.data.get('finalized'), res.data)
-        self.order.refresh_from_db()
-        self.assertEqual(self.order.status, 'paid')
+        self.assertEqual(res.status_code, 503, res.content)
+        self.assertFalse(res.data.get('finalized'))
+        self._assert_checkout_still_pending()
 
     def test_webhook_missing_signature_header_finalizes_in_sandbox(self):
         payload = self._success_webhook_payload(self.order)

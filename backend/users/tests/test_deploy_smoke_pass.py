@@ -21,6 +21,7 @@ from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 from users.models import Artist, Event, Order, Ticket
 from users.payme_views import payme_webhook
 from users.pricing import expected_buy_now_total
+from users.tests.payme_ipn_test_helpers import MockPayMeSaleConfirmMixin
 
 User = get_user_model()
 
@@ -36,7 +37,7 @@ def _signed_payme_request(payload, secret='whsec_smoke'):
     )
 
 
-class DeployReadinessSmokeTests(TestCase):
+class DeployReadinessSmokeTests(MockPayMeSaleConfirmMixin, TestCase):
     """End-to-end smoke coverage for launch-critical marketplace flows."""
 
     def setUp(self):

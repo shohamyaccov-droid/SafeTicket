@@ -19,7 +19,7 @@ from rest_framework.test import APIClient
 from users.models import Artist, Event, Offer, Order, SellerPayout, Ticket
 from users.pricing import buyer_charge_from_base_amount
 from users.serializers import user_can_access_ticket_pdf
-from users.tests.payme_ipn_test_helpers import sign_payme_ipn_payload
+from users.tests.payme_ipn_test_helpers import MockPayMeSaleConfirmMixin, sign_payme_ipn_payload
 from wallets.models import WalletTransaction
 
 User = get_user_model()
@@ -56,7 +56,7 @@ def _sign_payme_payload(payload: dict, secret: str = 'whsec_negotiation') -> tup
     FRONTEND_ORIGIN='https://example.test',
     API_PUBLIC_ORIGIN='https://api.example.test',
 )
-class NegotiatedOfferPayMeWalletE2ETests(TestCase):
+class NegotiatedOfferPayMeWalletE2ETests(MockPayMeSaleConfirmMixin, TestCase):
     class ImmediateThread:
         def __init__(self, target=None, *args, **kwargs):
             self.target = target

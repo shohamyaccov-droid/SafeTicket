@@ -67,7 +67,7 @@ class PaymeWebhookVerificationTests(TestCase):
         self.assertEqual(reason, 'ok')
 
     @override_settings(PAYME_IS_SANDBOX=True, DEBUG=False)
-    def test_webhook_rejects_when_api_credentials_missing_in_production(self):
+    def test_webhook_order_binding_does_not_require_api_password(self):
         payload = {
             'merchant_order_id': '123',
             'transaction_id': 'txn_123',
@@ -86,11 +86,11 @@ class PaymeWebhookVerificationTests(TestCase):
             order=_order(),
         )
 
-        self.assertFalse(ok)
-        self.assertEqual(reason, 'missing_api_credentials')
+        self.assertTrue(ok)
+        self.assertEqual(reason, 'ok')
 
     @override_settings(**PAYME_IPN_TEST_SETTINGS)
-    def test_webhook_rejects_missing_signature_in_production(self):
+    def test_webhook_accepts_missing_signature_for_seller_accounts(self):
         payload = {
             'merchant_order_id': '123',
             'transaction_id': 'txn_123',
@@ -109,8 +109,8 @@ class PaymeWebhookVerificationTests(TestCase):
             order=_order(),
         )
 
-        self.assertFalse(ok)
-        self.assertEqual(reason, 'missing_signature_header')
+        self.assertTrue(ok)
+        self.assertEqual(reason, 'ok')
 
     @override_settings(**PAYME_IPN_TEST_SETTINGS)
     def test_webhook_accepts_payme_signature_in_body(self):
@@ -256,7 +256,7 @@ class PaymeWebhookVerificationTests(TestCase):
         self.assertEqual(reason, 'ok')
 
     @override_settings(**PAYME_IPN_TEST_SETTINGS)
-    def test_webhook_rejects_bad_body_signature(self):
+    def test_webhook_ignores_invalid_body_signature_for_seller_accounts(self):
         payload = {
             'merchant_order_id': '123',
             'transaction_id': 'txn_123',
@@ -280,8 +280,8 @@ class PaymeWebhookVerificationTests(TestCase):
             order=_order(),
         )
 
-        self.assertFalse(ok)
-        self.assertEqual(reason, 'bad_signature')
+        self.assertTrue(ok)
+        self.assertEqual(reason, 'ok')
 
     def test_normalize_prefers_notify_type_over_numeric_status(self):
         tid, norm = normalize_payme_webhook_status(

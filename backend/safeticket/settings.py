@@ -627,7 +627,8 @@ PAYME_IS_SANDBOX = bool(PAYME_API_URL) and any(
 )
 PAYME_MERCHANT_ID = (os.environ.get('PAYME_MERCHANT_ID') or PAYME_SELLER_ID).strip()
 PAYME_API_SECRET = (os.environ.get('PAYME_API_SECRET') or '').strip()
-# PayMe IPN payme_signature uses merchant_key + merchant_password (same dashboard API creds).
+# Optional leftover from Marketplace IPN docs. Standard Seller accounts do not
+# receive merchant_password; webhooks are verified via get-sales/get-transactions.
 PAYME_API_PASSWORD = (
     os.environ.get('PAYME_API_PASSWORD') or os.environ.get('PAYME_API_SECRET') or ''
 ).strip()
@@ -649,15 +650,9 @@ except ValueError:
 PAYME_CONFIRM_FAILURE_VIA_API = (
     os.environ.get('PAYME_CONFIRM_FAILURE_VIA_API', '').strip().lower() in ('1', 'true', 'yes')
 )
-# After IPN signature OK, re-query get-sales / get-transactions before finalizing (PayMe support).
-# Default on in production; set PAYME_CONFIRM_SUCCESS_VIA_API=false to disable.
-_payme_confirm_success_raw = (os.environ.get('PAYME_CONFIRM_SUCCESS_VIA_API') or '').strip().lower()
-if _payme_confirm_success_raw in ('0', 'false', 'no'):
-    PAYME_CONFIRM_SUCCESS_VIA_API = False
-elif _payme_confirm_success_raw in ('1', 'true', 'yes'):
-    PAYME_CONFIRM_SUCCESS_VIA_API = True
-else:
-    PAYME_CONFIRM_SUCCESS_VIA_API = not DEBUG
+# Seller accounts have no merchant_password. Fulfillment always uses get-sales /
+# get-transactions with PAYME_API_KEY; this flag is kept True for compatibility.
+PAYME_CONFIRM_SUCCESS_VIA_API = True
 _VITE_USE_PAYME = (os.environ.get('VITE_USE_PAYME') or '').strip().lower() in ('1', 'true', 'yes')
 _PAYME_CONFIGURED = bool(PAYME_SELLER_ID or PAYME_API_KEY or PAYME_MERCHANT_ID)
 # Production: only a verified PayMe webhook may finalize inventory (never client mock ack).
