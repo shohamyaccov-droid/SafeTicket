@@ -14,15 +14,13 @@ from __future__ import annotations
 import json
 
 from django.core.management.base import BaseCommand, CommandError
-from rest_framework.test import APIRequestFactory
 
 from users.models import PayMeWebhookLog
-from users.payme_views import payme_webhook
+from users.payme_webhook_replay import replay_payme_webhook_log
 from users.payments import (
     compute_payme_ipn_md5_signature,
-    extract_payme_raw_sign_fields,
-    get_payme_config,
     parse_payme_raw_body_fields,
+    get_payme_config,
 )
 
 
@@ -84,24 +82,8 @@ class Command(BaseCommand):
             self.stdout.write(json.dumps(fields, ensure_ascii=False, indent=2))
             return
 
-        factory = APIRequestFactory()
-        request = factory.post(
-            '/api/payments/webhook/payme/',
-            data=raw_body,
-            content_type=content_type,
-        )
-        for key, value in headers.items():
-            key_s = str(key)
-            if key_s.lower() in ('content-type', 'content-length', 'host'):
-                continue
-            meta_key = 'HTTP_' + key_s.upper().replace('-', '_')
-            request.META[meta_key] = str(value)
-
-        extracted = extract_payme_raw_sign_fields(request, raw_body=raw_body)
-        self.stdout.write(f'  extract_payme_raw_sign_fields keys={sorted(extracted.keys())}')
-
-        response = payme_webhook(request)
-        status_code = getattr(response, 'status_code', None)
-        data = getattr(response, 'data', None)
-        style = self.style.SUCCESS if status_code and int(status_code) < 400 else self.style.ERROR
-        self.stdout.write(style(f'Replay response status={status_code} data={data}'))
+        result = replay_payme_webhook_log(log)
+        status_code = result.get('status_code')
+        style = self.style.SUCCESS if result.get('ok') else self.style.ERROR
+        self.stdout.write(style(f'Replay response status={status_code} data={result.get("data")}'))
+        self.stdout.write(result.get('summary') or '')

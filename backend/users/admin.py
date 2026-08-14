@@ -1197,6 +1197,7 @@ class PayMeWebhookLogAdmin(admin.ModelAdmin):
     search_fields = ['error_message', 'raw_body']
     readonly_fields = ['created_at', 'raw_body', 'headers', 'is_valid', 'error_message']
     ordering = ['-created_at']
+    actions = ['replay_webhook']
 
     @admin.display(description='error')
     def error_message_short(self, obj):
@@ -1206,6 +1207,41 @@ class PayMeWebhookLogAdmin(admin.ModelAdmin):
     @admin.display(description='body bytes')
     def raw_body_len(self, obj):
         return len(obj.raw_body or '')
+
+    @admin.action(description='Replay Selected Webhooks')
+    def replay_webhook(self, request, queryset):
+        from users.payme_webhook_replay import MAX_ADMIN_REPLAY_BATCH, replay_payme_webhook_log
+
+        total = queryset.count()
+        logs = list(queryset.order_by('id')[:MAX_ADMIN_REPLAY_BATCH])
+        if not logs:
+            self.message_user(request, 'No webhook logs selected.', messages.WARNING)
+            return
+        if total > MAX_ADMIN_REPLAY_BATCH:
+            self.message_user(
+                request,
+                f'Selected {total} logs; replaying the first {MAX_ADMIN_REPLAY_BATCH} only.',
+                messages.WARNING,
+            )
+        for log in logs:
+            try:
+                result = replay_payme_webhook_log(log)
+            except Exception as exc:
+                _admin_log.exception('PayMeWebhookLog replay failed id=%s', log.pk)
+                self.message_user(
+                    request,
+                    f'Log #{log.pk}: replay crashed: {exc}',
+                    messages.ERROR,
+                )
+                continue
+            status_code = result.get('status_code')
+            if result.get('ok'):
+                level = messages.SUCCESS
+            elif status_code is None or int(status_code or 0) >= 400:
+                level = messages.ERROR
+            else:
+                level = messages.WARNING
+            self.message_user(request, result.get('summary') or f'Log #{log.pk}: no result', level)
 
 
 # ── Analytics Admin ────────────────────────────────────────────────────────────
