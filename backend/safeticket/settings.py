@@ -622,9 +622,6 @@ if not DEBUG:
     PAYME_API_URL = _raw_payme_api_url
 else:
     PAYME_API_URL = _raw_payme_api_url or 'https://testpay.payme.io/api'
-PAYME_IS_SANDBOX = bool(PAYME_API_URL) and any(
-    host in PAYME_API_URL for host in _PAYME_SANDBOX_HOSTS
-)
 PAYME_MERCHANT_ID = (os.environ.get('PAYME_MERCHANT_ID') or PAYME_SELLER_ID).strip()
 PAYME_API_SECRET = (os.environ.get('PAYME_API_SECRET') or '').strip()
 # Optional leftover from Marketplace IPN docs. Standard Seller accounts do not
@@ -636,6 +633,13 @@ PAYME_GENERATE_SALE_URL = (
     os.environ.get('PAYME_GENERATE_SALE_URL')
     or (f'{PAYME_API_URL}/generate-sale' if PAYME_API_URL else '')
 ).strip()
+# Checkout may set only PAYME_GENERATE_SALE_URL. Derive the API root so get-sales /
+# generate-request share the same host (empty PAYME_API_URL previously POSTed to /get-sales).
+if not PAYME_API_URL and PAYME_GENERATE_SALE_URL.endswith('/generate-sale'):
+    PAYME_API_URL = PAYME_GENERATE_SALE_URL[: -len('/generate-sale')].rstrip('/')
+PAYME_IS_SANDBOX = bool(PAYME_API_URL) and any(
+    host in PAYME_API_URL for host in _PAYME_SANDBOX_HOSTS
+)
 PAYME_WEBHOOK_SECRET = (os.environ.get('PAYME_WEBHOOK_SECRET') or '').strip()
 PAYME_SUB_SELLER_PAYEE_ID = (os.environ.get('PAYME_SUB_SELLER_PAYEE_ID') or '').strip()
 # Grace before abandoning pending_payment (Apple Pay webhooks can arrive late).

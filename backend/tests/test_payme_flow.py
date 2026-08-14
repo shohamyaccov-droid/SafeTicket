@@ -18,7 +18,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from users.models import Artist, Event, Order, SellerPayout, Ticket
+from users.models import Artist, Event, Order, PayMeWebhookLog, SellerPayout, Ticket
 from users.tests.payme_ipn_test_helpers import (
     MOCK_PAYME_SALE_AUTHORIZED,
     MOCK_PAYME_SALE_NOT_FOUND,
@@ -482,5 +482,36 @@ class PaymeWebhookFlowTests(MockPayMeSaleConfirmMixin, TestCase):
         self.assertEqual(res.status_code, 503, res.content)
         self.assertFalse(res.data.get('finalized'))
         self.assertEqual(res.data.get('reason'), 'payme_api_unavailable')
+        log = PayMeWebhookLog.objects.latest('id')
+        self.assertIn('payme_api_unavailable', log.error_message or '')
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, 'pending_payment')
+
+    def test_webhook_logs_payme_http_status_and_body(self):
+        payload = {
+            'merchant_order_id': str(self.order.id),
+            'status': 'success',
+            'transaction_id': 'webhook_txn_1',
+            'sale_price': 11500,
+            'currency': 'ILS',
+        }
+        body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+        self.mock_confirm_payme_sale_status.return_value = {
+            'ok': False,
+            'found': False,
+            'status': None,
+            'error': 'unauthorized',
+            'http_status': 401,
+            'url': 'https://live.payme.io/api/get-sales',
+            'response_text': '{"error":"unauthorized"}',
+        }
+        res = self.client.post(
+            '/api/payments/webhook/payme/',
+            body,
+            content_type='application/json',
+        )
+        self.assertEqual(res.status_code, 503, res.content)
+        log = PayMeWebhookLog.objects.latest('id')
+        self.assertIn('401', log.error_message or '')
+        self.assertIn('unauthorized', log.error_message or '')
+        self.assertIn('get-sales', log.error_message or '')

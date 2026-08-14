@@ -539,15 +539,33 @@ def payme_webhook(request):
             confirmed = {'ok': False, 'found': False, 'status': None, 'error': 'confirm_failed'}
         api_status = confirmed.get('status')
         confirm_error = confirmed.get('error') or 'confirm_failed'
+        confirm_http = confirmed.get('http_status')
+        confirm_url = confirmed.get('url')
+        confirm_body = (confirmed.get('response_text') or '')[:800]
         if not confirmed.get('ok'):
-            outcome['error_message'] = 'payme_api_unavailable'
+            outcome['error_message'] = (
+                f'payme_api_unavailable http={confirm_http} url={confirm_url} '
+                f'error={confirm_error} body={confirm_body}'
+            )[:2000]
+            logger.error(
+                'PayMe webhook API unavailable order_id=%s http=%s url=%s error=%s body=%s',
+                order_id,
+                confirm_http,
+                confirm_url,
+                confirm_error,
+                confirm_body,
+            )
             _log_payme_webhook_rejection(
                 'payme_api_unavailable',
                 order_id=order_id,
                 payload={
                     'error': confirm_error,
+                    'http_status': confirm_http,
+                    'url': confirm_url,
+                    'response_text': confirm_body,
                     'sale': sale_for_confirm,
                     'txn': txn_for_confirm,
+                    'attempts': confirmed.get('attempts'),
                 },
             )
             return Response(
@@ -556,12 +574,16 @@ def payme_webhook(request):
                     'finalized': False,
                     'reason': 'payme_api_unavailable',
                     'error': confirm_error,
+                    'http_status': confirm_http,
                 },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
         if not confirmed.get('found'):
-            outcome['error_message'] = 'payme_sale_not_found'
+            outcome['error_message'] = (
+                f'payme_sale_not_found http={confirmed.get("http_status")} '
+                f'url={confirmed.get("url")} body={(confirmed.get("response_text") or "")[:400]}'
+            )[:2000]
             _log_payme_webhook_rejection(
                 'payme_sale_not_found',
                 order_id=order_id,

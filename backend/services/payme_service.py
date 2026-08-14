@@ -58,10 +58,16 @@ class PayMeSettings:
             or seller_id
             or ''
         ).strip()
-        api_url = getattr(settings, 'PAYME_API_URL', 'https://testpay.payme.io/api').strip().rstrip('/')
+        api_url = (getattr(settings, 'PAYME_API_URL', '') or '').strip().rstrip('/')
         generate_sale_url = (
-            getattr(settings, 'PAYME_GENERATE_SALE_URL', '') or f'{api_url}/generate-sale'
-        ).strip()
+            getattr(settings, 'PAYME_GENERATE_SALE_URL', '') or ''
+        ).strip().rstrip('/')
+        if not generate_sale_url and api_url:
+            generate_sale_url = f'{api_url}/generate-sale'
+        if not api_url and generate_sale_url.endswith('/generate-sale'):
+            api_url = generate_sale_url[: -len('/generate-sale')].rstrip('/')
+        if not api_url:
+            api_url = 'https://testpay.payme.io/api' if getattr(settings, 'DEBUG', False) else ''
         return cls(
             seller_id=seller_id,
             api_url=api_url,
@@ -78,6 +84,16 @@ class PayMeSettings:
     @property
     def is_configured(self) -> bool:
         return bool(self.seller_id or self.api_key)
+
+    @property
+    def lookup_api_url(self) -> str:
+        """API root for get-sales / generate-request (same host as generate-sale)."""
+        if self.api_url:
+            return self.api_url.rstrip('/')
+        gen = (self.generate_sale_url or '').rstrip('/')
+        if gen.endswith('/generate-sale'):
+            return gen[: -len('/generate-sale')].rstrip('/')
+        return ''
 
 
 def money_to_agorot(amount: Decimal | str | float | int) -> int:
@@ -359,17 +375,26 @@ def build_standard_generate_sale_body(
     return body
 
 
-def _request_headers(cfg: PayMeSettings) -> dict[str, str]:
-    headers = {
+def _json_headers() -> dict[str, str]:
+    return {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
     }
+
+
+def _request_headers(cfg: PayMeSettings) -> dict[str, str]:
+    headers = _json_headers()
     if cfg.seller_id:
         headers['X-Payme-Merchant-Id'] = cfg.seller_id
     if cfg.api_key:
         headers['X-Api-Key'] = cfg.api_key
         headers['Authorization'] = f'Bearer {cfg.api_key}'
     return headers
+
+
+def _lookup_headers() -> dict[str, str]:
+    """PayMe query docs authenticate via JSON body, not Bearer (which can 401 get-sales)."""
+    return _json_headers()
 
 
 def generate_payme_sale(
@@ -502,7 +527,21 @@ def generate_payme_sale(
     }
 
 
-CONFIRM_TIMEOUT_SECONDS = 15
+CONFIRM_TIMEOUT_SECONDS = 30
+_LOOKUP_BODY_LOG_MAX = 1800
+
+
+def _empty_confirm_result(*, error: str, raw: dict[str, Any] | None = None) -> dict[str, Any]:
+    return {
+        'ok': False,
+        'found': False,
+        'status': None,
+        'raw': raw,
+        'error': error,
+        'http_status': None,
+        'url': None,
+        'response_text': None,
+    }
 
 
 def confirm_payme_sale_status(
@@ -513,160 +552,313 @@ def confirm_payme_sale_status(
     """
     Authoritative PayMe status lookup for a standard Seller account.
 
-    Seller accounts do not receive ``merchant_password``, so webhook HMAC/MD5
-    cannot be verified. PayMe's instructed fallback is a server-to-server
-    ``get-sales`` / ``get-transactions`` call using the API key
-    (``seller_payme_id`` / ``payme_client_key``).
+    Seller accounts do not receive ``merchant_password``. PayMe's instructed
+    fallback is a server-to-server lookup using the API key:
 
-    Returns::
+    1. ``POST {PAYME_API_URL}/get-sales`` with ``sale_payme_id`` / ``payme_sale_id``
+    2. ``POST {PAYME_API_URL}/generate-request`` (same host as generate-sale)
+    3. ``POST {PAYME_API_URL}/get-transactions``
 
-        {
-            'ok': bool,           # HTTP/API call reached PayMe
-            'found': bool,
-            'status': str | None, # normalized: success|authorized|failed|pending|None
-            'raw': dict | None,
-            'error': str | None,
-        }
+    Body always includes ``seller_payme_id`` and ``payme_client_key`` (MPL API key).
     """
     cfg = PayMeSettings.from_django()
     api_key = (cfg.api_key or cfg.seller_id or '').strip()
     if not api_key:
-        return {'ok': False, 'found': False, 'status': None, 'raw': None, 'error': 'seller_not_configured'}
+        logger.critical(
+            'PayMe webhook verification aborted: PAYME_API_KEY / PAYME_SELLER_ID is not loaded'
+        )
+        return _empty_confirm_result(error='missing_api_key')
 
     sale_id = (payme_sale_id or '').strip()
     txn_id = (payme_transaction_id or '').strip()
     if not sale_id and not txn_id:
-        return {'ok': False, 'found': False, 'status': None, 'raw': None, 'error': 'missing_ids'}
+        return _empty_confirm_result(error='missing_ids')
+
+    api_base = cfg.lookup_api_url
+    if not api_base:
+        logger.critical(
+            'PayMe webhook verification aborted: PAYME_API_URL is empty '
+            '(set PAYME_API_URL or PAYME_GENERATE_SALE_URL)'
+        )
+        return _empty_confirm_result(error='missing_api_url')
 
     wanted = {value for value in (sale_id, txn_id) if value}
-    transport_error: str | None = None
-    last_raw: dict[str, Any] | None = None
+    attempts: list[dict[str, Any]] = []
 
-    sale_lookup_ids = [sale_id] if sale_id else []
-    if txn_id and txn_id not in sale_lookup_ids:
-        sale_lookup_ids.append(txn_id)
-
-    for lookup_id in sale_lookup_ids:
-        result = _query_payme_get_sales(cfg, api_key=api_key, sale_payme_id=lookup_id, wanted=wanted)
+    def _try(result: dict[str, Any]) -> dict[str, Any] | None:
+        attempts.append(
+            {
+                'ok': result.get('ok'),
+                'found': result.get('found'),
+                'error': result.get('error'),
+                'http_status': result.get('http_status'),
+                'url': result.get('url'),
+                'response_text': (result.get('response_text') or '')[:400],
+            }
+        )
         if result.get('found'):
             return result
-        if result.get('ok'):
-            last_raw = result.get('raw') if isinstance(result.get('raw'), dict) else last_raw
-        else:
-            transport_error = result.get('error') or transport_error
+        return None
 
-    txn_result = _query_payme_get_transactions(
-        cfg,
-        api_key=api_key,
-        sale_payme_id=sale_id or None,
-        transaction_id=txn_id or None,
-        wanted=wanted,
+    sale_ids = [sale_id] if sale_id else []
+    if txn_id and txn_id not in sale_ids:
+        sale_ids.append(txn_id)
+
+    for lookup_id in sale_ids:
+        hit = _try(
+            _query_payme_endpoint(
+                cfg,
+                path='get-sales',
+                api_key=api_key,
+                payme_sale_id=lookup_id,
+                wanted=wanted,
+                extra={'page': 1, 'page_size': 10},
+            )
+        )
+        if hit:
+            return hit
+
+        hit = _try(
+            _query_payme_endpoint(
+                cfg,
+                path='generate-request',
+                api_key=api_key,
+                payme_sale_id=lookup_id,
+                payme_transaction_id=txn_id or None,
+                wanted=wanted,
+                extra={'action': 'get-sales'},
+            )
+        )
+        if hit:
+            return hit
+
+    hit = _try(
+        _query_payme_endpoint(
+            cfg,
+            path='get-transactions',
+            api_key=api_key,
+            payme_sale_id=sale_id or None,
+            payme_transaction_id=txn_id or None,
+            wanted=wanted,
+            extra={'page': 1, 'page_size': 10},
+        )
     )
-    if txn_result.get('found'):
-        return txn_result
-    if txn_result.get('ok'):
-        last_raw = txn_result.get('raw') if isinstance(txn_result.get('raw'), dict) else last_raw
-    else:
-        transport_error = txn_result.get('error') or transport_error
+    if hit:
+        return hit
 
-    gen_result = _query_payme_generate_request(
-        cfg,
-        api_key=api_key,
-        sale_payme_id=sale_id or txn_id,
-        transaction_id=txn_id or None,
-        wanted=wanted,
+    hit = _try(
+        _query_payme_endpoint(
+            cfg,
+            path='generate-request',
+            api_key=api_key,
+            payme_sale_id=sale_id or None,
+            payme_transaction_id=txn_id or None,
+            wanted=wanted,
+            extra={'action': 'get-transactions'},
+        )
     )
-    if gen_result.get('found'):
-        return gen_result
-    if gen_result.get('ok'):
-        last_raw = gen_result.get('raw') if isinstance(gen_result.get('raw'), dict) else last_raw
-    elif not transport_error:
-        transport_error = gen_result.get('error')
+    if hit:
+        return hit
 
-    if transport_error and last_raw is None:
-        return {'ok': False, 'found': False, 'status': None, 'raw': None, 'error': transport_error}
+    last = attempts[-1] if attempts else {}
+    transport_failed = all(not a.get('ok') for a in attempts) if attempts else True
+    logger.error(
+        'PayMe sale lookup failed sale_id=%s txn_id=%s attempts=%s',
+        sale_id,
+        txn_id,
+        attempts,
+    )
+    if transport_failed:
+        return {
+            'ok': False,
+            'found': False,
+            'status': None,
+            'raw': None,
+            'error': last.get('error') or 'payme_lookup_failed',
+            'http_status': last.get('http_status'),
+            'url': last.get('url'),
+            'response_text': last.get('response_text'),
+            'attempts': attempts,
+        }
+    return {
+        'ok': True,
+        'found': False,
+        'status': None,
+        'raw': None,
+        'error': 'payme_sale_not_found',
+        'http_status': last.get('http_status'),
+        'url': last.get('url'),
+        'response_text': last.get('response_text'),
+        'attempts': attempts,
+    }
 
-    return {'ok': True, 'found': False, 'status': None, 'raw': last_raw, 'error': None}
 
-
-def _payme_lookup_body(api_key: str, **filters: Any) -> dict[str, Any]:
+def _payme_lookup_body(
+    api_key: str,
+    *,
+    payme_sale_id: str | None = None,
+    payme_transaction_id: str | None = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     body: dict[str, Any] = {
         'payme_client_key': api_key,
         'seller_payme_id': api_key,
-        'page': 1,
-        'page_size': 10,
     }
-    for key, value in filters.items():
-        if value not in (None, ''):
-            body[key] = value
+    sale = (payme_sale_id or '').strip()
+    txn = (payme_transaction_id or '').strip()
+    if sale:
+        body['payme_sale_id'] = sale
+        body['sale_payme_id'] = sale
+    if txn:
+        body['payme_transaction_id'] = txn
+        body['transaction_id'] = txn
+    if extra:
+        for key, value in extra.items():
+            if value not in (None, ''):
+                body[key] = value
     return body
 
 
 def _post_payme_lookup(cfg: PayMeSettings, path: str, body: dict[str, Any]) -> dict[str, Any]:
-    """POST a PayMe query endpoint. ``ok`` is False only on transport / HTTP failure."""
-    api_url = (cfg.api_url or '').rstrip('/')
-    url = f'{api_url}/{path.lstrip("/")}'
+    """POST a PayMe query endpoint. Always logs HTTP status and response text."""
+    api_url = cfg.lookup_api_url
+    url = f'{api_url}/{path.lstrip("/")}' if api_url else f'/{path.lstrip("/")}'
+    safe_keys = sorted(k for k in body.keys() if k not in ('payme_client_key', 'seller_payme_id'))
     try:
         response = requests.post(
             url,
             json=body,
-            headers=_request_headers(cfg),
+            headers=_lookup_headers(),
             timeout=CONFIRM_TIMEOUT_SECONDS,
         )
     except requests.Timeout as exc:
-        logger.warning('PayMe %s timeout url=%s error=%s', path, url, exc)
-        return {'ok': False, 'data': None, 'error': 'timeout'}
+        logger.error('PayMe %s timeout url=%s keys=%s error=%s', path, url, safe_keys, exc)
+        return {
+            'ok': False,
+            'data': None,
+            'error': 'timeout',
+            'http_status': None,
+            'url': url,
+            'response_text': str(exc),
+        }
     except requests.RequestException as exc:
-        logger.warning('PayMe %s network error url=%s error=%s', path, url, exc)
-        return {'ok': False, 'data': None, 'error': f'network:{exc}'}
+        logger.error('PayMe %s network error url=%s keys=%s error=%s', path, url, safe_keys, exc)
+        return {
+            'ok': False,
+            'data': None,
+            'error': f'network:{exc}',
+            'http_status': None,
+            'url': url,
+            'response_text': str(exc),
+        }
 
+    raw_text = str(getattr(response, 'text', None) or '')[:_LOOKUP_BODY_LOG_MAX]
+    logger.info(
+        'PayMe %s response url=%s http=%s keys=%s body=%s',
+        path,
+        url,
+        response.status_code,
+        safe_keys,
+        raw_text,
+    )
+
+    data: Any = None
     try:
         data = response.json()
     except ValueError:
-        logger.warning(
-            'PayMe %s returned non-JSON http=%s body_prefix=%s',
+        logger.error(
+            'PayMe %s non-JSON url=%s http=%s body=%s',
             path,
+            url,
             response.status_code,
-            (response.text or '')[:180],
+            raw_text,
         )
-        return {'ok': False, 'data': None, 'error': f'invalid_json_http_{response.status_code}'}
+        return {
+            'ok': False,
+            'data': None,
+            'error': f'invalid_json_http_{response.status_code}',
+            'http_status': response.status_code,
+            'url': url,
+            'response_text': raw_text,
+        }
 
     if response.status_code >= 400:
         err = None
         if isinstance(data, dict):
-            err = data.get('status_error_details') or data.get('error') or data.get('message')
-        logger.warning(
-            'PayMe %s HTTP %s error=%s',
+            err = (
+                data.get('status_error_details')
+                or data.get('status_error_code')
+                or data.get('error')
+                or data.get('message')
+            )
+        logger.error(
+            'PayMe %s HTTP %s url=%s error=%s body=%s',
             path,
             response.status_code,
+            url,
             err or response.status_code,
+            raw_text,
         )
         return {
             'ok': False,
             'data': data if isinstance(data, dict) else None,
             'error': str(err or f'http_{response.status_code}'),
+            'http_status': response.status_code,
+            'url': url,
+            'response_text': raw_text,
         }
 
     if not isinstance(data, dict):
-        return {'ok': False, 'data': None, 'error': 'invalid_response'}
+        return {
+            'ok': False,
+            'data': None,
+            'error': 'invalid_response',
+            'http_status': response.status_code,
+            'url': url,
+            'response_text': raw_text,
+        }
 
-    return {'ok': True, 'data': data, 'error': None}
+    return {
+        'ok': True,
+        'data': data,
+        'error': None,
+        'http_status': response.status_code,
+        'url': url,
+        'response_text': raw_text,
+    }
 
 
 def _extract_payme_lookup_items(data: dict[str, Any]) -> list[Any]:
     items = data.get('items')
     if isinstance(items, list):
         return items
-    nested = data.get('data')
+    nested = data.get('data') or data.get('result') or data.get('sale')
+    if isinstance(nested, list):
+        return nested
     if isinstance(nested, dict):
         nested_items = nested.get('items')
         if isinstance(nested_items, list):
             return nested_items
-        if nested.get('sale_payme_id') or nested.get('sale_status') or nested.get('transaction_id'):
+        if _looks_like_payme_sale(nested):
             return [nested]
-    if data.get('sale_payme_id') or data.get('sale_status') or data.get('transaction_id'):
+    if _looks_like_payme_sale(data):
         return [data]
     return []
+
+
+def _looks_like_payme_sale(item: dict[str, Any]) -> bool:
+    return any(
+        item.get(key)
+        for key in (
+            'sale_payme_id',
+            'payme_sale_id',
+            'sale_status',
+            'payme_sale_status',
+            'transaction_id',
+            'payme_transaction_id',
+            'transaction_status',
+        )
+    )
 
 
 def _payme_item_ids(item: dict[str, Any]) -> set[str]:
@@ -690,6 +882,8 @@ def _find_matching_payme_item(items: list[Any], wanted: set[str]) -> dict[str, A
     for item in items:
         if isinstance(item, dict) and (_payme_item_ids(item) & wanted):
             return item
+    if len(items) == 1 and isinstance(items[0], dict) and _looks_like_payme_sale(items[0]):
+        return items[0]
     return None
 
 
@@ -705,100 +899,78 @@ def _status_from_payme_item(item: dict[str, Any]) -> str | None:
     return _normalize_payme_api_status(raw_status)
 
 
-def _matched_payme_result(item: dict[str, Any]) -> dict[str, Any]:
+def _meta_from_post(posted: dict[str, Any]) -> dict[str, Any]:
     return {
-        'ok': True,
-        'found': True,
-        'status': _status_from_payme_item(item),
-        'raw': item,
-        'error': None,
+        'http_status': posted.get('http_status'),
+        'url': posted.get('url'),
+        'response_text': posted.get('response_text'),
     }
 
 
-def _query_payme_get_sales(
+def _query_payme_endpoint(
     cfg: PayMeSettings,
     *,
+    path: str,
     api_key: str,
-    sale_payme_id: str,
     wanted: set[str],
-) -> dict[str, Any]:
-    body = _payme_lookup_body(api_key, sale_payme_id=sale_payme_id)
-    posted = _post_payme_lookup(cfg, 'get-sales', body)
-    if not posted['ok']:
-        return {'ok': False, 'found': False, 'status': None, 'raw': posted.get('data'), 'error': posted.get('error')}
-    data = posted['data'] or {}
-    if data.get('status_code') not in (None, 0):
-        logger.info(
-            'PayMe get-sales status_code=%s sale_id=%s details=%s',
-            data.get('status_code'),
-            sale_payme_id,
-            data.get('status_error_details') or data.get('error'),
-        )
-        return {'ok': True, 'found': False, 'status': None, 'raw': data, 'error': None}
-    match = _find_matching_payme_item(_extract_payme_lookup_items(data), wanted)
-    if match is None:
-        return {'ok': True, 'found': False, 'status': None, 'raw': data, 'error': None}
-    return _matched_payme_result(match)
-
-
-def _query_payme_get_transactions(
-    cfg: PayMeSettings,
-    *,
-    api_key: str,
-    sale_payme_id: str | None,
-    transaction_id: str | None,
-    wanted: set[str],
+    payme_sale_id: str | None = None,
+    payme_transaction_id: str | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     body = _payme_lookup_body(
         api_key,
-        sale_payme_id=sale_payme_id,
-        transaction_id=transaction_id,
-        payme_transaction_id=transaction_id,
+        payme_sale_id=payme_sale_id,
+        payme_transaction_id=payme_transaction_id,
+        extra=extra,
     )
-    posted = _post_payme_lookup(cfg, 'get-transactions', body)
+    posted = _post_payme_lookup(cfg, path, body)
+    meta = _meta_from_post(posted)
     if not posted['ok']:
-        return {'ok': False, 'found': False, 'status': None, 'raw': posted.get('data'), 'error': posted.get('error')}
+        return {
+            'ok': False,
+            'found': False,
+            'status': None,
+            'raw': posted.get('data'),
+            'error': posted.get('error'),
+            **meta,
+        }
     data = posted['data'] or {}
     if data.get('status_code') not in (None, 0):
-        logger.info(
-            'PayMe get-transactions status_code=%s sale_id=%s txn=%s details=%s',
+        details = data.get('status_error_details') or data.get('error') or data.get('status_code')
+        logger.error(
+            'PayMe %s status_code=%s sale_id=%s details=%s body=%s',
+            path,
             data.get('status_code'),
-            sale_payme_id,
-            transaction_id,
-            data.get('status_error_details') or data.get('error'),
+            payme_sale_id,
+            details,
+            meta.get('response_text'),
         )
-        return {'ok': True, 'found': False, 'status': None, 'raw': data, 'error': None}
+        return {
+            'ok': False,
+            'found': False,
+            'status': None,
+            'raw': data,
+            'error': str(details or 'payme_status_code'),
+            **meta,
+        }
     match = _find_matching_payme_item(_extract_payme_lookup_items(data), wanted)
     if match is None:
-        return {'ok': True, 'found': False, 'status': None, 'raw': data, 'error': None}
-    return _matched_payme_result(match)
-
-
-def _query_payme_generate_request(
-    cfg: PayMeSettings,
-    *,
-    api_key: str,
-    sale_payme_id: str | None,
-    transaction_id: str | None,
-    wanted: set[str],
-) -> dict[str, Any]:
-    """Optional fallback used by some PayMe seller integrations."""
-    body = _payme_lookup_body(
-        api_key,
-        action='get-sales',
-        sale_payme_id=sale_payme_id,
-        transaction_id=transaction_id,
-    )
-    posted = _post_payme_lookup(cfg, 'generate-request', body)
-    if not posted['ok']:
-        return {'ok': False, 'found': False, 'status': None, 'raw': posted.get('data'), 'error': posted.get('error')}
-    data = posted['data'] or {}
-    if data.get('status_code') not in (None, 0):
-        return {'ok': True, 'found': False, 'status': None, 'raw': data, 'error': None}
-    match = _find_matching_payme_item(_extract_payme_lookup_items(data), wanted)
-    if match is None:
-        return {'ok': True, 'found': False, 'status': None, 'raw': data, 'error': None}
-    return _matched_payme_result(match)
+        return {
+            'ok': True,
+            'found': False,
+            'status': None,
+            'raw': data,
+            'error': None,
+            **meta,
+        }
+    return {
+        'ok': True,
+        'found': True,
+        'status': _status_from_payme_item(match),
+        'raw': match,
+        'error': None,
+        **meta,
+    }
 
 
 def _normalize_payme_api_status(raw: Any) -> str | None:
