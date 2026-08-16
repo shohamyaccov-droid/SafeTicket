@@ -236,7 +236,9 @@ class TicketAdmin(admin.ModelAdmin):
             row = []
             for name in options.get('fields', ()):
                 if name == 'pdf_file':
-                    row.extend(['pdf_file_display', 'pdf_inline_preview'])
+                    # Keep native FileField upload so staff can replace a bad PDF,
+                    # plus the existing staff link / open-in-tab helpers.
+                    row.extend(['pdf_file', 'pdf_file_display', 'pdf_inline_preview'])
                 else:
                     row.append(name)
             out.append((title, {**options, 'fields': tuple(row)}))
