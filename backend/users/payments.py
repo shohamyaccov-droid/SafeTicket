@@ -868,7 +868,7 @@ def verify_payme_webhook_request(
 
     Standard Seller accounts do not receive ``merchant_password``, so PayMe IPN
     MD5 / HMAC signatures are not used as a security control. Authenticity is
-    established later by a server-to-server ``get-sales`` / ``get-transactions``
+    established later by a server-to-server ``get-transactions``
     call. This function only rejects payloads that do not match the stored order
     (merchant order id, PayMe sale/transaction id, amount, currency).
 

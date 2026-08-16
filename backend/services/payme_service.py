@@ -88,7 +88,7 @@ class PayMeSettings:
 
     @property
     def lookup_api_url(self) -> str:
-        """API root for get-sales / get-transactions (same host as generate-sale)."""
+        """API root for get-transactions (same host as generate-sale)."""
         if self.api_url:
             return self.api_url.rstrip('/')
         gen = (self.generate_sale_url or '').rstrip('/')
@@ -98,10 +98,10 @@ class PayMeSettings:
 
     def lookup_endpoint_url(self, endpoint: str) -> str:
         """
-        Absolute URL for a PayMe query route.
+        Absolute URL for PayMe ``get-transactions``.
 
-        Uses ``PAYME_API_URL`` when set; otherwise rewrites
-        ``…/api/generate-sale`` → ``…/api/get-sales`` (or get-transactions).
+        Rewrites ``PAYME_GENERATE_SALE_URL`` (…/generate-sale → …/get-transactions)
+        when set; otherwise uses ``PAYME_API_URL``.
         """
         return build_payme_query_url(
             endpoint,
@@ -117,23 +117,19 @@ def build_payme_query_url(
     generate_sale_url: str = '',
 ) -> str:
     """
-    Build ``…/api/get-sales`` or ``…/api/get-transactions`` from env URLs.
+    Build ``…/api/get-transactions`` from env URLs.
 
-    Examples:
-      generate-sale → get-sales:
-        https://preprod.paymeservice.com/api/generate-sale
-        → https://preprod.paymeservice.com/api/get-sales
-      api root → get-transactions:
-        https://live.payme.io/api
-        → https://live.payme.io/api/get-transactions
+    Prefer rewriting generate-sale so preprod/live hosts match checkout::
+
+      https://preprod.paymeservice.com/api/generate-sale
+      → https://preprod.paymeservice.com/api/get-transactions
     """
     name = (endpoint or '').strip().lstrip('/')
     if not name:
         raise ValueError('PayMe query endpoint name is required')
 
-    # Prefer explicit API root; otherwise rewrite …/generate-sale → …/{endpoint}.
-    # Both preserve the host (preprod vs live) via urllib.parse.
-    for candidate in ((api_url or '').strip(), (generate_sale_url or '').strip()):
+    # Prefer GENERATE_SALE_URL (PayMe support / checkout host), then API root.
+    for candidate in ((generate_sale_url or '').strip(), (api_url or '').strip()):
         if not candidate:
             continue
         parts = urlsplit(candidate)
@@ -452,7 +448,7 @@ def _request_headers(cfg: PayMeSettings) -> dict[str, str]:
 
 
 def _lookup_headers() -> dict[str, str]:
-    """PayMe query docs authenticate via JSON body, not Bearer (which can 401 get-sales)."""
+    """PayMe query docs authenticate via JSON body, not Bearer."""
     return _json_headers()
 
 
@@ -611,14 +607,9 @@ def confirm_payme_sale_status(
     """
     Authoritative PayMe status lookup for a standard Seller account.
 
-    Seller accounts do not receive ``merchant_password``. PayMe's instructed
-    fallback is a server-to-server lookup using the API key:
-
-    1. ``POST …/api/get-sales`` with ``payme_sale_id`` / ``sale_payme_id``
-    2. ``POST …/api/get-transactions`` (only if get-sales did not find a sale)
-
-    Body always includes ``seller_payme_id`` and ``payme_client_key`` (MPL API key).
-    Never call ``generate-request`` — that route does not exist on PayMe.
+    Per PayMe support: ``POST …/api/get-transactions`` with the
+    ``payme_transaction_id`` / ``transaction_id`` from the webhook callback.
+    Does not call get-sales or generate-request.
     """
     cfg = PayMeSettings.from_django()
     api_key = (cfg.api_key or cfg.seller_id or '').strip()
@@ -628,101 +619,67 @@ def confirm_payme_sale_status(
         )
         return _empty_confirm_result(error='missing_api_key')
 
-    sale_id = (payme_sale_id or '').strip()
+    # payme_sale_id is intentionally unused — PayMe requires the callback transaction id.
+    _ = payme_sale_id
     txn_id = (payme_transaction_id or '').strip()
-    if not sale_id and not txn_id:
-        return _empty_confirm_result(error='missing_ids')
+    if not txn_id:
+        return _empty_confirm_result(error='missing_transaction_id')
 
-    get_sales_url = cfg.lookup_endpoint_url('get-sales')
-    if not get_sales_url.startswith('http'):
+    url = cfg.lookup_endpoint_url('get-transactions')
+    if not url.startswith('http'):
         logger.critical(
-            'PayMe webhook verification aborted: cannot build get-sales URL '
-            '(set PAYME_API_URL or PAYME_GENERATE_SALE_URL)'
+            'PayMe webhook verification aborted: cannot build get-transactions URL '
+            '(set PAYME_GENERATE_SALE_URL or PAYME_API_URL)'
         )
         return _empty_confirm_result(error='missing_api_url')
 
-    wanted = {value for value in (sale_id, txn_id) if value}
-    attempts: list[dict[str, Any]] = []
-
-    def _try(result: dict[str, Any]) -> dict[str, Any] | None:
-        attempts.append(
-            {
-                'ok': result.get('ok'),
-                'found': result.get('found'),
-                'error': result.get('error'),
-                'http_status': result.get('http_status'),
-                'url': result.get('url'),
-                'response_text': (result.get('response_text') or '')[:400],
-            }
-        )
-        if result.get('found'):
-            return result
-        return None
-
-    # Prefer SALE… ids for get-sales; also try stored/alternate refs once each.
-    sale_ids: list[str] = []
-    for candidate in (sale_id, txn_id):
-        if candidate and candidate not in sale_ids:
-            sale_ids.append(candidate)
-
-    for lookup_id in sale_ids:
-        hit = _try(
-            _query_payme_endpoint(
-                cfg,
-                path='get-sales',
-                api_key=api_key,
-                payme_sale_id=lookup_id,
-                wanted=wanted,
-                extra={'page': 1, 'page_size': 10},
-            )
-        )
-        if hit:
-            return hit
-
-    hit = _try(
-        _query_payme_endpoint(
-            cfg,
-            path='get-transactions',
-            api_key=api_key,
-            payme_sale_id=sale_id or None,
-            payme_transaction_id=txn_id or None,
-            wanted=wanted,
-            extra={'page': 1, 'page_size': 10},
-        )
+    wanted = {txn_id}
+    result = _query_payme_endpoint(
+        cfg,
+        path='get-transactions',
+        api_key=api_key,
+        payme_transaction_id=txn_id,
+        wanted=wanted,
+        extra={'page': 1, 'page_size': 10},
     )
-    if hit:
-        return hit
+    attempt = {
+        'ok': result.get('ok'),
+        'found': result.get('found'),
+        'error': result.get('error'),
+        'http_status': result.get('http_status'),
+        'url': result.get('url'),
+        'response_text': (result.get('response_text') or '')[:400],
+    }
+    if result.get('found'):
+        return result
 
-    last = attempts[-1] if attempts else {}
-    transport_failed = all(not a.get('ok') for a in attempts) if attempts else True
     logger.error(
-        'PayMe sale lookup failed sale_id=%s txn_id=%s attempts=%s',
-        sale_id,
+        'PayMe get-transactions lookup failed txn_id=%s attempt=%s',
         txn_id,
-        attempts,
+        attempt,
     )
-    if transport_failed:
+    if not result.get('ok'):
         return {
             'ok': False,
             'found': False,
             'status': None,
-            'raw': None,
-            'error': last.get('error') or 'payme_lookup_failed',
-            'http_status': last.get('http_status'),
-            'url': last.get('url'),
-            'response_text': last.get('response_text'),
-            'attempts': attempts,
+            'raw': result.get('raw'),
+            'error': result.get('error') or 'payme_lookup_failed',
+            'http_status': result.get('http_status'),
+            'url': result.get('url'),
+            'response_text': result.get('response_text'),
+            'attempts': [attempt],
         }
     return {
         'ok': True,
         'found': False,
         'status': None,
-        'raw': None,
+        'raw': result.get('raw'),
         'error': 'payme_sale_not_found',
-        'http_status': last.get('http_status'),
-        'url': last.get('url'),
-        'response_text': last.get('response_text'),
-        'attempts': attempts,
+        'http_status': result.get('http_status'),
+        'url': result.get('url'),
+        'response_text': result.get('response_text'),
+        'attempts': [attempt],
     }
 
 
@@ -733,15 +690,14 @@ def _payme_lookup_body(
     payme_transaction_id: str | None = None,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Body for get-transactions: API key + callback transaction id only."""
     body: dict[str, Any] = {
         'payme_client_key': api_key,
         'seller_payme_id': api_key,
     }
-    sale = (payme_sale_id or '').strip()
+    # Sale id is not used for get-transactions (PayMe support).
+    _ = payme_sale_id
     txn = (payme_transaction_id or '').strip()
-    if sale:
-        body['payme_sale_id'] = sale
-        body['sale_payme_id'] = sale
     if txn:
         body['payme_transaction_id'] = txn
         body['transaction_id'] = txn
@@ -753,10 +709,10 @@ def _payme_lookup_body(
 
 
 def _post_payme_lookup(cfg: PayMeSettings, path: str, body: dict[str, Any]) -> dict[str, Any]:
-    """POST a PayMe query endpoint. Always logs HTTP status and response text."""
+    """POST get-transactions. Always logs HTTP status and response text."""
     endpoint = path.lstrip('/')
-    if endpoint not in ('get-sales', 'get-transactions'):
-        logger.error('PayMe refused unknown lookup path=%s', endpoint)
+    if endpoint != 'get-transactions':
+        logger.error('PayMe refused non-get-transactions lookup path=%s', endpoint)
         return {
             'ok': False,
             'data': None,
@@ -1017,7 +973,7 @@ def _query_payme_endpoint(
 
 
 def _normalize_payme_api_status(raw: Any) -> str | None:
-    """Lightweight status normalize for get-sales / get-transactions responses."""
+    """Lightweight status normalize for get-transactions responses."""
     s = str(raw or '').strip().lower().replace('_', '').replace('-', '').replace(' ', '')
     if not s:
         return None

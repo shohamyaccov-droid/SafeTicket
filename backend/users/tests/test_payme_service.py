@@ -298,7 +298,7 @@ class GeneratePaymeSaleForOrderTests(TestCase):
 class ConfirmPayMeSaleStatusTests(SimpleTestCase):
     @override_settings(PAYME_API_KEY='', PAYME_SELLER_ID='', PAYME_MERCHANT_ID='')
     def test_missing_api_key_is_not_configured(self):
-        result = confirm_payme_sale_status(payme_sale_id='SALE-1')
+        result = confirm_payme_sale_status(payme_transaction_id='TRAN-1')
         self.assertFalse(result['ok'])
         self.assertEqual(result['error'], 'missing_api_key')
 
@@ -310,9 +310,20 @@ class ConfirmPayMeSaleStatusTests(SimpleTestCase):
         DEBUG=False,
     )
     def test_missing_api_url_is_logged(self):
-        result = confirm_payme_sale_status(payme_sale_id='SALE-1')
+        result = confirm_payme_sale_status(payme_transaction_id='TRAN-1')
         self.assertFalse(result['ok'])
         self.assertEqual(result['error'], 'missing_api_url')
+
+    @override_settings(
+        PAYME_API_KEY='MPL-TEST-KEY',
+        PAYME_SELLER_ID='MPL-TEST-KEY',
+        PAYME_API_URL='https://api.payme.io/api',
+        PAYME_GENERATE_SALE_URL='',
+    )
+    def test_missing_transaction_id(self):
+        result = confirm_payme_sale_status(payme_sale_id='SALE-1')
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['error'], 'missing_transaction_id')
 
     def _ok_response(self, payload):
         response = MagicMock()
@@ -325,9 +336,10 @@ class ConfirmPayMeSaleStatusTests(SimpleTestCase):
         PAYME_API_KEY='MPL-TEST-KEY',
         PAYME_SELLER_ID='MPL-TEST-KEY',
         PAYME_API_URL='https://api.payme.io/api',
+        PAYME_GENERATE_SALE_URL='',
     )
     @patch('services.payme_service.requests.post')
-    def test_get_sales_completed_is_success(self, mock_post):
+    def test_get_transactions_completed_is_success(self, mock_post):
         mock_post.return_value = self._ok_response(
             {
                 'status_code': 0,
@@ -335,27 +347,26 @@ class ConfirmPayMeSaleStatusTests(SimpleTestCase):
                     {
                         'sale_payme_id': 'SALE-1',
                         'transaction_id': 'TRAN-1',
-                        'sale_status': 'completed',
+                        'transaction_status': 'completed',
                     }
                 ],
             }
         )
 
-        result = confirm_payme_sale_status(
-            payme_sale_id='SALE-1',
-            payme_transaction_id='TRAN-1',
-        )
+        result = confirm_payme_sale_status(payme_transaction_id='TRAN-1')
 
         self.assertTrue(result['ok'])
         self.assertTrue(result['found'])
         self.assertEqual(result['status'], 'success')
-        called_url = mock_post.call_args.args[0]
-        self.assertEqual(called_url, 'https://api.payme.io/api/get-sales')
+        self.assertEqual(mock_post.call_args.args[0], 'https://api.payme.io/api/get-transactions')
+        self.assertEqual(mock_post.call_count, 1)
         body = mock_post.call_args.kwargs['json']
         self.assertEqual(body['payme_client_key'], 'MPL-TEST-KEY')
         self.assertEqual(body['seller_payme_id'], 'MPL-TEST-KEY')
-        self.assertEqual(body['payme_sale_id'], 'SALE-1')
-        self.assertEqual(body['sale_payme_id'], 'SALE-1')
+        self.assertEqual(body['payme_transaction_id'], 'TRAN-1')
+        self.assertEqual(body['transaction_id'], 'TRAN-1')
+        self.assertNotIn('payme_sale_id', body)
+        self.assertNotIn('sale_payme_id', body)
         self.assertEqual(
             mock_post.call_args.kwargs['headers']['Content-Type'],
             'application/json',
@@ -373,54 +384,26 @@ class ConfirmPayMeSaleStatusTests(SimpleTestCase):
         mock_post.return_value = self._ok_response(
             {
                 'status_code': 0,
-                'items': [{'payme_sale_id': 'SALE-1', 'payme_sale_status': 'completed'}],
+                'items': [
+                    {
+                        'payme_transaction_id': 'TRAN-1',
+                        'transaction_status': 'completed',
+                    }
+                ],
             }
         )
-        result = confirm_payme_sale_status(payme_sale_id='SALE-1')
+        result = confirm_payme_sale_status(payme_transaction_id='TRAN-1')
         self.assertTrue(result['found'])
         self.assertEqual(
             mock_post.call_args.args[0],
-            'https://preprod.paymeservice.com/api/get-sales',
+            'https://preprod.paymeservice.com/api/get-transactions',
         )
-
-    @override_settings(
-        PAYME_API_KEY='MPL-TEST-KEY',
-        PAYME_SELLER_ID='MPL-TEST-KEY',
-        PAYME_API_URL='https://preprod.paymeservice.com/api',
-    )
-    @patch('services.payme_service.requests.post')
-    def test_get_transactions_used_when_get_sales_http_error(self, mock_post):
-        failed = MagicMock()
-        failed.status_code = 401
-        failed.json.return_value = {'error': 'unauthorized'}
-        failed.text = '{"error":"unauthorized"}'
-        success = self._ok_response(
-            {
-                'status_code': 0,
-                'payme_sale_id': 'SALE1786-TEST',
-                'payme_sale_status': 'completed',
-            }
-        )
-        mock_post.side_effect = [failed, success]
-
-        result = confirm_payme_sale_status(payme_sale_id='SALE1786-TEST')
-
-        self.assertTrue(result['ok'])
-        self.assertTrue(result['found'])
-        self.assertEqual(result['status'], 'success')
-        urls = [call.args[0] for call in mock_post.call_args_list]
-        self.assertEqual(urls[0], 'https://preprod.paymeservice.com/api/get-sales')
-        self.assertEqual(urls[1], 'https://preprod.paymeservice.com/api/get-transactions')
-        self.assertTrue(all('generate-request' not in u for u in urls))
-        txn_body = mock_post.call_args_list[1].kwargs['json']
-        self.assertEqual(txn_body['payme_sale_id'], 'SALE1786-TEST')
-        self.assertEqual(txn_body['seller_payme_id'], 'MPL-TEST-KEY')
-        self.assertEqual(txn_body['payme_client_key'], 'MPL-TEST-KEY')
 
     @override_settings(
         PAYME_API_KEY='MPL-TEST-KEY',
         PAYME_SELLER_ID='MPL-TEST-KEY',
         PAYME_API_URL='https://api.payme.io/api',
+        PAYME_GENERATE_SALE_URL='',
     )
     @patch('services.payme_service.requests.post')
     def test_http_401_surfaces_status_and_body(self, mock_post):
@@ -430,64 +413,20 @@ class ConfirmPayMeSaleStatusTests(SimpleTestCase):
         failed.text = '{"error":"unauthorized"}'
         mock_post.return_value = failed
 
-        result = confirm_payme_sale_status(payme_sale_id='SALE-1')
+        result = confirm_payme_sale_status(payme_transaction_id='TRAN-1')
         self.assertFalse(result['ok'])
         self.assertEqual(result['http_status'], 401)
         self.assertIn('unauthorized', result['response_text'] or '')
-        urls = [a.get('url') for a in (result.get('attempts') or [])]
-        self.assertTrue(urls)
-        self.assertTrue(all('generate-request' not in (u or '') for u in urls))
-        self.assertIn('/get-transactions', result.get('url') or urls[-1])
-
-    @override_settings(
-        PAYME_API_KEY='MPL-TEST-KEY',
-        PAYME_SELLER_ID='MPL-TEST-KEY',
-        PAYME_API_URL='https://api.payme.io/api',
-    )
-    @patch('services.payme_service.requests.post')
-    def test_get_transactions_fallback_when_get_sales_empty(self, mock_post):
-        empty = self._ok_response({'status_code': 0, 'items': []})
-        txns = self._ok_response(
-            {
-                'status_code': 0,
-                'items': [
-                    {
-                        'sale_payme_id': 'SALE-9',
-                        'payme_transaction_id': 'TRAN-9',
-                        'transaction_status': 'paid',
-                    }
-                ],
-            }
-        )
-        # get-sales(SALE-9), get-sales(TRAN-9), then get-transactions
-        mock_post.side_effect = [empty, empty, txns]
-
-        result = confirm_payme_sale_status(
-            payme_sale_id='SALE-9',
-            payme_transaction_id='TRAN-9',
-        )
-
-        self.assertTrue(result['ok'])
-        self.assertTrue(result['found'])
-        self.assertEqual(result['status'], 'success')
-        urls = [call.args[0] for call in mock_post.call_args_list]
-        self.assertEqual(
-            urls,
-            [
-                'https://api.payme.io/api/get-sales',
-                'https://api.payme.io/api/get-sales',
-                'https://api.payme.io/api/get-transactions',
-            ],
-        )
-        self.assertTrue(all('generate-request' not in u for u in urls))
+        self.assertIn('/get-transactions', result.get('url') or '')
+        self.assertNotIn('get-sales', result.get('url') or '')
 
     def test_build_payme_query_url_from_generate_sale(self):
         self.assertEqual(
             build_payme_query_url(
-                'get-sales',
+                'get-transactions',
                 generate_sale_url='https://preprod.paymeservice.com/api/generate-sale',
             ),
-            'https://preprod.paymeservice.com/api/get-sales',
+            'https://preprod.paymeservice.com/api/get-transactions',
         )
         self.assertEqual(
             build_payme_query_url(
@@ -497,21 +436,22 @@ class ConfirmPayMeSaleStatusTests(SimpleTestCase):
             'https://live.payme.io/api/get-transactions',
         )
         self.assertEqual(
-            build_payme_query_url('get-sales', api_url='https://api.payme.io/api'),
-            'https://api.payme.io/api/get-sales',
+            build_payme_query_url('get-transactions', api_url='https://api.payme.io/api'),
+            'https://api.payme.io/api/get-transactions',
         )
 
     @override_settings(
         PAYME_API_KEY='MPL-TEST-KEY',
         PAYME_SELLER_ID='MPL-TEST-KEY',
         PAYME_API_URL='https://api.payme.io/api',
+        PAYME_GENERATE_SALE_URL='',
     )
     @patch('services.payme_service.requests.post')
     def test_timeout_returns_transport_error(self, mock_post):
         import requests as req
 
         mock_post.side_effect = req.Timeout('timed out')
-        result = confirm_payme_sale_status(payme_sale_id='SALE-1')
+        result = confirm_payme_sale_status(payme_transaction_id='TRAN-1')
         self.assertFalse(result['ok'])
         self.assertFalse(result['found'])
         self.assertEqual(result['error'], 'timeout')
@@ -520,16 +460,23 @@ class ConfirmPayMeSaleStatusTests(SimpleTestCase):
         PAYME_API_KEY='MPL-TEST-KEY',
         PAYME_SELLER_ID='MPL-TEST-KEY',
         PAYME_API_URL='https://api.payme.io/api',
+        PAYME_GENERATE_SALE_URL='',
     )
     @patch('services.payme_service.requests.post')
     def test_unpaid_status_is_not_success(self, mock_post):
         mock_post.return_value = self._ok_response(
             {
                 'status_code': 0,
-                'items': [{'sale_payme_id': 'SALE-1', 'sale_status': 'pending'}],
+                'items': [
+                    {
+                        'payme_transaction_id': 'TRAN-1',
+                        'transaction_status': 'pending',
+                    }
+                ],
             }
         )
-        result = confirm_payme_sale_status(payme_sale_id='SALE-1')
+        result = confirm_payme_sale_status(payme_transaction_id='TRAN-1')
         self.assertTrue(result['ok'])
         self.assertTrue(result['found'])
         self.assertEqual(result['status'], 'pending')
+        self.assertEqual(mock_post.call_args.args[0], 'https://api.payme.io/api/get-transactions')

@@ -69,7 +69,7 @@ MOCK_PAYME_SALE_TIMEOUT = {
 
 
 class MockPayMeSaleConfirmMixin:
-    """Fulfillment is gated on get-sales/get-transactions; tests mock that lookup."""
+    """Fulfillment is gated on get-transactions; tests mock that lookup."""
 
     @classmethod
     def setUpClass(cls):

@@ -625,7 +625,7 @@ else:
 PAYME_MERCHANT_ID = (os.environ.get('PAYME_MERCHANT_ID') or PAYME_SELLER_ID).strip()
 PAYME_API_SECRET = (os.environ.get('PAYME_API_SECRET') or '').strip()
 # Optional leftover from Marketplace IPN docs. Standard Seller accounts do not
-# receive merchant_password; webhooks are verified via get-sales/get-transactions.
+# receive merchant_password; webhooks are verified via get-transactions.
 PAYME_API_PASSWORD = (
     os.environ.get('PAYME_API_PASSWORD') or os.environ.get('PAYME_API_SECRET') or ''
 ).strip()
@@ -633,8 +633,8 @@ PAYME_GENERATE_SALE_URL = (
     os.environ.get('PAYME_GENERATE_SALE_URL')
     or (f'{PAYME_API_URL}/generate-sale' if PAYME_API_URL else '')
 ).strip()
-# Checkout may set only PAYME_GENERATE_SALE_URL. Derive the API root so get-sales /
-# get-transactions share the same host (empty PAYME_API_URL previously POSTed to /get-sales).
+# Checkout may set only PAYME_GENERATE_SALE_URL. Derive the API root so
+# get-transactions shares the same host.
 if not PAYME_API_URL and PAYME_GENERATE_SALE_URL.endswith('/generate-sale'):
     PAYME_API_URL = PAYME_GENERATE_SALE_URL[: -len('/generate-sale')].rstrip('/')
 PAYME_IS_SANDBOX = bool(PAYME_API_URL) and any(
@@ -654,7 +654,7 @@ except ValueError:
 PAYME_CONFIRM_FAILURE_VIA_API = (
     os.environ.get('PAYME_CONFIRM_FAILURE_VIA_API', '').strip().lower() in ('1', 'true', 'yes')
 )
-# Seller accounts have no merchant_password. Fulfillment always uses get-sales /
+# Seller accounts have no merchant_password. Fulfillment always uses
 # get-transactions with PAYME_API_KEY; this flag is kept True for compatibility.
 PAYME_CONFIRM_SUCCESS_VIA_API = True
 _VITE_USE_PAYME = (os.environ.get('VITE_USE_PAYME') or '').strip().lower() in ('1', 'true', 'yes')
