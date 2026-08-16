@@ -11,6 +11,7 @@ from django.utils import timezone
 from services.payme_service import (
     PayMeError,
     PayMeSettings,
+    build_payme_query_url,
     build_standard_generate_sale_body,
     confirm_payme_sale_status,
     extract_payme_sale_url,
@@ -388,7 +389,7 @@ class ConfirmPayMeSaleStatusTests(SimpleTestCase):
         PAYME_API_URL='https://preprod.paymeservice.com/api',
     )
     @patch('services.payme_service.requests.post')
-    def test_generate_request_used_when_get_sales_http_error(self, mock_post):
+    def test_get_transactions_used_when_get_sales_http_error(self, mock_post):
         failed = MagicMock()
         failed.status_code = 401
         failed.json.return_value = {'error': 'unauthorized'}
@@ -409,11 +410,12 @@ class ConfirmPayMeSaleStatusTests(SimpleTestCase):
         self.assertEqual(result['status'], 'success')
         urls = [call.args[0] for call in mock_post.call_args_list]
         self.assertEqual(urls[0], 'https://preprod.paymeservice.com/api/get-sales')
-        self.assertEqual(urls[1], 'https://preprod.paymeservice.com/api/generate-request')
-        gen_body = mock_post.call_args_list[1].kwargs['json']
-        self.assertEqual(gen_body['payme_sale_id'], 'SALE1786-TEST')
-        self.assertEqual(gen_body['action'], 'get-sales')
-        self.assertEqual(gen_body['seller_payme_id'], 'MPL-TEST-KEY')
+        self.assertEqual(urls[1], 'https://preprod.paymeservice.com/api/get-transactions')
+        self.assertTrue(all('generate-request' not in u for u in urls))
+        txn_body = mock_post.call_args_list[1].kwargs['json']
+        self.assertEqual(txn_body['payme_sale_id'], 'SALE1786-TEST')
+        self.assertEqual(txn_body['seller_payme_id'], 'MPL-TEST-KEY')
+        self.assertEqual(txn_body['payme_client_key'], 'MPL-TEST-KEY')
 
     @override_settings(
         PAYME_API_KEY='MPL-TEST-KEY',
@@ -432,7 +434,10 @@ class ConfirmPayMeSaleStatusTests(SimpleTestCase):
         self.assertFalse(result['ok'])
         self.assertEqual(result['http_status'], 401)
         self.assertIn('unauthorized', result['response_text'] or '')
-        self.assertIn('/generate-request', result.get('url') or result.get('attempts')[-1]['url'])
+        urls = [a.get('url') for a in (result.get('attempts') or [])]
+        self.assertTrue(urls)
+        self.assertTrue(all('generate-request' not in (u or '') for u in urls))
+        self.assertIn('/get-transactions', result.get('url') or urls[-1])
 
     @override_settings(
         PAYME_API_KEY='MPL-TEST-KEY',
@@ -454,7 +459,8 @@ class ConfirmPayMeSaleStatusTests(SimpleTestCase):
                 ],
             }
         )
-        mock_post.side_effect = [empty, empty, empty, empty, txns]
+        # get-sales(SALE-9), get-sales(TRAN-9), then get-transactions
+        mock_post.side_effect = [empty, empty, txns]
 
         result = confirm_payme_sale_status(
             payme_sale_id='SALE-9',
@@ -465,7 +471,35 @@ class ConfirmPayMeSaleStatusTests(SimpleTestCase):
         self.assertTrue(result['found'])
         self.assertEqual(result['status'], 'success')
         urls = [call.args[0] for call in mock_post.call_args_list]
-        self.assertIn('https://api.payme.io/api/get-transactions', urls)
+        self.assertEqual(
+            urls,
+            [
+                'https://api.payme.io/api/get-sales',
+                'https://api.payme.io/api/get-sales',
+                'https://api.payme.io/api/get-transactions',
+            ],
+        )
+        self.assertTrue(all('generate-request' not in u for u in urls))
+
+    def test_build_payme_query_url_from_generate_sale(self):
+        self.assertEqual(
+            build_payme_query_url(
+                'get-sales',
+                generate_sale_url='https://preprod.paymeservice.com/api/generate-sale',
+            ),
+            'https://preprod.paymeservice.com/api/get-sales',
+        )
+        self.assertEqual(
+            build_payme_query_url(
+                'get-transactions',
+                generate_sale_url='https://live.payme.io/api/generate-sale',
+            ),
+            'https://live.payme.io/api/get-transactions',
+        )
+        self.assertEqual(
+            build_payme_query_url('get-sales', api_url='https://api.payme.io/api'),
+            'https://api.payme.io/api/get-sales',
+        )
 
     @override_settings(
         PAYME_API_KEY='MPL-TEST-KEY',

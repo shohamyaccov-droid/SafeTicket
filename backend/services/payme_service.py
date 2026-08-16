@@ -10,6 +10,7 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 import requests
 from django.conf import settings
@@ -87,13 +88,71 @@ class PayMeSettings:
 
     @property
     def lookup_api_url(self) -> str:
-        """API root for get-sales / generate-request (same host as generate-sale)."""
+        """API root for get-sales / get-transactions (same host as generate-sale)."""
         if self.api_url:
             return self.api_url.rstrip('/')
         gen = (self.generate_sale_url or '').rstrip('/')
         if gen.endswith('/generate-sale'):
             return gen[: -len('/generate-sale')].rstrip('/')
         return ''
+
+    def lookup_endpoint_url(self, endpoint: str) -> str:
+        """
+        Absolute URL for a PayMe query route.
+
+        Uses ``PAYME_API_URL`` when set; otherwise rewrites
+        ``…/api/generate-sale`` → ``…/api/get-sales`` (or get-transactions).
+        """
+        return build_payme_query_url(
+            endpoint,
+            api_url=self.api_url,
+            generate_sale_url=self.generate_sale_url,
+        )
+
+
+def build_payme_query_url(
+    endpoint: str,
+    *,
+    api_url: str = '',
+    generate_sale_url: str = '',
+) -> str:
+    """
+    Build ``…/api/get-sales`` or ``…/api/get-transactions`` from env URLs.
+
+    Examples:
+      generate-sale → get-sales:
+        https://preprod.paymeservice.com/api/generate-sale
+        → https://preprod.paymeservice.com/api/get-sales
+      api root → get-transactions:
+        https://live.payme.io/api
+        → https://live.payme.io/api/get-transactions
+    """
+    name = (endpoint or '').strip().lstrip('/')
+    if not name:
+        raise ValueError('PayMe query endpoint name is required')
+
+    # Prefer explicit API root; otherwise rewrite …/generate-sale → …/{endpoint}.
+    # Both preserve the host (preprod vs live) via urllib.parse.
+    for candidate in ((api_url or '').strip(), (generate_sale_url or '').strip()):
+        if not candidate:
+            continue
+        parts = urlsplit(candidate)
+        if not parts.scheme or not parts.netloc:
+            continue
+        path = (parts.path or '').rstrip('/')
+        segments = [seg for seg in path.split('/') if seg]
+        if segments and segments[-1] in (
+            'generate-sale',
+            'get-sales',
+            'get-transactions',
+            'generate-request',
+        ):
+            segments = segments[:-1]
+        segments.append(name)
+        new_path = '/' + '/'.join(segments)
+        return urlunsplit((parts.scheme, parts.netloc, new_path, '', ''))
+
+    return f'/{name}'
 
 
 def money_to_agorot(amount: Decimal | str | float | int) -> int:
@@ -555,11 +614,11 @@ def confirm_payme_sale_status(
     Seller accounts do not receive ``merchant_password``. PayMe's instructed
     fallback is a server-to-server lookup using the API key:
 
-    1. ``POST {PAYME_API_URL}/get-sales`` with ``sale_payme_id`` / ``payme_sale_id``
-    2. ``POST {PAYME_API_URL}/generate-request`` (same host as generate-sale)
-    3. ``POST {PAYME_API_URL}/get-transactions``
+    1. ``POST …/api/get-sales`` with ``payme_sale_id`` / ``sale_payme_id``
+    2. ``POST …/api/get-transactions`` (only if get-sales did not find a sale)
 
     Body always includes ``seller_payme_id`` and ``payme_client_key`` (MPL API key).
+    Never call ``generate-request`` — that route does not exist on PayMe.
     """
     cfg = PayMeSettings.from_django()
     api_key = (cfg.api_key or cfg.seller_id or '').strip()
@@ -574,10 +633,10 @@ def confirm_payme_sale_status(
     if not sale_id and not txn_id:
         return _empty_confirm_result(error='missing_ids')
 
-    api_base = cfg.lookup_api_url
-    if not api_base:
+    get_sales_url = cfg.lookup_endpoint_url('get-sales')
+    if not get_sales_url.startswith('http'):
         logger.critical(
-            'PayMe webhook verification aborted: PAYME_API_URL is empty '
+            'PayMe webhook verification aborted: cannot build get-sales URL '
             '(set PAYME_API_URL or PAYME_GENERATE_SALE_URL)'
         )
         return _empty_confirm_result(error='missing_api_url')
@@ -600,9 +659,11 @@ def confirm_payme_sale_status(
             return result
         return None
 
-    sale_ids = [sale_id] if sale_id else []
-    if txn_id and txn_id not in sale_ids:
-        sale_ids.append(txn_id)
+    # Prefer SALE… ids for get-sales; also try stored/alternate refs once each.
+    sale_ids: list[str] = []
+    for candidate in (sale_id, txn_id):
+        if candidate and candidate not in sale_ids:
+            sale_ids.append(candidate)
 
     for lookup_id in sale_ids:
         hit = _try(
@@ -618,20 +679,6 @@ def confirm_payme_sale_status(
         if hit:
             return hit
 
-        hit = _try(
-            _query_payme_endpoint(
-                cfg,
-                path='generate-request',
-                api_key=api_key,
-                payme_sale_id=lookup_id,
-                payme_transaction_id=txn_id or None,
-                wanted=wanted,
-                extra={'action': 'get-sales'},
-            )
-        )
-        if hit:
-            return hit
-
     hit = _try(
         _query_payme_endpoint(
             cfg,
@@ -641,20 +688,6 @@ def confirm_payme_sale_status(
             payme_transaction_id=txn_id or None,
             wanted=wanted,
             extra={'page': 1, 'page_size': 10},
-        )
-    )
-    if hit:
-        return hit
-
-    hit = _try(
-        _query_payme_endpoint(
-            cfg,
-            path='generate-request',
-            api_key=api_key,
-            payme_sale_id=sale_id or None,
-            payme_transaction_id=txn_id or None,
-            wanted=wanted,
-            extra={'action': 'get-transactions'},
         )
     )
     if hit:
@@ -721,8 +754,18 @@ def _payme_lookup_body(
 
 def _post_payme_lookup(cfg: PayMeSettings, path: str, body: dict[str, Any]) -> dict[str, Any]:
     """POST a PayMe query endpoint. Always logs HTTP status and response text."""
-    api_url = cfg.lookup_api_url
-    url = f'{api_url}/{path.lstrip("/")}' if api_url else f'/{path.lstrip("/")}'
+    endpoint = path.lstrip('/')
+    if endpoint not in ('get-sales', 'get-transactions'):
+        logger.error('PayMe refused unknown lookup path=%s', endpoint)
+        return {
+            'ok': False,
+            'data': None,
+            'error': f'unsupported_lookup_path:{endpoint}',
+            'http_status': None,
+            'url': None,
+            'response_text': None,
+        }
+    url = cfg.lookup_endpoint_url(endpoint)
     safe_keys = sorted(k for k in body.keys() if k not in ('payme_client_key', 'seller_payme_id'))
     try:
         response = requests.post(

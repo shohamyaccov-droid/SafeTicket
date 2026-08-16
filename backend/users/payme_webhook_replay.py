@@ -77,7 +77,7 @@ def replay_payme_webhook_log(log) -> dict[str, Any]:
     """
     Re-run a saved IPN through ``payme_webhook``.
 
-    Hits PayMe get-sales / generate-request. Already-paid orders stay paid
+    Hits PayMe get-sales / get-transactions. Already-paid orders stay paid
     (idempotent finalize); they still exercise the live API lookup.
     """
     log_id = getattr(log, 'pk', None)

@@ -634,7 +634,7 @@ PAYME_GENERATE_SALE_URL = (
     or (f'{PAYME_API_URL}/generate-sale' if PAYME_API_URL else '')
 ).strip()
 # Checkout may set only PAYME_GENERATE_SALE_URL. Derive the API root so get-sales /
-# generate-request share the same host (empty PAYME_API_URL previously POSTed to /get-sales).
+# get-transactions share the same host (empty PAYME_API_URL previously POSTed to /get-sales).
 if not PAYME_API_URL and PAYME_GENERATE_SALE_URL.endswith('/generate-sale'):
     PAYME_API_URL = PAYME_GENERATE_SALE_URL[: -len('/generate-sale')].rstrip('/')
 PAYME_IS_SANDBOX = bool(PAYME_API_URL) and any(
