@@ -267,7 +267,7 @@ class ReplayPayMeWebhookAdminActionTests(MockPayMeSaleConfirmMixin, TestCase):
             'status': None,
             'error': 'unauthorized',
             'http_status': 401,
-            'url': 'https://live.payme.io/api/get-transactions',
+            'url': 'https://live.payme.io/api/get-sales',
             'response_text': '{"error":"unauthorized"}',
         }
         request = _admin_request(self.staff)

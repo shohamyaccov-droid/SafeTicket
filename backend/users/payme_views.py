@@ -271,17 +271,22 @@ def _canonicalize_webhook_payload_for_order(payload: dict[str, Any], order: Orde
 
 
 def _payme_ids_for_api_confirm(payload: dict[str, Any], order: Order) -> tuple[str | None, str | None]:
-    """Extract payme_transaction_id from the webhook for get-transactions (not sale_id)."""
+    """Extract sale_payme_id / payme_transaction_id from the webhook for live lookup."""
+    sale = str(
+        payload.get('payme_sale_id')
+        or payload.get('sale_id')
+        or payload.get('saleId')
+        or payload.get('sale_payme_id')
+        or ''
+    ).strip()
     txn = str(
         payload.get('payme_transaction_id')
         or payload.get('transaction_id')
         or payload.get('transactionId')
         or ''
     ).strip()
-    # Intentionally ignore payme_sale_id / Order.payme_transaction_id sale refs —
-    # PayMe support: call get-transactions with the callback transaction_id only.
     _ = order
-    return (None, txn or None)
+    return (sale or None, txn or None)
 
 
 def _log_payme_webhook_rejection(reason: str, *, order_id: int | None = None, payload: dict[str, Any] | None = None):
@@ -303,7 +308,7 @@ def payme_webhook(request):
 
     Every notify is persisted to PayMeWebhookLog (raw body + headers) before parsing
     so unpaid / fake callbacks can be replayed offline. Fulfillment is gated on a
-    direct PayMe get-transactions lookup — not the webhook body.
+    direct PayMe get-sales / get-transactions lookup — not the webhook body.
     """
     # Absolute first side-effect: capture exact wire bytes before any business logic.
     webhook_log = _capture_payme_webhook_log(request)
@@ -513,12 +518,11 @@ def payme_webhook(request):
             )
             return Response({'error': 'invalid webhook', 'reason': verify_reason}, status=status.HTTP_403_FORBIDDEN)
 
-        _, txn_for_confirm = _payme_ids_for_api_confirm(payload, order)
-        sale_for_log = str(
-            payload.get('payme_sale_id') or payload.get('sale_id') or payload.get('saleId') or ''
-        ).strip() or None
+        sale_for_confirm, txn_for_confirm = _payme_ids_for_api_confirm(payload, order)
+        sale_for_log = sale_for_confirm
         try:
             confirmed = confirm_payme_sale_status(
+                payme_sale_id=sale_for_confirm,
                 payme_transaction_id=txn_for_confirm,
             )
         except Exception as confirm_exc:

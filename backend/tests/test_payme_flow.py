@@ -502,7 +502,7 @@ class PaymeWebhookFlowTests(MockPayMeSaleConfirmMixin, TestCase):
             'status': None,
             'error': 'unauthorized',
             'http_status': 401,
-            'url': 'https://live.payme.io/api/get-transactions',
+            'url': 'https://live.payme.io/api/get-sales',
             'response_text': '{"error":"unauthorized"}',
         }
         res = self.client.post(
@@ -514,4 +514,4 @@ class PaymeWebhookFlowTests(MockPayMeSaleConfirmMixin, TestCase):
         log = PayMeWebhookLog.objects.latest('id')
         self.assertIn('401', log.error_message or '')
         self.assertIn('unauthorized', log.error_message or '')
-        self.assertIn('get-transactions', log.error_message or '')
+        self.assertIn('get-sales', log.error_message or '')

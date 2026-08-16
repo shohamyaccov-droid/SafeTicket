@@ -607,79 +607,109 @@ def confirm_payme_sale_status(
     """
     Authoritative PayMe status lookup for a standard Seller account.
 
-    Per PayMe support: ``POST …/api/get-transactions`` with the
-    ``payme_transaction_id`` / ``transaction_id`` from the webhook callback.
-    Does not call get-sales or generate-request.
+    Empirically verified against live PayMe (Aug 2026):
+
+    - Auth must be ``seller_payme_id`` = MPL seller id only.
+    - Sending the MPL as ``payme_client_key`` returns HTTP 500
+      ``שירות לא נמצא`` (status_additional_info=payme_client_key).
+    - Primary: ``POST …/api/get-sales`` with ``sale_payme_id`` (webhook payme_sale_id).
+    - Fallback: ``POST …/api/get-transactions`` with ``payme_transaction_id``.
     """
     cfg = PayMeSettings.from_django()
-    api_key = (cfg.api_key or cfg.seller_id or '').strip()
-    if not api_key:
+    seller_id = (cfg.seller_id or cfg.api_key or '').strip()
+    if not seller_id:
         logger.critical(
             'PayMe webhook verification aborted: PAYME_API_KEY / PAYME_SELLER_ID is not loaded'
         )
         return _empty_confirm_result(error='missing_api_key')
 
-    # payme_sale_id is intentionally unused — PayMe requires the callback transaction id.
-    _ = payme_sale_id
+    sale_id = (payme_sale_id or '').strip()
     txn_id = (payme_transaction_id or '').strip()
-    if not txn_id:
-        return _empty_confirm_result(error='missing_transaction_id')
+    if not sale_id and not txn_id:
+        return _empty_confirm_result(error='missing_ids')
 
-    url = cfg.lookup_endpoint_url('get-transactions')
-    if not url.startswith('http'):
+    probe_url = cfg.lookup_endpoint_url('get-sales')
+    if not probe_url.startswith('http'):
         logger.critical(
-            'PayMe webhook verification aborted: cannot build get-transactions URL '
-            '(set PAYME_GENERATE_SALE_URL or PAYME_API_URL)'
+            'PayMe webhook verification aborted: cannot build lookup URL '
+            '(set PAYME_GENERATE_SALE_URL or PAYME_API_URL to live.payme.io)'
         )
         return _empty_confirm_result(error='missing_api_url')
 
-    wanted = {txn_id}
-    result = _query_payme_endpoint(
-        cfg,
-        path='get-transactions',
-        api_key=api_key,
-        payme_transaction_id=txn_id,
-        wanted=wanted,
-        extra={'page': 1, 'page_size': 10},
-    )
-    attempt = {
-        'ok': result.get('ok'),
-        'found': result.get('found'),
-        'error': result.get('error'),
-        'http_status': result.get('http_status'),
-        'url': result.get('url'),
-        'response_text': (result.get('response_text') or '')[:400],
-    }
-    if result.get('found'):
-        return result
+    wanted = {value for value in (sale_id, txn_id) if value}
+    attempts: list[dict[str, Any]] = []
 
+    def _try(result: dict[str, Any]) -> dict[str, Any] | None:
+        attempts.append(
+            {
+                'ok': result.get('ok'),
+                'found': result.get('found'),
+                'error': result.get('error'),
+                'http_status': result.get('http_status'),
+                'url': result.get('url'),
+                'response_text': (result.get('response_text') or '')[:400],
+            }
+        )
+        if result.get('found'):
+            return result
+        return None
+
+    if sale_id:
+        hit = _try(
+            _query_payme_endpoint(
+                cfg,
+                path='get-sales',
+                api_key=seller_id,
+                payme_sale_id=sale_id,
+                wanted=wanted,
+            )
+        )
+        if hit:
+            return hit
+
+    if txn_id:
+        hit = _try(
+            _query_payme_endpoint(
+                cfg,
+                path='get-transactions',
+                api_key=seller_id,
+                payme_transaction_id=txn_id,
+                wanted=wanted,
+            )
+        )
+        if hit:
+            return hit
+
+    last = attempts[-1] if attempts else {}
+    transport_failed = all(not a.get('ok') for a in attempts) if attempts else True
     logger.error(
-        'PayMe get-transactions lookup failed txn_id=%s attempt=%s',
+        'PayMe lookup failed sale_id=%s txn_id=%s attempts=%s',
+        sale_id,
         txn_id,
-        attempt,
+        attempts,
     )
-    if not result.get('ok'):
+    if transport_failed:
         return {
             'ok': False,
             'found': False,
             'status': None,
-            'raw': result.get('raw'),
-            'error': result.get('error') or 'payme_lookup_failed',
-            'http_status': result.get('http_status'),
-            'url': result.get('url'),
-            'response_text': result.get('response_text'),
-            'attempts': [attempt],
+            'raw': None,
+            'error': last.get('error') or 'payme_lookup_failed',
+            'http_status': last.get('http_status'),
+            'url': last.get('url'),
+            'response_text': last.get('response_text'),
+            'attempts': attempts,
         }
     return {
         'ok': True,
         'found': False,
         'status': None,
-        'raw': result.get('raw'),
+        'raw': None,
         'error': 'payme_sale_not_found',
-        'http_status': result.get('http_status'),
-        'url': result.get('url'),
-        'response_text': result.get('response_text'),
-        'attempts': [attempt],
+        'http_status': last.get('http_status'),
+        'url': last.get('url'),
+        'response_text': last.get('response_text'),
+        'attempts': attempts,
     }
 
 
@@ -690,17 +720,24 @@ def _payme_lookup_body(
     payme_transaction_id: str | None = None,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Body for get-transactions: API key + callback transaction id only."""
+    """
+    Seller-account lookup body.
+
+    Never send ``payme_client_key`` with the MPL seller id — PayMe treats that as a
+    Partner key and returns ``שירות לא נמצא``. Use ``seller_payme_id`` only.
+    Filter fields must be exact: ``sale_payme_id`` / ``payme_transaction_id``.
+    """
     body: dict[str, Any] = {
-        'payme_client_key': api_key,
         'seller_payme_id': api_key,
     }
-    # Sale id is not used for get-transactions (PayMe support).
-    _ = payme_sale_id
+    sale = (payme_sale_id or '').strip()
     txn = (payme_transaction_id or '').strip()
+    if sale:
+        # Official get-sales filter name. Do NOT send payme_sale_id here — PayMe
+        # ignores it and may return an unfiltered list.
+        body['sale_payme_id'] = sale
     if txn:
         body['payme_transaction_id'] = txn
-        body['transaction_id'] = txn
     if extra:
         for key, value in extra.items():
             if value not in (None, ''):
@@ -709,10 +746,10 @@ def _payme_lookup_body(
 
 
 def _post_payme_lookup(cfg: PayMeSettings, path: str, body: dict[str, Any]) -> dict[str, Any]:
-    """POST get-transactions. Always logs HTTP status and response text."""
+    """POST get-sales or get-transactions. Always logs HTTP status and response text."""
     endpoint = path.lstrip('/')
-    if endpoint != 'get-transactions':
-        logger.error('PayMe refused non-get-transactions lookup path=%s', endpoint)
+    if endpoint not in ('get-sales', 'get-transactions'):
+        logger.error('PayMe refused unknown lookup path=%s', endpoint)
         return {
             'ok': False,
             'data': None,
@@ -986,6 +1023,7 @@ def _normalize_payme_api_status(raw: Any) -> str | None:
         'complete',
         'paid',
         'captured',
+        'validated',
         'sale',
         'sold',
         'ok',
