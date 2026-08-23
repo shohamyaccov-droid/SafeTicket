@@ -15,6 +15,7 @@ import { isCaesareaVenueEvent, caesareaSellSectionOptions } from '../utils/caesa
 import { displayEventVenueName, formatEventLocation } from '../utils/eventLocalTime';
 import SellCompletionModal from '../components/SellCompletionModal';
 import TicketUploadWizard from '../components/TicketUploadWizard';
+import ListingCreatedSuccessView from './ListingCreatedSuccessView';
 import '../components/SellCompletionModal.css';
 import './Sell.css';
 
@@ -838,30 +839,10 @@ const Sell = () => {
   // success screen with a skeleton and leave the user without a home CTA.
   if (success) {
     return (
-      <div className="sell-container sell-success-screen" data-testid="listing-success">
-        <div className="listing-card success-message">
-          <div className="success-icon-large" aria-hidden="true">✓</div>
-          <h2 className="success-title">Listing Created Successfully!</h2>
-          <h3 className="success-subtitle-hebrew">הכרטיס הועלה בהצלחה!</h3>
-          {successWasIsrael ? (
-            <p className="success-text">
-              הכרטיס הועלה בהצלחה! הוא יפורסם באתר לאחר בדיקת צוות קצרה (עד 24 שעות).
-            </p>
-          ) : (
-            <p className="success-text">הכרטיס פורסם באתר וזמין למכירה.</p>
-          )}
-          <p className="success-redirect-text" role="status" aria-live="polite">
-            מעבירים אותך למכירות שלי בעוד 3 שניות...
-          </p>
-          <button
-            type="button"
-            className="success-home-button"
-            onClick={goToMySales}
-          >
-            למכירות שלי
-          </button>
-        </div>
-      </div>
+      <ListingCreatedSuccessView
+        successWasIsrael={successWasIsrael}
+        onGoToSales={goToMySales}
+      />
     );
   }
 
