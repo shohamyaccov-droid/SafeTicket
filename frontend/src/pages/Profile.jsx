@@ -322,7 +322,7 @@ const Profile = () => {
             {listings.length === 0 ? (
               <div className="empty-state">
                 <p>עדיין לא הצעת כרטיסים למכירה.</p>
-                <button onClick={() => navigate('/sell')} className="browse-button">
+                <button onClick={() => navigate('/sell/new')} className="browse-button">
                   הצע כרטיס למכירה
                 </button>
               </div>

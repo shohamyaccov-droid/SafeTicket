@@ -110,7 +110,7 @@ export default function ProfileWalletPage({ embedded = false }) {
             {transactions.length === 0 ? (
               <div className="wallet-empty">
                 <p>עדיין אין מכירות בארנק.</p>
-                <Link to="/sell" className="wallet-cta-link">
+                <Link to="/sell/new" className="wallet-cta-link">
                   פרסם כרטיס למכירה
                 </Link>
               </div>

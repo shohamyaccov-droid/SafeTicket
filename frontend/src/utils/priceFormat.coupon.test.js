@@ -1,5 +1,5 @@
 /**
- * Pure pricing math for affiliate coupon + 12% base fee (GlobalFeeSettings defaults).
+ * Pure pricing math for affiliate coupon + 7% base fee (GlobalFeeSettings defaults).
  * Run: npm test (vitest)
  */
 import { describe, expect, it } from 'vitest';
@@ -16,13 +16,13 @@ import {
   buyerChargeFromBaseWithFixedCoupon,
 } from './priceFormat.js';
 
-describe('buyerChargeFromBase (12% fee)', () => {
-  it('charges exactly 12% on 100', () => {
-    expect(BUYER_SERVICE_FEE_PERCENT).toBe(12);
+describe('buyerChargeFromBase (7% fee)', () => {
+  it('charges exactly 7% on 100', () => {
+    expect(BUYER_SERVICE_FEE_PERCENT).toBe(7);
     const r = buyerChargeFromBase(100);
     expect(r.baseAmount).toBe(100);
-    expect(r.serviceFee).toBe(12);
-    expect(r.totalAmount).toBe(112);
+    expect(r.serviceFee).toBe(7);
+    expect(r.totalAmount).toBe(107);
   });
 });
 
@@ -31,37 +31,37 @@ describe('buyerChargeFromBaseWithFixedCoupon', () => {
     const r = buyerChargeFromBaseWithFixedCoupon(100, 20);
     expect(r.baseAmount).toBe(100);
     expect(r.buyerDiscount).toBe(20);
-    expect(r.totalAmount).toBe(92);
+    expect(r.totalAmount).toBe(87);
   });
 
   it('never produces a negative total', () => {
     const r = buyerChargeFromBaseWithFixedCoupon(5, 20);
-    expect(r.buyerDiscount).toBe(5.6);
+    expect(r.buyerDiscount).toBe(5.35);
     expect(r.totalAmount).toBe(0);
   });
 });
 
 describe('buyerChargeFromBaseWithAffiliateCoupon', () => {
-  it('splits 12% into 5/5/2 and charges buyer 7%', () => {
-    expect(BUYER_FEE_PERCENT_WITH_COUPON).toBe(7);
+  it('splits 7% into 5/2/0 and charges buyer 2%', () => {
+    expect(BUYER_FEE_PERCENT_WITH_COUPON).toBe(2);
     expect(AFFILIATE_BUYER_DISCOUNT_PERCENT).toBe(5);
-    expect(AFFILIATE_COMMISSION_PERCENT).toBe(5);
-    expect(AFFILIATE_PLATFORM_NET_PERCENT).toBe(2);
+    expect(AFFILIATE_COMMISSION_PERCENT).toBe(2);
+    expect(AFFILIATE_PLATFORM_NET_PERCENT).toBe(0);
     const r = buyerChargeFromBaseWithAffiliateCoupon(100);
     expect(r.baseAmount).toBe(100);
-    expect(r.serviceFee).toBe(7);
+    expect(r.serviceFee).toBe(2);
     expect(r.buyerDiscount).toBe(5);
-    expect(r.affiliateCommission).toBe(5);
-    expect(r.platformNetFee).toBe(2);
-    expect(r.totalAmount).toBe(107);
+    expect(r.affiliateCommission).toBe(2);
+    expect(r.platformNetFee).toBe(0);
+    expect(r.totalAmount).toBe(102);
   });
 
   it('handles multi-ticket subtotal precisely', () => {
     const r = buyerChargeFromBaseWithAffiliateCoupon(300);
-    expect(r.serviceFee).toBe(21);
+    expect(r.serviceFee).toBe(6);
     expect(r.buyerDiscount).toBe(15);
-    expect(r.affiliateCommission).toBe(15);
-    expect(r.platformNetFee).toBe(6);
-    expect(r.totalAmount).toBe(321);
+    expect(r.affiliateCommission).toBe(6);
+    expect(r.platformNetFee).toBe(0);
+    expect(r.totalAmount).toBe(306);
   });
 });

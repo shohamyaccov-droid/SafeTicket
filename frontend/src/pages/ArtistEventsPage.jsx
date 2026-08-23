@@ -8,7 +8,11 @@ import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import { toastError } from '../utils/toast';
 import { formatArtistEventRowDate, displayEventVenueName } from '../utils/eventLocalTime';
-import { pickMostSupplyEventId } from '../utils/artistEventSupply';
+import {
+  pickMostSupplyEventId,
+  eventTicketCount,
+  formatAvailableTicketsLabel,
+} from '../utils/artistEventSupply';
 import { eventHref } from '../utils/eventSeo';
 import './ArtistEventsPage.css';
 
@@ -21,6 +25,7 @@ const ArtistEventsPage = () => {
   const [loadError, setLoadError] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
   const [showAlertModal, setShowAlertModal] = useState(false);
+  const [waitlistEvent, setWaitlistEvent] = useState(null);
 
   useEffect(() => {
     if (!artistId) {
@@ -178,11 +183,13 @@ const ArtistEventsPage = () => {
             {upcomingEvents.map((event) => {
               const isMostSupply = mostSupplyEventId != null && event.id === mostSupplyEventId;
               const venueLabel = displayEventVenueName(event);
+              const ticketCount = eventTicketCount(event);
+              const soldOut = ticketCount <= 0;
 
               return (
                 <div
                   key={event.id}
-                  className="event-row"
+                  className={`event-row${soldOut ? ' event-row--sold-out' : ''}`}
                   role="link"
                   tabIndex={0}
                   onClick={() => openEvent(event)}
@@ -208,8 +215,25 @@ const ArtistEventsPage = () => {
                       <MapPin className="event-venue__icon" size={15} strokeWidth={2.25} aria-hidden />
                       <span className="event-venue__label">{venueLabel}</span>
                     </div>
+                    <p className="event-ticket-count">
+                      {formatAvailableTicketsLabel(ticketCount)}
+                    </p>
                   </div>
-                  <ChevronLeft className="event-row__chevron" size={20} strokeWidth={2.25} aria-hidden />
+                  {soldOut ? (
+                    <button
+                      type="button"
+                      className="event-waitlist-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setWaitlistEvent(event);
+                      }}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      הצטרף לרשימת המתנה
+                    </button>
+                  ) : (
+                    <ChevronLeft className="event-row__chevron" size={20} strokeWidth={2.25} aria-hidden />
+                  )}
                 </div>
               );
             })}
@@ -219,6 +243,9 @@ const ArtistEventsPage = () => {
 
       {showAlertModal ? (
         <WaitlistSignupModal artist={artist} onClose={() => setShowAlertModal(false)} />
+      ) : null}
+      {waitlistEvent ? (
+        <WaitlistSignupModal event={waitlistEvent} onClose={() => setWaitlistEvent(null)} />
       ) : null}
     </div>
   );

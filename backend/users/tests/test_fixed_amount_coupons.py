@@ -71,7 +71,7 @@ class FixedAmountCouponTests(TestCase):
         self.assertTrue(response.data['valid'])
         self.assertEqual(response.data['discount_type'], 'fixed')
         self.assertEqual(Decimal(response.data['discount_amount']), Decimal('20.00'))
-        self.assertEqual(Decimal(response.data['total_amount']), Decimal('92.00'))
+        self.assertEqual(Decimal(response.data['total_amount']), Decimal('87.00'))
 
     def test_guest_can_validate_without_email(self):
         anon = APIClient()
@@ -89,14 +89,14 @@ class FixedAmountCouponTests(TestCase):
         response = anon.get('/api/users/pricing/settings/')
         self.assertEqual(response.status_code, 200)
         self.assertIn('service_fee_percentage', response.data)
-        self.assertEqual(Decimal(response.data['service_fee_percentage']), Decimal('12.00'))
+        self.assertEqual(Decimal(response.data['service_fee_percentage']), Decimal('7.00'))
 
     def test_create_order_recalculates_fixed_discount_on_server(self):
         response = self.client.post(
             '/api/users/orders/',
             {
                 'ticket': self.ticket.id,
-                'total_amount': '92.00',
+                'total_amount': '87.00',
                 'accepted_terms': True,
                 'quantity': 1,
                 'event_name': self.ticket.event.name,
@@ -107,7 +107,7 @@ class FixedAmountCouponTests(TestCase):
 
         self.assertEqual(response.status_code, 201, response.data)
         order = Order.objects.get(pk=response.data['id'])
-        self.assertEqual(order.total_amount, Decimal('92.00'))
+        self.assertEqual(order.total_amount, Decimal('87.00'))
         self.assertEqual(order.buyer_fee_discount, Decimal('20.00'))
         self.assertEqual(order.coupon_code_snapshot, 'SAFE20')
         self.assertTrue(CouponRedemption.objects.filter(order=order).exists())
@@ -151,4 +151,4 @@ class FixedAmountCouponTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(Decimal(response.data['total_amount']), Decimal('0.00'))
-        self.assertEqual(Decimal(response.data['discount_amount']), Decimal('5.60'))
+        self.assertEqual(Decimal(response.data['discount_amount']), Decimal('5.35'))

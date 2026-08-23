@@ -17,3 +17,15 @@ export function pickMostSupplyEventId(events) {
   const earliest = [...tied].sort((a, b) => new Date(a.date) - new Date(b.date))[0];
   return earliest?.id ?? null;
 }
+
+export function eventTicketCount(event) {
+  return Number(event?.tickets_count) || 0;
+}
+
+/** Compact Hebrew label for available inventory on an artist event row. */
+export function formatAvailableTicketsLabel(count) {
+  const n = Number(count) || 0;
+  if (n <= 0) return 'אין כרטיסים זמינים';
+  if (n === 1) return '🎫 כרטיס אחד זמין';
+  return `🎫 ${n} כרטיסים זמינים`;
+}

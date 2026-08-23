@@ -382,7 +382,7 @@ def seed_platform_coupon(
 ) -> Coupon:
     """
     Platform-owned promo: buyer pays (base_fee − discount); affiliate 0%;
-    platform retains the remainder (defaults: 7% / 0% / 7%).
+    platform retains the remainder (defaults: 2% / 0% / 2%).
     """
     from users.fee_settings import get_fee_rates
 

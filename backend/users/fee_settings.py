@@ -58,10 +58,10 @@ class FeeRates:
 
 
 def _rates_from_django_settings() -> FeeRates:
-    buyer = Decimal(str(getattr(settings, 'PLATFORM_BUYER_SERVICE_FEE_RATE', '0.12')))
+    buyer = Decimal(str(getattr(settings, 'PLATFORM_BUYER_SERVICE_FEE_RATE', '0.07')))
     seller = Decimal(str(getattr(settings, 'PLATFORM_SELLER_SERVICE_FEE_RATE', '0.00')))
     discount = Decimal(str(getattr(settings, 'AFFILIATE_BUYER_DISCOUNT_RATE', '0.05')))
-    affiliate = Decimal(str(getattr(settings, 'AFFILIATE_COMMISSION_RATE', '0.05')))
+    affiliate = Decimal(str(getattr(settings, 'AFFILIATE_COMMISSION_RATE', '0.02')))
     q = Decimal('0.0001')
     buyer = buyer.quantize(q, rounding=ROUND_HALF_UP)
     seller = seller.quantize(q, rounding=ROUND_HALF_UP)

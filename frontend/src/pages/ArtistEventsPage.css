@@ -144,6 +144,24 @@
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
+.event-row--sold-out {
+  background: #f8fafc;
+  border-color: #e5e7eb;
+  opacity: 0.82;
+}
+
+.event-row--sold-out:hover {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  box-shadow: none;
+}
+
+.event-row--sold-out .event-date,
+.event-row--sold-out .event-venue,
+.event-row--sold-out .event-venue__icon {
+  color: #94a3b8;
+}
+
 .event-row:focus-visible {
   outline: 2px solid #0284c7;
   outline-offset: 2px;
@@ -208,6 +226,44 @@
   white-space: nowrap;
 }
 
+.event-ticket-count {
+  margin: 0.12rem 0 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #0369a1;
+  line-height: 1.3;
+}
+
+.event-row--sold-out .event-ticket-count {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.event-waitlist-btn {
+  flex-shrink: 0;
+  max-width: 11.5rem;
+  padding: 0.42rem 0.7rem;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.25;
+  cursor: pointer;
+  text-align: center;
+  box-shadow: 0 3px 10px rgba(234, 88, 12, 0.22);
+}
+
+.event-waitlist-btn:hover {
+  filter: brightness(1.06);
+}
+
+.event-waitlist-btn:focus-visible {
+  outline: 2px solid #c2410c;
+  outline-offset: 2px;
+}
+
 .event-row__chevron {
   flex-shrink: 0;
   color: #94a3b8;
@@ -251,5 +307,15 @@
 
   .event-venue {
     font-size: 0.82rem;
+  }
+
+  .event-ticket-count {
+    font-size: 0.74rem;
+  }
+
+  .event-waitlist-btn {
+    max-width: 9.5rem;
+    font-size: 0.7rem;
+    padding: 0.38rem 0.55rem;
   }
 }

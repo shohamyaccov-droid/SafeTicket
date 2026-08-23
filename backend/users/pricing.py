@@ -4,9 +4,9 @@ Order pricing: buyer service fee + seller withholding.
 Rates come from GlobalFeeSettings (Django Admin singleton), cached in fee_settings.
 Fallback: Django settings / env when the table is unavailable (migrations).
 
-Default (DB): 12% buyer fee, 0% seller fee.
-With coupon: buyer pays (12% − 5% discount) = 7%; affiliate 5% (or 0% for platform);
-platform keeps the remainder (2% affiliate path / 7% platform path).
+Default (DB): 7% buyer fee, 0% seller fee.
+With coupon: buyer pays (7% − 5% discount) = 2%; affiliate 2% (or 0% for platform);
+platform keeps the remainder (0% affiliate path / 2% platform path).
 
 Amounts use Decimal quantized to 0.01 in the listing currency.
 """

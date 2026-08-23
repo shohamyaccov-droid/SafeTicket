@@ -29,7 +29,7 @@ describe('buyerChargeFromBase edge cases', () => {
 
   it('falls back when fee percent is NaN', () => {
     const r = buyerChargeFromBase(100, NaN);
-    expect(r.totalAmount).toBe(112);
+    expect(r.totalAmount).toBe(107);
   });
 
   it('never produces negative total with extreme fixed coupon', () => {
