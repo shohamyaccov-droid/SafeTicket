@@ -572,6 +572,11 @@ RESEND_API_KEY = (os.environ.get('RESEND_API_KEY') or '').strip()
 DEFAULT_FROM_EMAIL = 'TradeTix <onboarding@resend.dev>'
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
+# GA4 Data API — numeric Property ID from Analytics Admin → Property settings.
+# Auth is Application Default Credentials only (gcloud auth application-default login).
+# This is NOT the Measurement ID (G-XXXXXXXX).
+GA4_PROPERTY_ID = (os.environ.get('GA4_PROPERTY_ID') or '').strip()
+
 
 def _fx_rate_to_ils(env_key: str, default: str) -> Decimal:
     """Indicative rates for admin dashboard ILS rollups only (not payment quotes)."""
