@@ -4587,6 +4587,58 @@ def _admin_staff_or_superuser(request):
     return bool(u.is_staff or u.is_superuser)
 
 
+def _optional_seating_from_request(request):
+    data = getattr(request, 'data', None) or {}
+    payload = {}
+    if 'section' in data:
+        raw = data.get('section')
+        payload['section'] = '' if raw is None else str(raw).strip()
+    if 'row' in data:
+        raw = data.get('row')
+        payload['row'] = '' if raw is None else str(raw).strip()
+    return payload
+
+
+def _match_venue_section_for_ticket(ticket, section_text):
+    event = getattr(ticket, 'event', None)
+    venue_id = getattr(event, 'venue_place_id', None) if event is not None else None
+    if not venue_id or not section_text:
+        return None
+    qs = VenueSection.objects.filter(venue_id=venue_id)
+    matched = qs.filter(name__iexact=section_text).first()
+    if matched:
+        return matched
+    stripped = section_text
+    for prefix in ('גוש ', 'גוש', 'Section ', 'Block '):
+        if stripped.lower().startswith(prefix.lower()):
+            stripped = stripped[len(prefix):].strip()
+            break
+    if stripped and stripped != section_text:
+        return qs.filter(name__iexact=stripped).first()
+    return None
+
+
+def apply_admin_ticket_seating(ticket, *, section=None, row=None):
+    """Write free-text גוש/שורה from the admin review queue onto a ticket."""
+    changed = []
+    if section is not None:
+        matched = _match_venue_section_for_ticket(ticket, section) if section else None
+        if matched:
+            ticket.venue_section = matched
+            ticket.custom_section_text = ''
+            ticket.section_legacy = (matched.name or '')[:100]
+        else:
+            ticket.venue_section = None
+            ticket.custom_section_text = (section or '')[:100]
+            ticket.section_legacy = (section or '')[:100]
+        changed.extend(['venue_section', 'custom_section_text', 'section_legacy'])
+    if row is not None:
+        ticket.row = row
+        ticket.row_number = row
+        changed.extend(['row', 'row_number'])
+    return changed
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_dashboard_stats(request):
@@ -4928,11 +4980,16 @@ def admin_approve_ticket(request, ticket_id):
                 {'error': f'Ticket is not pending approval. Current status: {ticket.status}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
+        seating = _optional_seating_from_request(request)
+        seating_fields = apply_admin_ticket_seating(ticket, **seating)
+
         # Approve the ticket: change status to 'active'
         ticket.status = 'active'
         ticket.verification_status = 'מאומת'
-        ticket.save(update_fields=['status', 'verification_status', 'updated_at'])
+        ticket.save(
+            update_fields=['status', 'verification_status', 'updated_at', *seating_fields]
+        )
 
         try:
             from .notifications import notify_ticket_approved
@@ -4952,6 +5009,50 @@ def admin_approve_ticket(request, ticket_id):
             {'error': 'Ticket not found'},
             status=status.HTTP_404_NOT_FOUND
         )
+
+
+@csrf_required
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_update_ticket_seating(request, ticket_id):
+    """Save גוש/שורה from the admin review queue without changing ticket status."""
+    if not _admin_staff_or_superuser(request):
+        return Response(
+            {'error': 'Permission denied. Admin access required.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    seating = _optional_seating_from_request(request)
+    if not seating:
+        return Response(
+            {'error': 'Provide section and/or row.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        ticket = Ticket.objects.select_related(
+            'seller', 'event', 'event__venue_place', 'venue_section'
+        ).get(id=ticket_id)
+    except Ticket.DoesNotExist:
+        return Response({'error': 'Ticket not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    allowed = ('pending_approval', 'active', 'reserved')
+    if ticket.status not in allowed:
+        return Response(
+            {'error': f'Cannot edit seating in state {ticket.status}.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    seating_fields = apply_admin_ticket_seating(ticket, **seating)
+    ticket.save(update_fields=[*seating_fields, 'updated_at'])
+    serializer = TicketSerializer(ticket, context={'request': request})
+    return Response(
+        {
+            'message': 'Ticket seating updated',
+            'ticket': serializer.data,
+        },
+        status=status.HTTP_200_OK,
+    )
 
 
 @csrf_required

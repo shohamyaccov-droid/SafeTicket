@@ -137,6 +137,26 @@
   color: #0f172a;
 }
 
+.admin-btn-save-seating {
+  background: #fff;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  font-weight: 700;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.admin-btn-save-seating:hover:not(:disabled) {
+  background: #f8fafc;
+}
+
+.admin-btn-save-seating:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .admin-seller-contact {
   display: grid;
   gap: 0.28rem;

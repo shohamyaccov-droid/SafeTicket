@@ -92,3 +92,78 @@ class AdminPendingTicketFileUrlTests(TestCase):
         self.assertEqual(self.ticket.status, 'active')
         mock_notify.assert_called_once()
         self.assertEqual(mock_notify.call_args.args[0].id, self.ticket.id)
+
+    def test_admin_can_save_section_and_row_without_approving(self):
+        self.client.force_authenticate(self.admin)
+        blank = Ticket.objects.create(
+            seller=self.seller,
+            event=self.ticket.event,
+            original_price=Decimal('90'),
+            asking_price=Decimal('90'),
+            pdf_file='tickets/pdfs/ga-pending.pdf',
+            status='pending_approval',
+            verification_status='ממתין לאישור',
+            available_quantity=1,
+        )
+        response = self.client.post(
+            f'/api/users/admin/tickets/{blank.id}/seating/',
+            {'section': 'דשא', 'row': '3'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        blank.refresh_from_db()
+        self.assertEqual(blank.status, 'pending_approval')
+        self.assertEqual(blank.custom_section_text, 'דשא')
+        self.assertEqual(blank.get_section_display(), 'דשא')
+        self.assertEqual(blank.row, '3')
+        self.assertEqual(blank.row_number, '3')
+        self.assertEqual(response.data['ticket']['section'], 'דשא')
+        self.assertEqual(response.data['ticket']['row'], '3')
+
+    def test_admin_seating_matches_structured_venue_section(self):
+        self.client.force_authenticate(self.admin)
+        blank = Ticket.objects.create(
+            seller=self.seller,
+            event=self.ticket.event,
+            original_price=Decimal('70'),
+            asking_price=Decimal('70'),
+            pdf_file='tickets/pdfs/ga-block.pdf',
+            status='pending_approval',
+            verification_status='ממתין לאישור',
+            available_quantity=1,
+        )
+        response = self.client.post(
+            f'/api/users/admin/tickets/{blank.id}/seating/',
+            {'section': 'Block 12', 'row': '7'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        blank.refresh_from_db()
+        self.assertEqual(blank.venue_section_id, self.section.id)
+        self.assertEqual((blank.custom_section_text or '').strip(), '')
+        self.assertEqual(blank.get_section_display(), 'Block 12')
+        self.assertEqual(blank.row, '7')
+
+    def test_approve_persists_section_and_row_from_request_body(self):
+        self.client.force_authenticate(self.admin)
+        blank = Ticket.objects.create(
+            seller=self.seller,
+            event=self.ticket.event,
+            original_price=Decimal('80'),
+            asking_price=Decimal('80'),
+            pdf_file='tickets/pdfs/ga-approve.pdf',
+            status='pending_approval',
+            verification_status='ממתין לאישור',
+            available_quantity=1,
+        )
+        response = self.client.post(
+            f'/api/users/admin/tickets/{blank.id}/approve/',
+            {'section': '14', 'row': '8'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        blank.refresh_from_db()
+        self.assertEqual(blank.status, 'active')
+        self.assertEqual(blank.get_section_display(), '14')
+        self.assertEqual(blank.row, '8')
+        self.assertEqual(blank.row_number, '8')

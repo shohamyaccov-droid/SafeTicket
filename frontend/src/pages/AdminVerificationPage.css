@@ -235,9 +235,25 @@
 }
 
 .approve-button:disabled,
-.reject-button:disabled {
+.reject-button:disabled,
+.save-seating-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.save-seating-button {
+  background: #fff;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.admin-verification-seating .detail-value {
+  display: block;
 }
 
 @media (max-width: 768px) {

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { adminAPI, ticketAPI } from '../services/api';
-import { translateSectionDisplay } from '../utils/venueMaps';
 import { currencySymbol, formatAmountForCurrency, resolveTicketCurrency } from '../utils/priceFormat';
 import { toastError, toastSuccess } from '../utils/toast';
 import { openAxiosBlobForMobile, ticketFileMimeFromAxiosHeaders } from '../utils/ticketDownload';
@@ -12,6 +11,8 @@ import {
   telHref,
   whatsAppChatUrl,
 } from '../utils/adminSellerContact';
+import AdminQuickSeatEdit from '../components/AdminQuickSeatEdit';
+import { mergeSeatingDraft } from '../utils/adminTicketSeating';
 import './AdminVerificationPage.css';
 
 const AdminVerificationPage = () => {
@@ -21,6 +22,7 @@ const AdminVerificationPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [processing, setProcessing] = useState(new Set());
+  const [seatDrafts, setSeatDrafts] = useState({});
 
   useEffect(() => {
     // CRITICAL: Wait for AuthContext to finish loading before checking permissions
@@ -57,21 +59,54 @@ const AdminVerificationPage = () => {
     }
   };
 
-  const handleApprove = async (ticketId) => {
-    if (processing.has(ticketId)) return;
+  const seatingFor = (ticket) => mergeSeatingDraft(ticket, seatDrafts);
+
+  const handleSaveSeating = async (ticket) => {
+    if (processing.has(ticket.id)) return;
+    const seating = seatingFor(ticket);
+    try {
+      setProcessing((prev) => new Set(prev).add(ticket.id));
+      const res = await adminAPI.updateTicketSeating(ticket.id, seating);
+      const saved = res.data?.ticket;
+      setPendingTickets((prev) =>
+        prev.map((row) =>
+          row.id === ticket.id
+            ? {
+                ...row,
+                ...(saved || {}),
+                section: saved?.section ?? seating.section,
+                row: saved?.row ?? seating.row,
+              }
+            : row,
+        ),
+      );
+      toastSuccess('גוש ושורה נשמרו');
+    } catch (err) {
+      toastError('שגיאה בשמירת גוש/שורה. אנא נסה שוב.');
+    } finally {
+      setProcessing((prev) => {
+        const next = new Set(prev);
+        next.delete(ticket.id);
+        return next;
+      });
+    }
+  };
+
+  const handleApprove = async (ticket) => {
+    if (processing.has(ticket.id)) return;
 
     try {
-      setProcessing(prev => new Set(prev).add(ticketId));
-      await adminAPI.approveTicket(ticketId);
-      setPendingTickets(prev => prev.filter(t => t.id !== ticketId));
+      setProcessing((prev) => new Set(prev).add(ticket.id));
+      await adminAPI.approveTicket(ticket.id, seatingFor(ticket));
+      setPendingTickets((prev) => prev.filter((t) => t.id !== ticket.id));
       toastSuccess('הכרטיס אושר בהצלחה');
     } catch (err) {
       toastError('שגיאה באישור הכרטיס. אנא נסה שוב.');
     } finally {
-      setProcessing(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(ticketId);
-        return newSet;
+      setProcessing((prev) => {
+        const next = new Set(prev);
+        next.delete(ticket.id);
+        return next;
       });
     }
   };
@@ -283,14 +318,18 @@ const AdminVerificationPage = () => {
                       </span>
                     </div>
                   )}
-                  {ticket.section && (
-                    <div className="detail-row">
-                      <span className="detail-label">💺 מושב:</span>
-                      <span className="detail-value">
-                        {ticket.section && ticket.row ? `גוש ${translateSectionDisplay(ticket.section)}, שורה ${ticket.row}` : (translateSectionDisplay(ticket.section) || ticket.row || 'לא צוין')}
-                      </span>
-                    </div>
-                  )}
+                  <div className="detail-row admin-verification-seating">
+                    <span className="detail-label">💺 מושב (עריכה מהירה):</span>
+                    <span className="detail-value">
+                      <AdminQuickSeatEdit
+                        values={seatingFor(ticket)}
+                        disabled={isProcessing}
+                        onChange={(next) =>
+                          setSeatDrafts((prev) => ({ ...prev, [ticket.id]: next }))
+                        }
+                      />
+                    </span>
+                  </div>
                   <div className="detail-row">
                     <span className="detail-label">📆 תאריך העלאה:</span>
                     <span className="detail-value">{formatDate(ticket.created_at)}</span>
@@ -323,6 +362,14 @@ const AdminVerificationPage = () => {
                   </button>
                   <div className="action-buttons">
                     <button
+                      type="button"
+                      onClick={() => handleSaveSeating(ticket)}
+                      className="save-seating-button"
+                      disabled={isProcessing}
+                    >
+                      {isProcessing ? 'מעבד...' : 'שמור'}
+                    </button>
+                    <button
                       onClick={() => handleReject(ticket.id)}
                       className="reject-button"
                       disabled={isProcessing}
@@ -330,7 +377,7 @@ const AdminVerificationPage = () => {
                       {isProcessing ? 'מעבד...' : 'דחה'}
                     </button>
                     <button
-                      onClick={() => handleApprove(ticket.id)}
+                      onClick={() => handleApprove(ticket)}
                       className="approve-button"
                       disabled={isProcessing}
                     >

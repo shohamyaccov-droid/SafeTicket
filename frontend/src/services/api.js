@@ -910,9 +910,13 @@ export const adminAPI = {
     await ensureCsrfToken();
     return api.post(`/users/admin/orders/${orderId}/cancel/`, data);
   },
-  approveTicket: async (ticketId) => {
+  approveTicket: async (ticketId, data = {}) => {
     await ensureCsrfToken();
-    return api.post(`/users/admin/tickets/${ticketId}/approve/`);
+    return api.post(`/users/admin/tickets/${ticketId}/approve/`, data);
+  },
+  updateTicketSeating: async (ticketId, data) => {
+    await ensureCsrfToken();
+    return api.post(`/users/admin/tickets/${ticketId}/seating/`, data);
   },
   rejectTicket: async (ticketId) => {
     await ensureCsrfToken();

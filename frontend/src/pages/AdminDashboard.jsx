@@ -12,6 +12,8 @@ import {
   whatsAppChatUrl,
 } from '../utils/adminSellerContact';
 import Ga4AnalyticsDashboard from '../components/Ga4AnalyticsDashboard';
+import AdminQuickSeatEdit from '../components/AdminQuickSeatEdit';
+import { mergeSeatingDraft } from '../utils/adminTicketSeating';
 import './AdminDashboard.css';
 
 function AdminSellerContactCell({ ticket }) {
@@ -131,19 +133,6 @@ function StatCard({ label, value, sub, currency = false }) {
   );
 }
 
-function AdminSeatDetails({ ticket }) {
-  const zone = ticket.section || ticket.custom_section_text || ticket.venue_section_name || '—';
-  const row = ticket.row || ticket.row_number || '—';
-  const seat = ticket.seat_number || ticket.seat_numbers || '—';
-  return (
-    <div className="admin-seat-details" dir="rtl">
-      <span><strong>גוש:</strong> {zone}</span>
-      <span><strong>שורה:</strong> {row}</span>
-      <span><strong>כיסא:</strong> {seat}</span>
-    </div>
-  );
-}
-
 export default function AdminDashboard() {
   const { user } = useAuth();
   const [mainTab, setMainTab] = useState('overview');
@@ -155,6 +144,7 @@ export default function AdminDashboard() {
   const [pendingTickets, setPendingTickets] = useState([]);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [pendingActionId, setPendingActionId] = useState(null);
+  const [seatDrafts, setSeatDrafts] = useState({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -199,6 +189,52 @@ export default function AdminDashboard() {
       setPendingLoading(false);
     }
   }, []);
+
+  const seatingFor = (ticket) => mergeSeatingDraft(ticket, seatDrafts);
+
+  const handleSaveSeating = async (ticket) => {
+    const seating = seatingFor(ticket);
+    setPendingActionId(ticket.id);
+    try {
+      await ensureCsrfToken();
+      const res = await adminAPI.updateTicketSeating(ticket.id, seating);
+      const saved = res.data?.ticket;
+      toastSuccess('גוש ושורה נשמרו');
+      setPendingTickets((prev) =>
+        prev.map((row) =>
+          row.id === ticket.id
+            ? {
+                ...row,
+                ...(saved || {}),
+                section: saved?.section ?? seating.section,
+                row: saved?.row ?? seating.row,
+              }
+            : row,
+        ),
+      );
+      setSeatDrafts((prev) => ({ ...prev, [ticket.id]: seating }));
+    } catch (err) {
+      toastError(err?.response?.data?.error || 'שמירת מושב נכשלה');
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
+  const handleApprovePending = async (ticket) => {
+    const seating = seatingFor(ticket);
+    setPendingActionId(ticket.id);
+    try {
+      await ensureCsrfToken();
+      await adminAPI.approveTicket(ticket.id, seating);
+      toastSuccess('הכרטיס שוחרר לאתר');
+      await loadPending();
+      await load();
+    } catch (err) {
+      toastError(err?.response?.data?.error || 'אישור נכשל');
+    } finally {
+      setPendingActionId(null);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -351,7 +387,20 @@ export default function AdminDashboard() {
                         <AdminSellerContactCell ticket={t} />
                       </td>
                       <td data-label="פרטי מושב">
-                        <AdminSeatDetails ticket={t} />
+                        <AdminQuickSeatEdit
+                          values={seatingFor(t)}
+                          disabled={pendingActionId === t.id}
+                          onChange={(next) =>
+                            setSeatDrafts((prev) => ({ ...prev, [t.id]: next }))
+                          }
+                        />
+                        {t.seat_number || t.seat_numbers ? (
+                          <div className="admin-seat-details">
+                            <span>
+                              <strong>כיסא:</strong> {t.seat_number || t.seat_numbers}
+                            </span>
+                          </div>
+                        ) : null}
                       </td>
                       <td data-label="פנים">
                         {(() => {
@@ -399,22 +448,17 @@ export default function AdminDashboard() {
                           ) : null}
                           <button
                             type="button"
+                            className="admin-btn-save-seating"
+                            disabled={pendingActionId === t.id}
+                            onClick={() => handleSaveSeating(t)}
+                          >
+                            {pendingActionId === t.id ? 'שומר…' : 'שמור'}
+                          </button>
+                          <button
+                            type="button"
                             className="admin-btn-approve-ticket"
                             disabled={pendingActionId === t.id}
-                            onClick={async () => {
-                              setPendingActionId(t.id);
-                              try {
-                                await ensureCsrfToken();
-                                await adminAPI.approveTicket(t.id);
-                                toastSuccess('הכרטיס שוחרר לאתר');
-                                await loadPending();
-                                await load();
-                              } catch (err) {
-                                toastError(err?.response?.data?.error || 'אישור נכשל');
-                              } finally {
-                                setPendingActionId(null);
-                              }
-                            }}
+                            onClick={() => handleApprovePending(t)}
                           >
                             שחרר לאתר
                           </button>
