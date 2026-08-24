@@ -1,6 +1,5 @@
 /* eslint-disable react/prop-types -- project does not use PropTypes consistently */
-import { useMemo } from 'react';
-import { Filter, Ticket, Gem, CheckSquare } from 'lucide-react';
+import { Filter } from 'lucide-react';
 import {
   getTicketBaseNumeric,
   resolveTicketCurrency,
@@ -8,7 +7,7 @@ import {
   formatAmountForCurrency,
   buyerChargeFromBase,
 } from '../utils/priceFormat';
-import { isListingGroupTaken } from '../utils/ticketAvailability';
+import { listingQuantityOptions, normalizeListingSplitType } from '../utils/listingQuantity';
 import TakenBuyButton from './TakenBuyButton';
 import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import { formatBuyerFeePercent } from '../services/pricingSettings';
@@ -75,24 +74,15 @@ export default function BloomfieldTicketListPanel({
   onToggleRow,
   onBuy,
   onOffer,
+  buyQuantity = 1,
+  onBuyQuantityChange,
   buyingStableId = null,
   user,
   isSellerFn,
   totalListingsBeforeQuantityFilter = 0,
-  cheapestTicketPrice = null,
 }) {
   const buyerFeePercent = useBuyerServiceFeePercent();
   const feePercentLabel = formatBuyerFeePercent(buyerFeePercent);
-  const resolvedCheapest = useMemo(() => {
-    if (cheapestTicketPrice != null && !Number.isNaN(Number(cheapestTicketPrice))) {
-      return Number(cheapestTicketPrice);
-    }
-    const nums = rows
-      .map((r) => parseFloat(r.group?.price))
-      .filter((n) => !Number.isNaN(n));
-    if (nums.length === 0) return null;
-    return Math.min(...nums);
-  }, [rows, cheapestTicketPrice]);
 
   return (
     <div className="flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm" dir="rtl">
@@ -162,10 +152,10 @@ export default function BloomfieldTicketListPanel({
             const isTakenListing = isListingGroupTaken(group);
             const isUnavailableListing = sellerOwns || isTakenListing;
             const showActions = isExpanded || isUnavailableListing;
-            const hasPdf = (group.tickets || []).some((t) => t.has_pdf_file || t.pdf_file_url);
-            const groupPrice = parseFloat(group.price);
-            const isBestValue =
-              resolvedCheapest != null && !Number.isNaN(groupPrice) && groupPrice === resolvedCheapest;
+            const splitType = normalizeListingSplitType(
+              firstTicket?.split_type || group.split_type || ''
+            );
+            const qtyOptions = listingQuantityOptions(splitType, group.available_count || 1);
 
             /* ── price computation (bypass BuyerListingPrice.css entirely) ── */
             const cur = resolveTicketCurrency(firstTicket);
@@ -199,11 +189,11 @@ export default function BloomfieldTicketListPanel({
                 data-bloomfield-block={bloomfield.blockId}
                 role="button"
                 tabIndex={0}
-                onClick={() => onToggleRow(groupId)}
+                onClick={() => onToggleRow(groupId, group)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    onToggleRow(groupId);
+                    onToggleRow(groupId, group);
                   }
                 }}
                 onMouseEnter={() => onHoverRow(stableId)}
@@ -296,27 +286,6 @@ export default function BloomfieldTicketListPanel({
                     >
                       {detailTitle}
                     </span>
-
-                    <div style={BADGES_ROW_STYLE}>
-                      {group.available_count > 0 ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                          <Ticket className="h-3.5 w-3.5 shrink-0 text-pink-500" strokeWidth={2} aria-hidden />
-                          {group.available_count} {group.available_count === 1 ? 'כרטיס' : 'כרטיסים'}
-                        </span>
-                      ) : null}
-                      {isBestValue ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-cyan-100/90 px-2.5 py-1 text-xs font-semibold text-teal-900">
-                          <Gem className="h-3.5 w-3.5 shrink-0 text-teal-600" strokeWidth={2} aria-hidden />
-                          מחיר משתלם
-                        </span>
-                      ) : null}
-                      {hasPdf ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-900">
-                          <CheckSquare className="h-3.5 w-3.5 shrink-0 text-green-600" strokeWidth={2} aria-hidden />
-                          הורדה מיידית
-                        </span>
-                      ) : null}
-                    </div>
                   </div>
 
                 </div>
@@ -335,7 +304,26 @@ export default function BloomfieldTicketListPanel({
                         <p className="text-xs text-slate-500">כרטיס זה כבר אינו זמין לרכישה</p>
                       </div>
                     ) : (
-                      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+                        <label className="flex flex-col gap-1 text-xs font-semibold text-slate-700">
+                          כמות
+                          <select
+                            className="min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800"
+                            value={qtyOptions.includes(buyQuantity) ? buyQuantity : qtyOptions[0]}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              onBuyQuantityChange?.(Number(e.target.value));
+                            }}
+                            disabled={group.available_count <= 0 || isBuying}
+                          >
+                            {qtyOptions.map((n) => (
+                              <option key={n} value={n}>
+                                {n} {n === 1 ? 'כרטיס' : 'כרטיסים'}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                         <button
                           type="button"
                           className="min-h-[44px] rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -347,10 +335,10 @@ export default function BloomfieldTicketListPanel({
                         >
                           {isBuying ? (
                             <>
-                              פותח תשלום… <span className="button-spinner" aria-hidden />
+                              מעביר לתשלום… <span className="button-spinner" aria-hidden />
                             </>
                           ) : (
-                            'קנה עכשיו'
+                            'המשך לתשלום'
                           )}
                         </button>
                         {user ? (

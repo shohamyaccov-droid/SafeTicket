@@ -57,6 +57,7 @@ import {
 import { buildSectionMapStatus } from '../utils/mapSectionStatus';
 import TakenBuyButton from '../components/TakenBuyButton';
 import { createListFetchAbort } from '../utils/listFetch';
+import { defaultListingQuantity, listingQuantityOptions } from '../utils/listingQuantity';
 import './EventDetailsPage.css';
 
 /** Absolute URL for OG/Twitter when the SPA has no event image yet. */
@@ -455,12 +456,6 @@ const EventDetailsPage = () => {
     return sortListingGroupsForBuyer(grouped, user, primaryCompare);
   }, [tickets, sortBy, user]);
 
-  // Find cheapest ticket group for premium badge
-  const cheapestTicketPrice = useMemo(() => {
-    if (ticketGroups.length === 0) return null;
-    return Math.min(...ticketGroups.map(g => parseFloat(g.price)));
-  }, [ticketGroups]);
-
   // Calculate price range from tickets
   const priceRange = useMemo(() => {
     if (tickets.length === 0) return { min: 0, max: 1000 };
@@ -729,13 +724,9 @@ const EventDetailsPage = () => {
         matchingFresh.tickets[0]?.split_type || matchingFresh.split_type || ''
       );
       const avail = matchingFresh.available_count || 1;
-      if (split === 'all') {
-        setQuantity(avail);
-      } else if (split === 'pairs') {
-        setQuantity(avail >= 2 ? 2 : avail);
-      } else {
-        setQuantity(1);
-      }
+      const options = listingQuantityOptions(split, avail);
+      const chosen = options.includes(quantity) ? quantity : defaultListingQuantity(split, avail);
+      setQuantity(chosen);
       setShowCheckout(true);
     } catch (err) {
       setToast({
@@ -1515,13 +1506,21 @@ const EventDetailsPage = () => {
                     highlightStableId={bloomfieldMapHighlight}
                     activeTicketId={activeTicketId}
                     onHoverRow={(id) => setBloomfieldHoverId(id)}
-                    onToggleRow={(groupId) => {
+                    onToggleRow={(groupId, group) => {
                       setActiveTicketId((prev) =>
                         prev != null && String(prev) === String(groupId) ? null : groupId
                       );
+                      if (group) {
+                        const split = normalizeSplitType(
+                          group.tickets?.[0]?.split_type || group.split_type || ''
+                        );
+                        setQuantity(defaultListingQuantity(split, group.available_count || 1));
+                      }
                     }}
                     onBuy={handleBuy}
                     onOffer={handleMakeOffer}
+                    buyQuantity={quantity}
+                    onBuyQuantityChange={setQuantity}
                     buyingStableId={buyOpeningKey}
                     user={user}
                     isSellerFn={isCurrentUserSellerOfTicket}
@@ -1548,9 +1547,6 @@ const EventDetailsPage = () => {
             ) : null}
             {(isRamatGanVenue ? ramatGanDisplayGroups : ticketGroups).map((group) => {
               const seatRange = getSeatRange(group);
-              const hasPdf = group.tickets.some((t) => t.has_pdf_file || t.pdf_file_url);
-              const isVerified = group.seller_is_verified;
-              const isCheapest = cheapestTicketPrice && parseFloat(group.price) === cheapestTicketPrice;
               const firstTicket = group.tickets[0];
               const sectionName = getSectionNameForMap(firstTicket);
               const splitTypeRaw = firstTicket?.split_type || firstTicket?.split_option || group.split_type || '';
@@ -1581,6 +1577,7 @@ const EventDetailsPage = () => {
                 } else {
                   // Expand: set as active (this updates the map)
                   setActiveTicketId(groupId);
+                  setQuantity(defaultListingQuantity(splitType, group.available_count || 1));
                 }
               };
               
@@ -1588,6 +1585,7 @@ const EventDetailsPage = () => {
               const handleTicketHover = () => {
                 if (!isExpanded && sectionName && event?.venue && VENUE_MAPS[event.venue]) {
                   setActiveTicketId(groupId);
+                  setQuantity(defaultListingQuantity(splitType, group.available_count || 1));
                 }
               };
               
@@ -1617,33 +1615,12 @@ const EventDetailsPage = () => {
                       <div className="section-row-info">
                         <span className="section-row-text">{seatRange}</span>
                       </div>
-                      <div className="ticket-mini-tags">
-                        <span className="mini-tag quantity-tag">
-                          🎟️ {group.available_count || 1}{' '}
-                          {(group.available_count || 1) === 1 ? 'כרטיס' : 'כרטיסים'}
-                          {splitType === 'pairs' && (
-                            <span className="split-badge badge-pairs">נמכר בזוגות בלבד</span>
-                          )}
-                          {splitType === 'all' && (
-                            <span className="split-badge badge-all">רכישת כל הכמות יחד</span>
-                          )}
-                        </span>
-                        {isCheapest && (
-                          <span className="mini-tag cheapest-tag">💎 מחיר משתלם</span>
-                        )}
-                        {hasPdf && (
-                          <span className="mini-tag delivery-tag">✅ הורדה מיידית</span>
-                        )}
-                        {isVerified && (
-                          <span className="mini-tag verified-tag">✓ מאומת</span>
-                        )}
-                      </div>
                     </div>
                     
                     {/* Left Side: Price */}
                     <div className="ticket-row-price">
                       <div className="ticket-price-container">
-                        <BuyerListingPrice ticket={firstTicket} quantity={group.available_count || 1} />
+                        <BuyerListingPrice ticket={firstTicket} />
                       </div>
                     </div>
                   </div>
@@ -1663,6 +1640,25 @@ const EventDetailsPage = () => {
                           </div>
                         ) : (
                           <>
+                            <div
+                              className="ticket-expanded-qty"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <label htmlFor={`listing-qty-${groupId}`}>כמות</label>
+                              <select
+                                id={`listing-qty-${groupId}`}
+                                className="ticket-qty-select"
+                                value={quantity}
+                                onChange={(e) => setQuantity(Number(e.target.value))}
+                                disabled={group.available_count <= 0 || isBuyOpening}
+                              >
+                                {listingQuantityOptions(splitType, group.available_count || 1).map((n) => (
+                                  <option key={n} value={n}>
+                                    {n} {n === 1 ? 'כרטיס' : 'כרטיסים'}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
                             <div className="buy-button-wrapper">
                               <button
                                 onClick={(e) => {
@@ -1674,13 +1670,13 @@ const EventDetailsPage = () => {
                               >
                                 {isBuyOpening ? (
                                   <>
-                                    פותח תשלום… <span className="button-spinner" aria-hidden />
+                                    מעביר לתשלום… <span className="button-spinner" aria-hidden />
                                   </>
                                 ) : (
-                                  'קנה עכשיו'
+                                  'המשך לתשלום'
                                 )}
                               </button>
-                              <span className="micro-trust-text">🔒 תשלום מאובטח ומוגן</span>
+                              <span className="micro-trust-text">🔒 תשלום מאובטח ב-PayMe — בלי אישור נוסף</span>
                             </div>
                             {allowsNegotiation ? (
                               user ? (
@@ -1743,6 +1739,7 @@ const EventDetailsPage = () => {
           ticketGroup={selectedTicketGroup}
           user={user}
           quantity={quantity}
+          autoStartPayme
           onClose={handleCloseCheckout}
           onErrorToParent={(payload) => {
             setToast(payload);

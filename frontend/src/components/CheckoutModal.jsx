@@ -196,9 +196,9 @@ function coerceCheckoutQuantity(value, fallback = 1) {
   return Math.min(10, Math.floor(n));
 }
 
-const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 1, onClose, acceptedOffer = null, splitType: splitTypeOverride = null, onErrorToParent = null }) => {
+const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 1, onClose, acceptedOffer = null, splitType: splitTypeOverride = null, onErrorToParent = null, autoStartPayme = false }) => {
   const { refreshProfile } = useAuth();
-  const [step, setStep] = useState('info'); // 'info', 'payment', 'success'
+  const [step, setStep] = useState(() => (autoStartPayme ? 'payment' : 'info')); // 'info', 'payment', 'success'
   const [quantity, setQuantity] = useState(() => coerceCheckoutQuantity(initialQuantity, 1));
   const [guestForm, setGuestForm] = useState({
     firstName: '',
@@ -237,7 +237,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const [appliedCoupon, setAppliedCoupon] = useState(null); // server preview payload
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponError, setCouponError] = useState('');
-  const [legalAccepted, setLegalAccepted] = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(() => Boolean(autoStartPayme));
   const [legalError, setLegalError] = useState('');
   const [shabbatOpen, setShabbatOpen] = useState(false);
   const [shabbatHavdalah, setShabbatHavdalah] = useState(null);
@@ -1151,6 +1151,40 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     await executeCheckout(true);
   };
 
+  const executeCheckoutRef = useRef(executeCheckout);
+  executeCheckoutRef.current = executeCheckout;
+  const autoPayStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (!autoStartPayme) return;
+    if (autoPayStartedRef.current) return;
+    if (step !== 'payment') return;
+    if (showIdentityForm) return;
+    if (loading) return;
+    if (reservationInitializing) return;
+    if (!skipCartReserveForNegotiatedOffer && !reservationActive) return;
+    if (!user) {
+      const g = guestForm;
+      if (!g.firstName || !g.lastName || !g.email || !g.phone) {
+        setShowIdentityForm(true);
+        setRetryPayAfterIdentity(true);
+        return;
+      }
+    }
+    autoPayStartedRef.current = true;
+    void executeCheckoutRef.current(false);
+  }, [
+    autoStartPayme,
+    step,
+    showIdentityForm,
+    loading,
+    reservationInitializing,
+    skipCartReserveForNegotiatedOffer,
+    reservationActive,
+    user,
+    guestForm,
+  ]);
+
   const handleDownloadPDF = async (ticketId, index = null) => {
     if (!ticketId) {
       const msg = 'שגיאה: מזהה כרטיס חסר';
@@ -1738,8 +1772,17 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               <path d="M10 1L3 4V9C3 13.55 6.16 17.74 10 19C13.84 17.74 17 13.55 17 9V4L10 1Z" fill="currentColor"/>
               <path d="M8 9L9 10L12 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <h2>תשלום מאובטח</h2>
+            <h2>{autoStartPayme ? 'מעביר לתשלום מאובטח' : 'תשלום מאובטח'}</h2>
           </div>
+          {autoStartPayme && !showIdentityForm ? (
+            <p className="checkout-autostart-status" role="status">
+              {loading || paymentPhase !== 'idle'
+                ? 'יוצרים הזמנה ומעבירים ל-PayMe…'
+                : error
+                  ? error
+                  : 'שומרים את הכרטיס ומעבירים לתשלום…'}
+            </p>
+          ) : null}
           
           {/* Reservation Notice with Countdown Timer - at top */}
           <div className="reservation-notice reservation-timer-top">

@@ -1,26 +1,27 @@
 /* eslint-disable react/prop-types */
 import { useEffect } from 'react';
+import { trackGoogleAdsConversion } from '../utils/googleAdsConversions';
 
 /**
- * Confirmation shown after a successful ticket listing on /sell/new.
- * Mounts only when Sell replaces the empty form with the success state,
- * so the Google Ads seller-acquisition conversion cannot fire on form entry.
+ * Confirmation after a successful /sell/new listing.
+ * Mounts only on success so the Google Ads conversion cannot fire on form entry.
+ * Payout details are optional — TradeTix never charges the seller to publish.
  */
-export default function ListingCreatedSuccessView({ successWasIsrael, onGoToSales }) {
+export default function ListingCreatedSuccessView({
+  successWasIsrael,
+  onAddPayoutDetails,
+  onDoLater,
+}) {
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.gtag) {
-      window.gtag('event', 'conversion', {
-        send_to: 'AW-18350905085/QVV8COaZ0tYcEP2tsq5E',
-      });
-    }
+    trackGoogleAdsConversion();
   }, []);
 
   return (
     <div className="sell-container sell-success-screen" data-testid="listing-success">
       <div className="listing-card success-message">
         <div className="success-icon-large" aria-hidden="true">✓</div>
-        <h2 className="success-title">Listing Created Successfully!</h2>
-        <h3 className="success-subtitle-hebrew">הכרטיס הועלה בהצלחה!</h3>
+        <h2 className="success-title">Ticket Published Successfully!</h2>
+        <h3 className="success-subtitle-hebrew">הכרטיס פורסם בהצלחה!</h3>
         {successWasIsrael ? (
           <p className="success-text">
             הכרטיס הועלה בהצלחה! הוא יפורסם באתר לאחר בדיקת צוות קצרה (עד 24 שעות).
@@ -28,12 +29,27 @@ export default function ListingCreatedSuccessView({ successWasIsrael, onGoToSale
         ) : (
           <p className="success-text">הכרטיס פורסם באתר וזמין למכירה.</p>
         )}
-        <p className="success-redirect-text" role="status" aria-live="polite">
-          מעבירים אותך למכירות שלי בעוד 3 שניות...
-        </p>
-        <button type="button" className="success-home-button" onClick={onGoToSales}>
-          למכירות שלי
-        </button>
+        <div className="success-payout-reassure" data-testid="listing-success-payout-copy">
+          <p className="success-text success-text--emphasis">
+            אנחנו לא גובים ממך כסף על הפרסום. אין חיוב על כרטיס אשראי ואין עמלת העלאה.
+          </p>
+          <p className="success-text">
+            כשהכרטיס יימכר, נעביר את התשלום לחשבון הבנק או ל-Bit שלך — אפשר למלא את הפרטים עכשיו,
+            או אחרי המכירה מארנק הפרופיל.
+          </p>
+        </div>
+        <div className="success-cta-row">
+          <button type="button" className="success-home-button" onClick={onAddPayoutDetails}>
+            הוספת פרטי תשלום עכשיו
+          </button>
+          <button
+            type="button"
+            className="success-home-button success-home-button--secondary"
+            onClick={onDoLater}
+          >
+            אעשה את זה אחר כך
+          </button>
+        </div>
       </div>
     </div>
   );

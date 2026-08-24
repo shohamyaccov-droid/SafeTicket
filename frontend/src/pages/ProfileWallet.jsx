@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { walletAPI } from '../services/api';
 import { formatAmountForCurrency } from '../utils/priceFormat';
@@ -18,6 +18,7 @@ const STATUS_LABELS = {
 export default function ProfileWalletPage({ embedded = false }) {
   const { user, refreshProfile } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [summary, setSummary] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [needsPayoutDetails, setNeedsPayoutDetails] = useState(false);
@@ -47,6 +48,12 @@ export default function ProfileWalletPage({ embedded = false }) {
     if (!user) return;
     load();
   }, [user, load]);
+
+  useEffect(() => {
+    if (searchParams.get('addPayout') === '1') {
+      setPayoutModalOpen(true);
+    }
+  }, [searchParams]);
 
   const formatDate = (iso) => {
     if (!iso) return '—';

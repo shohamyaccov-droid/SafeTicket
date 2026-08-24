@@ -108,6 +108,16 @@
   text-align: right;
 }
 
+.checkout-autostart-status {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  background: #ecfdf5;
+  color: #065f46;
+  font-weight: 600;
+  text-align: center;
+}
+
 /* Ensure proper spacing for scrollable content */
 .modal-content > * {
   flex-shrink: 0;

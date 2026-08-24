@@ -417,51 +417,26 @@ const Sell = () => {
     }, 60);
   }, [error, fieldErrors]);
 
-  useEffect(() => {
-    if (!success) return undefined;
-
-    let cancelled = false;
-    const goToSales = () => {
-      if (cancelled) return;
-      const salesUrl = '/dashboard?tab=sales';
-      try {
-        navigate(salesUrl, { replace: true });
-      } catch {
-        /* fall through */
-      }
-      // Hard fallback if client routing is stuck (common after long upload sessions).
-      window.setTimeout(() => {
-        if (cancelled) return;
-        const path = `${window.location.pathname}${window.location.search}`;
-        if (!path.startsWith('/dashboard') || !window.location.search.includes('tab=sales')) {
-          window.location.assign(salesUrl);
-        }
-      }, 250);
-    };
-
-    const timer = window.setTimeout(goToSales, 3000);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-    // Intentionally depend only on `success` so a changing navigate identity cannot
-    // clear/restart the 3s timer indefinitely.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate used as imperative escape hatch
-  }, [success]);
-
-  const goToMySales = () => {
-    const salesUrl = '/dashboard?tab=sales';
+  const goToWalletForPayout = () => {
+    const walletUrl = '/profile/wallet?addPayout=1';
     try {
-      navigate(salesUrl, { replace: true });
+      navigate(walletUrl, { replace: true });
     } catch {
       /* fall through */
     }
     window.setTimeout(() => {
-      const path = `${window.location.pathname}${window.location.search}`;
-      if (!path.startsWith('/dashboard') || !window.location.search.includes('tab=sales')) {
-        window.location.assign(salesUrl);
+      if (!window.location.pathname.startsWith('/profile/wallet')) {
+        window.location.assign(walletUrl);
       }
     }, 100);
+  };
+
+  const goHomeAfterListing = () => {
+    try {
+      navigate('/', { replace: true });
+    } catch {
+      window.location.assign('/');
+    }
   };
 
   /**
@@ -812,7 +787,8 @@ const Sell = () => {
     return (
       <ListingCreatedSuccessView
         successWasIsrael={successWasIsrael}
-        onGoToSales={goToMySales}
+        onAddPayoutDetails={goToWalletForPayout}
+        onDoLater={goHomeAfterListing}
       />
     );
   }

@@ -15,10 +15,17 @@ describe('ListingCreatedSuccessView Google Ads conversion', () => {
   });
 
   it('fires the conversion exactly once when the success view mounts', () => {
-    render(<ListingCreatedSuccessView successWasIsrael={false} onGoToSales={() => {}} />);
+    render(
+      <ListingCreatedSuccessView
+        successWasIsrael={false}
+        onAddPayoutDetails={() => {}}
+        onDoLater={() => {}}
+      />,
+    );
 
     expect(screen.getByTestId('listing-success')).toBeInTheDocument();
-    expect(screen.getByText('הכרטיס הועלה בהצלחה!')).toBeInTheDocument();
+    expect(screen.getByText('הכרטיס פורסם בהצלחה!')).toBeInTheDocument();
+    expect(screen.getByTestId('listing-success-payout-copy')).toHaveTextContent('לא גובים');
     expect(window.gtag).toHaveBeenCalledTimes(1);
     expect(window.gtag).toHaveBeenCalledWith('event', 'conversion', {
       send_to: 'AW-18350905085/QVV8COaZ0tYcEP2tsq5E',
@@ -27,9 +34,19 @@ describe('ListingCreatedSuccessView Google Ads conversion', () => {
 
   it('does not fire again on rerender of the same mounted success view', () => {
     const { rerender } = render(
-      <ListingCreatedSuccessView successWasIsrael={false} onGoToSales={() => {}} />,
+      <ListingCreatedSuccessView
+        successWasIsrael={false}
+        onAddPayoutDetails={() => {}}
+        onDoLater={() => {}}
+      />,
     );
-    rerender(<ListingCreatedSuccessView successWasIsrael onGoToSales={() => {}} />);
+    rerender(
+      <ListingCreatedSuccessView
+        successWasIsrael
+        onAddPayoutDetails={() => {}}
+        onDoLater={() => {}}
+      />,
+    );
     expect(window.gtag).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/בדיקת צוות/)).toBeInTheDocument();
   });
@@ -37,15 +54,30 @@ describe('ListingCreatedSuccessView Google Ads conversion', () => {
   it('skips gtag when it is not loaded', () => {
     delete window.gtag;
     expect(() =>
-      render(<ListingCreatedSuccessView successWasIsrael={false} onGoToSales={() => {}} />),
+      render(
+        <ListingCreatedSuccessView
+          successWasIsrael={false}
+          onAddPayoutDetails={() => {}}
+          onDoLater={() => {}}
+        />,
+      ),
     ).not.toThrow();
   });
 
-  it('calls onGoToSales from the CTA', async () => {
-    const onGoToSales = vi.fn();
+  it('routes payout now vs later from the two CTAs', async () => {
+    const onAddPayoutDetails = vi.fn();
+    const onDoLater = vi.fn();
     const user = userEvent.setup();
-    render(<ListingCreatedSuccessView successWasIsrael={false} onGoToSales={onGoToSales} />);
-    await user.click(screen.getByRole('button', { name: 'למכירות שלי' }));
-    expect(onGoToSales).toHaveBeenCalledTimes(1);
+    render(
+      <ListingCreatedSuccessView
+        successWasIsrael={false}
+        onAddPayoutDetails={onAddPayoutDetails}
+        onDoLater={onDoLater}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'הוספת פרטי תשלום עכשיו' }));
+    expect(onAddPayoutDetails).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'אעשה את זה אחר כך' }));
+    expect(onDoLater).toHaveBeenCalledTimes(1);
   });
 });
