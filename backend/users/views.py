@@ -1345,15 +1345,29 @@ def user_profile(request):
         }, status=status.HTTP_200_OK)
 
 
+def ensure_listing_seller_role(user):
+    """
+    Listing is allowed without bank details. Promote buyers to seller so
+    Ticket.seller and the sales dashboard work; payouts still wait for
+    profile bank/Bit details collected after a sale.
+    """
+    if not user or not getattr(user, 'is_authenticated', False):
+        return user
+    if getattr(user, 'role', '') != 'seller':
+        user.role = 'seller'
+        user.save(update_fields=['role', 'updated_at'])
+    return user
+
+
 @csrf_required
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def upgrade_to_seller(request):
     """
-    Buyer → seller onboarding: payout + escrow acceptance, then role=seller.
+    Save payout details (bank or Bit) and ensure role=seller.
+    Used after a sale from profile — not required to publish a listing.
+    Existing sellers may update the same fields.
     """
-    if getattr(request.user, 'role', '') == 'seller':
-        return Response({'detail': 'כבר מוגדר כמוכר.'}, status=status.HTTP_400_BAD_REQUEST)
     ser = UpgradeToSellerSerializer(data=request.data)
     ser.is_valid(raise_exception=True)
     u = request.user
@@ -3166,11 +3180,9 @@ class TicketViewSet(viewsets.ModelViewSet):
         """
         Override create to handle multiple PDF files - create one Ticket per PDF
         """
-        # Only sellers can create tickets
         if not request.user.is_authenticated:
             raise PermissionDenied("Authentication required to create tickets.")
-        if request.user.role != 'seller':
-            raise PermissionDenied("Only users with seller role can create tickets.")
+        ensure_listing_seller_role(request.user)
 
         def _safe_int(value, default=0):
             try:
@@ -3523,8 +3535,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         # Keep for backward compatibility but shouldn't be called
         if not self.request.user.is_authenticated:
             raise PermissionDenied("Authentication required to create tickets.")
-        if self.request.user.role != 'seller':
-            raise PermissionDenied("Only users with seller role can create tickets.")
+        ensure_listing_seller_role(self.request.user)
         serializer.save(seller=self.request.user)
     
     def get_serializer_context(self):

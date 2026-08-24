@@ -291,4 +291,5 @@ def user_wallet(request):
     return Response({
         'summary': _wallet_summary_for_seller(user),
         'transactions': [_serialize_wallet_transaction(p) for p in payouts],
+        'needs_payout_details': not bool(getattr(user, 'has_payout_details', False)),
     })

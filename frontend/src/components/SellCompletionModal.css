@@ -138,3 +138,17 @@
   min-height: 48px;
   margin-top: 0.25rem;
 }
+
+.sell-auth-step {
+  margin: 0.5rem 0 1rem;
+  padding: 0.25rem 0 0.5rem;
+}
+
+.sell-auth-form .sell-wizard-actions {
+  margin-top: 1rem;
+}
+
+.sell-auth-form .sell-completion-submit {
+  flex: 1;
+  max-width: 360px;
+}

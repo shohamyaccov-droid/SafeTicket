@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ticketAPI, eventAPI, artistAPI, eventRequestAPI, authAPI } from '../services/api';
+import { ticketAPI, eventAPI, artistAPI, eventRequestAPI } from '../services/api';
 import { createListFetchAbort } from '../utils/listFetch';
 import SellFormSkeleton from '../components/skeletons/SellFormSkeleton';
 import { toastError } from '../utils/toast';
@@ -153,12 +153,14 @@ function buildSellListingDraftSnapshot({
   selectedCategory,
   selectedArtistId,
   sellerListingTermsAccepted,
+  wizardStep,
 }) {
   return {
     uploadMethod,
     selectedCategory,
     selectedArtistId,
     sellerListingTermsAccepted,
+    wizardStep,
     formData: {
       event_id: formData.event_id,
       event_name: formData.event_name,
@@ -179,48 +181,14 @@ function buildSellListingDraftSnapshot({
   };
 }
 
-function validateCompletionPayload(payload, { needsAuth }) {
+function validateAuthPayload(payload) {
   const fe = {};
-  const { authMode, authForm, payoutMethod, sellerBank, bitPhoneConfirm, acceptedEscrow } = payload;
-  const phoneRaw = (authForm?.phone_number || '').trim();
-
-  if (!acceptedEscrow) fe.acceptedEscrow = 'יש לאשר את תנאי הנאמנות כדי להמשיך.';
-  if ((sellerBank.account_holder_name || '').trim().length < 2) {
-    fe.account_holder_name = 'נא להזין שם בעל חשבון.';
+  const { authMode, authForm } = payload;
+  if (authMode === 'register' && !(authForm?.first_name || '').trim()) {
+    fe.first_name = 'נא להזין שם.';
   }
-  const idRaw = (sellerBank.id_number || '').replace(/[\s-]/g, '');
-  if (!/^\d+$/.test(idRaw) || idRaw.length < 5 || idRaw.length > 9) {
-    fe.id_number = 'נא להזין מספר תעודת זהות תקין.';
-  }
-
-  if (payoutMethod === 'bank') {
-    if (!(sellerBank.bank_name_or_code || '').trim()) fe.bank_name_or_code = 'נא לציין בנק.';
-    if (!/^\d+$/.test((sellerBank.branch_number || '').trim())) fe.branch_number = 'נא להזין מספר סניף תקין.';
-    if (!/^\d{4,}$/.test((sellerBank.account_number || '').trim())) fe.account_number = 'נא להזין מספר חשבון תקין.';
-  } else {
-    const normalize = (v) => String(v || '').replace(/\D/g, '').replace(/^972/, '0');
-    const one = normalize(phoneRaw);
-    const two = normalize(bitPhoneConfirm);
-    if (!/^05\d{8}$/.test(one)) fe.bit_phone_number = 'נא להזין מספר טלפון ביט ישראלי תקין.';
-    if (one !== two) fe.bit_phone_number_confirm = 'מספרי הטלפון לביט אינם תואמים.';
-  }
-
-  if (needsAuth) {
-    if (authMode === 'register' && !(authForm.first_name || '').trim()) {
-      fe.first_name = 'נא להזין שם פרטי.';
-    }
-    if (!(authForm.email || '').trim()) fe.email = 'נא להזין אימייל.';
-    if (!(authForm.password || '').trim()) fe.password = 'נא להזין סיסמה.';
-    if (authMode === 'register') {
-      const signupPhone = String(authForm.phone_number || '').replace(/\D/g, '').replace(/^972/, '0');
-      if (!/^05\d{8}$/.test(signupPhone)) fe.phone_number = 'נא להזין מספר טלפון ישראלי תקין.';
-    } else if (phoneRaw.length < 8) {
-      fe.phone = 'נא להזין מספר טלפון תקין.';
-    }
-  } else if (phoneRaw.length < 8) {
-    fe.phone = 'נא להזין מספר טלפון תקין.';
-  }
-
+  if (!(authForm?.email || '').trim()) fe.email = 'נא להזין אימייל.';
+  if (!(authForm?.password || '').trim()) fe.password = 'נא להזין סיסמה.';
   return fe;
 }
 
@@ -383,7 +351,10 @@ const Sell = () => {
   const navigate = useNavigate();
   const sellDraft = useMemo(() => readSellListingDraft(), []);
   const { user, refreshProfile, login, register } = useAuth();
-  const [wizardStep, setWizardStep] = useState(1);
+  const [wizardStep, setWizardStep] = useState(() => {
+    const s = Number(sellDraft?.wizardStep) || 1;
+    return s >= 1 && s <= 4 ? s : 1;
+  });
   const [formData, setFormData] = useState(() => {
     const base = defaultSellFormData();
     const draftForm = sellDraft?.formData;
@@ -428,11 +399,9 @@ const Sell = () => {
   const [eventRequestSubmitting, setEventRequestSubmitting] = useState(false);
   const [eventRequestFeedback, setEventRequestFeedback] = useState(null);
   const submitAttemptedRef = useRef(false);
-  const listingSnapshotRef = useRef(null);
-  const [completionOpen, setCompletionOpen] = useState(false);
-  const [completionSaving, setCompletionSaving] = useState(false);
-  const [completionError, setCompletionError] = useState('');
-  const [completionFieldErrors, setCompletionFieldErrors] = useState({});
+  const [authSaving, setAuthSaving] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [authFieldErrors, setAuthFieldErrors] = useState({});
   /** Full event from GET /events/:id/ — includes venue_detail.sections for seating UI. */
   const [eventDetail, setEventDetail] = useState(null);
 
@@ -725,9 +694,10 @@ const Sell = () => {
         selectedCategory,
         selectedArtistId,
         sellerListingTermsAccepted,
+        wizardStep,
       })
     );
-  }, [formData, uploadMethod, selectedCategory, selectedArtistId, sellerListingTermsAccepted]);
+  }, [formData, uploadMethod, selectedCategory, selectedArtistId, sellerListingTermsAccepted, wizardStep]);
 
   const submitEventRequest = async (e) => {
     e.preventDefault();
@@ -829,11 +799,12 @@ const Sell = () => {
     return staticFallback.length === 0;
   }, [formData.event_id, formData.selectedEvent, eventDetail, sectionOptions.length]);
 
-  const selectedVenueLabel = canonicalVenueName(
-    eventDetail && String(eventDetail.id) === String(formData.event_id)
-      ? eventDetail
-      : formData.selectedEvent || {}
-  );
+  const skipAuth = Boolean(user);
+  useEffect(() => {
+    if (user && wizardStep === 3) {
+      setWizardStep(4);
+    }
+  }, [user, wizardStep]);
 
   // Success must win over other loading UI — a profile refresh must not replace the
   // success screen with a skeleton and leave the user without a home CTA.
@@ -846,9 +817,7 @@ const Sell = () => {
     );
   }
 
-  // Reverse funnel: show the listing form immediately. Auth still resolves in the
-  // background; guests can fill the form and sign up/login only at submit/completion.
-  const isSeller = Boolean(user && user.role === 'seller');
+  // Reverse funnel: guests fill event + price first; auth is a later wizard step.
   const handleCategoryChange = (e) => {
     const newCategory = e.target.value;
     setSelectedCategory(newCategory);
@@ -1075,35 +1044,55 @@ const Sell = () => {
 
   };
 
-  const captureListingSnapshot = () => {
-    listingSnapshotRef.current = {
-      formData: {
-        ...formData,
-        singleMultiPagePdf: formData.singleMultiPagePdf,
-        ticket_packages: (formData.ticket_packages || []).map((pkg) => ({
-          seat_number: pkg?.seat_number || '',
-          pdf_file: pkg?.pdf_file || null,
-        })),
-        selectedEvent: formData.selectedEvent,
-      },
-      uploadMethod,
-    };
-  };
-
-  const buildUpgradePayload = (payload) => {
-    const { authForm, payoutMethod, sellerBank } = payload;
-    const phone = (authForm?.phone_number || '').trim();
-    return {
-      phone_number: phone,
-      payout_method: payoutMethod,
-      bit_phone_number: payoutMethod === 'bit' ? phone.replace(/\D/g, '').replace(/^972/, '0') : '',
-      account_holder_name: sellerBank.account_holder_name.trim(),
-      id_number: sellerBank.id_number.replace(/[\s-]/g, ''),
-      bank_name_or_code: payoutMethod === 'bank' ? sellerBank.bank_name_or_code.trim() : '',
-      branch_number: payoutMethod === 'bank' ? sellerBank.branch_number.trim() : '',
-      account_number: payoutMethod === 'bank' ? sellerBank.account_number.trim() : '',
-      accepted_escrow_terms: true,
-    };
+  const handleAuthSubmit = async (payload) => {
+    const fe = validateAuthPayload(payload);
+    if (Object.keys(fe).length) {
+      setAuthFieldErrors(fe);
+      return;
+    }
+    setAuthFieldErrors({});
+    setAuthError('');
+    setAuthSaving(true);
+    try {
+      const { authMode, authForm } = payload;
+      if (authMode === 'register') {
+        const reg = await register({
+          username: authForm.email.trim(),
+          email: authForm.email.trim(),
+          first_name: authForm.first_name.trim(),
+          last_name: authForm.first_name.trim() || '-',
+          password: authForm.password,
+          password2: authForm.password,
+          role: 'buyer',
+        });
+        if (!reg.success) {
+          setAuthError(parseApiMessage(reg.error, 'ההרשמה נכשלה.'));
+          return;
+        }
+        const loginRes = await login(authForm.email.trim(), authForm.password);
+        if (!loginRes.success) {
+          setAuthError(loginRes.errorHebrew || loginRes.error || 'ההתחברות נכשלה לאחר הרשמה.');
+          return;
+        }
+      } else {
+        const loginRes = await login(authForm.email.trim(), authForm.password);
+        if (!loginRes.success) {
+          setAuthError(loginRes.errorHebrew || loginRes.error || 'ההתחברות נכשלה.');
+          return;
+        }
+      }
+      try {
+        await refreshProfile();
+      } catch {
+        /* listing continues; role promotion happens on publish */
+      }
+      setWizardStep(4);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      setAuthError(parseApiMessage(err.response?.data, err.message || 'ההתחברות נכשלה.'));
+    } finally {
+      setAuthSaving(false);
+    }
   };
 
   const executeTicketUpload = async (snapshot = null) => {
@@ -1206,7 +1195,6 @@ const Sell = () => {
       submitAttemptedRef.current = false;
       setSuccessWasIsrael(ilEvent);
       writeSellListingDraft(null);
-      listingSnapshotRef.current = null;
       setSuccess(true);
     } catch (err) {
       const raw = `${err?.message || ''} ${JSON.stringify(err?.response?.data || {})}`;
@@ -1221,77 +1209,6 @@ const Sell = () => {
       setLoading(false);
       setUploadProgress(0);
       setUploadPhase('');
-    }
-  };
-
-  const handleCompletionSubmit = async (payload) => {
-    const needsAuth = !user;
-    const fe = validateCompletionPayload(payload, { needsAuth });
-    if (Object.keys(fe).length) {
-      setCompletionFieldErrors(fe);
-      return;
-    }
-    setCompletionFieldErrors({});
-    setCompletionError('');
-    setCompletionSaving(true);
-    try {
-      const { authMode, authForm } = payload;
-
-      if (!user) {
-        if (authMode === 'register') {
-          const reg = await register({
-            username: authForm.email.trim(),
-            email: authForm.email.trim(),
-            phone_number: authForm.phone_number.trim(),
-            first_name: authForm.first_name.trim(),
-            last_name: authForm.first_name.trim() || '-',
-            password: authForm.password,
-            password2: authForm.password,
-            role: 'buyer',
-          });
-          if (!reg.success) {
-            setCompletionError(parseApiMessage(reg.error, 'ההרשמה נכשלה.'));
-            return;
-          }
-          const loginRes = await login(authForm.email.trim(), authForm.password);
-          if (!loginRes.success) {
-            setCompletionError(loginRes.errorHebrew || loginRes.error || 'ההתחברות נכשלה לאחר הרשמה.');
-            return;
-          }
-        } else {
-          const loginRes = await login(authForm.email.trim(), authForm.password);
-          if (!loginRes.success) {
-            setCompletionError(loginRes.errorHebrew || loginRes.error || 'ההתחברות נכשלה.');
-            return;
-          }
-        }
-      }
-
-      await authAPI.getCsrf();
-      const profileRes = await authAPI.getProfile();
-      const currentUser = profileRes.data?.user || profileRes.data;
-      if (currentUser?.role !== 'seller') {
-        await authAPI.upgradeToSeller(buildUpgradePayload(payload));
-        await refreshProfile();
-      }
-
-      // Keep modal open until upload finishes so network drops leave a recoverable UI
-      // and listingSnapshotRef File objects stay reachable for retry.
-      const snapshot = listingSnapshotRef.current;
-      if (!snapshot?.formData) {
-        setCompletionError('פרטי הכרטיס לא נשמרו. סגרו את החלון, בדקו שהקבצים עדיין נבחרו, ונסו שוב.');
-        return;
-      }
-      await executeTicketUpload(snapshot);
-      if (listingSnapshotRef.current === null) {
-        setCompletionOpen(false);
-      } else {
-        setCompletionError('העלאת הכרטיס נכשלה. תוכלו לנסות שוב בלי למלא מחדש את פרטי הזיכוי.');
-      }
-    } catch (err) {
-      setCompletionError(parseApiMessage(err.response?.data, err.message || 'הפעולה נכשלה.'));
-    } finally {
-      setCompletionSaving(false);
     }
   };
 
@@ -1442,32 +1359,81 @@ const Sell = () => {
       }
     }
 
-    if (!isSeller) {
-      captureListingSnapshot();
-      setCompletionOpen(true);
-      setCompletionError('');
-      setCompletionFieldErrors({});
+    if (!user) {
       setLoading(false);
       setUploadProgress(0);
       setUploadPhase('');
+      setWizardStep(3);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
     await executeTicketUpload();
   };
 
-  const ilSelected = isIsraelEvent(formData.selectedEvent);
   const feeBasis = parseFloat(String(formData.listing_price || 0)) || 0;
-  const advanceToPricing = () => {
-    const form = document.getElementById('sell-listing-form');
-    if (!form?.reportValidity()) return;
+  const scrollWizardTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  const validateIdentityStep = () => {
+    if (selectedCategory === 'concert' && !selectedArtistId) {
+      setFieldErrors({ event: 'אנא בחר אמן.' });
+      return false;
+    }
+    if (!formData.event_id) {
+      setFieldErrors({ event: 'אנא בחר אירוע מהרשימה.' });
+      return false;
+    }
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.event;
+      return next;
+    });
+    return true;
+  };
+
+  const validatePricingStep = () => {
+    const fe = {};
+    const requiredCount = formData.available_quantity || 1;
+    if (!formData.ticket_packages || formData.ticket_packages.length !== requiredCount) {
+      fe.packages = `אנא השלם את כל פרטי הכרטיסים (${requiredCount} כרטיסים נדרשים).`;
+    }
+    if (!(formData.section || '').trim()) fe.section = 'נא לבחור גוש מהרשימה.';
+    if (!(formData.row || '').trim()) fe.row = 'נא להזין שורה.';
+    const incompleteSeats = (formData.ticket_packages || []).some(
+      (pkg) => !pkg || !(pkg.seat_number || '').trim()
+    );
+    if (incompleteSeats) fe.seats = 'נא להזין מספר כיסא לכל כרטיס.';
+    if (formData.listing_price === '' || formData.listing_price == null) {
+      fe.listing_price = 'נא להזין מחיר מכירה.';
+    } else {
+      const askVal = parseFloat(String(formData.listing_price).replace(',', '.'));
+      if (!Number.isFinite(askVal) || askVal <= 0) {
+        fe.listing_price = 'מחיר המכירה חייב להיות מספר חיובי.';
+      }
+    }
+    if (Object.keys(fe).length) {
+      setFieldErrors(fe);
+      return false;
+    }
+    setFieldErrors({});
+    return true;
+  };
+
+  const advanceFromIdentity = () => {
+    if (!validateIdentityStep()) return;
     setWizardStep(2);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollWizardTop();
+  };
+
+  const advanceFromPricing = () => {
+    if (!validatePricingStep()) return;
+    setWizardStep(user ? 4 : 3);
+    scrollWizardTop();
   };
 
   return (
     <div className="sell-container">
-      {loading && !completionOpen && (
+      {loading && (
         <div className="sell-upload-overlay" role="status" aria-live="polite" aria-busy="true">
           <div className="sell-upload-overlay-card">
             <div className="sell-upload-spinner" aria-hidden />
@@ -1489,7 +1455,7 @@ const Sell = () => {
           </div>
         </div>
       )}
-      <TicketUploadWizard step={completionOpen ? 3 : wizardStep}>
+      <TicketUploadWizard step={wizardStep} skipAuth={skipAuth}>
       <div className="listing-card sell-form-compact sell-listing-card--mobile-cta">
         <aside className="sell-trust-strip" aria-label="יתרונות למוכרים">
           <ul className="sell-trust-strip__list">
@@ -1546,7 +1512,7 @@ const Sell = () => {
           </div>
         )}
         
-        <form id="sell-listing-form" onSubmit={handleSubmit}>
+        <form id="sell-listing-form" onSubmit={handleSubmit} noValidate>
           <div className={wizardStep === 1 ? '' : 'sell-wizard-hidden'} aria-hidden={wizardStep !== 1}>
           {catalogError && (
             <div className="catalog-error-banner" role="alert">
@@ -1744,6 +1710,14 @@ const Sell = () => {
             </>
           )}
 
+          <div className="sell-wizard-actions">
+            <button type="button" className="sell-wizard-next" onClick={advanceFromIdentity}>
+              המשך למחיר ומושבים
+            </button>
+          </div>
+          </div>
+
+          <div className={wizardStep === 2 ? '' : 'sell-wizard-hidden'} aria-hidden={wizardStep !== 2}>
           <div className="form-group">
             <label htmlFor="available_quantity">כמה כרטיסים ברצונך למכור? *</label>
             <select
@@ -1777,8 +1751,8 @@ const Sell = () => {
                   setError('');
                 }
               }}
-              required
               className="quantity-select"
+              required={wizardStep === 2}
             >
               {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => (
                 <option key={num} value={num}>
@@ -1804,7 +1778,7 @@ const Sell = () => {
                   value={formData.section}
                   onChange={handleChange}
                   className="section-dropdown premium-select"
-                  required
+                  required={wizardStep === 2}
                   disabled={!formData.event_id || sectionOptions.length === 0 || sectionsStillLoading}
                 >
                   <option value="">
@@ -1836,7 +1810,7 @@ const Sell = () => {
                   value={formData.row}
                   onChange={handleChange}
                   placeholder="לדוגמה: 5"
-                  required
+                  required={wizardStep === 2}
                   inputMode="numeric"
                   autoComplete="off"
                 />
@@ -1901,133 +1875,16 @@ const Sell = () => {
             )}
           </div>
 
-          {formData.available_quantity > 1 ? (
-          <div className="form-group pdf-upload-toggle-section">
-            <label>אופן העלאת קבצי הכרטיס</label>
-            <div className="upload-method-options" role="radiogroup" aria-label="אופן העלאת קבצי הכרטיס">
-              <div
-                role="radio"
-                aria-checked={uploadMethod === 'single_file'}
-                tabIndex={0}
-                className={`upload-method-option ${uploadMethod === 'single_file' ? 'selected' : ''}`}
-                onClick={() => {
-                  setUploadMethod('single_file');
-                  setFormData((prev) => ({
-                    ...prev,
-                    ticket_packages: (prev.ticket_packages || []).map((p) => ({ ...p, pdf_file: null })),
-                  }));
-                  setFieldErrors((prev) => {
-                    const next = { ...prev };
-                    delete next.upload_mode;
-                    delete next.upload_packages;
-                    return next;
-                  });
-                  setError('');
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    e.currentTarget.click();
-                  }
-                }}
-              >
-                <div className="option-content">
-                  <span className="option-title">קובץ PDF אחד המכיל את כל הכרטיסים (אנו נטפל בפיצול)</span>
-                  <span className="option-desc">העלה קובץ PDF עם עמוד נפרד לכל כרטיס – המערכת תפצל אוטומטית</span>
-                </div>
-              </div>
-              <div
-                role="radio"
-                aria-checked={uploadMethod === 'separate_files'}
-                tabIndex={0}
-                className={`upload-method-option ${uploadMethod === 'separate_files' ? 'selected' : ''}`}
-                onClick={() => {
-                  setUploadMethod('separate_files');
-                  setFormData((prev) => ({ ...prev, singleMultiPagePdf: null }));
-                  setFieldErrors((prev) => {
-                    const next = { ...prev };
-                    delete next.upload_mode;
-                    delete next.upload_single;
-                    return next;
-                  });
-                  setError('');
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    e.currentTarget.click();
-                  }
-                }}
-              >
-                <div className="option-content">
-                  <span className="option-title">קובץ נפרד לכל כרטיס (PDF או תמונה)</span>
-                  <span className="option-desc">העלה קובץ ייחודי (PDF, JPG, PNG) לכל כרטיס</span>
-                </div>
-              </div>
-            </div>
-            <div className="upload-constraints-card" role="note">
-              <strong>הנחיות לקובץ הכרטיס</strong>
-              <span>{TICKET_FILE_CONSTRAINTS_HE}</span>
-              <span>
-                לכמה כרטיסים בקובץ יחיד: העלו PDF מרובה עמודים, עמוד אחד לכל כרטיס. תמונות מתאימות רק במצב קובץ נפרד לכל כרטיס.
-              </span>
-            </div>
-            <SellFieldError message={fieldErrors.upload_mode} />
-          </div>
-          ) : (
-            <div className="upload-constraints-card upload-constraints-card--compact" role="note">
-              <span>{TICKET_FILE_CONSTRAINTS_HE}</span>
-            </div>
-          )}
-
-          {/* Single file dropzone (Option A) */}
-          {uploadMethod === 'single_file' && (
-            <div className="form-group single-pdf-dropzone">
-              <label htmlFor="single_multi_page_pdf">קובץ כרטיס (PDF או תמונה) *</label>
-              <div className="file-dropzone-box">
-                <input
-                  type="file"
-                  id="single_multi_page_pdf"
-                  name="single_multi_page_pdf"
-                  onChange={handleChange}
-                  accept={TICKET_FILE_INPUT_ACCEPT}
-                  required={wizardStep === 1}
-                />
-                {formData.singleMultiPagePdf ? (
-                  <>
-                    <TicketAttachmentPreview file={formData.singleMultiPagePdf} />
-                    <span className="uploaded-file-name">✓ {formData.singleMultiPagePdf.name}</span>
-                  </>
-                ) : (
-                  <span className="dropzone-placeholder">
-                    {formData.available_quantity > 1
-                      ? `העלה קובץ PDF עם ${formData.available_quantity} עמודים (עמוד לכל כרטיס)`
-                      : 'העלה קובץ PDF או תמונה (JPG, PNG) של הכרטיס'}
-                  </span>
-                )}
-              </div>
-              {formData.available_quantity > 1 && (
-                <small>המערכת תפצל רק קובצי PDF מרובי עמודים – כל עמוד יהפוך לכרטיס נפרד</small>
-              )}
-              <SellFieldError message={fieldErrors.upload_single} />
-            </div>
-          )}
-
-          {/* Ticket Cards - Seat only (+ PDF when separate_files) */}
           <div className="form-group ticket-packages-section">
             <label>כרטיסים למכירה *</label>
             <SellFieldError message={fieldErrors.packages} />
             <SellFieldError message={fieldErrors.seats} />
-            <SellFieldError message={fieldErrors.upload_packages} />
             {Array.from({ length: formData.available_quantity }, (_, index) => {
               const packageData = formData.ticket_packages[index] || { seat_number: '', pdf_file: null };
               return (
                 <div key={index} className="ticket-package-row">
                   <div className="package-header">
                     <h4>כרטיס {index + 1}</h4>
-                    {uploadMethod === 'separate_files' && packageData.pdf_file && (
-                      <span className="package-status">✓ קובץ הועלה</span>
-                    )}
                   </div>
                   <div className="package-content">
                     <div className="form-group">
@@ -2040,31 +1897,12 @@ const Sell = () => {
                         name={`seat_number_pkg_${index}`}
                         value={packageData.seat_number || ''}
                         onChange={handleChange}
-                        required
+                        required={wizardStep === 2}
                         placeholder="לדוגמה: 12"
                         inputMode="numeric"
                         autoComplete="off"
                       />
                     </div>
-                    {uploadMethod === 'separate_files' && (
-                      <div className="form-group">
-                        <label htmlFor={`pdf_file_package_${index}`}>קובץ כרטיס (PDF או תמונה) *</label>
-                        <input
-                          type="file"
-                          id={`pdf_file_package_${index}`}
-                          name={`pdf_file_package_${index}`}
-                          onChange={handleChange}
-                          accept={TICKET_FILE_INPUT_ACCEPT}
-                          required={uploadMethod === 'separate_files'}
-                        />
-                        {packageData.pdf_file && (
-                          <>
-                            <TicketAttachmentPreview file={packageData.pdf_file} />
-                            <span className="uploaded-file-name">✓ {packageData.pdf_file.name}</span>
-                          </>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </div>
               );
@@ -2168,14 +2006,6 @@ const Sell = () => {
             </div>
           )}
 
-          <div className="sell-wizard-actions">
-            <button type="button" className="sell-wizard-next" onClick={advanceToPricing}>
-              המשך למחיר ואישור
-            </button>
-          </div>
-          </div>
-
-          <div className={wizardStep === 2 ? '' : 'sell-wizard-hidden'} aria-hidden={wizardStep !== 2}>
           <div className="form-group sell-pricing-block">
             <label htmlFor="listing_price">מחיר מכירה לכרטיס בודד *</label>
             <input
@@ -2209,6 +2039,174 @@ const Sell = () => {
             ) : null}
           </div>
 
+          <div className="sell-wizard-actions">
+            <button
+              type="button"
+              className="sell-wizard-back"
+              onClick={() => {
+                setWizardStep(1);
+                scrollWizardTop();
+              }}
+            >
+              חזרה לאירוע
+            </button>
+            <button type="button" className="sell-wizard-next" onClick={advanceFromPricing}>
+              {user ? 'המשך להעלאת כרטיס' : 'המשך לחשבון'}
+            </button>
+          </div>
+          </div>
+
+          <div className={wizardStep === 4 ? '' : 'sell-wizard-hidden'} aria-hidden={wizardStep !== 4}>
+          {formData.available_quantity > 1 ? (
+          <div className="form-group pdf-upload-toggle-section">
+            <label>אופן העלאת קבצי הכרטיס</label>
+            <div className="upload-method-options" role="radiogroup" aria-label="אופן העלאת קבצי הכרטיס">
+              <div
+                role="radio"
+                aria-checked={uploadMethod === 'single_file'}
+                tabIndex={0}
+                className={`upload-method-option ${uploadMethod === 'single_file' ? 'selected' : ''}`}
+                onClick={() => {
+                  setUploadMethod('single_file');
+                  setFormData((prev) => ({
+                    ...prev,
+                    ticket_packages: (prev.ticket_packages || []).map((p) => ({ ...p, pdf_file: null })),
+                  }));
+                  setFieldErrors((prev) => {
+                    const next = { ...prev };
+                    delete next.upload_mode;
+                    delete next.upload_packages;
+                    return next;
+                  });
+                  setError('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}
+              >
+                <div className="option-content">
+                  <span className="option-title">קובץ PDF אחד המכיל את כל הכרטיסים (אנו נטפל בפיצול)</span>
+                  <span className="option-desc">העלה קובץ PDF עם עמוד נפרד לכל כרטיס – המערכת תפצל אוטומטית</span>
+                </div>
+              </div>
+              <div
+                role="radio"
+                aria-checked={uploadMethod === 'separate_files'}
+                tabIndex={0}
+                className={`upload-method-option ${uploadMethod === 'separate_files' ? 'selected' : ''}`}
+                onClick={() => {
+                  setUploadMethod('separate_files');
+                  setFormData((prev) => ({ ...prev, singleMultiPagePdf: null }));
+                  setFieldErrors((prev) => {
+                    const next = { ...prev };
+                    delete next.upload_mode;
+                    delete next.upload_single;
+                    return next;
+                  });
+                  setError('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}
+              >
+                <div className="option-content">
+                  <span className="option-title">קובץ נפרד לכל כרטיס (PDF או תמונה)</span>
+                  <span className="option-desc">העלה קובץ ייחודי (PDF, JPG, PNG) לכל כרטיס</span>
+                </div>
+              </div>
+            </div>
+            <div className="upload-constraints-card" role="note">
+              <strong>הנחיות לקובץ הכרטיס</strong>
+              <span>{TICKET_FILE_CONSTRAINTS_HE}</span>
+              <span>
+                לכמה כרטיסים בקובץ יחיד: העלו PDF מרובה עמודים, עמוד אחד לכל כרטיס. תמונות מתאימות רק במצב קובץ נפרד לכל כרטיס.
+              </span>
+            </div>
+            <SellFieldError message={fieldErrors.upload_mode} />
+          </div>
+          ) : (
+            <div className="upload-constraints-card upload-constraints-card--compact" role="note">
+              <span>{TICKET_FILE_CONSTRAINTS_HE}</span>
+            </div>
+          )}
+
+          {uploadMethod === 'single_file' && (
+            <div className="form-group single-pdf-dropzone">
+              <label htmlFor="single_multi_page_pdf">קובץ כרטיס (PDF או תמונה) *</label>
+              <div className="file-dropzone-box">
+                <input
+                  type="file"
+                  id="single_multi_page_pdf"
+                  name="single_multi_page_pdf"
+                  onChange={handleChange}
+                  accept={TICKET_FILE_INPUT_ACCEPT}
+                  required={wizardStep === 4}
+                />
+                {formData.singleMultiPagePdf ? (
+                  <>
+                    <TicketAttachmentPreview file={formData.singleMultiPagePdf} />
+                    <span className="uploaded-file-name">✓ {formData.singleMultiPagePdf.name}</span>
+                  </>
+                ) : (
+                  <span className="dropzone-placeholder">
+                    {formData.available_quantity > 1
+                      ? `העלה קובץ PDF עם ${formData.available_quantity} עמודים (עמוד לכל כרטיס)`
+                      : 'העלה קובץ PDF או תמונה (JPG, PNG) של הכרטיס'}
+                  </span>
+                )}
+              </div>
+              {formData.available_quantity > 1 && (
+                <small>המערכת תפצל רק קובצי PDF מרובי עמודים – כל עמוד יהפוך לכרטיס נפרד</small>
+              )}
+              <SellFieldError message={fieldErrors.upload_single} />
+            </div>
+          )}
+
+          {uploadMethod === 'separate_files' ? (
+            <div className="form-group ticket-packages-section">
+              <label>קבצי כרטיס *</label>
+              <SellFieldError message={fieldErrors.upload_packages} />
+              {Array.from({ length: formData.available_quantity }, (_, index) => {
+                const packageData = formData.ticket_packages[index] || { seat_number: '', pdf_file: null };
+                return (
+                  <div key={`pdf-${index}`} className="ticket-package-row">
+                    <div className="package-header">
+                      <h4>כרטיס {index + 1}{packageData.seat_number ? ` · כיסא ${packageData.seat_number}` : ''}</h4>
+                      {packageData.pdf_file && (
+                        <span className="package-status">✓ קובץ הועלה</span>
+                      )}
+                    </div>
+                    <div className="package-content">
+                      <div className="form-group">
+                        <label htmlFor={`pdf_file_package_${index}`}>קובץ כרטיס (PDF או תמונה) *</label>
+                        <input
+                          type="file"
+                          id={`pdf_file_package_${index}`}
+                          name={`pdf_file_package_${index}`}
+                          onChange={handleChange}
+                          accept={TICKET_FILE_INPUT_ACCEPT}
+                          required={wizardStep === 4 && uploadMethod === 'separate_files'}
+                        />
+                        {packageData.pdf_file && (
+                          <>
+                            <TicketAttachmentPreview file={packageData.pdf_file} />
+                            <span className="uploaded-file-name">✓ {packageData.pdf_file.name}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
           <div className="terms-checkbox-container sell-single-compliance">
             <label className="terms-checkbox-label">
               <input
@@ -2226,7 +2224,7 @@ const Sell = () => {
                   });
                 }}
                 className="terms-checkbox-input"
-                required={wizardStep === 2}
+                required={wizardStep === 4}
               />
               <span>
                 אני מאשר/ת את{' '}
@@ -2245,30 +2243,43 @@ const Sell = () => {
               type="button"
               className="sell-wizard-back"
               onClick={() => {
-                setWizardStep(1);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                setWizardStep(user ? 2 : 3);
+                scrollWizardTop();
               }}
             >
-              חזרה לפרטי הכרטיס
+              חזרה
             </button>
-          <button type="submit" disabled={loading || completionSaving} className="submit-button sell-submit--desktop-only">
-            {loading ? (
-              <>
-                מפרסם כרטיס… <span className="button-spinner" aria-hidden />
-              </>
-            ) : (
-              'הצע כרטיס למכירה'
-            )}
-          </button>
+            <button type="submit" disabled={loading || authSaving} className="submit-button sell-submit--desktop-only">
+              {loading ? (
+                <>
+                  מפרסם כרטיס… <span className="button-spinner" aria-hidden />
+                </>
+              ) : (
+                'הצע כרטיס למכירה'
+              )}
+            </button>
           </div>
           </div>
         </form>
 
-        {wizardStep === 2 ? <div className="sell-submit-sticky-wrap">
+        {wizardStep === 3 && !user ? (
+          <SellCompletionModal
+            saving={authSaving}
+            error={authError}
+            fieldErrors={authFieldErrors}
+            onBack={() => {
+              setWizardStep(2);
+              scrollWizardTop();
+            }}
+            onSubmit={handleAuthSubmit}
+          />
+        ) : null}
+
+        {wizardStep === 4 ? <div className="sell-submit-sticky-wrap">
           <button
             type="submit"
             form="sell-listing-form"
-            disabled={loading || completionSaving}
+            disabled={loading || authSaving}
             className="submit-button sell-submit-sticky-btn"
           >
             {loading ? (
@@ -2281,18 +2292,6 @@ const Sell = () => {
           </button>
         </div> : null}
       </div>
-
-      <SellCompletionModal
-        open={completionOpen}
-        needsAuth={!user}
-        saving={completionSaving}
-        error={completionError}
-        fieldErrors={completionFieldErrors}
-        onClose={() => {
-          if (!completionSaving) setCompletionOpen(false);
-        }}
-        onSubmit={handleCompletionSubmit}
-      />
       </TicketUploadWizard>
     </div>
   );

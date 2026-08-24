@@ -227,6 +227,42 @@
   text-decoration: underline;
 }
 
+.wallet-payout-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 1.5rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 14px;
+  background: #eff6ff;
+}
+
+.wallet-payout-banner p {
+  margin: 0;
+  flex: 1 1 16rem;
+  color: #1e3a8a;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.wallet-payout-banner-btn {
+  border: none;
+  border-radius: 10px;
+  background: #0045af;
+  color: #fff;
+  font-weight: 700;
+  min-height: 44px;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+}
+
+.wallet-payout-banner-btn:hover {
+  background: #003894;
+}
+
 @media (max-width: 640px) {
   .wallet-balance-grid {
     grid-template-columns: 1fr;

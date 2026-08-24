@@ -73,7 +73,19 @@ class User(AbstractUser):
     is_email_verified = models.BooleanField(default=True, help_text="Email verified via OTP (False when OTP enforcement is enabled)")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
+    @property
+    def has_payout_details(self) -> bool:
+        """True when bank or Bit payout can be executed; listing does not require this."""
+        method = (self.payout_method or 'bank').strip() or 'bank'
+        if method == 'bit':
+            return bool((self.bit_phone_number or '').strip())
+        return bool(
+            (self.account_holder_name or '').strip()
+            and (self.bank_name or '').strip()
+            and (self.account_number or '').strip()
+        )
+
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
     

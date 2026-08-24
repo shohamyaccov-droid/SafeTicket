@@ -322,6 +322,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     is_verified_seller = serializers.BooleanField(read_only=True)
     is_email_verified = serializers.BooleanField(read_only=True)
+    has_payout_details = serializers.BooleanField(read_only=True)
     profile_image = serializers.SerializerMethodField()
     full_name = serializers.SerializerMethodField()
 
@@ -344,13 +345,13 @@ class UserSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'username', 'email', 'role', 'first_name', 'last_name', 'full_name',
             'phone_number', 'payout_details',
-            'payout_method', 'bit_phone_number',
+            'payout_method', 'bit_phone_number', 'has_payout_details',
             'accepted_escrow_terms', 'profile_image', 'is_verified_seller', 'is_email_verified',
             'is_superuser', 'is_staff', 'date_joined',
         )
         read_only_fields = (
             'id', 'date_joined', 'is_verified_seller', 'is_email_verified', 'is_superuser', 'is_staff',
-            'accepted_escrow_terms', 'full_name',
+            'accepted_escrow_terms', 'full_name', 'has_payout_details',
         )
 
 

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { walletAPI } from '../services/api';
 import { formatAmountForCurrency } from '../utils/priceFormat';
 import { toastError } from '../utils/toast';
+import BecomeSellerModal from '../components/BecomeSellerModal';
 import './ProfileWallet.css';
 
 const STATUS_LABELS = {
@@ -15,10 +16,12 @@ const STATUS_LABELS = {
 
 // eslint-disable-next-line react/prop-types
 export default function ProfileWalletPage({ embedded = false }) {
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [transactions, setTransactions] = useState([]);
+  const [needsPayoutDetails, setNeedsPayoutDetails] = useState(false);
+  const [payoutModalOpen, setPayoutModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -27,6 +30,7 @@ export default function ProfileWalletPage({ embedded = false }) {
       const res = await walletAPI.getWallet();
       setSummary(res.data.summary || null);
       setTransactions(res.data.transactions || []);
+      setNeedsPayoutDetails(Boolean(res.data.needs_payout_details));
     } catch (err) {
       const msg =
         err?.response?.data?.error ||
@@ -71,6 +75,17 @@ export default function ProfileWalletPage({ embedded = false }) {
         <h1>הארנק שלי</h1>
         <p className="wallet-subtitle">מעקב אחר הכנסות ממכירות ויתרות בארנק</p>
       </div>
+
+      {!loading && needsPayoutDetails && transactions.length > 0 ? (
+        <div className="wallet-payout-banner" role="status">
+          <p>
+            הכרטיס נמכר — כדי לקבל את הכסף, הוסיפו פרטי בנק או ביט בפרופיל. זה לא נדרש בזמן פרסום המודעה.
+          </p>
+          <button type="button" className="wallet-payout-banner-btn" onClick={() => setPayoutModalOpen(true)}>
+            הוספת פרטי תשלום
+          </button>
+        </div>
+      ) : null}
 
       {loading ? (
         <div className="wallet-loading">טוען נתונים...</div>
@@ -147,6 +162,23 @@ export default function ProfileWalletPage({ embedded = false }) {
           </section>
         </>
       )}
+
+      <BecomeSellerModal
+        open={payoutModalOpen}
+        title="פרטי תשלום לקבלת הכסף"
+        lead="אחרי מכירה בלבד — מלאו חשבון בנק או ביט כדי שנוכל להעביר לכם את התשלום אחרי האירוע."
+        onClose={() => setPayoutModalOpen(false)}
+        onSuccess={async () => {
+          setPayoutModalOpen(false);
+          setNeedsPayoutDetails(false);
+          try {
+            await refreshProfile();
+          } catch {
+            /* wallet reload below is enough */
+          }
+          load();
+        }}
+      />
     </div>
   );
 }

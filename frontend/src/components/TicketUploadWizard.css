@@ -52,7 +52,7 @@
 
 .ticket-upload-wizard__steps {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.5rem;
   margin: 0;
   padding: 0;
@@ -105,6 +105,10 @@
   color: #15803d;
 }
 
+.ticket-upload-wizard__step.is-skipped {
+  opacity: 0.85;
+}
+
 .sell-wizard-hidden {
   display: none;
 }
@@ -153,7 +157,7 @@
     flex-direction: column;
     gap: 0.25rem;
     padding: 0.55rem 0.2rem;
-    font-size: 0.72rem;
+    font-size: 0.62rem;
     text-align: center;
   }
 

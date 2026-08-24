@@ -68,12 +68,15 @@ class UpgradeToSellerBankDetailsTests(TestCase):
         )
         self.assertEqual(res.status_code, 400)
 
-    def test_rejects_when_already_seller(self):
+    def test_already_seller_can_update_payout_details(self):
         self.buyer.role = 'seller'
         self.buyer.save(update_fields=['role'])
         self.client.force_authenticate(self.buyer)
         res = self.client.post(UPGRADE_URL, _valid_payload(), format='json')
-        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.status_code, 200, res.content)
+        self.buyer.refresh_from_db()
+        self.assertEqual(self.buyer.account_holder_name, 'ישראל ישראלי')
+        self.assertTrue(self.buyer.has_payout_details)
 
     def test_upgrade_with_bit_payout_method(self):
         self.client.force_authenticate(self.buyer)

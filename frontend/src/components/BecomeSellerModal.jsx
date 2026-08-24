@@ -16,7 +16,13 @@ const initialBank = {
  * Escrow-style seller onboarding (Viagogo-inspired): payout + mandatory escrow acceptance.
  * Bank details are sent as discrete fields; API stores JSON in payout_details.
  */
-export default function BecomeSellerModal({ open, onClose, onSuccess }) {
+export default function BecomeSellerModal({
+  open,
+  onClose,
+  onSuccess,
+  title = 'הפוך למוכר',
+  lead = 'התשלום לך ישוחרר רק לאחר קיום האירוע, בהתאם לתקנון האתר — כמו מודל נאמנות (escrow).',
+}) {
   const [phone, setPhone] = useState('');
   const [payoutMethod, setPayoutMethod] = useState('bank');
   const [bitPhoneConfirm, setBitPhoneConfirm] = useState('');
@@ -140,10 +146,8 @@ export default function BecomeSellerModal({ open, onClose, onSuccess }) {
         <button type="button" className="become-seller-close" onClick={onClose} aria-label="סגור">
           ×
         </button>
-        <h2 id="become-seller-title">הפוך למוכר</h2>
-        <p className="become-seller-lead">
-          התשלום לך ישוחרר רק לאחר קיום האירוע, בהתאם לתקנון האתר — כמו מודל נאמנות (escrow).
-        </p>
+        <h2 id="become-seller-title">{title}</h2>
+        <p className="become-seller-lead">{lead}</p>
         <form onSubmit={handleSubmit} className="become-seller-form">
           <label className="become-seller-label">
             מספר טלפון
