@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 import { useEffect } from 'react';
 import { trackGoogleAdsConversion } from '../utils/googleAdsConversions';
+import './ListingCreatedSuccessView.css';
 
 /**
  * Confirmation after a successful /sell/new listing.
@@ -20,34 +21,22 @@ export default function ListingCreatedSuccessView({
     <div className="sell-container sell-success-screen" data-testid="listing-success">
       <div className="listing-card success-message">
         <div className="success-icon-large" aria-hidden="true">✓</div>
-        <h2 className="success-title">Ticket Published Successfully!</h2>
-        <h3 className="success-subtitle-hebrew">הכרטיס פורסם בהצלחה!</h3>
-        {successWasIsrael ? (
-          <p className="success-text">
-            הכרטיס הועלה בהצלחה! הוא יפורסם באתר לאחר בדיקת צוות קצרה (עד 24 שעות).
-          </p>
-        ) : (
-          <p className="success-text">הכרטיס פורסם באתר וזמין למכירה.</p>
-        )}
-        <div className="success-payout-reassure" data-testid="listing-success-payout-copy">
-          <p className="success-text success-text--emphasis">
-            אנחנו לא גובים ממך כסף על הפרסום. אין חיוב על כרטיס אשראי ואין עמלת העלאה.
-          </p>
-          <p className="success-text">
-            כשהכרטיס יימכר, נעביר את התשלום לחשבון הבנק או ל-Bit שלך — אפשר למלא את הפרטים עכשיו,
-            או אחרי המכירה מארנק הפרופיל.
-          </p>
-        </div>
+        <h2 className="success-title">הכרטיס הועלה בהצלחה!</h2>
+        <p className="success-text listing-success-subtitle">
+          {successWasIsrael
+            ? 'הוא יפורסם באתר לאחר אישור קצר (עד 24 שעות).'
+            : 'הכרטיס פורסם באתר וזמין למכירה.'}
+        </p>
         <div className="success-cta-row">
-          <button type="button" className="success-home-button" onClick={onAddPayoutDetails}>
-            הוספת פרטי תשלום עכשיו
+          <button type="button" className="success-home-button listing-success-cta-primary" onClick={onAddPayoutDetails}>
+            💳 הזנת פרטי בנק או ביט לקבלת התשלום
           </button>
           <button
             type="button"
-            className="success-home-button success-home-button--secondary"
+            className="success-home-button success-home-button--secondary listing-success-cta-secondary"
             onClick={onDoLater}
           >
-            אעשה את זה אחר כך
+            אעשה זאת מאוחר יותר (חזרה לדף הבית)
           </button>
         </div>
       </div>

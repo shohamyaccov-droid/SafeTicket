@@ -1,0 +1,211 @@
+.admin-review-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 14000;
+  background: rgba(15, 23, 42, 0.62);
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.admin-review-modal {
+  width: min(1180px, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+  color: #0f172a;
+}
+
+.admin-review-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 1rem 1.2rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.admin-review-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.admin-review-event {
+  margin: 0.25rem 0 0;
+  color: #475569;
+  font-size: 0.92rem;
+}
+
+.admin-review-close {
+  border: none;
+  background: transparent;
+  font-size: 1.8rem;
+  line-height: 1;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.admin-review-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
+  min-height: 0;
+  flex: 1;
+}
+
+.admin-review-preview {
+  background: #0f172a;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-review-ticket-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.65rem 0.75rem;
+  background: #1e293b;
+}
+
+.admin-review-ticket-chip {
+  border: 1px solid #475569;
+  background: transparent;
+  color: #e2e8f0;
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.admin-review-ticket-chip--active {
+  background: #fff;
+  color: #0f172a;
+  border-color: #fff;
+}
+
+.admin-review-frame,
+.admin-review-image {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: #0f172a;
+  min-height: 380px;
+}
+
+.admin-review-image {
+  object-fit: contain;
+}
+
+.admin-review-missing {
+  color: #cbd5e1;
+  padding: 2rem;
+  text-align: center;
+}
+
+.admin-review-form {
+  padding: 1.1rem 1.2rem 1.3rem;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 0.85rem;
+}
+
+.admin-review-field {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.admin-review-field input,
+.admin-review-field select {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: #0f172a;
+  background: #fff;
+}
+
+.admin-review-field input:focus,
+.admin-review-field select:focus {
+  outline: 2px solid #0045af;
+  outline-offset: 1px;
+  border-color: #0045af;
+}
+
+.admin-review-bulk {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.75rem 0.85rem;
+  font-size: 0.88rem;
+}
+
+.admin-review-bulk-lead {
+  margin: 0 0 0.5rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.admin-review-bulk ul {
+  margin: 0;
+  padding: 0 1.1rem 0 0;
+}
+
+.admin-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+
+.admin-review-save,
+.admin-review-approve {
+  flex: 1;
+  min-width: 8rem;
+  border-radius: 10px;
+  font-weight: 800;
+  padding: 0.7rem 0.9rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.admin-review-save {
+  background: #fff;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+}
+
+.admin-review-approve {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  color: #fff;
+  border: none;
+}
+
+.admin-review-save:disabled,
+.admin-review-approve:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 860px) {
+  .admin-review-split {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-review-preview {
+    min-height: 280px;
+  }
+}

@@ -24,8 +24,9 @@ describe('ListingCreatedSuccessView Google Ads conversion', () => {
     );
 
     expect(screen.getByTestId('listing-success')).toBeInTheDocument();
-    expect(screen.getByText('הכרטיס פורסם בהצלחה!')).toBeInTheDocument();
-    expect(screen.getByTestId('listing-success-payout-copy')).toHaveTextContent('לא גובים');
+    expect(screen.getByRole('heading', { name: 'הכרטיס הועלה בהצלחה!' })).toBeInTheDocument();
+    expect(screen.queryByText(/Ticket Published Successfully/i)).not.toBeInTheDocument();
+    expect(screen.getByText('הכרטיס פורסם באתר וזמין למכירה.')).toBeInTheDocument();
     expect(window.gtag).toHaveBeenCalledTimes(1);
     expect(window.gtag).toHaveBeenCalledWith('event', 'conversion', {
       send_to: 'AW-18350905085/QVV8COaZ0tYcEP2tsq5E',
@@ -48,7 +49,7 @@ describe('ListingCreatedSuccessView Google Ads conversion', () => {
       />,
     );
     expect(window.gtag).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/בדיקת צוות/)).toBeInTheDocument();
+    expect(screen.getByText('הוא יפורסם באתר לאחר אישור קצר (עד 24 שעות).')).toBeInTheDocument();
   });
 
   it('skips gtag when it is not loaded', () => {
@@ -75,9 +76,9 @@ describe('ListingCreatedSuccessView Google Ads conversion', () => {
         onDoLater={onDoLater}
       />,
     );
-    await user.click(screen.getByRole('button', { name: 'הוספת פרטי תשלום עכשיו' }));
+    await user.click(screen.getByRole('button', { name: '💳 הזנת פרטי בנק או ביט לקבלת התשלום' }));
     expect(onAddPayoutDetails).toHaveBeenCalledTimes(1);
-    await user.click(screen.getByRole('button', { name: 'אעשה את זה אחר כך' }));
+    await user.click(screen.getByRole('button', { name: 'אעשה זאת מאוחר יותר (חזרה לדף הבית)' }));
     expect(onDoLater).toHaveBeenCalledTimes(1);
   });
 });

@@ -12,8 +12,8 @@ import {
   whatsAppChatUrl,
 } from '../utils/adminSellerContact';
 import Ga4AnalyticsDashboard from '../components/Ga4AnalyticsDashboard';
-import AdminQuickSeatEdit from '../components/AdminQuickSeatEdit';
-import { mergeSeatingDraft } from '../utils/adminTicketSeating';
+import AdminReviewModal from '../components/AdminReviewModal';
+import { listingGroupTickets, mergeSeatingDraft, seatingPayload } from '../utils/adminTicketSeating';
 import './AdminDashboard.css';
 
 function AdminSellerContactCell({ ticket }) {
@@ -145,6 +145,7 @@ export default function AdminDashboard() {
   const [pendingLoading, setPendingLoading] = useState(false);
   const [pendingActionId, setPendingActionId] = useState(null);
   const [seatDrafts, setSeatDrafts] = useState({});
+  const [reviewTicketId, setReviewTicketId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -191,28 +192,47 @@ export default function AdminDashboard() {
   }, []);
 
   const seatingFor = (ticket) => mergeSeatingDraft(ticket, seatDrafts);
+  const reviewTicket = pendingTickets.find((row) => row.id === reviewTicketId) || null;
 
-  const handleSaveSeating = async (ticket) => {
-    const seating = seatingFor(ticket);
+  const mergeSavedTickets = (savedList, fallbackValues, anchorId) => {
+    const byId = new Map((savedList || []).map((row) => [row.id, row]));
+    setPendingTickets((prev) =>
+      prev.map((row) => {
+        const saved = byId.get(row.id);
+        if (!saved && row.id !== anchorId) return row;
+        const source = saved || fallbackValues;
+        return {
+          ...row,
+          ...(saved || {}),
+          section: source?.section ?? fallbackValues.section,
+          row: source?.row ?? fallbackValues.row,
+          seat_number: source?.seat_number ?? source?.seat ?? fallbackValues.seat,
+          seat_numbers: source?.seat_numbers ?? source?.seat ?? fallbackValues.seat,
+        };
+      }),
+    );
+    setSeatDrafts((prev) => {
+      const nextDrafts = { ...prev };
+      (savedList || []).forEach((row) => {
+        nextDrafts[row.id] = {
+          section: row.section ?? fallbackValues.section,
+          row: row.row ?? fallbackValues.row,
+          seat: row.seat_number ?? row.seat_numbers ?? fallbackValues.seat,
+        };
+      });
+      if (!byId.has(anchorId)) nextDrafts[anchorId] = fallbackValues;
+      return nextDrafts;
+    });
+  };
+
+  const handleReviewSave = async (ticket, values, opts = {}) => {
     setPendingActionId(ticket.id);
     try {
       await ensureCsrfToken();
-      const res = await adminAPI.updateTicketSeating(ticket.id, seating);
-      const saved = res.data?.ticket;
-      toastSuccess('גוש ושורה נשמרו');
-      setPendingTickets((prev) =>
-        prev.map((row) =>
-          row.id === ticket.id
-            ? {
-                ...row,
-                ...(saved || {}),
-                section: saved?.section ?? seating.section,
-                row: saved?.row ?? seating.row,
-              }
-            : row,
-        ),
-      );
-      setSeatDrafts((prev) => ({ ...prev, [ticket.id]: seating }));
+      const payload = seatingPayload(values, opts);
+      const res = await adminAPI.updateTicketSeating(ticket.id, payload);
+      mergeSavedTickets(res.data?.tickets || [res.data?.ticket], values, ticket.id);
+      toastSuccess(opts.applyToGroup ? 'פרטי המושב נשמרו לכל הכרטיסים בקבוצה' : 'פרטי המושב נשמרו');
     } catch (err) {
       toastError(err?.response?.data?.error || 'שמירת מושב נכשלה');
     } finally {
@@ -220,13 +240,15 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleApprovePending = async (ticket) => {
-    const seating = seatingFor(ticket);
+  const handleReviewApprove = async (ticket, values, opts = {}) => {
     setPendingActionId(ticket.id);
     try {
       await ensureCsrfToken();
-      await adminAPI.approveTicket(ticket.id, seating);
-      toastSuccess('הכרטיס שוחרר לאתר');
+      const payload = seatingPayload(values, opts);
+      await adminAPI.approveTicket(ticket.id, payload);
+      const groupSize = listingGroupTickets(pendingTickets, ticket).length;
+      toastSuccess(groupSize > 1 ? 'הכרטיסים בקבוצה שוחררו לאתר' : 'הכרטיס שוחרר לאתר');
+      setReviewTicketId(null);
       await loadPending();
       await load();
     } catch (err) {
@@ -387,20 +409,22 @@ export default function AdminDashboard() {
                         <AdminSellerContactCell ticket={t} />
                       </td>
                       <td data-label="פרטי מושב">
-                        <AdminQuickSeatEdit
-                          values={seatingFor(t)}
-                          disabled={pendingActionId === t.id}
-                          onChange={(next) =>
-                            setSeatDrafts((prev) => ({ ...prev, [t.id]: next }))
-                          }
-                        />
-                        {t.seat_number || t.seat_numbers ? (
-                          <div className="admin-seat-details">
-                            <span>
-                              <strong>כיסא:</strong> {t.seat_number || t.seat_numbers}
-                            </span>
-                          </div>
-                        ) : null}
+                        {(() => {
+                          const seating = seatingFor(t);
+                          return (
+                            <div className="admin-seat-details">
+                              <span>
+                                <strong>גוש:</strong> {seating.section || '—'}
+                              </span>
+                              <span>
+                                <strong>שורה:</strong> {seating.row || '—'}
+                              </span>
+                              <span>
+                                <strong>כיסא:</strong> {seating.seat || '—'}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td data-label="פנים">
                         {(() => {
@@ -426,41 +450,13 @@ export default function AdminDashboard() {
                       </td>
                       <td data-label="פעולות">
                         <div className="admin-pending-actions">
-                          {t.ticket_file_url ? (
-                            <a
-                              className="admin-btn-view-file"
-                              href={t.ticket_file_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              צפה ב-PDF
-                            </a>
-                          ) : null}
-                          {t.receipt_file_url ? (
-                            <a
-                              className="admin-btn-view-file admin-btn-view-file--receipt"
-                              href={t.receipt_file_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              צפה בקבלה
-                            </a>
-                          ) : null}
                           <button
                             type="button"
-                            className="admin-btn-save-seating"
+                            className="admin-btn-review-ticket"
                             disabled={pendingActionId === t.id}
-                            onClick={() => handleSaveSeating(t)}
+                            onClick={() => setReviewTicketId(t.id)}
                           >
-                            {pendingActionId === t.id ? 'שומר…' : 'שמור'}
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-btn-approve-ticket"
-                            disabled={pendingActionId === t.id}
-                            onClick={() => handleApprovePending(t)}
-                          >
-                            שחרר לאתר
+                            בדיקה ואישור
                           </button>
                           <button
                             type="button"
@@ -495,6 +491,16 @@ export default function AdminDashboard() {
               ) : null}
             </div>
           )}
+          {reviewTicket ? (
+            <AdminReviewModal
+              ticket={reviewTicket}
+              tickets={pendingTickets}
+              busy={pendingActionId === reviewTicket.id}
+              onClose={() => setReviewTicketId(null)}
+              onSave={handleReviewSave}
+              onApprove={handleReviewApprove}
+            />
+          ) : null}
         </section>
       ) : mainTab === 'analytics' ? null : loading && !stats ? (
         <div className="admin-dash-loading">טוען נתונים…</div>

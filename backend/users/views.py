@@ -373,6 +373,12 @@ from .models import (
     TicketAlert,
     VenueSection,
 )
+from .admin_ticket_seating import (
+    apply_admin_seating_to_ticket_or_group,
+    optional_seating_from_request,
+    request_flag,
+    ticket_file_kind,
+)
 from .schema_compat import event_queryset_defer_rollout_columns, ticket_queryset_defer_event_rollout_columns
 from .shabbat import shabbat_forbidden_response
 from .pricing import (
@@ -4588,55 +4594,7 @@ def _admin_staff_or_superuser(request):
 
 
 def _optional_seating_from_request(request):
-    data = getattr(request, 'data', None) or {}
-    payload = {}
-    if 'section' in data:
-        raw = data.get('section')
-        payload['section'] = '' if raw is None else str(raw).strip()
-    if 'row' in data:
-        raw = data.get('row')
-        payload['row'] = '' if raw is None else str(raw).strip()
-    return payload
-
-
-def _match_venue_section_for_ticket(ticket, section_text):
-    event = getattr(ticket, 'event', None)
-    venue_id = getattr(event, 'venue_place_id', None) if event is not None else None
-    if not venue_id or not section_text:
-        return None
-    qs = VenueSection.objects.filter(venue_id=venue_id)
-    matched = qs.filter(name__iexact=section_text).first()
-    if matched:
-        return matched
-    stripped = section_text
-    for prefix in ('גוש ', 'גוש', 'Section ', 'Block '):
-        if stripped.lower().startswith(prefix.lower()):
-            stripped = stripped[len(prefix):].strip()
-            break
-    if stripped and stripped != section_text:
-        return qs.filter(name__iexact=stripped).first()
-    return None
-
-
-def apply_admin_ticket_seating(ticket, *, section=None, row=None):
-    """Write free-text גוש/שורה from the admin review queue onto a ticket."""
-    changed = []
-    if section is not None:
-        matched = _match_venue_section_for_ticket(ticket, section) if section else None
-        if matched:
-            ticket.venue_section = matched
-            ticket.custom_section_text = ''
-            ticket.section_legacy = (matched.name or '')[:100]
-        else:
-            ticket.venue_section = None
-            ticket.custom_section_text = (section or '')[:100]
-            ticket.section_legacy = (section or '')[:100]
-        changed.extend(['venue_section', 'custom_section_text', 'section_legacy'])
-    if row is not None:
-        ticket.row = row
-        ticket.row_number = row
-        changed.extend(['row', 'row_number'])
-    return changed
+    return optional_seating_from_request(request)
 
 
 @api_view(['GET'])
@@ -4929,6 +4887,7 @@ def admin_pending_tickets(request):
     pending_tickets = (
         Ticket.objects.filter(status='pending_approval')
         .select_related('seller', 'event', 'event__artist', 'event__venue_place', 'venue_section')
+        .prefetch_related('event__venue_place__sections')
         .order_by('-created_at')
     )
     serializer = TicketSerializer(pending_tickets, many=True, context={'request': request})
@@ -4951,6 +4910,7 @@ def admin_pending_tickets(request):
         for ticket_data, ticket in zip(tickets, pending_tickets):
             ticket_data['ticket_file_url'] = get_ticket_pdf_admin_url(ticket)
             ticket_data['receipt_file_url'] = get_ticket_receipt_admin_url(ticket)
+            ticket_data['ticket_file_kind'] = ticket_file_kind(ticket)
 
     return Response({
         'count': pending_tickets.count(),
@@ -4982,26 +4942,43 @@ def admin_approve_ticket(request, ticket_id):
             )
 
         seating = _optional_seating_from_request(request)
-        seating_fields = apply_admin_ticket_seating(ticket, **seating)
-
-        # Approve the ticket: change status to 'active'
-        ticket.status = 'active'
-        ticket.verification_status = 'מאומת'
-        ticket.save(
-            update_fields=['status', 'verification_status', 'updated_at', *seating_fields]
+        apply_to_group = request_flag(request.data, 'apply_to_group', default=True)
+        approve_group = request_flag(request.data, 'approve_group', default=False)
+        updates = apply_admin_seating_to_ticket_or_group(
+            ticket,
+            seating,
+            apply_to_group=apply_to_group,
         )
+
+        approved_tickets = []
+        for member, seating_fields in updates:
+            should_approve = member.pk == ticket.pk or (
+                approve_group and member.status == 'pending_approval'
+            )
+            if should_approve and member.status == 'pending_approval':
+                member.status = 'active'
+                member.verification_status = 'מאומת'
+                member.save(
+                    update_fields=['status', 'verification_status', 'updated_at', *seating_fields]
+                )
+                approved_tickets.append(member)
+            elif seating_fields:
+                member.save(update_fields=[*seating_fields, 'updated_at'])
 
         try:
             from .notifications import notify_ticket_approved
 
-            transaction.on_commit(lambda: notify_ticket_approved(ticket))
+            for approved in approved_tickets:
+                transaction.on_commit(lambda t=approved: notify_ticket_approved(t))
         except Exception:
             logger.exception('admin_approve_ticket: approval email dispatch failed ticket_id=%s', ticket_id)
-        
+
+        ticket.refresh_from_db()
         serializer = TicketSerializer(ticket, context={'request': request})
         return Response({
             'message': 'Ticket approved successfully',
-            'ticket': serializer.data
+            'ticket': serializer.data,
+            'tickets': TicketSerializer(approved_tickets or [ticket], many=True, context={'request': request}).data,
         }, status=status.HTTP_200_OK)
         
     except Ticket.DoesNotExist:
@@ -5015,7 +4992,7 @@ def admin_approve_ticket(request, ticket_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def admin_update_ticket_seating(request, ticket_id):
-    """Save גוש/שורה from the admin review queue without changing ticket status."""
+    """Save גוש/שורה/כיסא from the admin review queue without changing ticket status."""
     if not _admin_staff_or_superuser(request):
         return Response(
             {'error': 'Permission denied. Admin access required.'},
@@ -5025,7 +5002,7 @@ def admin_update_ticket_seating(request, ticket_id):
     seating = _optional_seating_from_request(request)
     if not seating:
         return Response(
-            {'error': 'Provide section and/or row.'},
+            {'error': 'Provide section, row, and/or seat.'},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -5043,13 +5020,25 @@ def admin_update_ticket_seating(request, ticket_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    seating_fields = apply_admin_ticket_seating(ticket, **seating)
-    ticket.save(update_fields=[*seating_fields, 'updated_at'])
+    apply_to_group = request_flag(request.data, 'apply_to_group', default=True)
+    updates = apply_admin_seating_to_ticket_or_group(
+        ticket,
+        seating,
+        apply_to_group=apply_to_group,
+        allowed_statuses=allowed,
+    )
+    saved = []
+    for member, seating_fields in updates:
+        if seating_fields:
+            member.save(update_fields=[*seating_fields, 'updated_at'])
+        saved.append(member)
+    ticket.refresh_from_db()
     serializer = TicketSerializer(ticket, context={'request': request})
     return Response(
         {
             'message': 'Ticket seating updated',
             'ticket': serializer.data,
+            'tickets': TicketSerializer(saved, many=True, context={'request': request}).data,
         },
         status=status.HTTP_200_OK,
     )
