@@ -576,6 +576,7 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL
 # Auth is Application Default Credentials only (gcloud auth application-default login).
 # This is NOT the Measurement ID (G-XXXXXXXX).
 GA4_PROPERTY_ID = (os.environ.get('GA4_PROPERTY_ID') or '').strip()
+GOOGLE_CLOUD_PROJECT = (os.environ.get('GOOGLE_CLOUD_PROJECT') or '').strip()
 
 
 def _fx_rate_to_ils(env_key: str, default: str) -> Decimal:

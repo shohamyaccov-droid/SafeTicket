@@ -899,6 +899,8 @@ export const adminAPI = {
   getTransactions: (params) => api.get('/users/admin/transactions/', { params }),
   getOffersDashboard: (params) => api.get('/users/admin/offers/', { params }),
   getGodModeDashboard: (params) => api.get('/users/admin/god-mode/', { params }),
+  getGa4Overview: () => api.get('/users/admin/ga4-overview/'),
+  getGa4Behavior: () => api.get('/users/admin/ga4-behavior/'),
   getPayouts: (params) => api.get('/users/admin/payouts/', { params }),
   markPayoutPaid: async (payoutId) => {
     await ensureCsrfToken();

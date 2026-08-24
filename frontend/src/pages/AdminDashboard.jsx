@@ -11,6 +11,7 @@ import {
   telHref,
   whatsAppChatUrl,
 } from '../utils/adminSellerContact';
+import Ga4AnalyticsDashboard from '../components/Ga4AnalyticsDashboard';
 import './AdminDashboard.css';
 
 function AdminSellerContactCell({ ticket }) {
@@ -274,6 +275,13 @@ export default function AdminDashboard() {
             </button>
             <button
               type="button"
+              className={`admin-dash-tab ${mainTab === 'analytics' ? 'admin-dash-tab--active' : ''}`}
+              onClick={() => setMainTab('analytics')}
+            >
+              אנליטיקס
+            </button>
+            <button
+              type="button"
               className={`admin-dash-tab ${mainTab === 'pending' ? 'admin-dash-tab--active' : ''}`}
               onClick={() => setMainTab('pending')}
             >
@@ -300,6 +308,8 @@ export default function AdminDashboard() {
           </div>
         </div>
       </header>
+
+      {mainTab === 'analytics' ? <Ga4AnalyticsDashboard /> : null}
 
       {mainTab === 'pending' ? (
         <section className="admin-pending-section" aria-label="כרטיסים ממתינים לאימות">
@@ -442,7 +452,7 @@ export default function AdminDashboard() {
             </div>
           )}
         </section>
-      ) : loading && !stats ? (
+      ) : mainTab === 'analytics' ? null : loading && !stats ? (
         <div className="admin-dash-loading">טוען נתונים…</div>
       ) : (
         <>

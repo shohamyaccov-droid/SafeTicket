@@ -7,7 +7,9 @@ from pathlib import Path
 try:
     from dotenv import load_dotenv
 
-    load_dotenv(Path(__file__).resolve().parent.parent / '.env')
+    _backend_dir = Path(__file__).resolve().parent
+    load_dotenv(_backend_dir.parent / '.env')
+    load_dotenv(_backend_dir / '.env')
 except ImportError:
     pass
 

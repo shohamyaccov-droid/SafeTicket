@@ -1,0 +1,157 @@
+.ga4-dash {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.ga4-dash-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.ga4-dash-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.2rem;
+}
+
+.ga4-dash-sub {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.ga4-dash-status {
+  padding: 1.5rem;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.ga4-dash-status--error {
+  color: #9a3412;
+}
+
+.ga4-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.ga4-stat-card,
+.ga4-panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.ga4-stat-card h3,
+.ga4-panel h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.ga4-stat-value {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.ga4-stat-hint,
+.ga4-panel-note {
+  margin: 0.45rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.ga4-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.75rem;
+}
+
+.ga4-funnel-list {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.ga4-funnel-step {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.65rem 0.75rem;
+  background: #f8fafc;
+}
+
+.ga4-funnel-step-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.ga4-funnel-label {
+  font-weight: 700;
+}
+
+.ga4-funnel-path {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.ga4-funnel-count {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1.15rem;
+}
+
+.ga4-funnel-drop {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: #9a3412;
+}
+
+.ga4-pages-table td[dir='ltr'] {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.82rem;
+}
+
+.ga4-kind {
+  display: inline-block;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.ga4-kind--event {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.ga4-kind--artist {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.ga4-kind--ticket {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.ga4-kind--event_group {
+  background: #ffedd5;
+  color: #9a3412;
+}
