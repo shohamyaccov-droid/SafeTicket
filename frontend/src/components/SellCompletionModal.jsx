@@ -66,7 +66,7 @@ export default function SellCompletionModal({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (saving) return;
-    onSubmit({ authMode, authForm });
+    onSubmit({ authMode: authMode, authForm: authForm });
   };
 
   return (
@@ -75,7 +75,7 @@ export default function SellCompletionModal({
         {authMode === 'register' ? 'יצירת חשבון מהירה' : 'התחברות'}
       </h2>
       <p className="sell-completion-lead">
-        הפרטים שהזנת נשמרו. רק שם, אימייל וסיסמה — פרטי התשלום יגיעו אחרי מכירה.
+        רק שם, אימייל וסיסמה. הוספת חשבון בנק או ביט תתבצע לאחר העלאת הכרטיס.
       </p>
 
       {error ? (

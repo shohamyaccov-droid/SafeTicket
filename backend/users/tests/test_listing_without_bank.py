@@ -13,9 +13,9 @@ User = get_user_model()
 UPLOAD_URL = '/api/users/tickets/'
 
 
-def _pdf_file():
+def _pdf_file(name='listing-ticket.pdf'):
     return SimpleUploadedFile(
-        'listing-ticket.pdf',
+        name,
         b'%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n',
         content_type='application/pdf',
     )
@@ -63,3 +63,25 @@ class ListingWithoutBankDetailsTests(TestCase):
         wallet = self.client.get('/api/users/me/wallet/')
         self.assertEqual(wallet.status_code, 200)
         self.assertTrue(wallet.data['needs_payout_details'])
+
+    def test_ga_listing_without_section_or_row_for_multiple_tickets(self):
+        """Standing / grass listings: quantity + price + files, no גוש/שורה."""
+        self.client.force_authenticate(self.buyer)
+        payload = {
+            'event_id': str(self.event.id),
+            'original_price': '90.00',
+            'listing_price': '90',
+            'available_quantity': '2',
+            'pdf_files_count': '2',
+            'il_legal_declaration': 'true',
+            'pdf_file_0': _pdf_file('ga-a.pdf'),
+            'pdf_file_1': _pdf_file('ga-b.pdf'),
+        }
+        res = self.client.post(UPLOAD_URL, payload, format='multipart')
+        self.assertEqual(res.status_code, 201, res.content)
+        tickets = Ticket.objects.filter(seller=self.buyer).order_by('id')
+        self.assertEqual(tickets.count(), 2)
+        for ticket in tickets:
+            self.assertFalse((ticket.row or '').strip())
+            self.assertFalse((ticket.row_number or '').strip())
+            self.assertFalse((ticket.seat_number or '').strip())

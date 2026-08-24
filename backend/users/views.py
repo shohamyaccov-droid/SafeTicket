@@ -3318,58 +3318,29 @@ class TicketViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Validate seat data when quantity > 1
-        # For single tickets (quantity = 1), row/seat are optional
-        # For multiple tickets (quantity > 1), row/seat are REQUIRED for each ticket
+        # Seating is optional (standing / grass / GA). Quantity + price + files are enough.
+        # If the seller *does* fill row+seat, combinations must stay unique.
         seat_data_list = []
-        if available_quantity > 1:
-            # Multiple tickets: row and seat are REQUIRED
-            for i in range(available_quantity):
-                row_key = f'row_number_{i}'
-                seat_key = f'seat_number_{i}'
-                row_number = request.data.get(row_key, '').strip()
-                seat_number = request.data.get(seat_key, '').strip()
-                
-                if not row_number or not seat_number:
-                    return Response(
-                        {
-                            'error': (
-                                f'כל כרטיס חייב לכלול שורה, כיסא וקובץ כרטיס ייחודי. '
-                                f'חסרים נתונים עבור כרטיס {i + 1}.'
-                            )
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-                
-                seat_data_list.append({
-                    'row_number': row_number,
-                    'seat_number': seat_number
-                })
-            
-            # Validate all seats are unique
-            seat_combinations = [(s['row_number'], s['seat_number']) for s in seat_data_list]
-            if len(seat_combinations) != len(set(seat_combinations)):
-                return Response(
-                    {'error': 'כל כרטיס חייב להיות עם שורה וכיסא ייחודיים. לא ניתן להשתמש באותו שורה וכיסא פעמיים.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        else:
-            # Single ticket: row and seat are optional, but if provided, store them
-            row_key = f'row_number_0'
-            seat_key = f'seat_number_0'
-            row_number = request.data.get(row_key, '').strip()
-            seat_number = request.data.get(seat_key, '').strip()
-            if row_number and seat_number:
-                seat_data_list.append({
-                    'row_number': row_number,
-                    'seat_number': seat_number
-                })
-            else:
-                # No row/seat provided for single ticket - that's OK
-                seat_data_list.append({
-                    'row_number': '',
-                    'seat_number': ''
-                })
+        for i in range(available_quantity):
+            row_key = f'row_number_{i}'
+            seat_key = f'seat_number_{i}'
+            row_number = (request.data.get(row_key) or request.data.get('row') or '').strip()
+            seat_number = (request.data.get(seat_key) or '').strip()
+            seat_data_list.append({
+                'row_number': row_number,
+                'seat_number': seat_number,
+            })
+
+        filled_seats = [
+            (s['row_number'], s['seat_number'])
+            for s in seat_data_list
+            if s['row_number'] or s['seat_number']
+        ]
+        if filled_seats and len(filled_seats) != len(set(filled_seats)):
+            return Response(
+                {'error': 'כל כרטיס חייב להיות עם שורה וכיסא ייחודיים. לא ניתן להשתמש באותו שורה וכיסא פעמיים.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         
         # Create base data dict (without pdf_file / receipt bytes — receipt injected per row below)
         base_data = {}

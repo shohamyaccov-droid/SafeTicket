@@ -1021,7 +1021,10 @@ const Sell = () => {
   };
 
   const handleAuthSubmit = async (payload) => {
-    const fe = validateAuthPayload(payload);
+    const authMode = payload.authMode ?? payload.authMode;
+    const authForm = payload.authForm ?? payload.authForm;
+    const normalized = { authMode, authForm };
+    const fe = validateAuthPayload(normalized);
     if (Object.keys(fe).length) {
       setAuthFieldErrors(fe);
       return;
@@ -1030,7 +1033,6 @@ const Sell = () => {
     setAuthError('');
     setAuthSaving(true);
     try {
-      const { authMode, authForm } = payload;
       if (authMode === 'register') {
         const reg = await register({
           username: authForm.email.trim(),
@@ -1234,24 +1236,7 @@ const Sell = () => {
     }
 
     const secValStrict = (formData.section || '').trim();
-    if (!secValStrict) {
-      setFieldErrors({ section: 'נא לבחור גוש מהרשימה.' });
-      setLoading(false);
-      return;
-    }
-    if (!(formData.row || '').trim()) {
-      setFieldErrors({ row: 'נא להזין שורה.' });
-      setLoading(false);
-      return;
-    }
-    const incompleteSeats = formData.ticket_packages.some(
-      (pkg) => !pkg || !(pkg.seat_number || '').trim()
-    );
-    if (incompleteSeats) {
-      setFieldErrors({ seats: 'נא להזין מספר כיסא לכל כרטיס.' });
-      setLoading(false);
-      return;
-    }
+    void secValStrict;
 
     const useSingleFile = uploadMethod === 'single_file' && formData.singleMultiPagePdf && requiredCount >= 1;
     const useSeparateFiles = uploadMethod === 'separate_files';
@@ -1373,12 +1358,6 @@ const Sell = () => {
     if (!formData.ticket_packages || formData.ticket_packages.length !== requiredCount) {
       fe.packages = `אנא השלם את כל פרטי הכרטיסים (${requiredCount} כרטיסים נדרשים).`;
     }
-    if (!(formData.section || '').trim()) fe.section = 'נא לבחור גוש מהרשימה.';
-    if (!(formData.row || '').trim()) fe.row = 'נא להזין שורה.';
-    const incompleteSeats = (formData.ticket_packages || []).some(
-      (pkg) => !pkg || !(pkg.seat_number || '').trim()
-    );
-    if (incompleteSeats) fe.seats = 'נא להזין מספר כיסא לכל כרטיס.';
     if (formData.listing_price === '' || formData.listing_price == null) {
       fe.listing_price = 'נא להזין מחיר מכירה.';
     } else {
@@ -1431,7 +1410,18 @@ const Sell = () => {
           </div>
         </div>
       )}
-      <TicketUploadWizard step={wizardStep} skipAuth={skipAuth}>
+      <TicketUploadWizard
+        step={wizardStep}
+        skipAuth={skipAuth}
+        onBack={(next) => {
+          setWizardStep(next);
+          scrollWizardTop();
+        }}
+        onGoToStep={(next) => {
+          setWizardStep(next);
+          scrollWizardTop();
+        }}
+      >
       <div className="listing-card sell-form-compact sell-listing-card--mobile-cta">
         <aside className="sell-trust-strip" aria-label="יתרונות למוכרים">
           <ul className="sell-trust-strip__list">
@@ -1743,18 +1733,18 @@ const Sell = () => {
           <div className="seating-and-seats-compact">
             <h3 className="seating-section-title">פרטי ישיבה ומושבים</h3>
             <small className="section-hint">
-              גוש, שורה ומספר כיסא נדרשים לכל רשימה. גוש ושורה משותפים לכל הכרטיסים; כיסא לכל כרטיס למטה. ניתן למלא רצף מושבים אוטומטית כשמוכרים יותר מכרטיס אחד.
+              גוש, שורה וכיסא הם אופציונליים — באזורים כמו דשא או עמידה אפשר להמשיך רק עם כמות ומחיר.
+              אם יש מושבים ממוספרים, גוש ושורה משותפים לכל הכרטיסים; כיסא לכל כרטיס למטה.
             </small>
             <div className="form-row seating-row-compact">
               <div className="form-group">
-                <label htmlFor="section">גוש *</label>
+                <label htmlFor="section">גוש (אופציונלי)</label>
                 <select
                   id="section"
                   name="section"
                   value={formData.section}
                   onChange={handleChange}
                   className="section-dropdown premium-select"
-                  required={wizardStep === 2}
                   disabled={!formData.event_id || sectionOptions.length === 0 || sectionsStillLoading}
                 >
                   <option value="">
@@ -1778,7 +1768,7 @@ const Sell = () => {
                 <SellFieldError message={fieldErrors.section} />
               </div>
               <div className="form-group">
-                <label htmlFor="row">שורה *</label>
+                <label htmlFor="row">שורה (אופציונלי)</label>
                 <input
                   type="text"
                   id="row"
@@ -1786,7 +1776,6 @@ const Sell = () => {
                   value={formData.row}
                   onChange={handleChange}
                   placeholder="לדוגמה: 5"
-                  required={wizardStep === 2}
                   inputMode="numeric"
                   autoComplete="off"
                 />
@@ -1865,7 +1854,7 @@ const Sell = () => {
                   <div className="package-content">
                     <div className="form-group">
                       <label htmlFor={`seat_number_pkg_${index}`}>
-                        כיסא * {formData.row && <span className="package-context">(שורה {formData.row})</span>}
+                        כיסא (אופציונלי) {formData.row && <span className="package-context">(שורה {formData.row})</span>}
                       </label>
                       <input
                         type="text"
@@ -1873,7 +1862,6 @@ const Sell = () => {
                         name={`seat_number_pkg_${index}`}
                         value={packageData.seat_number || ''}
                         onChange={handleChange}
-                        required={wizardStep === 2}
                         placeholder="לדוגמה: 12"
                         inputMode="numeric"
                         autoComplete="off"
@@ -2238,17 +2226,19 @@ const Sell = () => {
           </div>
         </form>
 
-        {wizardStep === 3 && !user ? (
-          <SellCompletionModal
-            saving={authSaving}
-            error={authError}
-            fieldErrors={authFieldErrors}
-            onBack={() => {
-              setWizardStep(2);
-              scrollWizardTop();
-            }}
-            onSubmit={handleAuthSubmit}
-          />
+        {!user ? (
+          <div className={wizardStep === 3 ? '' : 'sell-wizard-hidden'} aria-hidden={wizardStep !== 3}>
+            <SellCompletionModal
+              saving={authSaving}
+              error={authError}
+              fieldErrors={authFieldErrors}
+              onBack={() => {
+                setWizardStep(2);
+                scrollWizardTop();
+              }}
+              onSubmit={handleAuthSubmit}
+            />
+          </div>
         ) : null}
 
         {wizardStep === 4 ? <div className="sell-submit-sticky-wrap">

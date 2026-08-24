@@ -19,11 +19,15 @@
   align-items: center;
   gap: 0.25rem;
   padding: 0.35rem 0.15rem;
+  border: none;
+  background: transparent;
   color: #425466;
   font-size: 0.9rem;
   font-weight: 700;
+  font-family: inherit;
   text-decoration: none;
   border-radius: 6px;
+  cursor: pointer;
   transition: color 0.15s ease, background 0.15s ease;
 }
 
@@ -107,6 +111,30 @@
 
 .ticket-upload-wizard__step.is-skipped {
   opacity: 0.85;
+}
+
+.ticket-upload-wizard__step.is-clickable {
+  cursor: pointer;
+}
+
+.ticket-upload-wizard__step-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ticket-upload-wizard__step.is-clickable:hover {
+  border-color: #0045af;
+  background: rgba(0, 69, 175, 0.04);
 }
 
 .sell-wizard-hidden {
