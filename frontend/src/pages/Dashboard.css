@@ -737,12 +737,22 @@
 }
 
 /* Card Actions - compact */
-.card-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--border-light);
+.card-actions .download-button {
+  flex: 1 1 100%;
+  width: 100%;
+  min-height: 44px;
+  font-size: 1rem;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.download-button--row {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+  border-radius: 8px;
+  white-space: nowrap;
 }
 
 .primary-button,

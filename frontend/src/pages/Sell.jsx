@@ -1692,7 +1692,7 @@ const Sell = () => {
                   setError('');
                 }
               }}
-              className="quantity-select"
+              className="quantity-select premium-select"
               required={wizardStep === 2}
             >
               {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => (
@@ -1701,7 +1701,6 @@ const Sell = () => {
                 </option>
               ))}
             </select>
-            <small>בחר את מספר הכרטיסים שברצונך למכור (1-10).</small>
           </div>
 
           {/* Optional seating — hidden until the seller chooses to add it */}
@@ -1853,10 +1852,7 @@ const Sell = () => {
           </div>
           </OptionalSeatingDisclosure>
 
-          {/* Ticket Details & Restrictions Section */}
           <div className="ticket-details-section">
-            <h3 className="ticket-details-section-title">פרטי הכרטיס והגבלות</h3>
-
             <div className="form-group sell-pricing-block">
               <label htmlFor="listing_price">מחיר מכירה לכרטיס בודד *</label>
               <input
@@ -1873,7 +1869,7 @@ const Sell = () => {
               />
               <SellFieldError message={fieldErrors.listing_price} />
               <small className="sell-il-pricing-hint">
-                זהו המחיר עבור כרטיס אחד שיוצג לקונים לפני עמלת ביטחון. (אם העלית מספר כרטיסים, המערכת תכפיל את הסכום אוטומטית).
+                המחיר עבור כרטיס אחד שיוצג לקונים לפני עמלת ביטחון. (אם העלית מספר כרטיסים, המערכת תכפיל את הסכום אוטומטית).
               </small>
 
               {feeBasis > 0 ? (
@@ -1898,7 +1894,7 @@ const Sell = () => {
                 value={formData.split_type}
                 onChange={handleChange}
                 required
-                className="premium-select"
+                className="premium-select quantity-select"
               >
                 <option value="כל כמות">כל כמות</option>
                 <option value="זוגות בלבד">זוגות בלבד</option>
@@ -1921,7 +1917,7 @@ const Sell = () => {
                 </label>
               </div>
               <small className="checkbox-hint">
-                כבוי = רק רכישה במחיר המודעה. דלוק = קונים יוכלו לשלוח הצעות מחיר (עד 2 לכל מודעה).
+                כבוי = רק רכישה במחיר המודעה. דלוק = קונים יוכלו לשלוח הצעות מחיר
               </small>
             </div>
           </div>
@@ -2033,13 +2029,7 @@ const Sell = () => {
                     <TicketAttachmentPreview file={formData.singleMultiPagePdf} />
                     <span className="uploaded-file-name">✓ {formData.singleMultiPagePdf.name}</span>
                   </>
-                ) : (
-                  <span className="dropzone-placeholder">
-                    {formData.available_quantity > 1
-                      ? `העלה קובץ PDF עם ${formData.available_quantity} עמודים (עמוד לכל כרטיס)`
-                      : 'העלה קובץ PDF או תמונה (JPG, PNG) של הכרטיס'}
-                  </span>
-                )}
+                ) : null}
               </div>
               <SellFieldError message={fieldErrors.upload_single} />
             </div>

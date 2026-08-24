@@ -1,6 +1,8 @@
 /**
  * Homepage discovery helpers — performer grouping, last-minute filter, inventory flags.
  */
+import { eventHref } from './eventSeo';
+import { eventTicketCount } from './artistEventSupply';
 
 /** @param {object} ev */
 export function eventCategoryKey(ev) {
@@ -82,7 +84,7 @@ export function groupEventsByPerformer(list) {
     if (!events.length) continue;
     events.sort((a, b) => new Date(a.date) - new Date(b.date));
     const display = events[0];
-    const totalTickets = events.reduce((acc, e) => acc + (Number(e.tickets_count) || 0), 0);
+    const totalTickets = events.reduce((acc, e) => acc + eventTicketCount(e), 0);
     const hasTickets = totalTickets > 0;
     const waitlistOnly = !hasTickets && events.some((e) => Boolean(e.high_demand));
     const artistId = display.artist_detail?.id ?? display.artist ?? null;
@@ -122,7 +124,7 @@ export function filterLastMinuteEvents(list, todayStart, days = 4) {
       const d = new Date(ev.date);
       if (Number.isNaN(d.getTime())) return false;
       if (d < todayStart || d > end) return false;
-      return (Number(ev.tickets_count) || 0) > 0;
+      return eventTicketCount(ev) > 0;
     })
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 }
@@ -138,4 +140,34 @@ export function sortPerformersByDemand(groups) {
     if (aTickets !== bTickets) return bTickets - aTickets;
     return String(a?.performerName || '').localeCompare(String(b?.performerName || ''), 'he');
   });
+}
+
+/** Upcoming events on a performer card that still have live inventory. */
+export function performerEventsWithTickets(group) {
+  return (group?.events || []).filter((ev) => eventTicketCount(ev) > 0);
+}
+
+/**
+ * Homepage performer-card destination.
+ * One upcoming event with tickets → EventDetailsPage.
+ * Multiple events → ArtistEventsPage (or a date picker when there is no artist id).
+ *
+ * @param {{ artistId?: string|number|null, events?: object[] }} group
+ * @returns {{ type: 'event'|'artist'|'picker'|'none', href?: string }}
+ */
+export function performerNavigateTarget(group) {
+  const stocked = performerEventsWithTickets(group);
+  if (stocked.length === 1) {
+    return { type: 'event', href: eventHref(stocked[0]) };
+  }
+  if (group?.artistId != null && group.artistId !== '') {
+    return { type: 'artist', href: `/artist/${group.artistId}` };
+  }
+  if ((group?.events || []).length > 1) {
+    return { type: 'picker' };
+  }
+  if ((group?.events || []).length === 1) {
+    return { type: 'event', href: eventHref(group.events[0]) };
+  }
+  return { type: 'none' };
 }

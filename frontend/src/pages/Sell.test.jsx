@@ -118,13 +118,17 @@ describe('Sell wizard step 2 details', () => {
 
     expect(
       screen.getByText(
-        'זהו המחיר עבור כרטיס אחד שיוצג לקונים לפני עמלת ביטחון. (אם העלית מספר כרטיסים, המערכת תכפיל את הסכום אוטומטית).',
+        'המחיר עבור כרטיס אחד שיוצג לקונים לפני עמלת ביטחון. (אם העלית מספר כרטיסים, המערכת תכפיל את הסכום אוטומטית).',
       ),
     ).toBeInTheDocument();
+    expect(screen.queryByText('פרטי הכרטיס והגבלות')).not.toBeInTheDocument();
+    expect(screen.queryByText('בחר את מספר הכרטיסים שברצונך למכור (1-10).')).not.toBeInTheDocument();
     expect(screen.queryByText('אין צורך להזין מחיר מקורי או להעלות קבלה.')).not.toBeInTheDocument();
+    expect(screen.getByText('כבוי = רק רכישה במחיר המודעה. דלוק = קונים יוכלו לשלוח הצעות מחיר')).toBeInTheDocument();
+    expect(screen.queryByText(/עד 2 לכל מודעה/)).not.toBeInTheDocument();
 
     expect(screen.queryByText(/פורמטים נתמכים/)).not.toBeInTheDocument();
-    expect(screen.getByText('העלה קובץ PDF או תמונה, גודל מקסימלי 5MB לקובץ')).toBeInTheDocument();
+    expect(screen.getAllByText('העלה קובץ PDF או תמונה, גודל מקסימלי 5MB לקובץ')).toHaveLength(1);
 
     await user.click(screen.getByLabelText(/אני מאשר\/ת את/));
     await user.click(screen.getByRole('button', { name: 'פרסם כרטיס' }));

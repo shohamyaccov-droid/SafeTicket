@@ -5,6 +5,7 @@ import { walletAPI } from '../services/api';
 import { formatAmountForCurrency } from '../utils/priceFormat';
 import { toastError } from '../utils/toast';
 import BecomeSellerModal from '../components/BecomeSellerModal';
+import { availableFundsFromTransactions, pendingFundsFromTransactions } from '../utils/sellerWallet';
 import './ProfileWallet.css';
 
 const STATUS_LABELS = {
@@ -106,7 +107,12 @@ export default function ProfileWalletPage({ embedded = false }) {
                   <span className="wallet-summary-pill wallet-summary-pill--pending">Escrow</span>
                 </div>
                 <span className="wallet-summary-value" dir="ltr">
-                  ₪{formatAmountForCurrency(summary.pending_funds, 'ILS')}
+                  ₪{formatAmountForCurrency(
+                    transactions.length
+                      ? pendingFundsFromTransactions(transactions)
+                      : summary.pending_funds,
+                    'ILS'
+                  )}
                 </span>
                 <span className="wallet-summary-hint">
                   כספים מוחזקים בנאמנות (Escrow) וישוחררו אוטומטית 36 שעות לאחר קיום האירוע, בכפוף לתקינות הכרטיסים.
@@ -118,7 +124,12 @@ export default function ProfileWalletPage({ embedded = false }) {
                   <span className="wallet-summary-pill wallet-summary-pill--available">מאושר</span>
                 </div>
                 <span className="wallet-summary-value" dir="ltr">
-                  ₪{formatAmountForCurrency(summary.available_funds, 'ILS')}
+                  ₪{formatAmountForCurrency(
+                    transactions.length
+                      ? availableFundsFromTransactions(transactions)
+                      : summary.available_funds,
+                    'ILS'
+                  )}
                 </span>
                 <span className="wallet-summary-hint">
                   כספים שאושרו ומוכנים להעברה יזומה לחשבון הבנק/הביט שלך על ידי הנהלת האתר.

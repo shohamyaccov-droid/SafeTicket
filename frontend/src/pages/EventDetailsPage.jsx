@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { eventAPI, offerAPI } from '../services/api';
+import { eventAPI, offerAPI, artistAPI } from '../services/api';
 import { Analytics } from '../utils/analytics';
 import CheckoutModal from '../components/CheckoutModal';
 import WaitlistSignupModal from '../components/WaitlistSignupModal';
@@ -46,6 +46,12 @@ import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import { formatBuyerFeePercent } from '../services/pricingSettings';
 import EventJsonLd from '../components/EventJsonLd';
 import { eventHref } from '../utils/eventSeo';
+import {
+  eventArtistId,
+  isEventDatePassed,
+  normalizeArtistEventsPayload,
+  pickNextUpcomingEvent,
+} from '../utils/eventSchedule';
 import { PUBLIC_SITE_ORIGIN, toPublicAbsoluteUrl } from '../utils/publicSite';
 import {
   filterMarketplaceTickets,
@@ -97,6 +103,7 @@ const EventDetailsPage = () => {
   const [offerSubmitted, setOfferSubmitted] = useState(false);
   const [offerSubmitting, setOfferSubmitting] = useState(false);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const [eventHasPassed, setEventHasPassed] = useState(false);
 
   // Filtering and sorting state
   const [filters, setFilters] = useState({
@@ -359,6 +366,7 @@ const EventDetailsPage = () => {
     setTicketsLoading(true);
     setEvent(null);
     setTickets([]);
+    setEventHasPassed(false);
 
     const { signal, clear, abort } = createListFetchAbort();
 
@@ -371,15 +379,41 @@ const EventDetailsPage = () => {
         const eventResponse = await eventAPI.getEvent(eventKey, { signal });
         if (cancelled) return;
 
-        setEvent(eventResponse.data);
+        const loadedEvent = eventResponse.data;
+        if (isEventDatePassed(loadedEvent?.date)) {
+          const artistId = eventArtistId(loadedEvent);
+          if (artistId) {
+            try {
+              const othersRes = await artistAPI.getArtistEvents(artistId, { signal });
+              if (cancelled) return;
+              const next = pickNextUpcomingEvent(normalizeArtistEventsPayload(othersRes.data), {
+                excludeId: loadedEvent.id ?? eventKey,
+              });
+              if (next && String(next.id) !== String(loadedEvent.id)) {
+                navigate(eventHref(next), { replace: true });
+                return;
+              }
+            } catch {
+              /* stay on this page and show the passed-event UI */
+            }
+          }
+          if (cancelled) return;
+          setEvent(loadedEvent);
+          setEventHasPassed(true);
+          setLoading(false);
+          setTicketsLoading(false);
+          return;
+        }
+
+        setEvent(loadedEvent);
         setLoading(false);
 
         const resolvedSlug = (eventResponse.data?.slug || '').trim();
         if (resolvedSlug && String(eventKey) !== resolvedSlug) {
           navigate(`/event/${encodeURIComponent(resolvedSlug)}`, { replace: true });
         }
-        Analytics.ticketViewed(eventResponse.data?.id ?? eventKey, {
-          contentName: eventResponse.data?.name || eventResponse.data?.title,
+        Analytics.ticketViewed(loadedEvent?.id ?? eventKey, {
+          contentName: loadedEvent?.name || loadedEvent?.title,
         });
 
         await ticketsPromise;
@@ -1193,6 +1227,23 @@ const EventDetailsPage = () => {
         </div>
       </div>
 
+      {eventHasPassed ? (
+        <div className="event-passed-banner" dir="rtl" role="status">
+          <h2 className="event-passed-title">הופעה זו עברה</h2>
+          <p className="event-passed-text">המועד הזה כבר התקיים. בחרו מועד אחר של אותו אמן.</p>
+          <button
+            type="button"
+            className="event-passed-cta"
+            onClick={() => {
+              const artistId = eventArtistId(event);
+              navigate(artistId ? `/artist/${artistId}` : '/');
+            }}
+          >
+            {eventArtistId(event) ? 'צפו במועדים אחרים' : 'חזרה לדף הבית'}
+          </button>
+        </div>
+      ) : (
+      <>
       {ticketsLoading ? (
         <div className="edsk-tickets event-tickets-loading" aria-busy="true" aria-live="polite">
           {[1, 2, 3].map((i) => (
@@ -1727,6 +1778,8 @@ const EventDetailsPage = () => {
         </div>
       </div>
       ) : null}
+      </>
+      )}
 
       {/* Checkout Modal */}
       {waitlistOpen && event ? (

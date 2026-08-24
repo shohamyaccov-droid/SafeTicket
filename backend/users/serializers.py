@@ -537,7 +537,11 @@ class OrderSerializer(serializers.ModelSerializer):
                     url = request.build_absolute_uri(f'/api/users/tickets/{t.id}/download_pdf/')
                 else:
                     url = f'/api/users/tickets/{t.id}/download_pdf/'
-            tickets.append({'id': t.id, 'pdf_file_url': url})
+            tickets.append({
+                'id': t.id,
+                'pdf_file_url': url,
+                'has_pdf_file': bool(t.pdf_file),
+            })
         return tickets
     
     def get_ticket_info(self, obj):
@@ -1241,7 +1245,11 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
                     url = request.build_absolute_uri(f'/api/users/tickets/{t.id}/download_pdf/')
                 else:
                     url = f'/api/users/tickets/{t.id}/download_pdf/'
-            tickets.append({'id': t.id, 'pdf_file_url': url})
+            tickets.append({
+                'id': t.id,
+                'pdf_file_url': url,
+                'has_pdf_file': bool(t.pdf_file),
+            })
         return tickets
     
     def get_ticket_details(self, obj):
@@ -1295,31 +1303,17 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
         return first_resolved_image_url_for_event(self.context.get('request'), ev)
     
     def get_status_timeline(self, obj):
-        """Return status timeline for order progress. When paid+has PDFs, show ready for download."""
-        cache = self.context.get('profile_tickets_by_id') or {}
-        ids = list(getattr(obj, 'ticket_ids', None) or [])
-        if not ids and obj.ticket_id:
-            ids = [obj.ticket_id]
-        has_pdf = False
-        for tid in ids:
-            t = cache.get(tid)
-            if t is None and obj.ticket_id == tid and obj.ticket:
-                t = obj.ticket
-            if t and t.pdf_file:
-                has_pdf = True
-                break
-        if not has_pdf and obj.ticket and obj.ticket.pdf_file:
-            has_pdf = True
-        # If paid/completed AND has PDFs (instant delivery), show step 3 (ready for download)
-        ready_for_download = obj.status in ['paid', 'completed'] and has_pdf
+        """Paid/completed orders are ready for download — never leave them on 'מעבד'."""
+        ready_for_download = obj.status in ['paid', 'completed']
         current_step = 3 if ready_for_download else (2 if obj.status == 'paid' else (1 if obj.status == 'pending' else 0))
-        labels = {1: 'הזמנה אושרה', 2: 'מעבד', 3: 'מוכן להורדה'}
+        step2_label = 'מוכן להורדה' if ready_for_download else 'מעבד'
+        current_label = 'מוכן להורדה' if ready_for_download else ('מעבד' if current_step == 2 else 'הזמנה אושרה')
         return {
             'current_step': current_step,
-            'current_label': labels.get(current_step, obj.status),
+            'current_label': current_label,
             'steps': [
                 {'step': 1, 'label': 'הזמנה אושרה', 'completed': obj.status in ['paid', 'completed']},
-                {'step': 2, 'label': 'מעבד', 'completed': ready_for_download},
+                {'step': 2, 'label': step2_label, 'completed': ready_for_download},
                 {'step': 3, 'label': 'מוכן להורדה', 'completed': ready_for_download},
             ]
         }

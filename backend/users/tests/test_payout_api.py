@@ -245,6 +245,12 @@ class UserWalletApiTests(PayoutApiTestBase):
         self.assertEqual(tx_by_id[eligible_payout.pk]['display_status'], 'available')
         self.assertEqual(tx_by_id[locked_payout.pk]['platform_fee'], '15.00')
         self.assertEqual(tx_by_id[locked_payout.pk]['net_earnings'], '100.00')
+        available_from_rows = sum(
+            Decimal(t['net_earnings'])
+            for t in res.data['transactions']
+            if t['display_status'] == 'available'
+        )
+        self.assertEqual(Decimal(summary['available_funds']), available_from_rows)
         self.seller.wallet.refresh_from_db()
         self.assertEqual(self.seller.wallet.locked_balance, Decimal('100.00'))
         self.assertEqual(self.seller.wallet.available_balance, Decimal('200.00'))

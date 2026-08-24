@@ -15,6 +15,7 @@ import {
   groupEventsByPerformer,
   filterLastMinuteEvents,
   sortPerformersByDemand,
+  performerNavigateTarget,
 } from '../utils/homeDiscover';
 import { formatEventLocation } from '../utils/eventLocalTime';
 import './Home.css';
@@ -248,20 +249,18 @@ const Home = () => {
 
   const handlePerformerNavigate = useCallback(
     (group) => {
-      if (group.artistId != null && group.artistId !== '') {
-        navigate(`/artist/${group.artistId}`);
+      const target = performerNavigateTarget(group);
+      if (target.type === 'event' || target.type === 'artist') {
+        navigate(target.href);
         return;
       }
-      if (!group?.events?.length) return;
-      if (group.eventCount <= 1) {
-        navigate(eventHref(group.events[0]));
-        return;
+      if (target.type === 'picker' && group?.events?.length) {
+        setDatePickGroup({
+          displayEvent: group.events[0],
+          events: group.events,
+          count: group.eventCount,
+        });
       }
-      setDatePickGroup({
-        displayEvent: group.events[0],
-        events: group.events,
-        count: group.eventCount,
-      });
     },
     [navigate]
   );

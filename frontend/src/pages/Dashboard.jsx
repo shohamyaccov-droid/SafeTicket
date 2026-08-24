@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { authAPI, ticketAPI, orderAPI, offerAPI } from '../services/api';
+import { authAPI, ticketAPI, offerAPI } from '../services/api';
 import {
   formatPrice,
   currencySymbol,
@@ -22,7 +22,13 @@ import DashboardSkeleton from '../components/skeletons/DashboardSkeleton';
 import ProfileWalletPage from './ProfileWallet';
 import { toastError, toastSuccess } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
-import { downloadTicketFromAxiosBlob, openBlobForMobile } from '../utils/ticketDownload';
+import { downloadTicketFromAxiosBlob } from '../utils/ticketDownload';
+import {
+  orderCanDownloadTickets,
+  orderTicketIds,
+  orderTicketIsDownloadable,
+  timelineForBuyerDisplay,
+} from '../utils/buyerOrderActions';
 import { buyerHasPaymeIdentity, buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
 import BuyerIdentityInlineForm from '../components/BuyerIdentityInlineForm';
 import {
@@ -662,62 +668,6 @@ const Dashboard = () => {
     }
   };
 
-  const handleViewReceipt = async (orderId) => {
-    if (orderId == null) {
-      toastError('מספר הזמנה חסר');
-      return;
-    }
-    const escapeHtml = (s) =>
-      String(s ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    try {
-      const response = await orderAPI.getReceipt(orderId);
-      const d = response.data || {};
-      const rc = String(d.currency || 'ILS').toUpperCase();
-      const rsym = currencySymbol(rc);
-      const fmt = (v) => (v != null && v !== '' ? `${rsym}${formatAmountForCurrency(v, rc)}` : '—');
-      let dateLabel = '—';
-      if (d.order_date) {
-        try {
-          const dt = new Date(d.order_date);
-          dateLabel = Number.isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('he-IL');
-        } catch {
-          dateLabel = '—';
-        }
-      }
-      const lblDate = '\u05EA\u05D0\u05E8\u05D9\u05DA';
-      const lblTotalPaid = '\u05E1\u05D4\u05F4\u05DB \u05E9\u05D5\u05DC\u05DD (\u05DC\u05E7\u05D5\u05E0\u05D4)';
-      const htmlDoc = `<!DOCTYPE html>
-<html lang="he" dir="rtl">
-<head><meta charset="utf-8"/><title>קבלה - הזמנה ${escapeHtml(orderId)}</title></head>
-<body style="font-family: system-ui, Arial, sans-serif; padding: 20px; direction: rtl;">
-  <h1>קבלה</h1>
-  <p><strong>מטבע:</strong> ${escapeHtml(rc)}</p>
-  <p><strong>מספר הזמנה:</strong> ${escapeHtml(d.order_id)}</p>
-  <p><strong>${lblDate}:</strong> ${escapeHtml(dateLabel)}</p>
-  <p><strong>סטטוס:</strong> ${escapeHtml(d.status)}</p>
-  <p><strong>${lblTotalPaid}:</strong> ${escapeHtml(fmt(d.total_paid_by_buyer ?? d.total_amount))}</p>
-  <p><strong>מחיר מוסכם (בסיס):</strong> ${escapeHtml(d.final_negotiated_price != null ? fmt(d.final_negotiated_price) : '—')}</p>
-  <p><strong>דמי שירות ותפעול (לקוח):</strong> ${escapeHtml(d.buyer_service_fee != null ? fmt(d.buyer_service_fee) : '—')}</p>
-  <p><strong>עמלת פלטפורמה (מוכר, 0%):</strong> ${escapeHtml(d.seller_service_fee != null ? fmt(d.seller_service_fee) : '—')}</p>
-  <p><strong>נטו למוכר:</strong> ${escapeHtml(d.net_seller_revenue != null ? fmt(d.net_seller_revenue) : '—')}</p>
-  <p><strong>כמות:</strong> ${escapeHtml(d.quantity)}</p>
-  <p><strong>אירוע:</strong> ${escapeHtml(d.event_name)}</p>
-  <p><button type="button" onclick="window.print()">הדפס</button></p>
-</body>
-</html>`;
-      const blob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8' });
-      openBlobForMobile(blob, {
-        downloadName: `receipt-order-${orderId}.html`,
-      });
-    } catch (err) {
-      toastError('טעינת הקבלה נכשלה. אנא נסה שוב מאוחר יותר.');
-    }
-  };
-
   const handleCopyListingLink = async (listing) => {
     const eventId = listing.event_id;
     if (!eventId) {
@@ -1061,12 +1011,11 @@ const Dashboard = () => {
                   const ticket = purchase.ticket_details || {};
                   const payCur = String(purchase.currency || 'ILS').toUpperCase();
                   const paySym = currencySymbol(payCur);
-                  const timeline = purchase.status_timeline || { steps: [] };
+                  const timeline = timelineForBuyerDisplay(purchase, purchase.status_timeline);
                   const isExpanded = expandedPurchaseId === purchase.id;
                   const tickets = purchase.tickets || [];
-                  const hasDownloadablePdf = (purchase.pdf_download_url || tickets.some((t) => t.pdf_file_url || t.has_pdf_file)) &&
-                    (purchase.status === 'paid' || purchase.status === 'completed');
-                  const ticketIds = tickets.length > 0 ? tickets.map(t => t.id) : [purchase.ticket || ticket.id];
+                  const hasDownloadablePdf = orderCanDownloadTickets(purchase);
+                  const ticketIds = orderTicketIds(purchase);
 
                   return (
                     <div key={purchase.id} className="purchase-card enterprise-card dashboard-compact-card purchase-card-accordion" style={{ width: '100%', display: 'block', marginBottom: '8px', boxSizing: 'border-box' }}>
@@ -1110,6 +1059,18 @@ const Dashboard = () => {
                         </div>
                         <div className="purchase-card-accordion-summary-end">
                           <span className="row-price purchase-card-accordion-price">{paySym}{formatAmountForCurrency(purchase.total_paid_by_buyer ?? purchase.total_amount, payCur)}</span>
+                          {hasDownloadablePdf && ticketIds.length === 1 ? (
+                            <button
+                              type="button"
+                              className="primary-button download-button download-button--row"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownloadPDF(ticketIds[0]);
+                              }}
+                            >
+                              הורד כרטיס
+                            </button>
+                          ) : null}
                           <span className={`status-badge status-${purchase.status}`}>
                             {purchase.status === 'paid'
                               ? 'שולם'
@@ -1207,15 +1168,16 @@ const Dashboard = () => {
                           </div>
 
                           <div className="card-actions">
-                            {hasDownloadablePdf && (
+                            {hasDownloadablePdf ? (
                               ticketIds.length > 1 ? (
                                 <div className="multi-download-buttons">
                                   {tickets.map((t, idx) => (
                                     <button
                                       key={t.id}
+                                      type="button"
                                       onClick={() => handleDownloadPDF(t.id)}
                                       className="primary-button download-button"
-                                      disabled={!(t.pdf_file_url || t.has_pdf_file)}
+                                      disabled={tickets.some(orderTicketIsDownloadable) ? !orderTicketIsDownloadable(t) : false}
                                     >
                                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                         <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1228,6 +1190,7 @@ const Dashboard = () => {
                                 </div>
                               ) : (
                                 <button
+                                  type="button"
                                   onClick={() => handleDownloadPDF(ticketIds[0])}
                                   className="primary-button download-button"
                                 >
@@ -1236,38 +1199,10 @@ const Dashboard = () => {
                                     <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                                     <path d="M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                                   </svg>
-                                  הורדת כרטיס
+                                  הורד כרטיס
                                 </button>
                               )
-                            )}
-                            <button
-                              onClick={() => handleViewReceipt(purchase.id)}
-                              className="secondary-button receipt-button"
-                            >
-                              <svg
-                                width="18"
-                                height="18"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <path
-                                  d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                                <path
-                                  d="M14 2V8H20"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                              קבלה
-                            </button>
+                            ) : null}
                           </div>
                         </div>
                       )}

@@ -149,22 +149,41 @@ def _serialize_admin_payout(payout: SellerPayout) -> dict:
 
 
 def _wallet_summary_for_seller(user) -> dict:
-    from wallets.models import UserWallet
+    """Available/pending balances from the payout ledger so the UI matches transaction rows.
 
-    wallet = UserWallet.objects.filter(user=user).first()
+    Available to withdraw = sum of released (completed) sales net of platform fees,
+    excluding payouts already transferred to the seller's bank/Bit.
+    """
+    from wallets.models import WalletTransaction
+
     base = SellerPayout.objects.filter(seller=user).exclude(
         payout_status=SellerPayout.PayoutStatus.CANCELLED
     )
     transferred = base.filter(payout_status=SellerPayout.PayoutStatus.TRANSFERRED)
-
     total_earned = _sum_seller_obligation(transferred)
-    pending_funds = _quantize(getattr(wallet, 'locked_balance', Decimal('0.00')))
-    available_funds = _quantize(getattr(wallet, 'available_balance', Decimal('0.00')))
+
+    pending_funds = Decimal('0.00')
+    available_funds = Decimal('0.00')
+    open_payouts = (
+        base.exclude(payout_status=SellerPayout.PayoutStatus.TRANSFERRED)
+        .prefetch_related('wallet_transactions')
+    )
+    for payout in open_payouts:
+        net = _quantize(payout.net_payout)
+        credit_is_available = any(
+            tx.transaction_type == WalletTransaction.TransactionType.SALE_CREDIT
+            and tx.status == WalletTransaction.Status.COMPLETED
+            for tx in payout.wallet_transactions.all()
+        )
+        if credit_is_available:
+            available_funds += net
+        else:
+            pending_funds += net
 
     return {
         'total_earned': str(total_earned),
-        'pending_funds': str(pending_funds),
-        'available_funds': str(available_funds),
+        'pending_funds': str(_quantize(pending_funds)),
+        'available_funds': str(_quantize(available_funds)),
         'currency': 'ILS',
     }
 
