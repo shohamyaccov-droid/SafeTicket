@@ -27,7 +27,7 @@ const SELL_PAGE_BUILD_TAG = import.meta.env.VITE_BUILD_ID || 'local-dev';
 const TICKET_FILE_INPUT_ACCEPT =
   'image/*,application/pdf,.pdf,.jpg,.jpeg,.png';
 const MAX_TICKET_FILE_SIZE_BYTES = 5 * 1024 * 1024;
-const TICKET_FILE_CONSTRAINTS_HE = 'פורמטים נתמכים: PDF, JPG, PNG · גודל מקסימלי: 5MB לקובץ';
+const TICKET_FILE_CONSTRAINTS_HE = 'העלה קובץ PDF או תמונה, גודל מקסימלי 5MB לקובץ';
 
 function isPdfFile(file) {
   if (!file) return false;
@@ -403,12 +403,7 @@ const Sell = () => {
   const [authFieldErrors, setAuthFieldErrors] = useState({});
   /** Full event from GET /events/:id/ — includes venue_detail.sections for seating UI. */
   const [eventDetail, setEventDetail] = useState(null);
-  const [seatingDetailsOpen, setSeatingDetailsOpen] = useState(() => {
-    const draftForm = sellDraft?.formData;
-    if (!draftForm) return false;
-    const hasSeat = (draftForm.ticket_packages || []).some((pkg) => (pkg?.seat_number || '').trim());
-    return Boolean((draftForm.section || '').trim() || (draftForm.row || '').trim() || hasSeat);
-  });
+  const [seatingDetailsOpen, setSeatingDetailsOpen] = useState(false);
   const publishAfterAuthRef = useRef(false);
 
   useEffect(() => {
@@ -1322,7 +1317,7 @@ const Sell = () => {
           return;
         }
       } else {
-        setFieldErrors({ upload_mode: 'אנא העלה קובץ כרטיס (PDF או תמונה).' });
+        setFieldErrors({ upload_single: 'אנא העלה קובץ כרטיס (PDF או תמונה).' });
         setLoading(false);
         return;
       }
@@ -1861,37 +1856,54 @@ const Sell = () => {
           {/* Ticket Details & Restrictions Section */}
           <div className="ticket-details-section">
             <h3 className="ticket-details-section-title">פרטי הכרטיס והגבלות</h3>
-            
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="ticket_type">סוג כרטיס *</label>
-                <select
-                  id="ticket_type"
-                  name="ticket_type"
-                  value="pdf"
-                  disabled
-                  required
-                  className="premium-select"
-                >
-                  <option value="pdf">כרטיס אלקטרוני (PDF או תמונה)</option>
-                </select>
-              </div>
 
-              <div className="form-group">
-                <label htmlFor="split_type">אפשרויות פיצול וקנייה *</label>
-                <select
-                  id="split_type"
-                  name="split_type"
-                  value={formData.split_type}
-                  onChange={handleChange}
-                  required
-                  className="premium-select"
-                >
-                  <option value="כל כמות">כל כמות</option>
-                  <option value="זוגות בלבד">זוגות בלבד</option>
-                  <option value="מכור הכל יחד">מכור הכל יחד</option>
-                </select>
-              </div>
+            <div className="form-group sell-pricing-block">
+              <label htmlFor="listing_price">מחיר מכירה לכרטיס בודד *</label>
+              <input
+                type="number"
+                id="listing_price"
+                name="listing_price"
+                value={formData.listing_price}
+                onChange={handleChange}
+                required={wizardStep === 2}
+                min="1"
+                step={sellCurrency === 'ILS' ? '1' : '0.01'}
+                placeholder={sellSym}
+                inputMode={sellCurrency === 'ILS' ? 'numeric' : 'decimal'}
+              />
+              <SellFieldError message={fieldErrors.listing_price} />
+              <small className="sell-il-pricing-hint">
+                זהו המחיר עבור כרטיס אחד שיוצג לקונים לפני עמלת ביטחון. (אם העלית מספר כרטיסים, המערכת תכפיל את הסכום אוטומטית).
+              </small>
+
+              {feeBasis > 0 ? (
+                <div className="price-breakdown-container">
+                  <div className="price-breakdown-row fee-row">
+                    <span>עמלת מכירה (0% — ללא עמלה!):</span>
+                    <span dir="ltr" style={{ color: '#16a34a', fontWeight: 700 }}>חינם ✓</span>
+                  </div>
+                  <div className="price-breakdown-row net-row">
+                    <strong>הסכום שתקבלו (100% מהמחיר):</strong>
+                    <strong dir="ltr">{sellSym}{formatAmountForCurrency(feeBasis, sellCurrency)}</strong>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="split_type">אפשרויות פיצול וקנייה *</label>
+              <select
+                id="split_type"
+                name="split_type"
+                value={formData.split_type}
+                onChange={handleChange}
+                required
+                className="premium-select"
+              >
+                <option value="כל כמות">כל כמות</option>
+                <option value="זוגות בלבד">זוגות בלבד</option>
+                <option value="מכור הכל יחד">מכור הכל יחד</option>
+              </select>
             </div>
 
             <div className="form-group checkbox-group">
@@ -1935,39 +1947,6 @@ const Sell = () => {
               </small>
             </div>
           )}
-
-          <div className="form-group sell-pricing-block">
-            <label htmlFor="listing_price">מחיר מכירה לכרטיס בודד *</label>
-            <input
-              type="number"
-              id="listing_price"
-              name="listing_price"
-              value={formData.listing_price}
-              onChange={handleChange}
-              required={wizardStep === 2}
-              min="1"
-              step={sellCurrency === 'ILS' ? '1' : '0.01'}
-              placeholder={sellSym}
-              inputMode={sellCurrency === 'ILS' ? 'numeric' : 'decimal'}
-            />
-            <SellFieldError message={fieldErrors.listing_price} />
-            <small className="sell-il-pricing-hint">
-              זה המחיר עבור כרטיס אחד שיוצג לקונים לפני עמלת ביטחון. (אם העלית מספר כרטיסים, המערכת תכפיל את הסכום אוטומטית). אין צורך להזין מחיר מקורי או להעלות קבלה.
-            </small>
-
-            {feeBasis > 0 ? (
-              <div className="price-breakdown-container">
-                <div className="price-breakdown-row fee-row">
-                  <span>עמלת מכירה (0% — ללא עמלה!):</span>
-                  <span dir="ltr" style={{ color: '#16a34a', fontWeight: 700 }}>חינם ✓</span>
-                </div>
-                <div className="price-breakdown-row net-row">
-                  <strong>הסכום שתקבלו (100% מהמחיר):</strong>
-                  <strong dir="ltr">{sellSym}{formatAmountForCurrency(feeBasis, sellCurrency)}</strong>
-                </div>
-              </div>
-            ) : null}
-          </div>
 
           {formData.available_quantity > 1 ? (
           <div className="form-group pdf-upload-toggle-section">
@@ -2033,20 +2012,9 @@ const Sell = () => {
                 </div>
               </div>
             </div>
-            <div className="upload-constraints-card" role="note">
-              <strong>הנחיות לקובץ הכרטיס</strong>
-              <span>{TICKET_FILE_CONSTRAINTS_HE}</span>
-              <span>
-                לכמה כרטיסים בקובץ יחיד: העלו PDF מרובה עמודים, עמוד אחד לכל כרטיס. תמונות מתאימות רק במצב קובץ נפרד לכל כרטיס.
-              </span>
-            </div>
             <SellFieldError message={fieldErrors.upload_mode} />
           </div>
-          ) : (
-            <div className="upload-constraints-card upload-constraints-card--compact" role="note">
-              <span>{TICKET_FILE_CONSTRAINTS_HE}</span>
-            </div>
-          )}
+          ) : null}
 
           {uploadMethod === 'single_file' && (
             <div className="form-group single-pdf-dropzone">
@@ -2073,9 +2041,6 @@ const Sell = () => {
                   </span>
                 )}
               </div>
-              {formData.available_quantity > 1 && (
-                <small>המערכת תפצל רק קובצי PDF מרובי עמודים – כל עמוד יהפוך לכרטיס נפרד</small>
-              )}
               <SellFieldError message={fieldErrors.upload_single} />
             </div>
           )}
@@ -2118,6 +2083,8 @@ const Sell = () => {
               })}
             </div>
           ) : null}
+
+          <small className="sell-upload-hint">{TICKET_FILE_CONSTRAINTS_HE}</small>
 
           <div className="terms-checkbox-container sell-single-compliance">
             <label className="terms-checkbox-label">

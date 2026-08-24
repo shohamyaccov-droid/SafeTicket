@@ -1846,3 +1846,11 @@
   line-height: 1.45;
 }
 
+.sell-upload-hint {
+  display: block;
+  margin: 0.35rem 0 0.85rem;
+  color: var(--text-tertiary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+

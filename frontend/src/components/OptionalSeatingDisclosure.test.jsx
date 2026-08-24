@@ -9,7 +9,7 @@ afterEach(() => {
 });
 
 describe('OptionalSeatingDisclosure', () => {
-  it('hides seating fields until the optional toggle is opened', async () => {
+  it('starts closed and only shows seating fields after the toggle is clicked', async () => {
     const user = userEvent.setup();
     function Harness() {
       const [open, setOpen] = useState(false);
@@ -21,8 +21,12 @@ describe('OptionalSeatingDisclosure', () => {
       );
     }
     render(<Harness />);
+    const toggle = screen.getByRole('button', { name: '➕ הוספת פרטי ישיבה (אופציונלי)' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByLabelText('גוש (אופציונלי)')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '➕ הוספת פרטי ישיבה (אופציונלי)' }));
+    expect(screen.queryByText(SEATING_HINT)).not.toBeInTheDocument();
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText(SEATING_HINT)).toBeInTheDocument();
     expect(screen.getByLabelText('גוש (אופציונלי)')).toBeInTheDocument();
   });
