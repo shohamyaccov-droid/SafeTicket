@@ -139,7 +139,7 @@ export default function SellCompletionModal({
             חזרה
           </button>
           <button type="submit" className="become-seller-submit sell-completion-submit" disabled={saving}>
-            {saving ? 'שומר…' : 'המשך להעלאת כרטיס'}
+            {saving ? 'מפרסם…' : 'פרסם כרטיס'}
           </button>
         </div>
       </form>

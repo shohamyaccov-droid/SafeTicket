@@ -1796,3 +1796,53 @@
   }
 }
 
+.sell-optional-seating {
+  margin: 0 0 1rem;
+}
+
+.sell-optional-seating__toggle {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  border: 1px dashed #94a3b8;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 0.92rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: right;
+}
+
+.sell-optional-seating__toggle:hover {
+  background: #f1f5f9;
+  border-color: #0045af;
+  color: #003894;
+}
+
+.sell-optional-seating__toggle:focus-visible {
+  outline: 2px solid #0045af;
+  outline-offset: 2px;
+}
+
+.sell-optional-seating__panel {
+  margin-top: 0.65rem;
+  padding: 0.85rem;
+  border: 1px solid #dbe3ee;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.sell-optional-seating__hint {
+  margin: 0 0 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+

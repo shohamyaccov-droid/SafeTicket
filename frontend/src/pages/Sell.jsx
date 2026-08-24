@@ -15,7 +15,9 @@ import { isCaesareaVenueEvent, caesareaSellSectionOptions } from '../utils/caesa
 import { displayEventVenueName, formatEventLocation } from '../utils/eventLocalTime';
 import SellCompletionModal from '../components/SellCompletionModal';
 import TicketUploadWizard from '../components/TicketUploadWizard';
+import OptionalSeatingDisclosure from '../components/OptionalSeatingDisclosure';
 import ListingCreatedSuccessView from './ListingCreatedSuccessView';
+import { clampSellWizardStep } from '../utils/sellWizard';
 import '../components/SellCompletionModal.css';
 import './Sell.css';
 
@@ -351,10 +353,7 @@ const Sell = () => {
   const navigate = useNavigate();
   const sellDraft = useMemo(() => readSellListingDraft(), []);
   const { user, refreshProfile, login, register } = useAuth();
-  const [wizardStep, setWizardStep] = useState(() => {
-    const s = Number(sellDraft?.wizardStep) || 1;
-    return s >= 1 && s <= 4 ? s : 1;
-  });
+  const [wizardStep, setWizardStep] = useState(() => clampSellWizardStep(sellDraft?.wizardStep));
   const [formData, setFormData] = useState(() => {
     const base = defaultSellFormData();
     const draftForm = sellDraft?.formData;
@@ -404,6 +403,13 @@ const Sell = () => {
   const [authFieldErrors, setAuthFieldErrors] = useState({});
   /** Full event from GET /events/:id/ — includes venue_detail.sections for seating UI. */
   const [eventDetail, setEventDetail] = useState(null);
+  const [seatingDetailsOpen, setSeatingDetailsOpen] = useState(() => {
+    const draftForm = sellDraft?.formData;
+    if (!draftForm) return false;
+    const hasSeat = (draftForm.ticket_packages || []).some((pkg) => (pkg?.seat_number || '').trim());
+    return Boolean((draftForm.section || '').trim() || (draftForm.row || '').trim() || hasSeat);
+  });
+  const publishAfterAuthRef = useRef(false);
 
   useEffect(() => {
     if (!submitAttemptedRef.current) return;
@@ -776,8 +782,8 @@ const Sell = () => {
 
   const skipAuth = Boolean(user);
   useEffect(() => {
-    if (user && wizardStep === 3) {
-      setWizardStep(4);
+    if (user && wizardStep === 3 && !publishAfterAuthRef.current) {
+      setWizardStep(2);
     }
   }, [user, wizardStep]);
 
@@ -1064,11 +1070,13 @@ const Sell = () => {
       } catch {
         /* listing continues; role promotion happens on publish */
       }
-      setWizardStep(4);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      publishAfterAuthRef.current = true;
+      setWizardStep(2);
+      await executeTicketUpload();
     } catch (err) {
       setAuthError(parseApiMessage(err.response?.data, err.message || 'ההתחברות נכשלה.'));
     } finally {
+      publishAfterAuthRef.current = false;
       setAuthSaving(false);
     }
   };
@@ -1115,7 +1123,7 @@ const Sell = () => {
     submitData.append('is_together', activeForm.is_together ? 'true' : 'false');
     submitData.append('ticket_type', 'כרטיס אלקטרוני (PDF או תמונה)');
     submitData.append('split_type', fdText(activeForm.split_type || 'כל כמות'));
-    submitData.append('is_obstructed_view', activeForm.is_obstructed_view ? 'true' : 'false');
+    submitData.append('is_obstructed_view', 'false');
     submitData.append(
       'allow_negotiation',
       activeForm.allow_negotiation === false ? 'false' : 'true'
@@ -1352,37 +1360,9 @@ const Sell = () => {
     return true;
   };
 
-  const validatePricingStep = () => {
-    const fe = {};
-    const requiredCount = formData.available_quantity || 1;
-    if (!formData.ticket_packages || formData.ticket_packages.length !== requiredCount) {
-      fe.packages = `אנא השלם את כל פרטי הכרטיסים (${requiredCount} כרטיסים נדרשים).`;
-    }
-    if (formData.listing_price === '' || formData.listing_price == null) {
-      fe.listing_price = 'נא להזין מחיר מכירה.';
-    } else {
-      const askVal = parseFloat(String(formData.listing_price).replace(',', '.'));
-      if (!Number.isFinite(askVal) || askVal <= 0) {
-        fe.listing_price = 'מחיר המכירה חייב להיות מספר חיובי.';
-      }
-    }
-    if (Object.keys(fe).length) {
-      setFieldErrors(fe);
-      return false;
-    }
-    setFieldErrors({});
-    return true;
-  };
-
   const advanceFromIdentity = () => {
     if (!validateIdentityStep()) return;
     setWizardStep(2);
-    scrollWizardTop();
-  };
-
-  const advanceFromPricing = () => {
-    if (!validatePricingStep()) return;
-    setWizardStep(user ? 4 : 3);
     scrollWizardTop();
   };
 
@@ -1729,7 +1709,11 @@ const Sell = () => {
             <small>בחר את מספר הכרטיסים שברצונך למכור (1-10).</small>
           </div>
 
-          {/* Seating + optional auto seat numbers (single compact section) */}
+          {/* Optional seating — hidden until the seller chooses to add it */}
+          <OptionalSeatingDisclosure
+            open={seatingDetailsOpen}
+            onToggle={() => setSeatingDetailsOpen((open) => !open)}
+          >
           <div className="seating-and-seats-compact">
             <h3 className="seating-section-title">פרטי ישיבה ומושבים</h3>
             <small className="section-hint">
@@ -1872,6 +1856,7 @@ const Sell = () => {
               );
             })}
           </div>
+          </OptionalSeatingDisclosure>
 
           {/* Ticket Details & Restrictions Section */}
           <div className="ticket-details-section">
@@ -1907,25 +1892,6 @@ const Sell = () => {
                   <option value="מכור הכל יחד">מכור הכל יחד</option>
                 </select>
               </div>
-            </div>
-
-            <div className="form-group checkbox-group">
-              <div className="checkbox-wrapper">
-                <input
-                  type="checkbox"
-                  id="is_obstructed_view"
-                  name="is_obstructed_view"
-                  checked={formData.is_obstructed_view}
-                  onChange={handleChange}
-                  className="checkbox-input"
-                />
-                <label htmlFor="is_obstructed_view" className="checkbox-label">
-                  הנוף מוסתר חלקית (Restricted View)
-                </label>
-              </div>
-              <small className="checkbox-hint">
-                סמן אם הכרטיסים שלך נמצאים באזור עם נוף מוגבל או מוסתר חלקית. זה עוזר למנוע תלונות מהקונים.
-              </small>
             </div>
 
             <div className="form-group checkbox-group">
@@ -2003,24 +1969,6 @@ const Sell = () => {
             ) : null}
           </div>
 
-          <div className="sell-wizard-actions">
-            <button
-              type="button"
-              className="sell-wizard-back"
-              onClick={() => {
-                setWizardStep(1);
-                scrollWizardTop();
-              }}
-            >
-              חזרה לאירוע
-            </button>
-            <button type="button" className="sell-wizard-next" onClick={advanceFromPricing}>
-              {user ? 'המשך להעלאת כרטיס' : 'המשך לחשבון'}
-            </button>
-          </div>
-          </div>
-
-          <div className={wizardStep === 4 ? '' : 'sell-wizard-hidden'} aria-hidden={wizardStep !== 4}>
           {formData.available_quantity > 1 ? (
           <div className="form-group pdf-upload-toggle-section">
             <label>אופן העלאת קבצי הכרטיס</label>
@@ -2110,7 +2058,7 @@ const Sell = () => {
                   name="single_multi_page_pdf"
                   onChange={handleChange}
                   accept={TICKET_FILE_INPUT_ACCEPT}
-                  required={wizardStep === 4}
+                  required={wizardStep === 2}
                 />
                 {formData.singleMultiPagePdf ? (
                   <>
@@ -2155,7 +2103,7 @@ const Sell = () => {
                           name={`pdf_file_package_${index}`}
                           onChange={handleChange}
                           accept={TICKET_FILE_INPUT_ACCEPT}
-                          required={wizardStep === 4 && uploadMethod === 'separate_files'}
+                          required={wizardStep === 2 && uploadMethod === 'separate_files'}
                         />
                         {packageData.pdf_file && (
                           <>
@@ -2188,7 +2136,7 @@ const Sell = () => {
                   });
                 }}
                 className="terms-checkbox-input"
-                required={wizardStep === 4}
+                required={wizardStep === 2}
               />
               <span>
                 אני מאשר/ת את{' '}
@@ -2207,24 +2155,24 @@ const Sell = () => {
               type="button"
               className="sell-wizard-back"
               onClick={() => {
-                setWizardStep(user ? 2 : 3);
+                setWizardStep(1);
                 scrollWizardTop();
               }}
             >
-              חזרה
+              חזרה לאירוע
             </button>
-            <button type="submit" disabled={loading || authSaving} className="submit-button sell-submit--desktop-only">
-              {loading ? (
-                <>
-                  מפרסם כרטיס… <span className="button-spinner" aria-hidden />
-                </>
-              ) : (
-                'הצע כרטיס למכירה'
-              )}
+            <button type="submit" className="sell-wizard-next" disabled={loading || authSaving}>
+              {loading
+                ? 'מפרסם כרטיס…'
+                : user
+                  ? 'פרסם כרטיס'
+                  : 'המשך לחשבון'}
             </button>
           </div>
           </div>
+
         </form>
+
 
         {!user ? (
           <div className={wizardStep === 3 ? '' : 'sell-wizard-hidden'} aria-hidden={wizardStep !== 3}>
@@ -2241,7 +2189,7 @@ const Sell = () => {
           </div>
         ) : null}
 
-        {wizardStep === 4 ? <div className="sell-submit-sticky-wrap">
+        {wizardStep === 2 ? <div className="sell-submit-sticky-wrap">
           <button
             type="submit"
             form="sell-listing-form"
