@@ -1,0 +1,135 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
+
+import Dashboard from './Dashboard';
+import { authAPI, offerAPI, ticketAPI } from '../services/api';
+
+vi.mock('../context/AuthContext', () => {
+  const user = { id: 1, username: 'buyer' };
+  return {
+    useAuth: () => ({
+      user,
+      refreshProfile: vi.fn(),
+    }),
+  };
+});
+
+vi.mock('../services/api', () => ({
+  authAPI: { getDashboard: vi.fn() },
+  ticketAPI: { downloadPDF: vi.fn(), updateTicketPrice: vi.fn(), deleteTicket: vi.fn() },
+  offerAPI: {
+    getReceivedOffers: vi.fn(),
+    getSentOffers: vi.fn(),
+    acceptOffer: vi.fn(),
+    rejectOffer: vi.fn(),
+    counterOffer: vi.fn(),
+  },
+}));
+
+vi.mock('../utils/toast', () => ({
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
+}));
+
+vi.mock('../utils/ticketDownload', () => ({
+  downloadTicketFromAxiosBlob: vi.fn(),
+}));
+
+vi.mock('../components/CheckoutModal', () => ({ default: () => null }));
+vi.mock('../components/NegotiationModal', () => ({ default: () => null }));
+vi.mock('./ProfileWallet', () => ({ default: () => null }));
+vi.mock('../components/BuyerIdentityInlineForm', () => ({ default: () => null }));
+
+afterEach(() => {
+  cleanup();
+});
+
+function paidPurchase(overrides = {}) {
+  return {
+    id: 101,
+    status: 'paid',
+    tickets: [],
+    ticket_details: { event_name: 'הופעת בדיקה', event_date: '2099-01-01T20:00:00Z', venue: 'בלומפילד' },
+    total_amount: 199,
+    currency: 'ILS',
+    quantity: 1,
+    ...overrides,
+  };
+}
+
+describe('Dashboard buyer order download', () => {
+  beforeEach(() => {
+    offerAPI.getReceivedOffers.mockResolvedValue({ data: [] });
+    offerAPI.getSentOffers.mockResolvedValue({ data: [] });
+    ticketAPI.downloadPDF.mockResolvedValue({ data: new Blob(['pdf']), headers: {} });
+  });
+
+  it('shows הורד כרטיס in the DOM for a paid ready order without tickets[]', async () => {
+    authAPI.getDashboard.mockResolvedValue({
+      data: {
+        purchases: [paidPurchase({ ticket: 42 })],
+        listings: { active: [], sold: [] },
+        summary: { total_purchases: 1, active_listings_count: 0, sold_listings_count: 0 },
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+
+    const button = await screen.findByRole('button', { name: 'הורד כרטיס' });
+    expect(button).toBeInTheDocument();
+    expect(button).toBeVisible();
+    expect(screen.getByText('הזמנה אושרה')).toBeInTheDocument();
+    expect(screen.getByText('תשלום אושר')).toBeInTheDocument();
+    expect(screen.getByText('מוכן להורדה')).toBeInTheDocument();
+  });
+
+  it('shows הורד כרטיס for paid orders with only pdf_download_url', async () => {
+    authAPI.getDashboard.mockResolvedValue({
+      data: {
+        purchases: [
+          paidPurchase({
+            pdf_download_url: 'https://example.com/api/users/tickets/77/download_pdf/',
+          }),
+        ],
+        listings: { active: [], sold: [] },
+        summary: { total_purchases: 1 },
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('button', { name: 'הורד כרטיס' })).toBeInTheDocument();
+  });
+
+  it('downloads via ticketAPI.downloadPDF when the button is clicked', async () => {
+    const user = userEvent.setup();
+    authAPI.getDashboard.mockResolvedValue({
+      data: {
+        purchases: [paidPurchase({ ticket: 42 })],
+        listings: { active: [], sold: [] },
+        summary: { total_purchases: 1 },
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'הורד כרטיס' }));
+    await waitFor(() => {
+      expect(ticketAPI.downloadPDF).toHaveBeenCalledWith(42);
+    });
+  });
+});

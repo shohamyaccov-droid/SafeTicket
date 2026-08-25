@@ -1,5 +1,10 @@
 /* eslint-disable react/prop-types */
-import { orderCanDownloadTickets, orderTicketIds, orderTicketIsDownloadable } from '../utils/buyerOrderActions';
+import {
+  isPaidActiveOrder,
+  orderTicketIds,
+  orderTicketIsDownloadable,
+  resolveDownloadTicketId,
+} from '../utils/buyerOrderActions';
 
 function DownloadIcon() {
   return (
@@ -12,26 +17,31 @@ function DownloadIcon() {
 }
 
 export default function BuyerOrderDownloadBar({ purchase, onDownload }) {
-  if (!orderCanDownloadTickets(purchase)) return null;
+  if (!isPaidActiveOrder(purchase)) return null;
 
   const tickets = Array.isArray(purchase?.tickets) ? purchase.tickets : [];
   const ticketIds = orderTicketIds(purchase);
   const anyFlagged = tickets.some(orderTicketIsDownloadable);
 
+  const handleDownload = (explicitId) => {
+    const id = explicitId ?? resolveDownloadTicketId(purchase);
+    onDownload?.(id);
+  };
+
   if (ticketIds.length > 1) {
     const ids = tickets.length === ticketIds.length ? tickets.map((t) => t.id) : ticketIds;
     return (
-      <div className="card-actions buyer-order-download-bar">
+      <div className="buyer-order-download-bar" data-testid="buyer-order-download-bar">
         <div className="multi-download-buttons">
           {ids.map((id, idx) => {
             const ticket = tickets[idx];
             const disabled = anyFlagged && ticket ? !orderTicketIsDownloadable(ticket) : false;
             return (
               <button
-                key={id}
+                key={id ?? `ticket-${idx}`}
                 type="button"
-                onClick={() => onDownload?.(id)}
-                className="primary-button download-button"
+                onClick={() => handleDownload(id)}
+                className="primary-button download-button buyer-download-ticket-btn"
                 disabled={disabled}
               >
                 <DownloadIcon />
@@ -45,11 +55,11 @@ export default function BuyerOrderDownloadBar({ purchase, onDownload }) {
   }
 
   return (
-    <div className="card-actions buyer-order-download-bar">
+    <div className="buyer-order-download-bar" data-testid="buyer-order-download-bar">
       <button
         type="button"
-        onClick={() => onDownload?.(ticketIds[0])}
-        className="primary-button download-button"
+        onClick={() => handleDownload(ticketIds[0])}
+        className="primary-button download-button buyer-download-ticket-btn"
       >
         <DownloadIcon />
         הורד כרטיס

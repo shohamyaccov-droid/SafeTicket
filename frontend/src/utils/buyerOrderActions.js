@@ -5,7 +5,7 @@ export function isPaidActiveOrder(purchase) {
 
 function coerceTicketId(value) {
   if (value == null || value === '') return null;
-  if (typeof value === 'object') return value.id ?? null;
+  if (typeof value === 'object') return value.id ?? value.ticket_id ?? null;
   return value;
 }
 
@@ -14,16 +14,38 @@ export function ticketIdFromDownloadUrl(url) {
   return match ? Number(match[1]) : null;
 }
 
+function ticketIdFromTicketLike(ticket) {
+  const direct = coerceTicketId(ticket);
+  if (direct != null && direct !== '') return direct;
+  if (!ticket || typeof ticket !== 'object') return null;
+  return (
+    ticketIdFromDownloadUrl(ticket.pdf_file_url) ||
+    ticketIdFromDownloadUrl(ticket.pdf_download_url) ||
+    null
+  );
+}
+
 export function orderTicketIds(purchase) {
   const tickets = Array.isArray(purchase?.tickets) ? purchase.tickets : [];
-  const fromTickets = tickets.map((t) => coerceTicketId(t)).filter((id) => id != null && id !== '');
+  const fromTickets = tickets.map(ticketIdFromTicketLike).filter((id) => id != null && id !== '');
   if (fromTickets.length) return fromTickets;
 
-  const fallback = coerceTicketId(purchase?.ticket) || coerceTicketId(purchase?.ticket_details);
+  const fallback =
+    coerceTicketId(purchase?.ticket) ||
+    coerceTicketId(purchase?.ticket_id) ||
+    ticketIdFromTicketLike(purchase?.ticket_details);
   if (fallback != null && fallback !== '') return [fallback];
 
-  const fromUrl = ticketIdFromDownloadUrl(purchase?.pdf_download_url);
+  const fromUrl =
+    ticketIdFromDownloadUrl(purchase?.pdf_download_url) ||
+    ticketIdFromDownloadUrl(purchase?.ticket_details?.pdf_download_url) ||
+    ticketIdFromDownloadUrl(purchase?.ticket_details?.pdf_file_url);
   return fromUrl != null ? [fromUrl] : [];
+}
+
+export function resolveDownloadTicketId(purchase) {
+  const ids = orderTicketIds(purchase);
+  return ids.length ? ids[0] : null;
 }
 
 export function orderTicketIsDownloadable(ticket) {
@@ -31,8 +53,9 @@ export function orderTicketIsDownloadable(ticket) {
   return Boolean(ticket.pdf_file_url || ticket.has_pdf_file);
 }
 
+/** Paid/completed matches the stepper "ready to download" step — do not require ids up front. */
 export function orderCanDownloadTickets(purchase) {
-  return isPaidActiveOrder(purchase) && orderTicketIds(purchase).length > 0;
+  return isPaidActiveOrder(purchase);
 }
 
 const STEP1 = 'הזמנה אושרה';

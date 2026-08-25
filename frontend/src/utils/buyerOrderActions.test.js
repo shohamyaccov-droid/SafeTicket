@@ -3,6 +3,7 @@ import {
   isPaidActiveOrder,
   orderCanDownloadTickets,
   orderTicketIds,
+  resolveDownloadTicketId,
   timelineForBuyerDisplay,
 } from './buyerOrderActions';
 
@@ -28,6 +29,12 @@ describe('buyerOrderActions', () => {
     expect(orderTicketIds(paid)).toEqual([9]);
   });
 
+  it('shows download for paid orders even when ticket ids are missing', () => {
+    expect(orderCanDownloadTickets({ status: 'paid', tickets: [] })).toBe(true);
+    expect(orderCanDownloadTickets({ status: 'completed' })).toBe(true);
+    expect(orderCanDownloadTickets({ status: 'pending' })).toBe(false);
+  });
+
   it('resolves a ticket id from the download URL when tickets are missing', () => {
     expect(
       orderTicketIds({
@@ -35,6 +42,11 @@ describe('buyerOrderActions', () => {
         pdf_download_url: 'https://example.com/api/users/tickets/77/download_pdf/',
       }),
     ).toEqual([77]);
+  });
+
+  it('resolves a ticket id from ticket_details.id', () => {
+    expect(orderTicketIds({ status: 'paid', tickets: [], ticket_details: { id: 55 } })).toEqual([55]);
+    expect(resolveDownloadTicketId({ status: 'paid', ticket: 42, tickets: [] })).toBe(42);
   });
 
   it('keeps processing on step 2 and ready-to-download only on step 3', () => {

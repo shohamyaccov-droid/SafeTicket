@@ -24,6 +24,7 @@ import { toastError, toastSuccess } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
 import { downloadTicketFromAxiosBlob } from '../utils/ticketDownload';
 import {
+  isPaidActiveOrder,
   timelineForBuyerDisplay,
 } from '../utils/buyerOrderActions';
 import { buyerHasPaymeIdentity, buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
@@ -337,6 +338,15 @@ const Dashboard = () => {
     fetchDashboardData();
     fetchOffers();
   }, [user]);
+
+  // Paid/ready orders: auto-open the accordion so the stepper + download button are visible.
+  useEffect(() => {
+    const purchases = dashboardData?.purchases;
+    if (!Array.isArray(purchases) || purchases.length === 0) return;
+    const ready = purchases.find((p) => isPaidActiveOrder(p) && p?.id != null);
+    if (!ready) return;
+    setExpandedPurchaseId((prev) => (prev != null ? prev : ready.id));
+  }, [dashboardData]);
 
   // Refresh offers when opening the tab (fixes stale list after mutations elsewhere)
   useEffect(() => {
@@ -1105,54 +1115,58 @@ const Dashboard = () => {
                               <span className="detail-value">{purchase.quantity || 1}</span>
                             </div>
                           </div>
-
-                          <div className="status-timeline">
-                            <div className="timeline-label">סטטוס הזמנה:</div>
-                            <div className="timeline-steps">
-                              {timeline.steps.map((step, index) => (
-                                <div
-                                  key={step.step}
-                                  className={`timeline-step ${step.completed ? 'completed' : ''} ${
-                                    index === timeline.current_step - 1 ? 'current' : ''
-                                  }`}
-                                >
-                                  <div className="step-circle" style={{ backgroundColor: step.completed ? '#10b981' : '#ffffff', position: 'relative', zIndex: 2 }}>
-                                    {step.completed ? (
-                                      <svg
-                                        width="16"
-                                        height="16"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                      >
-                                        <path
-                                          d="M20 6L9 17L4 12"
-                                          stroke="white"
-                                          strokeWidth="2"
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                        />
-                                      </svg>
-                                    ) : (
-                                      <span>{step.step}</span>
-                                    )}
-                                  </div>
-                                  <div className="step-label">{step.label}</div>
-                                  {index < timeline.steps.length - 1 && (
-                                    <div
-                                      className={`step-connector ${
-                                        step.completed ? 'completed' : ''
-                                      }`}
-                                    ></div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          <BuyerOrderDownloadBar purchase={purchase} onDownload={handleDownloadPDF} />
                         </div>
                       )}
+
+                      <div className="purchase-progress-and-download">
+                        <div className="status-timeline">
+                          <div className="timeline-label">סטטוס הזמנה:</div>
+                          <div className="timeline-steps">
+                            {timeline.steps.map((step, index) => (
+                              <div
+                                key={step.step}
+                                className={`timeline-step ${step.completed ? 'completed' : ''} ${
+                                  index === timeline.current_step - 1 ? 'current' : ''
+                                }`}
+                              >
+                                <div className="step-circle" style={{ backgroundColor: step.completed ? '#10b981' : '#ffffff', position: 'relative', zIndex: 2 }}>
+                                  {step.completed ? (
+                                    <svg
+                                      width="16"
+                                      height="16"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                      <path
+                                        d="M20 6L9 17L4 12"
+                                        stroke="white"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      />
+                                    </svg>
+                                  ) : (
+                                    <span>{step.step}</span>
+                                  )}
+                                </div>
+                                <div className="step-label">{step.label}</div>
+                                {index < timeline.steps.length - 1 && (
+                                  <div
+                                    className={`step-connector ${
+                                      step.completed ? 'completed' : ''
+                                    }`}
+                                  ></div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {isPaidActiveOrder(purchase) && (
+                          <BuyerOrderDownloadBar purchase={purchase} onDownload={handleDownloadPDF} />
+                        )}
+                      </div>
                     </div>
                   );
                 })}

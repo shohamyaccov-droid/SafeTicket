@@ -402,6 +402,12 @@
   overflow: visible;
 }
 
+/* Purchases: never clip the stepper or download ticket button */
+.purchase-card.enterprise-card,
+.purchase-card-accordion.enterprise-card {
+  overflow: visible;
+}
+
 /* My Sales listing rows: same — row action buttons must not clip/hide on card hover */
 .listing-card.enterprise-card.dashboard-compact-card {
   overflow: visible;
@@ -736,6 +742,14 @@
   display: none !important;
 }
 
+.purchase-progress-and-download {
+  display: block;
+  width: 100%;
+  padding: 0 1rem 1rem;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
 /* Card Actions */
 .card-actions {
   display: flex;
@@ -746,8 +760,29 @@
   border-top: 1px solid var(--border-light);
 }
 
+.buyer-order-download-bar {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin-top: 0.75rem;
+  overflow: visible;
+  visibility: visible;
+  opacity: 1;
+}
+
+.buyer-order-download-bar .multi-download-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
 .card-actions .download-button,
-.buyer-order-download-bar .download-button {
+.buyer-order-download-bar .download-button,
+.buyer-download-ticket-btn {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
   flex: 1 1 auto;
   width: 100%;
   min-height: 48px;
@@ -756,11 +791,14 @@
   font-weight: 800;
 }
 
-.card-actions .primary-button.download-button {
+.card-actions .primary-button.download-button,
+.buyer-order-download-bar .primary-button.download-button,
+.buyer-download-ticket-btn.primary-button {
   min-height: 48px;
   padding: 0.75rem 1rem;
   border-radius: 10px;
   font-size: 1.05rem;
+  flex: 1 1 auto;
 }
 
 .primary-button,
@@ -790,6 +828,17 @@
   padding: 0.4rem 0.75rem;
   font-size: 0.85rem;
   border-radius: 999px; /* sleek pill style */
+}
+
+/* Purchase download CTA must stay full-width and visible — do not inherit compact pills */
+.buyer-order-download-bar .primary-button.download-button,
+.buyer-download-ticket-btn {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  min-height: 48px !important;
+  padding: 0.75rem 1rem !important;
+  font-size: 1.05rem !important;
+  border-radius: 10px !important;
 }
 
 .primary-button {
@@ -1940,6 +1989,10 @@
 
   /* Row details panel: breathing room on small screens */
   .row-details {
+    padding: 0 0.75rem 1rem;
+  }
+
+  .purchase-progress-and-download {
     padding: 0 0.75rem 1rem;
   }
 
