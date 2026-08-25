@@ -16,9 +16,31 @@
 .terms-card h1 { font-size: 2rem; margin-bottom: 2rem; color: #111827; text-align: center; }
 .terms-card h2 { font-size: 1.25rem; margin-top: 2rem; margin-bottom: 1rem; color: #2563eb; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.5rem; }
 .terms-card p { margin-bottom: 1rem; color: #4b5563; }
-.terms-card ul { margin-bottom: 1rem; padding-right: 1.5rem; }
-.terms-card li { margin-bottom: 0.5rem; color: #4b5563; }
+.terms-card ul,
+.terms-card ol {
+  margin-bottom: 1rem;
+  padding-right: 1.5rem;
+}
+.terms-card ol {
+  list-style: decimal;
+}
+.terms-card ul {
+  list-style: disc;
+}
+.terms-card li { margin-bottom: 0.75rem; color: #4b5563; }
 .terms-card strong { color: #111827; }
+
+.how-it-works-card h1 {
+  font-size: clamp(1.45rem, 4vw, 2rem);
+  line-height: 1.35;
+  margin-bottom: 1.25rem;
+}
+
+.how-it-works-cta {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
 
 .not-found-card {
   text-align: center;

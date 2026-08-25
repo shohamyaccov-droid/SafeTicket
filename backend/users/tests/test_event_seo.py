@@ -16,6 +16,7 @@ from users.seo import (
     build_event_slug_base,
     build_seo_title,
     build_sitemap_xml,
+    get_static_page_seo,
     inject_seo_into_html,
 )
 
@@ -158,6 +159,7 @@ class EventSlugAndSeoTests(TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertIn('xml', res['Content-Type'])
         self.assertIn('<urlset', res.content.decode('utf-8'))
+        self.assertIn('public, max-age=300', res['Cache-Control'])
 
     def test_inject_html_includes_json_ld_script(self):
         seo = build_event_seo_payload(self.event)
@@ -176,6 +178,42 @@ class EventSlugAndSeoTests(TestCase):
         self.assertIn('https://tradetix.co.il/event/', seo['canonical_url'])
         self.assertIn('name="robots" content="index, follow"', html)
         self.assertNotIn('noindex', html)
+
+    def test_how_it_works_crawler_html_has_headings_and_steps(self):
+        seo = get_static_page_seo('/how-it-works')
+        self.assertIsNotNone(seo)
+        self.assertIn('איך למכור כרטיס', seo['crawler_html'])
+        self.assertIn('<ol>', seo['crawler_html'])
+        html = inject_seo_into_html(
+            '<html><head><title>Old</title><meta name="description" content="x"></head>'
+            '<body><div id="root"></div></body></html>',
+            seo,
+        )
+        self.assertIn(seo['seo_title'], html)
+        self.assertIn('איך למכור כרטיס להופעה', html)
+        self.assertIn('כרטיסים יד שניה', html)
+        self.assertIn('תשלום מאובטח', html)
+        self.assertIn('<div id="root"><article class="seo-crawler-snapshot">', html)
+        self.assertIn('HowTo', html)
+
+    def test_faq_crawler_html_lists_questions(self):
+        seo = get_static_page_seo('/faq')
+        html = inject_seo_into_html(
+            '<html><head><title>Old</title></head><body><div id="root"></div></body></html>',
+            seo,
+        )
+        self.assertIn('שאלות ותשובות', html)
+        self.assertIn('FAQPage', html)
+        self.assertIn('הגנת הקונה', html)
+
+    def test_home_static_seo_uses_default_title(self):
+        seo = get_static_page_seo('/')
+        self.assertTrue(seo['seo_title'].startswith('TradeTix'))
+        html = inject_seo_into_html(
+            '<html><head><title>Old</title></head><body><div id="root"></div></body></html>',
+            seo,
+        )
+        self.assertIn('WebSite', html)
 
     def test_staging_frontend_origin_never_used_for_canonical(self):
         from users.seo import event_canonical_url, frontend_origin

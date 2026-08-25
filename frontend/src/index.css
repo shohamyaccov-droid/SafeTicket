@@ -192,3 +192,33 @@ textarea {
   background: #aaaaaa;
 }
 
+/* Visible to HTML-only crawlers when the SPA has not yet replaced #root. */
+.seo-crawler-snapshot {
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 24px 20px 48px;
+  direction: rtl;
+  color: #1f2937;
+  line-height: 1.65;
+  font-family: Heebo, Assistant, system-ui, sans-serif;
+}
+.seo-crawler-snapshot h1 {
+  font-size: 1.75rem;
+  margin-bottom: 1rem;
+  color: #111827;
+}
+.seo-crawler-snapshot h2 {
+  font-size: 1.2rem;
+  margin: 1.75rem 0 0.75rem;
+  color: #2563eb;
+}
+.seo-crawler-snapshot p,
+.seo-crawler-snapshot li {
+  margin-bottom: 0.75rem;
+  color: #4b5563;
+}
+.seo-crawler-snapshot ol,
+.seo-crawler-snapshot ul {
+  padding-right: 1.5rem;
+}
+

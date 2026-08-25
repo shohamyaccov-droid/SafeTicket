@@ -1,10 +1,9 @@
 /**
- * Server-side SEO injection for /event/* on the public frontend host.
+ * Server-side SEO injection for the public frontend host (tradetix.co.il).
  *
- * Why: A pure Vite CSR SPA only exposes the generic index.html meta tags to crawlers
- * that do not execute JS (and delays Googlebot indexing). This Node shell keeps the
- * same Vite assets, but fetches Django /events/:id/seo/ and injects <title>, meta,
- * Open Graph, and Schema.org Event JSON-LD into the first HTML byte.
+ * A pure Vite CSR SPA only exposes generic index.html meta to crawlers that do not
+ * execute JS. This Node shell keeps the Vite assets, injects <title>/Open Graph/JSON-LD,
+ * and embeds static article HTML inside #root for / , /how-it-works, /faq, and /event/*.
  *
  * Start: node seo-server.mjs  (Render startCommand)
  */
@@ -12,6 +11,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getStaticPageSeo } from './src/content/staticPagesSeo.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(__dirname, 'dist');
@@ -28,6 +28,8 @@ const PUBLIC_ORIGIN = (
   'https://tradetix.co.il'
 ).replace(/\/$/, '');
 
+const INDEX_CACHE = { html: '', mtime: 0 };
+
 function esc(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -40,8 +42,9 @@ function injectSeo(html, seo) {
   const title = esc(seo.seo_title || 'TradeTix');
   const description = esc(seo.seo_description || '');
   const canonical = esc(seo.canonical_url || '');
-  const ogImage = esc(seo.og_image || '');
+  const ogImage = esc(seo.og_image || `${PUBLIC_ORIGIN}/og-share.png`);
   const ld = JSON.stringify(seo.json_ld || {}).replace(/</g, '\\u003c');
+  const crawlerHtml = String(seo.crawler_html || '').trim();
 
   html = html.replace(/<title>[^<]*<\/title>/i, `<title>${title}</title>`);
   html = html.replace(/<meta\s+name=["']description["'][^>]*>/gi, '');
@@ -51,7 +54,7 @@ function injectSeo(html, seo) {
   html = html.replace(/<meta\s+name=["']twitter:[^"']+["'][^>]*>/gi, '');
 
   const block = `
-    <!-- TradeTix event SEO (Node inject; crawler-visible) -->
+    <!-- TradeTix SEO (Node inject; crawler-visible) -->
     <meta name="robots" content="index, follow" />
     <meta name="description" content="${description}" />
     <link rel="canonical" href="${canonical}" />
@@ -66,9 +69,12 @@ function injectSeo(html, seo) {
     <meta name="twitter:title" content="${title}" />
     <meta name="twitter:description" content="${description}" />
     <meta name="twitter:image" content="${ogImage}" />
-    <script type="application/ld+json" id="tradetix-event-jsonld">${ld}</script>
+    <script type="application/ld+json" id="tradetix-jsonld">${ld}</script>
   `;
   html = html.replace(/<\/head>/i, `${block}</head>`);
+  if (crawlerHtml) {
+    return html.replace('<div id="root"></div>', `<div id="root">${crawlerHtml}</div>`);
+  }
   const noscript = `<noscript><article><h1>${title}</h1><p>${description}</p></article></noscript>`;
   return html.replace('<div id="root"></div>', `<div id="root"></div>${noscript}`);
 }
@@ -77,7 +83,18 @@ function readIndex() {
   if (!fs.existsSync(INDEX)) {
     throw new Error(`Missing ${INDEX} — run npm run build first`);
   }
-  return fs.readFileSync(INDEX, 'utf8');
+  const mtime = fs.statSync(INDEX).mtimeMs;
+  if (INDEX_CACHE.html && INDEX_CACHE.mtime === mtime) {
+    return INDEX_CACHE.html;
+  }
+  INDEX_CACHE.html = fs.readFileSync(INDEX, 'utf8');
+  INDEX_CACHE.mtime = mtime;
+  return INDEX_CACHE.html;
+}
+
+function sendHtml(res, html, cacheControl) {
+  res.set('Cache-Control', cacheControl);
+  res.type('html').send(html);
 }
 
 const app = express();
@@ -90,35 +107,35 @@ app.get('/robots.txt', (_req, res) => {
 });
 
 app.get('/sitemap.xml', async (_req, res) => {
-  const urls = [`${PUBLIC_ORIGIN}/`];
   try {
-    const response = await fetch(`${API}/api/users/events/?page_size=500`, {
-      headers: { Accept: 'application/json' },
+    const response = await fetch(`${API}/sitemap.xml`, {
+      headers: { Accept: 'application/xml' },
     });
     if (response.ok) {
-      const payload = await response.json();
-      const rows = Array.isArray(payload) ? payload : payload.results || [];
-      for (const row of rows) {
-        const key = (row.slug && String(row.slug).trim()) || row.id;
-        if (key) urls.push(`${PUBLIC_ORIGIN}/event/${key}`);
+      const body = await response.text();
+      if (body.includes('<urlset')) {
+        res.type('application/xml').set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600').send(body);
+        return;
       }
     }
   } catch (err) {
-    console.warn('[seo-server] sitemap fetch failed:', err?.message || err);
+    console.warn('[seo-server] sitemap proxy failed:', err?.message || err);
   }
+  const staticLocs = ['/', '/how-it-works', '/faq', '/about', '/contact', '/terms', '/privacy', '/refunds', '/buyer-guarantee', '/accessibility', '/sell/new'];
+  const urls = staticLocs.map((p) => (p === '/' ? `${PUBLIC_ORIGIN}/` : `${PUBLIC_ORIGIN}${p}`));
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls
   .map(
     (loc) => `  <url>
     <loc>${esc(loc)}</loc>
-    <changefreq>daily</changefreq>
+    <changefreq>weekly</changefreq>
   </url>`
   )
   .join('\n')}
 </urlset>
 `;
-  res.type('application/xml').set('Cache-Control', 'public, max-age=300').send(body);
+  res.type('application/xml').set('Cache-Control', 'public, max-age=120').send(body);
 });
 
 app.get('/.well-known/apple-developer-merchantid-domain-association', async (_req, res) => {
@@ -149,14 +166,31 @@ app.get('/event/:eventKey', async (req, res) => {
   } catch (err) {
     console.warn('[seo-server] event SEO fetch failed:', err?.message || err);
   }
-  res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-  res.type('html').send(html);
+  sendHtml(res, html, 'public, max-age=60, stale-while-revalidate=300');
 });
+
+function sendStaticMarketingPage(req, res) {
+  const page = getStaticPageSeo(req.path, PUBLIC_ORIGIN);
+  let html = readIndex();
+  if (page) {
+    html = injectSeo(html, page);
+  }
+  sendHtml(res, html, 'public, max-age=300, stale-while-revalidate=3600');
+}
+
+app.get('/', sendStaticMarketingPage);
+app.get('/how-it-works', sendStaticMarketingPage);
+app.get('/faq', sendStaticMarketingPage);
 
 app.use(express.static(DIST, { index: false, maxAge: '1h' }));
 
-app.get('*', (_req, res) => {
-  res.type('html').send(readIndex());
+app.get('*', (req, res) => {
+  const page = getStaticPageSeo(req.path, PUBLIC_ORIGIN);
+  let html = readIndex();
+  if (page) {
+    html = injectSeo(html, page);
+  }
+  sendHtml(res, html, 'public, max-age=60, stale-while-revalidate=300');
 });
 
 app.listen(PORT, () => {

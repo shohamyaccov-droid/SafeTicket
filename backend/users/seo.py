@@ -11,9 +11,12 @@ Architecture note (decoupled React SPA + Django API):
 """
 from __future__ import annotations
 
+import json
 import re
+import time
 from datetime import timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, Optional
 
 from django.conf import settings
@@ -24,6 +27,13 @@ from django.utils.text import slugify
 
 _STAGING_WEB_HOST = 'safeticket-web.onrender.com'
 _PUBLIC_SITE_DEFAULT = 'https://tradetix.co.il'
+DEFAULT_SITE_TITLE = 'TradeTix - זירת מסחר בטוחה למכירת כרטיסים יד שנייה'
+DEFAULT_SITE_DESCRIPTION = (
+    'טריידטיקס (TradeTix) — זירת מסחר בטוחה בישראל לקנייה ומכירת כרטיסים יד שנייה. '
+    'תשלום מאובטח והגנה על הכסף.'
+)
+_SITEMAP_CACHE: dict[str, Any] = {'at': 0.0, 'xml': ''}
+_SPA_INDEX_CACHE: dict[str, Any] = {'mtime': None, 'html': ''}
 
 
 def frontend_origin() -> str:
@@ -345,6 +355,12 @@ def build_event_seo_payload(event, *, request=None) -> dict[str, Any]:
         'canonical_path': event_path(slug),
         'og_image': image,
         'json_ld': json_ld,
+        'crawler_html': (
+            '<article class="seo-crawler-snapshot">'
+            f'<h1>{_xml_attr(title)}</h1>'
+            f'<p>{_xml_attr(description)}</p>'
+            '</article>'
+        ),
         'lowest_price': str(stats['low']) if stats['low'] is not None else None,
         'highest_price': str(stats['high']) if stats['high'] is not None else None,
         'available_ticket_count': stats['count'],
@@ -352,30 +368,182 @@ def build_event_seo_payload(event, *, request=None) -> dict[str, Any]:
     }
 
 
+def _content_json_path(filename: str) -> Path:
+    return Path(__file__).resolve().parents[2] / 'frontend' / 'src' / 'content' / filename
+
+
+def _load_content_json(filename: str) -> dict[str, Any]:
+    path = _content_json_path(filename)
+    with path.open(encoding='utf-8') as handle:
+        return json.load(handle)
+
+
+def _crawler_list_html(section: dict[str, Any]) -> str:
+    tag = 'ul' if section.get('list') == 'ul' else 'ol'
+    items = []
+    for item in section.get('items') or []:
+        strong = _xml_attr(str(item.get('strong') or ''))
+        text = _xml_attr(str(item.get('text') or ''))
+        items.append(f'<li><strong>{strong}</strong> {text}</li>')
+    return f'<{tag}>{"".join(items)}</{tag}>'
+
+
+def _how_it_works_crawler_html(page: dict[str, Any]) -> str:
+    parts = [
+        '<article class="seo-crawler-snapshot">',
+        f'<h1>{_xml_attr(page.get("h1") or "")}</h1>',
+        f'<p>{_xml_attr(page.get("intro") or "")}</p>',
+    ]
+    for section in page.get('sections') or []:
+        lead = section.get('lead') or ''
+        parts.append('<section>')
+        parts.append(f'<h2>{_xml_attr(section.get("h2") or "")}</h2>')
+        if lead:
+            parts.append(f'<p>{_xml_attr(lead)}</p>')
+        parts.append(_crawler_list_html(section))
+        parts.append('</section>')
+    parts.append('</article>')
+    return ''.join(parts)
+
+
+def _faq_crawler_html(page: dict[str, Any]) -> str:
+    parts = [
+        '<article class="seo-crawler-snapshot">',
+        f'<h1>{_xml_attr(page.get("h1") or "")}</h1>',
+        f'<p>{_xml_attr(page.get("intro") or "")}</p>',
+    ]
+    for item in page.get('items') or []:
+        parts.append(
+            '<section>'
+            f'<h2>{_xml_attr(item.get("question") or "")}</h2>'
+            f'<p>{_xml_attr(item.get("answer") or "")}</p>'
+            '</section>'
+        )
+    parts.append('</article>')
+    return ''.join(parts)
+
+
+def _how_it_works_json_ld(page: dict[str, Any]) -> dict[str, Any]:
+    sell = next((s for s in page.get('sections') or [] if s.get('id') == 'sell'), None)
+    buy = next((s for s in page.get('sections') or [] if s.get('id') == 'buy'), None)
+
+    def steps(section: dict[str, Any] | None) -> list[dict[str, Any]]:
+        out = []
+        for index, item in enumerate((section or {}).get('items') or [], start=1):
+            strong = str(item.get('strong') or '').rstrip(':')
+            out.append(
+                {
+                    '@type': 'HowToStep',
+                    'position': index,
+                    'name': strong,
+                    'text': f'{item.get("strong") or ""} {item.get("text") or ""}'.strip(),
+                }
+            )
+        return out
+
+    return {
+        '@context': 'https://schema.org',
+        '@graph': [
+            {
+                '@type': 'HowTo',
+                'name': 'איך למכור כרטיס להופעה ב-TradeTix',
+                'description': (sell or {}).get('lead') or page.get('description') or '',
+                'step': steps(sell),
+            },
+            {
+                '@type': 'HowTo',
+                'name': 'איך לקנות כרטיסים יד שניה ב-TradeTix',
+                'description': (buy or {}).get('lead') or page.get('description') or '',
+                'step': steps(buy),
+            },
+        ],
+    }
+
+
+def get_static_page_seo(path: str) -> dict[str, Any] | None:
+    """Title/description/JSON-LD/crawler HTML for marketing routes (no JS required)."""
+    route = path if str(path).startswith('/') else f'/{path}'
+    if route != '/' :
+        route = route.rstrip('/') or '/'
+    origin = frontend_origin()
+    og_image = f'{origin}/og-share.png'
+    if route == '/how-it-works':
+        page = _load_content_json('how-it-works.json')
+        return {
+            'seo_title': page.get('h1') or DEFAULT_SITE_TITLE,
+            'seo_description': page.get('description') or DEFAULT_SITE_DESCRIPTION,
+            'canonical_url': f'{origin}/how-it-works',
+            'og_image': og_image,
+            'json_ld': _how_it_works_json_ld(page),
+            'crawler_html': _how_it_works_crawler_html(page),
+        }
+    if route == '/faq':
+        page = _load_content_json('faq-crawler.json')
+        return {
+            'seo_title': page.get('title') or DEFAULT_SITE_TITLE,
+            'seo_description': page.get('description') or DEFAULT_SITE_DESCRIPTION,
+            'canonical_url': f'{origin}/faq',
+            'og_image': og_image,
+            'json_ld': {
+                '@context': 'https://schema.org',
+                '@type': 'FAQPage',
+                'mainEntity': [
+                    {
+                        '@type': 'Question',
+                        'name': item.get('question') or '',
+                        'acceptedAnswer': {'@type': 'Answer', 'text': item.get('answer') or ''},
+                    }
+                    for item in page.get('items') or []
+                ],
+            },
+            'crawler_html': _faq_crawler_html(page),
+        }
+    if route == '/':
+        return {
+            'seo_title': DEFAULT_SITE_TITLE,
+            'seo_description': DEFAULT_SITE_DESCRIPTION,
+            'canonical_url': f'{origin}/',
+            'og_image': og_image,
+            'json_ld': {
+                '@context': 'https://schema.org',
+                '@type': 'WebSite',
+                'name': 'TradeTix',
+                'url': f'{origin}/',
+                'description': DEFAULT_SITE_DESCRIPTION,
+                'inLanguage': 'he-IL',
+            },
+            'crawler_html': (
+                '<article class="seo-crawler-snapshot">'
+                f'<h1>{_xml_attr(DEFAULT_SITE_TITLE)}</h1>'
+                f'<p>{_xml_attr(DEFAULT_SITE_DESCRIPTION)}</p>'
+                '<p>TradeTix היא זירת מסחר בטוחה לכרטיסים יד שנייה בישראל. '
+                'קנייה ומכירה עם תשלום מאובטח והגנה על הכסף.</p>'
+                '</article>'
+            ),
+        }
+    return None
+
+
 def inject_seo_into_html(html: str, seo: dict[str, Any]) -> str:
     """
     Replace/augment <title>, description, canonical, Open Graph, and inject JSON-LD
     into an SPA index.html for crawler-visible first paint.
     """
-    import json
-
     title = _strip_html(str(seo.get('seo_title') or 'TradeTix'))
     description = _strip_html(str(seo.get('seo_description') or ''))
     canonical = str(seo.get('canonical_url') or '')
     og_image = str(seo.get('og_image') or '')
     json_ld = seo.get('json_ld') or {}
+    crawler_html = str(seo.get('crawler_html') or '').strip()
     # Prevent </script> breakouts in JSON-LD
     ld_text = json.dumps(json_ld, ensure_ascii=False).replace('<', '\\u003c')
 
-    def repl_title(m):
-        return f'<title>{title}</title>'
-
-    html = re.sub(r'<title>[^<]*</title>', repl_title, html, count=1, flags=re.I)
+    html = re.sub(r'<title>[^<]*</title>', f'<title>{title}</title>', html, count=1, flags=re.I)
     if not re.search(r'<title>', html, flags=re.I):
         html = html.replace('</head>', f'<title>{title}</title></head>', 1)
 
     meta_block = f'''
-    <!-- TradeTix event SEO (server-injected for crawlers) -->
+    <!-- TradeTix SEO (server-injected for crawlers) -->
     <meta name="robots" content="index, follow" />
     <meta name="description" content="{_xml_attr(description)}" />
     <link rel="canonical" href="{_xml_attr(canonical)}" />
@@ -390,10 +558,9 @@ def inject_seo_into_html(html: str, seo: dict[str, Any]) -> str:
     <meta name="twitter:title" content="{_xml_attr(title)}" />
     <meta name="twitter:description" content="{_xml_attr(description)}" />
     <meta name="twitter:image" content="{_xml_attr(og_image)}" />
-    <script type="application/ld+json" id="tradetix-event-jsonld">{ld_text}</script>
+    <script type="application/ld+json" id="tradetix-jsonld">{ld_text}</script>
     '''
 
-    # Drop conflicting default description/canonical/og/robots tags from static shell (first-pass).
     html = re.sub(
         r'<meta\s+name=["\']description["\'][^>]*>',
         '',
@@ -406,14 +573,16 @@ def inject_seo_into_html(html: str, seo: dict[str, Any]) -> str:
     html = re.sub(r'<meta\s+name=["\']twitter:[^"\']+["\'][^>]*>', '', html, flags=re.I)
     html = html.replace('</head>', meta_block + '\n</head>', 1)
 
-    # Noscript fallback for non-JS crawlers
-    noscript = (
-        f'<noscript><article><h1>{_xml_attr(title)}</h1>'
-        f'<p>{_xml_attr(description)}</p>'
-        f'<p><a href="{_xml_attr(canonical)}">Tickets</a></p></article></noscript>'
-    )
-    if '<div id="root">' in html:
-        html = html.replace('<div id="root"></div>', f'<div id="root"></div>{noscript}', 1)
+    if crawler_html:
+        html = html.replace('<div id="root"></div>', f'<div id="root">{crawler_html}</div>', 1)
+    else:
+        noscript = (
+            f'<noscript><article><h1>{_xml_attr(title)}</h1>'
+            f'<p>{_xml_attr(description)}</p>'
+            f'<p><a href="{_xml_attr(canonical)}">Tickets</a></p></article></noscript>'
+        )
+        if '<div id="root">' in html:
+            html = html.replace('<div id="root"></div>', f'<div id="root"></div>{noscript}', 1)
     return html
 
 
@@ -474,6 +643,32 @@ def build_sitemap_xml() -> str:
         )
     lines.append('</urlset>')
     return '\n'.join(lines)
+
+
+def cached_sitemap_xml(*, ttl: float = 60.0) -> str:
+    now = time.time()
+    cached = _SITEMAP_CACHE.get('xml') or ''
+    if cached and now - float(_SITEMAP_CACHE.get('at') or 0) < ttl:
+        return str(cached)
+    xml = build_sitemap_xml()
+    _SITEMAP_CACHE['at'] = now
+    _SITEMAP_CACHE['xml'] = xml
+    return xml
+
+
+def load_spa_index_html() -> str:
+    from django.http import Http404
+
+    index = Path(settings.STATIC_ROOT) / 'index.html'
+    if not index.is_file():
+        raise Http404('index.html missing — run build_render.sh then collectstatic.')
+    mtime = index.stat().st_mtime
+    if _SPA_INDEX_CACHE.get('html') and _SPA_INDEX_CACHE.get('mtime') == mtime:
+        return str(_SPA_INDEX_CACHE['html'])
+    html = index.read_text(encoding='utf-8')
+    _SPA_INDEX_CACHE['mtime'] = mtime
+    _SPA_INDEX_CACHE['html'] = html
+    return html
 
 
 def resolve_event_by_identifier(identifier: str, queryset=None):
