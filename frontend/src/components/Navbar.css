@@ -136,6 +136,8 @@
   border: 1px solid var(--border-color);
   background: var(--bg-primary);
   transition: background 0.15s ease, border-color 0.15s ease;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .nav-login-inline:hover {
@@ -477,6 +479,17 @@
   display: flex !important;
   align-items: center;
   box-sizing: border-box;
+}
+
+button.nav-drawer-link {
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+  text-align: inherit;
 }
 
 .nav-drawer-links .nav-drawer-link:last-child {

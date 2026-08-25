@@ -868,7 +868,10 @@
   text-align: center;
   font-size: 0.95rem;
   font-weight: 600;
+  font-family: inherit;
   color: var(--primary-blue);
+  background: transparent;
+  cursor: pointer;
   border: 2px dashed rgba(14, 165, 233, 0.45);
   border-radius: var(--radius-md);
   text-decoration: none;
@@ -1617,5 +1620,41 @@
   color: #b91c1c;
   font-size: 0.88rem;
   font-weight: 600;
+}
+
+.checkout-hold-timer-line {
+  margin: 0.75rem 0 0.65rem;
+  padding: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #166534;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+}
+
+.guest-checkout .auth-text-link,
+.user-checkout .auth-text-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--primary-blue);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.guest-checkout .auth-text-link:hover,
+.user-checkout .auth-text-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+  .checkout-hold-timer-line {
+    font-size: 0.72rem;
+  }
 }
 

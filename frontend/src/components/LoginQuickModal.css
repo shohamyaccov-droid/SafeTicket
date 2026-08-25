@@ -14,6 +14,8 @@
   position: relative;
   width: 100%;
   max-width: 400px;
+  max-height: min(90vh, 720px);
+  overflow-y: auto;
   background: var(--bg-card, #fff);
   border-radius: 14px;
   padding: 1.5rem 1.25rem 1.25rem;

@@ -1,8 +1,14 @@
-/** Guest checkout helpers: never lock a cart without email, never surface the raw API code. */
+/** Guest checkout identity helpers. */
 
 export function guestHasCheckoutEmail(user, guestEmail) {
   if (user) return true;
   return Boolean(String(guestEmail || '').trim());
+}
+
+export function guestCanReserveCart(user, guestEmail, cartToken) {
+  if (user) return true;
+  if (String(guestEmail || '').trim()) return true;
+  return Boolean(String(cartToken || '').trim());
 }
 
 export function isGuestEmailRequiredError(err) {

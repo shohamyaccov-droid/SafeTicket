@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { authAPI, orderAPI, paymentAPI, ticketAPI, ensureCsrfToken, getEffectiveBearerAccess, syncAxiosDefaultAuthHeader, notifySessionExpired, refreshAccessToken } from '../services/api';
 import {
   buyerChargeFromBase,
@@ -32,8 +32,10 @@ import ShabbatModal from './ShabbatModal';
 import BuyerIdentityInlineForm from './BuyerIdentityInlineForm';
 import { buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
 import { isCheckoutAuthSessionFailure } from '../utils/checkoutAuth';
-import { guestHasCheckoutEmail, isGuestEmailRequiredError } from '../utils/checkoutGuest';
+import { guestCanReserveCart, isGuestEmailRequiredError } from '../utils/checkoutGuest';
+import { getOrCreateCartToken, holdTimerLabel } from '../utils/cartToken';
 import { useAuth } from '../context/AuthContext';
+import { useAuthModal } from '../context/AuthModalContext';
 import './CheckoutModal.css';
 
 /** Buy Now: server cart hold (see TicketViewSet reserve). Negotiation: post-accept checkout window. */
@@ -202,7 +204,8 @@ function coerceCheckoutQuantity(value, fallback = 1) {
 
 const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 1, onClose, acceptedOffer = null, splitType: splitTypeOverride = null, onErrorToParent = null, autoStartPayme = false }) => {
   const { refreshProfile } = useAuth();
-  const [step, setStep] = useState(() => (autoStartPayme && user ? 'payment' : 'info')); // 'info', 'payment', 'success'
+  const { openLogin, openRegister } = useAuthModal();
+  const [step, setStep] = useState('info'); // 'info', 'payment', 'success'
   const [quantity, setQuantity] = useState(() => coerceCheckoutQuantity(initialQuantity, 1));
   const [guestForm, setGuestForm] = useState({
     firstName: '',
@@ -279,6 +282,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const stepRef = useRef(step);
   stepRef.current = step;
   const guestEmailRef = useRef('');
+  const cartTokenRef = useRef(getOrCreateCartToken());
   useEffect(() => {
     guestEmailRef.current = (guestForm.email || '').trim();
   }, [guestForm.email]);
@@ -586,8 +590,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     }
 
     setError('');
-    setStep('payment');
-    setInfoStepBusy(false);
+    try {
+      await executeCheckout(Boolean(isLocalDev && !usePayme));
+    } finally {
+      setInfoStepBusy(false);
+    }
   };
 
   const handleApplyCoupon = async () => {
@@ -883,6 +890,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         }
         if (appliedCoupon?.code) {
           orderData.coupon_code = appliedCoupon.code;
+        }
+        const cartToken = cartTokenRef.current || getOrCreateCartToken();
+        if (cartToken) {
+          orderData.cart_token = cartToken;
         }
 
         await ensureCsrfToken();
@@ -1234,31 +1245,33 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     return guestEmailRef.current || (guestForm.email || '').trim() || null;
   };
 
+  const sessionCartToken = () => cartTokenRef.current || getOrCreateCartToken();
+
   const fireReleaseHold = ({ keepalive = false } = {}) => {
     const tid = ticketIdRef.current;
     if (!tid || skipCartReserveRef.current || transactionCompleteRef.current) return null;
     // Never unlock while PayMe / Apple Pay is in flight (sheet blur, redirect, remount).
     if (isProcessingPaymentRef.current || paymentSubmittingRef.current) return null;
     const email = guestCheckoutEmail();
+    const cartToken = sessionCartToken();
     reservationRef.current = false;
     setReservationActive(false);
     if (keepalive) {
-      ticketAPI.releaseReservationKeepalive(tid, email);
+      ticketAPI.releaseReservationKeepalive(tid, email, cartToken);
       return null;
     }
-    return ticketAPI.releaseReservation(tid, email).catch(() => {
-      ticketAPI.releaseReservationKeepalive(tid, email);
+    return ticketAPI.releaseReservation(tid, email, cartToken).catch(() => {
+      ticketAPI.releaseReservationKeepalive(tid, email, cartToken);
     });
   };
 
-  // Reserve only after the buyer completes the info step (details + TOS) and
-  // enters payment — never lock inventory while they are still reviewing.
+  // Lock inventory as soon as checkout opens (first "המשך לתשלום" on the event page).
   // Negotiated offers already hold inventory from accept; skip cart /reserve.
   useEffect(() => {
     const tid = ticket?.id;
     if (!tid) return undefined;
 
-    if (step !== 'payment' && !skipCartReserveForNegotiatedOffer) {
+    if (step !== 'info' && step !== 'payment' && !skipCartReserveForNegotiatedOffer) {
       return undefined;
     }
 
@@ -1268,11 +1281,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     const reserveTicket = async () => {
       if (stepRef.current === 'success') return;
       if (checkoutClosingRef.current) return;
-      // Already holding a cart lock for this checkout session — do not re-lock.
-      if (reservationRef.current || reserveInFlightRef.current) return;
-      if (!guestHasCheckoutEmail(user, guestEmailRef.current)) {
+      if (reserveInFlightRef.current) return;
+      if (!guestCanReserveCart(user, guestEmailRef.current, sessionCartToken())) {
         setReservationInitializing(false);
-        if (autoStartPayme) setStep('info');
         return;
       }
 
@@ -1304,7 +1315,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         if (user) {
           syncAxiosDefaultAuthHeader();
         }
-        const reserveOpts = {};
+        const reserveOpts = { cart_token: sessionCartToken() };
         if (isNegotiatedPrice && acceptedOffer?.id) {
           reserveOpts.offer_id = acceptedOffer.id;
         }
@@ -1318,15 +1329,17 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         const response = await ticketAPI.reserveTicket(tid, email, reserveOpts);
 
         if (cancelled || generation !== reserveGenerationRef.current || checkoutClosingRef.current) {
-          // Stale async result (effect re-ran / left payment / closed modal). Release orphan lock.
+          // Stale async result (closed modal). Release orphan lock.
           if (
             response?.data?.success
             && !isProcessingPaymentRef.current
             && !paymentSubmittingRef.current
             && !transactionCompleteRef.current
+            && checkoutClosingRef.current
           ) {
-            ticketAPI.releaseReservationKeepalive(tid, email);
-            void ticketAPI.releaseReservation(tid, email).catch(() => {});
+            const token = sessionCartToken();
+            ticketAPI.releaseReservationKeepalive(tid, email, token);
+            void ticketAPI.releaseReservation(tid, email, token).catch(() => {});
           }
           return;
         }
@@ -1398,10 +1411,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     return () => {
       cancelled = true;
       reserveInFlightRef.current = false;
-      // Quantity / identity re-renders while still on payment must NOT drop the cart lock
-      // (mobile remounts were releasing anonymously and then failing re-reserve).
+      // Quantity / identity re-renders while still in checkout must NOT drop the cart lock.
       // True unmount / abandon is handled by the dedicated unmount + pagehide effects.
-      if (stepRef.current === 'payment' || skipCartReserveForNegotiatedOffer) {
+      if (stepRef.current === 'info' || stepRef.current === 'payment' || skipCartReserveForNegotiatedOffer) {
         return;
       }
       if (transactionCompleteRef.current || checkoutClosingRef.current) return;
@@ -1412,15 +1424,6 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     };
   }, [ticket?.id, ticket?.listing_group_id, ticketGroup?.listing_group_id, user, skipCartReserveForNegotiatedOffer, acceptedOffer?.id, lockedQuantity, quantity, isNegotiatedPrice, step]);
 
-  // Leaving the payment step (or closing modal via step change) releases the cart hold.
-  useEffect(() => {
-    if (step === 'payment' || skipCartReserveForNegotiatedOffer) return undefined;
-    if (transactionCompleteRef.current || checkoutClosingRef.current) return undefined;
-    if (!reservationRef.current || !ticket?.id) return undefined;
-    void fireReleaseHold();
-    return undefined;
-  }, [step, skipCartReserveForNegotiatedOffer, ticket?.id, user]);
-
   // True component unmount: unlock only if payment is not in flight.
   useEffect(() => {
     return () => {
@@ -1430,8 +1433,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       const tid = ticketIdRef.current;
       if (!tid) return;
       const email = userRef.current ? null : guestEmailRef.current || null;
+      const token = cartTokenRef.current;
       reservationRef.current = false;
-      ticketAPI.releaseReservationKeepalive(tid, email);
+      ticketAPI.releaseReservationKeepalive(tid, email, token);
     };
   }, []);
 
@@ -1445,8 +1449,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       const tid = ticketIdRef.current;
       if (!tid) return;
       const email = userRef.current ? null : guestEmailRef.current || null;
+      const token = cartTokenRef.current;
       reservationRef.current = false;
-      ticketAPI.releaseReservationKeepalive(tid, email);
+      ticketAPI.releaseReservationKeepalive(tid, email, token);
     };
     window.addEventListener('pagehide', releaseOnLeave);
     window.addEventListener('beforeunload', releaseOnLeave);
@@ -1499,7 +1504,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               try {
                 if (isProcessingPaymentRef.current || paymentSubmittingRef.current) return;
                 const email = user ? null : guestForm.email || null;
-                await ticketAPI.releaseReservation(ticket?.id, email);
+                const token = sessionCartToken();
+                await ticketAPI.releaseReservation(ticket?.id, email, token);
                 reservationRef.current = false;
                 setReservationActive(false);
               } catch {
@@ -1557,6 +1563,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     budget > 0 ? Math.min(100, Math.max(0, ((budget - timeRemaining) / budget) * 100)) : 0;
   const waitingForReservation =
     !skipCartReserveForNegotiatedOffer && !reservationActive && step === 'payment';
+  const infoSubmitDisabled =
+    loading ||
+    infoStepBusy ||
+    !legalAccepted ||
+    timeRemaining === 0 ||
+    (!skipCartReserveForNegotiatedOffer && !reservationActive);
   const paymentSubmitDisabled =
     loading ||
     checkoutSucceeded ||
@@ -1585,7 +1597,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     }
     if (!skipCartReserveForNegotiatedOffer && step !== 'success') {
       const hadHold = reservationRef.current || reserveInFlightRef.current || reservationActive;
-      if (hadHold || step === 'payment') {
+      if (hadHold || step === 'info' || step === 'payment') {
         fireReleaseHold({ keepalive: true });
         try {
           await fireReleaseHold();
@@ -1766,13 +1778,16 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   >
                     חזרה לעמוד הבית
                   </button>
-                  <Link
-                    to="/register"
+                  <button
+                    type="button"
                     className="success-register-cta"
-                    onClick={onClose}
+                    onClick={() => {
+                      onClose();
+                      openRegister();
+                    }}
                   >
                     פתיחת חשבון (אופציונלי) — ניהול הזמנות
-                  </Link>
+                  </button>
                 </>
               )}
               <button onClick={handleClose} className="success-close-button" type="button">
@@ -2450,16 +2465,23 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 {error || 'שגיאה לא ידועה'}
               </div>
             )}
+            <p className="checkout-hold-timer-line" role="status" aria-live="polite">
+              {holdTimerLabel(timeRemaining)}
+            </p>
             <button
               type="button"
               onClick={handleInfoSubmit}
-              disabled={loading || infoStepBusy || !legalAccepted}
+              disabled={infoSubmitDisabled}
               className="checkout-button"
             >
-              {infoStepBusy ? (
+              {loading || infoStepBusy ? (
                 <>
-                  ממשיך… <span className="button-spinner" aria-hidden />
+                  מעביר ל-PayMe… <span className="button-spinner" aria-hidden />
                 </>
+              ) : reservationInitializing || (!skipCartReserveForNegotiatedOffer && !reservationActive) ? (
+                'שומר כרטיס…'
+              ) : timeRemaining === 0 ? (
+                'זמן פג'
               ) : (
                 'המשך לתשלום'
               )}
@@ -2467,7 +2489,13 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           </div>
         ) : (
           <div className="guest-checkout">
-            <p>המשך כאורח או <a href="/login">התחבר</a> לחשבון שלך</p>
+            <p>
+              המשך כאורח או{' '}
+              <button type="button" className="auth-text-link" onClick={openLogin}>
+                התחבר
+              </button>{' '}
+              לחשבון שלך
+            </p>
             <form onSubmit={handleInfoSubmit}>
               <div className="form-group">
                 <label htmlFor="firstName">שם פרטי *</label>
@@ -2543,15 +2571,22 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 {error || 'שגיאה לא ידועה'}
               </div>
             )}
+              <p className="checkout-hold-timer-line" role="status" aria-live="polite">
+                {holdTimerLabel(timeRemaining)}
+              </p>
               <button
                 type="submit"
-                disabled={loading || infoStepBusy || !legalAccepted}
+                disabled={infoSubmitDisabled}
                 className="checkout-button"
               >
-                {infoStepBusy ? (
+                {loading || infoStepBusy ? (
                   <>
-                    ממשיך… <span className="button-spinner" aria-hidden />
+                    מעביר ל-PayMe… <span className="button-spinner" aria-hidden />
                   </>
+                ) : reservationInitializing || (!skipCartReserveForNegotiatedOffer && !reservationActive) ? (
+                  'שומר כרטיס…'
+                ) : timeRemaining === 0 ? (
+                  'זמן פג'
                 ) : (
                   'המשך לתשלום'
                 )}

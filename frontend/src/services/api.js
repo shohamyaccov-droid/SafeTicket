@@ -759,38 +759,49 @@ export const ticketAPI = {
     await ensureCsrfToken();
     const data = {};
     const guestEmail = email != null && String(email).trim() ? String(email).trim() : '';
+    const cartToken = options.cart_token != null && String(options.cart_token).trim()
+      ? String(options.cart_token).trim()
+      : '';
     if (guestEmail) data.email = guestEmail;
+    if (cartToken) data.cart_token = cartToken;
     if (options.offer_id != null) data.offer_id = options.offer_id;
     if (options.listing_group_id) data.listing_group_id = options.listing_group_id;
     // Always send an integer quantity so mobile selects / string state cannot omit it.
     const qtyRaw = options.quantity != null ? options.quantity : 1;
     const qty = Math.max(1, Math.min(10, parseInt(String(qtyRaw), 10) || 1));
     data.quantity = qty;
-    // Guests: skipAuth so we don't attach a stale JWT. Logged-in: keep Bearer.
+    const asGuest = Boolean(guestEmail || cartToken) && !getEffectiveBearerAccess();
     return api.post(
       `/users/tickets/${id}/reserve/`,
       data,
-      guestEmail ? { skipAuth: true } : undefined,
+      asGuest ? { skipAuth: true } : undefined,
     );
   },
-  releaseReservation: async (id, email = null) => {
+  releaseReservation: async (id, email = null, cartToken = null) => {
     await ensureCsrfToken();
     const guestEmail = email != null && String(email).trim() ? String(email).trim() : '';
-    const data = guestEmail ? { email: guestEmail } : {};
+    const token = cartToken != null && String(cartToken).trim() ? String(cartToken).trim() : '';
+    const data = {};
+    if (guestEmail) data.email = guestEmail;
+    if (token) data.cart_token = token;
+    const asGuest = Boolean(guestEmail || token) && !getEffectiveBearerAccess();
     return api.post(
       `/users/tickets/${id}/release_reservation/`,
       data,
-      guestEmail ? { skipAuth: true } : undefined,
+      asGuest ? { skipAuth: true } : undefined,
     );
   },
   /**
    * Best-effort release that survives tab close / navigation (axios is often aborted).
    * Uses fetch keepalive + optional sendBeacon; includes CSRF and Bearer when available.
    */
-  releaseReservationKeepalive: (id, email = null) => {
+  releaseReservationKeepalive: (id, email = null, cartToken = null) => {
     if (id == null || id === '') return false;
     const guestEmail = email != null && String(email).trim() ? String(email).trim() : '';
-    const payload = guestEmail ? { email: guestEmail } : {};
+    const token = cartToken != null && String(cartToken).trim() ? String(cartToken).trim() : '';
+    const payload = {};
+    if (guestEmail) payload.email = guestEmail;
+    if (token) payload.cart_token = token;
     const body = JSON.stringify(payload);
     const base = String(API_URL || '').replace(/\/+$/, '');
     const url = `${base}/users/tickets/${id}/release_reservation/`;
@@ -800,7 +811,8 @@ export const ticketAPI = {
     };
     const csrf = getCsrfTokenForRequest();
     if (csrf) headers['X-CSRFToken'] = csrf;
-    if (!guestEmail) {
+    const asGuest = Boolean(guestEmail || token) && !getEffectiveBearerAccess();
+    if (!asGuest) {
       const bearer = getEffectiveBearerAccess();
       if (bearer) headers.Authorization = `Bearer ${bearer}`;
     }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useAuthModal } from '../context/AuthModalContext';
 import { offerAPI } from '../services/api';
 import { isAcceptedOfferCheckoutExpired } from '../utils/offerTimer';
 import { prefetchSellPage } from '../utils/routePrefetch';
@@ -17,6 +18,7 @@ function greetingDisplayName(user) {
 
 const Navbar = () => {
   const { user, logout, loading } = useAuth();
+  const { openLogin, openRegister } = useAuthModal();
   const [offerCounts, setOfferCounts] = useState({ actionRequired: 0, acceptedOffers: 0 });
   const navigate = useNavigate();
   const location = useLocation();
@@ -247,9 +249,16 @@ const Navbar = () => {
               שלום, {greetingDisplayName(user)}
             </span>
           ) : (
-            <Link to="/login" className="nav-login-inline" onClick={closeDrawer}>
+            <button
+              type="button"
+              className="nav-login-inline"
+              onClick={() => {
+                closeDrawer();
+                openLogin();
+              }}
+            >
               התחבר
-            </Link>
+            </button>
           )}
         </div>
       </div>
@@ -306,12 +315,26 @@ const Navbar = () => {
             </>
           ) : (
             <>
-              <Link to="/login" className="nav-link nav-drawer-link" onClick={closeDrawer}>
+              <button
+                type="button"
+                className="nav-link nav-drawer-link"
+                onClick={() => {
+                  closeDrawer();
+                  openLogin();
+                }}
+              >
                 התחברות
-              </Link>
-              <Link to="/register" className="nav-link nav-drawer-link" onClick={closeDrawer}>
+              </button>
+              <button
+                type="button"
+                className="nav-link nav-drawer-link"
+                onClick={() => {
+                  closeDrawer();
+                  openRegister();
+                }}
+              >
                 הרשמה
-              </Link>
+              </button>
             </>
           )}
         </div>

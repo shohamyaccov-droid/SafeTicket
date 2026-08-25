@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { guestHasCheckoutEmail, isGuestEmailRequiredError } from './checkoutGuest';
+import { guestCanReserveCart, guestHasCheckoutEmail, isGuestEmailRequiredError } from './checkoutGuest';
 
 describe('checkoutGuest', () => {
   it('treats logged-in buyers as ready without an email field', () => {
@@ -10,6 +10,12 @@ describe('checkoutGuest', () => {
     expect(guestHasCheckoutEmail(null, '')).toBe(false);
     expect(guestHasCheckoutEmail(null, '  ')).toBe(false);
     expect(guestHasCheckoutEmail(null, 'buyer@example.com')).toBe(true);
+  });
+
+  it('allows a cart token to lock before the guest types an email', () => {
+    expect(guestCanReserveCart(null, '', 'abc')).toBe(true);
+    expect(guestCanReserveCart(null, '', '')).toBe(false);
+    expect(guestCanReserveCart({ id: 1 }, '', '')).toBe(true);
   });
 
   it('detects guest_email_required without showing a crash banner', () => {

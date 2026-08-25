@@ -38,6 +38,11 @@ import threading
 import traceback
 import uuid
 from pypdf import PdfReader, PdfWriter
+from .cart_identity import (
+    anonymous_reservation_email_q,
+    anonymous_reservation_matches,
+    stored_anonymous_reservation_email,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -109,13 +114,14 @@ def _listing_group_id_for_offer(negotiated_offer) -> str | None:
     return gid_s or None
 
 
-def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, guest_email: str = ''):
+def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, guest_email: str = '', cart_token: str = ''):
     """
     Lock `quantity` seats in a listing group for the 10-minute cart window.
     Prefers seats already reserved by this buyer, then active seats.
     Returns (reserved_tickets, expires_at).
     """
     guest_email = (guest_email or '').strip().lower()
+    stored_email = stored_anonymous_reservation_email(guest_email=guest_email, cart_token=cart_token)
     needed = max(1, int(quantity or 1))
     now = timezone.now()
     expires_at = now + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
@@ -135,10 +141,18 @@ def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, gu
         if t.status != 'reserved':
             return False
         if user is not None and getattr(user, 'is_authenticated', False):
-            return t.reserved_by_id == user.id
-        if guest_email:
-            return (t.reservation_email or '').strip().lower() == guest_email
-        return False
+            if t.reserved_by_id == user.id:
+                return True
+            return anonymous_reservation_matches(
+                t.reservation_email,
+                guest_email=guest_email,
+                cart_token=cart_token,
+            )
+        return anonymous_reservation_matches(
+            t.reservation_email,
+            guest_email=guest_email,
+            cart_token=cart_token,
+        )
 
     already = [t for t in group_rows if _belongs_to_buyer(t)]
     # Refresh TTL on seats already held by this buyer
@@ -149,7 +163,7 @@ def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, gu
             t.reservation_email = None
         else:
             t.reserved_by = None
-            t.reservation_email = guest_email or None
+            t.reservation_email = stored_email or None
         t.save(
             update_fields=['reserved_at', 'reserved_by', 'reservation_email', 'updated_at']
         )
@@ -175,7 +189,7 @@ def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, gu
             t.reservation_email = None
         else:
             t.reserved_by = None
-            t.reservation_email = guest_email or None
+            t.reservation_email = stored_email or None
         t.save(
             update_fields=[
                 'status',
@@ -951,9 +965,10 @@ def _guest_offer_email_matches(negotiated_offer, guest_email: str) -> bool:
     return bool(be) and ge == be
 
 
-def _reserve_rows_for_pending_checkout(available_tickets, user=None, guest_email: str = ''):
+def _reserve_rows_for_pending_checkout(available_tickets, user=None, guest_email: str = '', cart_token: str = ''):
     """Hold inventory: active -> reserved; existing reservation must match buyer."""
     guest_email = (guest_email or '').strip()
+    stored_email = stored_anonymous_reservation_email(guest_email=guest_email, cart_token=cart_token)
     now = timezone.now()
     for t in available_tickets:
         if t.status == 'active':
@@ -964,7 +979,7 @@ def _reserve_rows_for_pending_checkout(available_tickets, user=None, guest_email
                 t.reservation_email = None
             else:
                 t.reserved_by = None
-                t.reservation_email = guest_email or None
+                t.reservation_email = stored_email or None
             t.save(
                 update_fields=[
                     'status',
@@ -976,16 +991,31 @@ def _reserve_rows_for_pending_checkout(available_tickets, user=None, guest_email
             )
         elif t.status == 'reserved':
             if user and getattr(user, 'is_authenticated', False):
-                if t.reserved_by_id != user.id:
+                owned = t.reserved_by_id == user.id or anonymous_reservation_matches(
+                    t.reservation_email,
+                    guest_email=guest_email,
+                    cart_token=cart_token,
+                )
+                if not owned:
                     raise PermissionDenied('Reservation does not belong to this buyer.')
+                t.reserved_by = user
+                t.reservation_email = None
+                t.save(update_fields=['reserved_by', 'reservation_email', 'updated_at'])
             else:
-                if (t.reservation_email or '').strip().lower() != guest_email.lower():
+                if not anonymous_reservation_matches(
+                    t.reservation_email,
+                    guest_email=guest_email,
+                    cart_token=cart_token,
+                ):
                     raise PermissionDenied('Reservation does not belong to this guest email.')
+                if stored_email and (t.reservation_email or '').strip().lower() != stored_email:
+                    t.reservation_email = stored_email
+                    t.save(update_fields=['reservation_email', 'updated_at'])
         else:
             raise ValueError('ticket_not_available')
 
 
-def _verify_reservations_fresh(reserved_before, user=None, guest_email: str = ''):
+def _verify_reservations_fresh(reserved_before, user=None, guest_email: str = '', cart_token: str = ''):
     """Ensure checkout reservations have not expired (RESERVATION_TIMEOUT_MINUTES).
 
     Accepted-offer holds remain valid until offer.checkout_expires_at.
@@ -1000,10 +1030,19 @@ def _verify_reservations_fresh(reserved_before, user=None, guest_email: str = ''
         if not offer_protected and (not t.reserved_at or t.reserved_at < cutoff):
             raise ValueError('reservation_expired')
         if user and getattr(user, 'is_authenticated', False):
-            if t.reserved_by_id != user.id:
+            owned = t.reserved_by_id == user.id or anonymous_reservation_matches(
+                t.reservation_email,
+                guest_email=guest_email,
+                cart_token=cart_token,
+            )
+            if not owned:
                 raise PermissionDenied('Reservation owner mismatch.')
         else:
-            if (t.reservation_email or '').strip().lower() != guest_email.lower():
+            if not anonymous_reservation_matches(
+                t.reservation_email,
+                guest_email=guest_email,
+                cart_token=cart_token,
+            ):
                 raise PermissionDenied('Reservation email mismatch.')
 
 
@@ -2705,6 +2744,7 @@ def guest_checkout(request):
         order_data = serializer.validated_data
         ticket_id = order_data.get('ticket_id')
         guest_email_raw = (order_data.get('guest_email') or '').strip()
+        cart_token = (request.data.get('cart_token') or order_data.get('cart_token') or '').strip()
 
         if negotiated_offer and not _guest_offer_email_matches(negotiated_offer, guest_email_raw):
             return Response(
@@ -2864,13 +2904,16 @@ def guest_checkout(request):
                     remaining_needed = order_quantity - len(active_tickets)
                     if remaining_needed > 0:
                         guest_email = order_data.get('guest_email', '').strip()
-                        if guest_email:
-                            reserved_tickets = list(available_tickets_query.filter(
-                                status='reserved',
-                                reservation_email=guest_email
-                            ).select_for_update().order_by('id')[:remaining_needed])
-                        else:
-                            reserved_tickets = []
+                        ident_q = anonymous_reservation_email_q(
+                            guest_email=guest_email,
+                            cart_token=cart_token,
+                        )
+                        reserved_tickets = list(
+                            available_tickets_query.filter(status='reserved')
+                            .filter(ident_q)
+                            .select_for_update()
+                            .order_by('id')[:remaining_needed]
+                        )
                         available_tickets = active_tickets + reserved_tickets
                     else:
                         available_tickets = active_tickets
@@ -2889,7 +2932,7 @@ def guest_checkout(request):
                     ge = (order_data.get('guest_email') or '').strip()
                     try:
                         _reserve_rows_for_pending_checkout(
-                            available_tickets, user=None, guest_email=ge
+                            available_tickets, user=None, guest_email=ge, cart_token=cart_token
                         )
                     except PermissionDenied as e:
                         return Response(
@@ -2927,7 +2970,11 @@ def guest_checkout(request):
                 ticket.refresh_from_db()
                 if ticket.status == 'reserved':
                     ge = (order_data.get('guest_email') or '').strip()
-                    if ticket.reservation_email and ticket.reservation_email != ge:
+                    if ticket.reservation_email and not anonymous_reservation_matches(
+                        ticket.reservation_email,
+                        guest_email=ge,
+                        cart_token=cart_token,
+                    ):
                         return Response(
                             {'error': 'This ticket is reserved for another checkout session.'},
                             status=status.HTTP_400_BAD_REQUEST,
@@ -2985,7 +3032,9 @@ def guest_checkout(request):
                 held_qty = 0
                 if order_quantity == 1:
                     try:
-                        _reserve_rows_for_pending_checkout([ticket], user=None, guest_email=ge)
+                        _reserve_rows_for_pending_checkout(
+                            [ticket], user=None, guest_email=ge, cart_token=cart_token
+                        )
                     except PermissionDenied as e:
                         return Response(
                             {'error': getattr(e, 'detail', str(e))},
@@ -3703,12 +3752,14 @@ class TicketViewSet(viewsets.ModelViewSet):
         - listing_group_id: lock across a multi-seat listing group
         - offer_id: accepted offer — uses offer.quantity + offer ticket's listing group
         - email: guest reservation identity
+        - cart_token: anonymous browser session identity (locks before an email is typed)
         """
         blocked = shabbat_forbidden_response()
         if blocked is not None:
             return blocked
 
         guest_email = (request.data.get('email') or '').strip().lower()
+        cart_token = request.data.get('cart_token') or ''
         offer_id = request.data.get('offer_id')
         listing_group_id = (request.data.get('listing_group_id') or '').strip() or None
         try:
@@ -3717,10 +3768,14 @@ class TicketViewSet(viewsets.ModelViewSet):
             quantity = 1
         quantity = max(1, min(10, quantity))
 
-        # Anonymous carts need an email identity so the same device/session can
+        # Anonymous carts need an email or a cart_token so the same device can
         # reclaim or release the lock (critical on mobile without cookie auth).
         # Missing tickets still 404 first so clients get a stable not-found signal.
-        if not request.user.is_authenticated and not guest_email:
+        stored_email = stored_anonymous_reservation_email(
+            guest_email=guest_email,
+            cart_token=cart_token,
+        )
+        if not request.user.is_authenticated and not stored_email:
             if not Ticket.objects.filter(pk=pk).exists():
                 return Response({'error': HE_TICKET_NOT_AVAILABLE}, status=status.HTTP_404_NOT_FOUND)
             return Response(
@@ -3773,6 +3828,7 @@ class TicketViewSet(viewsets.ModelViewSet):
                             quantity=quantity,
                             user=request.user if request.user.is_authenticated else None,
                             guest_email=guest_email,
+                            cart_token=cart_token,
                         )
                     except ValueError as exc:
                         code = str(exc)
@@ -3826,23 +3882,28 @@ class TicketViewSet(viewsets.ModelViewSet):
                     if ticket.reserved_at:
                         expires_at = ticket.reserved_at + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
                         if timezone.now() < expires_at:
-                            if request.user.is_authenticated and ticket.reserved_by_id == request.user.id:
+                            same_auth = (
+                                request.user.is_authenticated and ticket.reserved_by_id == request.user.id
+                            )
+                            same_anonymous = anonymous_reservation_matches(
+                                ticket.reservation_email,
+                                guest_email=guest_email,
+                                cart_token=cart_token,
+                            )
+                            if same_auth or same_anonymous:
                                 ticket.reserved_at = timezone.now()
-                                ticket.save(update_fields=['reserved_at', 'updated_at'])
-                                expires_at = ticket.reserved_at + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
-                                return Response(
-                                    {
-                                        'success': True,
-                                        'message': 'Ticket reserved successfully',
-                                        'reserved_at': ticket.reserved_at.isoformat(),
-                                        'expires_at': expires_at.isoformat(),
-                                    },
-                                    status=status.HTTP_200_OK,
-                                )
-                            res_email = (ticket.reservation_email or '').strip().lower()
-                            if guest_email and res_email and guest_email == res_email:
-                                ticket.reserved_at = timezone.now()
-                                ticket.save(update_fields=['reserved_at', 'updated_at'])
+                                if request.user.is_authenticated:
+                                    ticket.reserved_by = request.user
+                                    ticket.reservation_email = None
+                                    ticket.save(
+                                        update_fields=['reserved_at', 'reserved_by', 'reservation_email', 'updated_at']
+                                    )
+                                else:
+                                    ticket.reserved_by = None
+                                    ticket.reservation_email = stored_email or ticket.reservation_email
+                                    ticket.save(
+                                        update_fields=['reserved_at', 'reserved_by', 'reservation_email', 'updated_at']
+                                    )
                                 expires_at = ticket.reserved_at + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
                                 return Response(
                                     {
@@ -3898,11 +3959,11 @@ class TicketViewSet(viewsets.ModelViewSet):
                     )
                 else:
                     ticket.reserved_by = None
-                    ticket.reservation_email = guest_email or None
+                    ticket.reservation_email = stored_email or None
                     logger.info(
-                        'Ticket %s reserved by guest email %s at %s',
+                        'Ticket %s reserved by guest identity %s at %s',
                         ticket.id,
-                        guest_email or '(empty)',
+                        stored_email or '(empty)',
                         ticket.reserved_at,
                     )
                 ticket.save(update_fields=['status', 'reserved_at', 'reserved_by', 'reservation_email', 'updated_at'])
@@ -3927,6 +3988,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         Idempotent: already-active tickets return success so abandon/close is safe to retry.
         """
         guest_email = (request.data.get('email') or '').strip().lower()
+        cart_token = request.data.get('cart_token') or ''
 
         try:
             with transaction.atomic():
@@ -3946,10 +4008,13 @@ class TicketViewSet(viewsets.ModelViewSet):
                 def _owned_by_requester(t) -> bool:
                     if t.status != 'reserved':
                         return False
-                    if request.user.is_authenticated:
-                        return t.reserved_by_id == request.user.id
-                    res_email = (t.reservation_email or '').strip().lower()
-                    return bool(guest_email and res_email and guest_email == res_email)
+                    if request.user.is_authenticated and t.reserved_by_id == request.user.id:
+                        return True
+                    return anonymous_reservation_matches(
+                        t.reservation_email,
+                        guest_email=guest_email,
+                        cart_token=cart_token,
+                    )
 
                 if ticket.status == 'reserved' and not _owned_by_requester(ticket):
                     return Response(

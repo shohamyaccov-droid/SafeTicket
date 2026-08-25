@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useAuthModal } from '../context/AuthModalContext';
 import { eventAPI, offerAPI, artistAPI } from '../services/api';
 import { Analytics } from '../utils/analytics';
 import CheckoutModal from '../components/CheckoutModal';
@@ -64,7 +65,6 @@ import { buildSectionMapStatus } from '../utils/mapSectionStatus';
 import TakenBuyButton from '../components/TakenBuyButton';
 import { createListFetchAbort } from '../utils/listFetch';
 import { defaultListingQuantity, listingAvailabilityLabel, listingQuantityOptions } from '../utils/listingQuantity';
-import LoginQuickModal from '../components/LoginQuickModal';
 import './EventDetailsPage.css';
 
 /** Absolute URL for OG/Twitter when the SPA has no event image yet. */
@@ -86,6 +86,7 @@ const EventDetailsPage = () => {
   const eventKey = eventSlug || eventId;
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { openLogin } = useAuthModal();
   const buyerFeePercent = useBuyerServiceFeePercent();
   const buyerFeeLabel = formatBuyerFeePercent(buyerFeePercent);
   const [event, setEvent] = useState(null);
@@ -104,7 +105,6 @@ const EventDetailsPage = () => {
   const [offerSubmitted, setOfferSubmitted] = useState(false);
   const [offerSubmitting, setOfferSubmitting] = useState(false);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
-  const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [eventHasPassed, setEventHasPassed] = useState(false);
 
   // Filtering and sorting state
@@ -1572,7 +1572,7 @@ const EventDetailsPage = () => {
                     }}
                     onBuy={handleBuy}
                     onOffer={handleMakeOffer}
-                    onRequestLogin={() => setLoginModalOpen(true)}
+                    onRequestLogin={openLogin}
                     buyQuantity={quantity}
                     onBuyQuantityChange={setQuantity}
                     buyingStableId={buyOpeningKey}
@@ -1753,7 +1753,7 @@ const EventDetailsPage = () => {
                                   className="viagogo-offer-button viagogo-offer-button--login"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setLoginModalOpen(true);
+                                    openLogin();
                                   }}
                                 >
                                   התחבר כדי להציע מחיר על המודעה
@@ -1796,10 +1796,6 @@ const EventDetailsPage = () => {
       )}
 
       {/* Checkout Modal */}
-      {loginModalOpen ? (
-        <LoginQuickModal onClose={() => setLoginModalOpen(false)} />
-      ) : null}
-
       {waitlistOpen && event ? (
         <WaitlistSignupModal event={event} onClose={() => setWaitlistOpen(false)} />
       ) : null}
@@ -1810,7 +1806,6 @@ const EventDetailsPage = () => {
           ticketGroup={selectedTicketGroup}
           user={user}
           quantity={quantity}
-          autoStartPayme={Boolean(user)}
           onClose={handleCloseCheckout}
           onErrorToParent={(payload) => {
             setToast(payload);

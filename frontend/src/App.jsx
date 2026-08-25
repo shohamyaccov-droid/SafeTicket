@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { AuthModalProvider } from './context/AuthModalContext';
 import api, { authAPI, SESSION_EXPIRED_EVENT, siteAPI } from './services/api';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
@@ -229,6 +230,7 @@ function App() {
   return (
     <AuthProvider>
       <Router>
+        <AuthModalProvider>
         <ScrollToTop />
         <PageTracker />
         <SessionExpiredRedirector />
@@ -304,6 +306,7 @@ function App() {
               <Route path="*" element={routeElement(<NotFoundPage />)} />
           </Routes>
         </AppChrome>
+        </AuthModalProvider>
       </Router>
     </AuthProvider>
   );

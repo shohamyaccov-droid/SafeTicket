@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import LoginQuickModal from './LoginQuickModal';
 
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ login: vi.fn() }),
+  useAuth: () => ({ login: vi.fn(), register: vi.fn() }),
 }));
 
 afterEach(() => {
@@ -20,5 +20,19 @@ describe('LoginQuickModal', () => {
     );
     expect(screen.getByRole('dialog', { name: 'התחברות' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'התחברות' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'הירשם כאן' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /הירשם כאן/ })).not.toBeInTheDocument();
+  });
+
+  it('renders registration as a modal overlay instead of navigating away', () => {
+    render(
+      <MemoryRouter>
+        <LoginQuickModal mode="register" onClose={vi.fn()} onSwitchToLogin={vi.fn()} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('dialog', { name: 'הרשמה' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'הרשמה' })).toBeInTheDocument();
+    expect(screen.getByLabelText('שם פרטי')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /הירשם כאן/ })).not.toBeInTheDocument();
   });
 });

@@ -9,8 +9,29 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from users.models import Artist, Event, Ticket
+from users.cart_identity import (
+    anonymous_reservation_matches,
+    cart_token_email,
+    stored_anonymous_reservation_email,
+)
 
 User = get_user_model()
+
+
+class CartIdentityHelperTests(TestCase):
+    def test_prefers_real_email_over_cart_token(self):
+        token = 'd' * 32
+        self.assertEqual(
+            stored_anonymous_reservation_email(guest_email='buyer@example.com', cart_token=token),
+            'buyer@example.com',
+        )
+        self.assertTrue(
+            anonymous_reservation_matches(
+                cart_token_email(token),
+                guest_email='buyer@example.com',
+                cart_token=token,
+            )
+        )
 
 
 class CartReserveIdentityTests(TestCase):
@@ -59,6 +80,58 @@ class CartReserveIdentityTests(TestCase):
         self.assertEqual(res.data.get('code'), 'guest_email_required')
         ticket.refresh_from_db()
         self.assertEqual(ticket.status, 'active')
+
+    def test_anonymous_reserve_with_cart_token_locks_without_email(self):
+        ticket = self._ticket()
+        token = 'a' * 32
+        res = self.client.post(
+            f'/api/users/tickets/{ticket.id}/reserve/',
+            {'cart_token': token, 'quantity': 1},
+            format='json',
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'reserved')
+        self.assertTrue((ticket.reservation_email or '').endswith('@cart.tradetix.invalid'))
+
+    def test_anonymous_release_with_cart_token_unlocks_immediately(self):
+        ticket = self._ticket()
+        token = 'b' * 32
+        lock = self.client.post(
+            f'/api/users/tickets/{ticket.id}/reserve/',
+            {'cart_token': token, 'quantity': 1},
+            format='json',
+        )
+        self.assertEqual(lock.status_code, 200, lock.data)
+        release = self.client.post(
+            f'/api/users/tickets/{ticket.id}/release_reservation/',
+            {'cart_token': token},
+            format='json',
+        )
+        self.assertEqual(release.status_code, 200, release.data)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'active')
+        self.assertIsNone(ticket.reserved_at)
+        self.assertIsNone(ticket.reservation_email)
+
+    def test_cart_token_hold_can_be_claimed_with_real_email(self):
+        ticket = self._ticket()
+        token = 'c' * 32
+        lock = self.client.post(
+            f'/api/users/tickets/{ticket.id}/reserve/',
+            {'cart_token': token, 'quantity': 1},
+            format='json',
+        )
+        self.assertEqual(lock.status_code, 200, lock.data)
+        claim = self.client.post(
+            f'/api/users/tickets/{ticket.id}/reserve/',
+            {'cart_token': token, 'email': 'buyer@example.com', 'quantity': 1},
+            format='json',
+        )
+        self.assertEqual(claim.status_code, 200, claim.data)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'reserved')
+        self.assertEqual(ticket.reservation_email, 'buyer@example.com')
 
     def test_same_buyer_can_rereserve_after_orphan_style_second_call(self):
         """Simulate desktop→mobile: second reserve by same auth must succeed."""
