@@ -24,13 +24,11 @@ import { toastError, toastSuccess } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
 import { downloadTicketFromAxiosBlob } from '../utils/ticketDownload';
 import {
-  orderCanDownloadTickets,
-  orderTicketIds,
-  orderTicketIsDownloadable,
   timelineForBuyerDisplay,
 } from '../utils/buyerOrderActions';
 import { buyerHasPaymeIdentity, buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
 import BuyerIdentityInlineForm from '../components/BuyerIdentityInlineForm';
+import BuyerOrderDownloadBar from '../components/BuyerOrderDownloadBar';
 import {
   formatTicketsCountHe,
   groupSellerListings,
@@ -1013,9 +1011,6 @@ const Dashboard = () => {
                   const paySym = currencySymbol(payCur);
                   const timeline = timelineForBuyerDisplay(purchase, purchase.status_timeline);
                   const isExpanded = expandedPurchaseId === purchase.id;
-                  const tickets = purchase.tickets || [];
-                  const hasDownloadablePdf = orderCanDownloadTickets(purchase);
-                  const ticketIds = orderTicketIds(purchase);
 
                   return (
                     <div key={purchase.id} className="purchase-card enterprise-card dashboard-compact-card purchase-card-accordion" style={{ width: '100%', display: 'block', marginBottom: '8px', boxSizing: 'border-box' }}>
@@ -1059,18 +1054,6 @@ const Dashboard = () => {
                         </div>
                         <div className="purchase-card-accordion-summary-end">
                           <span className="row-price purchase-card-accordion-price">{paySym}{formatAmountForCurrency(purchase.total_paid_by_buyer ?? purchase.total_amount, payCur)}</span>
-                          {hasDownloadablePdf && ticketIds.length === 1 ? (
-                            <button
-                              type="button"
-                              className="primary-button download-button download-button--row"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDownloadPDF(ticketIds[0]);
-                              }}
-                            >
-                              הורד כרטיס
-                            </button>
-                          ) : null}
                           <span className={`status-badge status-${purchase.status}`}>
                             {purchase.status === 'paid'
                               ? 'שולם'
@@ -1167,43 +1150,7 @@ const Dashboard = () => {
                             </div>
                           </div>
 
-                          <div className="card-actions">
-                            {hasDownloadablePdf ? (
-                              ticketIds.length > 1 ? (
-                                <div className="multi-download-buttons">
-                                  {tickets.map((t, idx) => (
-                                    <button
-                                      key={t.id}
-                                      type="button"
-                                      onClick={() => handleDownloadPDF(t.id)}
-                                      className="primary-button download-button"
-                                      disabled={tickets.some(orderTicketIsDownloadable) ? !orderTicketIsDownloadable(t) : false}
-                                    >
-                                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                        <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                        <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                        <path d="M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                      </svg>
-                                      הורד כרטיס {idx + 1}
-                                    </button>
-                                  ))}
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => handleDownloadPDF(ticketIds[0])}
-                                  className="primary-button download-button"
-                                >
-                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                    <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                    <path d="M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                  </svg>
-                                  הורד כרטיס
-                                </button>
-                              )
-                            ) : null}
-                          </div>
+                          <BuyerOrderDownloadBar purchase={purchase} onDownload={handleDownloadPDF} />
                         </div>
                       )}
                     </div>

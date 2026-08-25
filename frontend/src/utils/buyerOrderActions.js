@@ -3,12 +3,27 @@ export function isPaidActiveOrder(purchase) {
   return status === 'paid' || status === 'completed';
 }
 
+function coerceTicketId(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'object') return value.id ?? null;
+  return value;
+}
+
+export function ticketIdFromDownloadUrl(url) {
+  const match = String(url || '').match(/\/tickets\/(\d+)\/download_pdf\/?/i);
+  return match ? Number(match[1]) : null;
+}
+
 export function orderTicketIds(purchase) {
   const tickets = Array.isArray(purchase?.tickets) ? purchase.tickets : [];
-  const fromTickets = tickets.map((t) => t?.id).filter((id) => id != null && id !== '');
+  const fromTickets = tickets.map((t) => coerceTicketId(t)).filter((id) => id != null && id !== '');
   if (fromTickets.length) return fromTickets;
-  const fallback = purchase?.ticket || purchase?.ticket_details?.id;
-  return fallback != null && fallback !== '' ? [fallback] : [];
+
+  const fallback = coerceTicketId(purchase?.ticket) || coerceTicketId(purchase?.ticket_details);
+  if (fallback != null && fallback !== '') return [fallback];
+
+  const fromUrl = ticketIdFromDownloadUrl(purchase?.pdf_download_url);
+  return fromUrl != null ? [fromUrl] : [];
 }
 
 export function orderTicketIsDownloadable(ticket) {
@@ -17,30 +32,42 @@ export function orderTicketIsDownloadable(ticket) {
 }
 
 export function orderCanDownloadTickets(purchase) {
-  if (!isPaidActiveOrder(purchase)) return false;
-  if (purchase?.pdf_download_url) return orderTicketIds(purchase).length > 0;
-  const tickets = Array.isArray(purchase?.tickets) ? purchase.tickets : [];
-  if (tickets.some(orderTicketIsDownloadable)) return true;
-  return orderTicketIds(purchase).length > 0;
+  return isPaidActiveOrder(purchase) && orderTicketIds(purchase).length > 0;
 }
 
-/** Paid/active orders should never sit on the "מעבד" step. */
+const STEP1 = 'הזמנה אושרה';
+const STEP2_PENDING = 'מעבד';
+const STEP2_PAID = 'תשלום אושר';
+const STEP3 = 'מוכן להורדה';
+
+function defaultTimelineSteps(paid) {
+  return [
+    { step: 1, label: STEP1, completed: paid },
+    { step: 2, label: paid ? STEP2_PAID : STEP2_PENDING, completed: paid },
+    { step: 3, label: STEP3, completed: paid },
+  ];
+}
+
+/** Paid orders: step 2 is payment confirmed; only step 3 is "ready to download". */
 export function timelineForBuyerDisplay(purchase, timeline) {
-  const steps = Array.isArray(timeline?.steps) ? timeline.steps : [];
-  if (!isPaidActiveOrder(purchase)) {
-    return { current_step: timeline?.current_step || 0, current_label: timeline?.current_label || '', steps };
-  }
+  const paid = isPaidActiveOrder(purchase);
+  const incoming = Array.isArray(timeline?.steps) ? timeline.steps : [];
+  const base = incoming.length ? incoming : defaultTimelineSteps(paid);
+  const steps = base.map((step) => {
+    if (step.step === 1) {
+      return { ...step, label: STEP1, completed: paid || Boolean(step.completed) };
+    }
+    if (step.step === 2) {
+      return { ...step, label: paid ? STEP2_PAID : STEP2_PENDING, completed: paid };
+    }
+    if (step.step === 3) {
+      return { ...step, label: STEP3, completed: paid };
+    }
+    return step;
+  });
   return {
-    current_step: 3,
-    current_label: 'מוכן להורדה',
-    steps: steps.map((step) => {
-      if (step.step === 2 || step.label === 'מעבד') {
-        return { ...step, label: 'מוכן להורדה', completed: true };
-      }
-      if (step.step === 1 || step.step === 3) {
-        return { ...step, completed: true };
-      }
-      return { ...step, completed: true };
-    }),
+    current_step: paid ? 3 : timeline?.current_step || 1,
+    current_label: paid ? STEP3 : timeline?.current_label || STEP2_PENDING,
+    steps,
   };
 }

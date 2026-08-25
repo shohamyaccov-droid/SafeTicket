@@ -1303,10 +1303,10 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
         return first_resolved_image_url_for_event(self.context.get('request'), ev)
     
     def get_status_timeline(self, obj):
-        """Paid/completed orders are ready for download — never leave them on 'מעבד'."""
+        """Paid/completed: step 2 is payment confirmed; only step 3 is ready to download."""
         ready_for_download = obj.status in ['paid', 'completed']
         current_step = 3 if ready_for_download else (2 if obj.status == 'paid' else (1 if obj.status == 'pending' else 0))
-        step2_label = 'מוכן להורדה' if ready_for_download else 'מעבד'
+        step2_label = 'תשלום אושר' if ready_for_download else 'מעבד'
         current_label = 'מוכן להורדה' if ready_for_download else ('מעבד' if current_step == 2 else 'הזמנה אושרה')
         return {
             'current_step': current_step,

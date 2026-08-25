@@ -28,11 +28,22 @@ describe('buyerOrderActions', () => {
     expect(orderTicketIds(paid)).toEqual([9]);
   });
 
-  it('replaces the processing step with ready-for-download', () => {
+  it('resolves a ticket id from the download URL when tickets are missing', () => {
+    expect(
+      orderTicketIds({
+        status: 'paid',
+        pdf_download_url: 'https://example.com/api/users/tickets/77/download_pdf/',
+      }),
+    ).toEqual([77]);
+  });
+
+  it('keeps processing on step 2 and ready-to-download only on step 3', () => {
     const timeline = timelineForBuyerDisplay(paid, paid.status_timeline);
     expect(timeline.current_label).toBe('מוכן להורדה');
-    expect(timeline.steps.map((s) => s.label)).not.toContain('מעבד');
-    expect(timeline.steps[1].label).toBe('מוכן להורדה');
+    expect(timeline.steps[1].label).toBe('תשלום אושר');
+    expect(timeline.steps[2].label).toBe('מוכן להורדה');
+    expect(timeline.steps.filter((s) => s.label === 'מוכן להורדה')).toHaveLength(1);
     expect(timeline.steps[1].completed).toBe(true);
+    expect(timeline.steps[2].completed).toBe(true);
   });
 });

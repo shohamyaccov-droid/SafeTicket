@@ -736,23 +736,31 @@
   display: none !important;
 }
 
-/* Card Actions - compact */
-.card-actions .download-button {
-  flex: 1 1 100%;
-  width: 100%;
-  min-height: 44px;
-  font-size: 1rem;
-  border-radius: 10px;
-  font-weight: 700;
+/* Card Actions */
+.card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-light);
 }
 
-.download-button--row {
-  flex: 0 0 auto;
-  min-height: 36px;
-  padding: 0.35rem 0.75rem;
-  font-size: 0.82rem;
-  border-radius: 8px;
-  white-space: nowrap;
+.card-actions .download-button,
+.buyer-order-download-bar .download-button {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 48px;
+  font-size: 1.05rem;
+  border-radius: 10px;
+  font-weight: 800;
+}
+
+.card-actions .primary-button.download-button {
+  min-height: 48px;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  font-size: 1.05rem;
 }
 
 .primary-button,

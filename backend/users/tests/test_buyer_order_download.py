@@ -69,10 +69,11 @@ class BuyerOrderDownloadTimelineTests(TestCase):
         purchase = next(p for p in res.data['purchases'] if p['id'] == self.order.pk)
         timeline = purchase['status_timeline']
         self.assertEqual(timeline['current_label'], 'מוכן להורדה')
-        self.assertNotEqual(timeline['current_label'], 'מעבד')
-        step_labels = [s['label'] for s in timeline['steps']]
-        self.assertNotIn('מעבד', step_labels)
-        self.assertIn('מוכן להורדה', step_labels)
+        labels = [s['label'] for s in timeline['steps']]
+        self.assertEqual(labels[1], 'תשלום אושר')
+        self.assertEqual(labels[2], 'מוכן להורדה')
+        self.assertEqual(labels.count('מוכן להורדה'), 1)
+        self.assertNotIn('מעבד', labels)
         self.assertTrue(purchase['tickets'][0]['has_pdf_file'])
         self.assertTrue(purchase['tickets'][0]['pdf_file_url'])
 
