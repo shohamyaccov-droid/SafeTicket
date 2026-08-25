@@ -62,6 +62,15 @@
   transition: color 0.2s ease;
 }
 
+.faq-question-heading {
+  margin: 0;
+  width: 100%;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  line-height: inherit;
+}
+
 .faq-question:hover {
   color: #2563eb;
 }

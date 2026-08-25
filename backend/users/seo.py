@@ -12,6 +12,7 @@ Architecture note (decoupled React SPA + Django API):
 from __future__ import annotations
 
 import re
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -136,7 +137,12 @@ def _active_ticket_price_stats(event) -> dict[str, Any]:
 
 
 def build_seo_title(event) -> str:
-    name = (event.name or '').strip() or 'אירוע'
+    """SERP title: כרטיסים ל<artist> ב<venue> - TradeTix"""
+    artist_name = ''
+    if getattr(event, 'artist_id', None) and getattr(event, 'artist', None):
+        artist_name = (event.artist.name or '').strip()
+    name = (event.name or '').strip()
+    subject = artist_name or name or 'אירוע'
     venue = ''
     try:
         venue = (event.venue_display_name() or '').strip()
@@ -145,8 +151,8 @@ def build_seo_title(event) -> str:
     city = (event.city or '').strip()
     place = venue or city
     if place:
-        return _strip_html(f'{name} ב-{place} - כרטיסים | TradeTix')[:70]
-    return _strip_html(f'{name} - כרטיסים | TradeTix')[:70]
+        return _strip_html(f'כרטיסים ל{subject} ב{place} - TradeTix')[:70]
+    return _strip_html(f'כרטיסים ל{subject} - TradeTix')[:70]
 
 
 def build_seo_description(event, *, low_price: Any = None, currency: str = 'ILS') -> str:
@@ -182,6 +188,36 @@ def event_status_schema(event) -> str:
         'פעיל': 'https://schema.org/EventScheduled',
     }
     return mapping.get(status, 'https://schema.org/EventScheduled')
+
+
+def _ticket_offer_nodes(event, *, canonical: str, currency: str) -> list[dict[str, Any]]:
+    from users.models import Ticket
+
+    rows = list(
+        Ticket.objects.filter(
+            event=event,
+            status='active',
+            available_quantity__gt=0,
+        )
+        .order_by('asking_price', 'id')[:20]
+    )
+    nodes = []
+    for ticket in rows:
+        try:
+            price = str(Decimal(str(ticket.asking_price)).quantize(Decimal('0.01')))
+        except Exception:
+            continue
+        nodes.append(
+            {
+                '@type': 'Offer',
+                'url': canonical,
+                'price': price,
+                'priceCurrency': currency,
+                'availability': 'https://schema.org/InStock',
+                'category': 'ticket',
+            }
+        )
+    return nodes
 
 
 def build_event_json_ld(event, *, request=None) -> dict[str, Any]:
@@ -227,6 +263,7 @@ def build_event_json_ld(event, *, request=None) -> dict[str, Any]:
     )
 
     offers: dict[str, Any]
+    offer_nodes = _ticket_offer_nodes(event, canonical=canonical, currency=currency)
     if low is not None and offer_count > 0:
         offers = {
             '@type': 'AggregateOffer',
@@ -238,6 +275,10 @@ def build_event_json_ld(event, *, request=None) -> dict[str, Any]:
             'availability': availability,
             'validFrom': iso_datetime(getattr(event, 'created_at', None) or timezone.now()),
         }
+        if offer_nodes:
+            offers['offers'] = offer_nodes
+        if len(offer_nodes) == 1:
+            offers = offer_nodes[0]
     else:
         offers = {
             '@type': 'Offer',
@@ -384,6 +425,55 @@ def _xml_attr(value: str) -> str:
         .replace('<', '&lt;')
         .replace('>', '&gt;')
     )
+
+
+SITEMAP_STATIC_PATHS = (
+    '/',
+    '/how-it-works',
+    '/faq',
+    '/about',
+    '/contact',
+    '/terms',
+    '/privacy',
+    '/refunds',
+    '/buyer-guarantee',
+    '/accessibility',
+    '/sell/new',
+)
+
+
+def build_sitemap_xml() -> str:
+    """XML sitemap of static marketing pages plus upcoming active events."""
+    from users.models import Event
+
+    origin = frontend_origin()
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for path in SITEMAP_STATIC_PATHS:
+        loc = f'{origin}/' if path == '/' else f'{origin}{path}'
+        freq = 'daily' if path == '/' else 'weekly'
+        lines.append(
+            f'  <url><loc>{_xml_attr(loc)}</loc><changefreq>{freq}</changefreq></url>'
+        )
+    qs = (
+        Event.objects.filter(status__in=['פעיל', 'סולד אאוט'])
+        .filter(date__gte=timezone.now() - timedelta(hours=12))
+        .only('id', 'slug', 'updated_at')
+        .order_by('-id')[:5000]
+    )
+    for event in qs:
+        loc = event_canonical_url(event)
+        lastmod = ''
+        updated = getattr(event, 'updated_at', None)
+        if updated:
+            lastmod = f'<lastmod>{timezone.localtime(updated).date().isoformat()}</lastmod>'
+        lines.append(
+            f'  <url><loc>{_xml_attr(loc)}</loc>{lastmod}<changefreq>daily</changefreq></url>'
+        )
+    lines.append('</urlset>')
+    return '\n'.join(lines)
 
 
 def resolve_event_by_identifier(identifier: str, queryset=None):

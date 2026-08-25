@@ -54,6 +54,7 @@ import {
   pickNextUpcomingEvent,
 } from '../utils/eventSchedule';
 import { PUBLIC_SITE_ORIGIN, toPublicAbsoluteUrl } from '../utils/publicSite';
+import { DEFAULT_SITE_DESCRIPTION, DEFAULT_SITE_TITLE, eventDocumentTitle } from '../utils/siteSeo';
 import {
   filterMarketplaceTickets,
   isCurrentUserOwnListing,
@@ -1096,11 +1097,11 @@ const EventDetailsPage = () => {
     return (
       <div className="event-details-container">
         <Helmet>
-          <title>TradeTix | טריידטיקס</title>
+          <title>{DEFAULT_SITE_TITLE}</title>
           <meta name="robots" content="noindex" />
           <meta
             name="description"
-            content="קנו או מכרו כרטיסים לאירועים בישראל ב-TradeTix. תשלום מאובטח והגנה מלאה על הכסף."
+            content={DEFAULT_SITE_DESCRIPTION}
           />
         </Helmet>
         <EventDetailsSkeleton />
@@ -1150,14 +1151,16 @@ const EventDetailsPage = () => {
   const venueForSeo = venueFromEvent || (event.city && String(event.city).trim()) || '';
   const documentTitle =
     (event.seo_title && String(event.seo_title).trim()) ||
-    (venueForSeo
-      ? `${eventName} ב-${venueForSeo} - כרטיסים | TradeTix`
-      : `${eventName} - כרטיסים | TradeTix`);
+    eventDocumentTitle({
+      artistName: artistDisplayName,
+      eventName,
+      venue: venueForSeo,
+    });
   const metaDescription =
     (event.seo_description && String(event.seo_description).trim()) ||
     (venueForSeo
-      ? `קנו או מכרו כרטיסים ל-${eventName} ב-${venueForSeo}. תשלום מאובטח והגנה מלאה על הכסף.`
-      : `קנו או מכרו כרטיסים ל-${eventName}. תשלום מאובטח והגנה מלאה על הכסף.`);
+      ? `קנו או מכרו כרטיסים ל${eventName} ב${venueForSeo}. תשלום מאובטח והגנה מלאה על הכסף.`
+      : `קנו או מכרו כרטיסים ל${eventName}. תשלום מאובטח והגנה מלאה על הכסף.`);
 
   const pageCanonical = toPublicAbsoluteUrl(
     (event.canonical_url && String(event.canonical_url).trim()) || eventHref(event)

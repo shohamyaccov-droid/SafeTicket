@@ -14,6 +14,8 @@ from users.seo import (
     build_event_json_ld,
     build_event_seo_payload,
     build_event_slug_base,
+    build_seo_title,
+    build_sitemap_xml,
     inject_seo_into_html,
 )
 
@@ -109,6 +111,53 @@ class EventSlugAndSeoTests(TestCase):
         self.assertEqual(offers['offerCount'], '3')
         self.assertIn('InStock', offers['availability'])
         self.assertTrue(data['url'].endswith(f'/event/{self.event.slug}'))
+        nested = offers.get('offers') or []
+        self.assertGreaterEqual(len(nested), 1)
+        self.assertEqual(nested[0]['@type'], 'Offer')
+        self.assertIn('price', nested[0])
+
+    def test_seo_title_uses_artist_and_venue(self):
+        title = build_seo_title(self.event)
+        self.assertTrue(title.startswith('כרטיסים ל'))
+        self.assertIn('Eyal Golan', title)
+        self.assertIn('TradeTix', title)
+
+    def test_sitemap_includes_static_pages_and_active_events(self):
+        import xml.etree.ElementTree as ET
+
+        xml = build_sitemap_xml()
+        self.assertIn('<?xml version="1.0"', xml)
+        self.assertIn('urlset', xml)
+        self.assertIn('https://tradetix.co.il/how-it-works', xml)
+        self.assertIn('https://tradetix.co.il/faq', xml)
+        self.assertIn(f'https://tradetix.co.il/event/{self.event.slug}', xml)
+        ET.fromstring(xml)
+        cancelled = Event.objects.create(
+            artist=self.artist,
+            name='Cancelled Show',
+            date=timezone.now() + timedelta(days=10),
+            venue='Hall',
+            city='Tel Aviv',
+            country='IL',
+            category='concert',
+            status='בוטל',
+        )
+        xml2 = build_sitemap_xml()
+        self.assertNotIn(f'/event/{cancelled.slug}', xml2)
+
+    def test_robots_allows_crawlers_and_points_to_sitemap(self):
+        res = self.client.get('/robots.txt')
+        self.assertEqual(res.status_code, 200)
+        body = res.content.decode('utf-8')
+        self.assertIn('User-agent: *', body)
+        self.assertIn('Allow: /', body)
+        self.assertIn('Sitemap: https://tradetix.co.il/sitemap.xml', body)
+
+    def test_sitemap_endpoint_returns_xml(self):
+        res = self.client.get('/sitemap.xml')
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('xml', res['Content-Type'])
+        self.assertIn('<urlset', res.content.decode('utf-8'))
 
     def test_inject_html_includes_json_ld_script(self):
         seo = build_event_seo_payload(self.event)

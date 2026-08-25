@@ -31,25 +31,9 @@ def robots_txt(_request):
 
 
 def sitemap_xml(_request):
-    from users.models import Event
-    from users.seo import event_canonical_url, frontend_origin
+    from users.seo import build_sitemap_xml
 
-    origin = frontend_origin()
-    lines = [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-        f'  <url><loc>{origin}/</loc><changefreq>daily</changefreq></url>',
-    ]
-    qs = (
-        Event.objects.exclude(status='בוטל')
-        .only('id', 'slug')
-        .order_by('-id')[:5000]
-    )
-    for event in qs:
-        loc = event_canonical_url(event)
-        lines.append(f'  <url><loc>{loc}</loc><changefreq>daily</changefreq></url>')
-    lines.append('</urlset>')
-    return HttpResponse('\n'.join(lines), content_type='application/xml; charset=utf-8')
+    return HttpResponse(build_sitemap_xml(), content_type='application/xml; charset=utf-8')
 
 
 def _load_spa_index_html() -> str:

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import { formatBuyerFeePercent } from '../services/pricingSettings';
+import PageSeo from '../components/PageSeo';
+import { DEFAULT_SITE_TITLE } from '../utils/siteSeo';
 import './FAQ.css';
 
 const FAQ = () => {
@@ -12,6 +14,8 @@ const FAQ = () => {
   const faqs = [
     {
       question: 'האם הרכישה בטוחה? מהי הגנת הקונה?',
+      plainAnswer:
+        'כן. כספי הרכישה מוחזקים בנאמנות ואינם מועברים למוכר מיד. שחרור למוכר מתבצע רק 36 שעות לאחר סיום האירוע, בכפוף לתקינות העסקה.',
       answer: (
         <>
           כן. כספי הרכישה מוחזקים בנאמנות (Escrow) ואינם מועברים למוכר מיד. שחרור למוכר מתבצע רק{' '}
@@ -23,6 +27,8 @@ const FAQ = () => {
     },
     {
       question: 'מה קורה אם המופע מבוטל?',
+      plainAnswer:
+        'אם המארגן מבטל את האירוע סופית — מגיע החזר מלא של הסכום ששולם ל-TradeTix, בהתאם לתקנון ולעמוד ההחזרים.',
       answer: (
         <>
           אם המארגן מבטל את האירוע <strong>סופית</strong> (ללא מועד חדש מחייב) — אתם זכאים להחזר מלא
@@ -34,6 +40,8 @@ const FAQ = () => {
     },
     {
       question: 'מה קורה אם המופע נדחה למועד חדש?',
+      plainAnswer:
+        'הכרטיס נשאר בתוקף למועד החדש. אין החזר אוטומטי רק בשל דחייה. אם יוכרז ביטול סופי — תחול מדיניות הביטול.',
       answer: (
         <>
           הכרטיס <strong>נשאר בתוקף</strong> למועד החדש. <strong>אין החזר אוטומטי</strong> רק בשל
@@ -44,6 +52,8 @@ const FAQ = () => {
     },
     {
       question: 'מדיניות כרטיס מזויף / לא תקף (Fake Ticket Policy)',
+      plainAnswer:
+        'אם הכרטיס נדחה בכניסה פנו לתמיכה מהמקום עם תיעוד. במקרה מאומת מגיע החזר מלא והמוכר לא יקבל תמלוג.',
       answer: (
         <>
           אם הכרטיס נדחה בכניסה: (1) פנו לתמיכה <strong>מיד מהמקום</strong> או לכל המאוחר תוך שעה
@@ -61,6 +71,7 @@ const FAQ = () => {
     },
     {
       question: 'מהן העמלות? (דמי שירות)',
+      plainAnswer: `לקונים: דמי שירות ותפעול של ${feeLabel}% ממחיר הבסיס. למוכרים: עמלת מכירה 0% בעת זו. המחיר הסופי מוצג במסך התשלום.`,
       answer: (
         <>
           לקונים: דמי שירות ותפעול של <strong>{feeLabel}%</strong> ממחיר הבסיס של הכרטיס (או שיעור מופחת אם
@@ -71,6 +82,8 @@ const FAQ = () => {
     },
     {
       question: 'מתי המוכר מקבל את הכסף? (Escrow 36 שעות)',
+      plainAnswer:
+        'הכסף נשמר בנאמנות ומשתחרר למוכר רק לאחר 36 שעות מסיום האירוע, בכפוף לתקינות הכרטיס ולסטטוס תקין של העסקה.',
       answer: (
         <>
           הכסף אינו מועבר מיד עם המכירה. הוא נשמר בנאמנות ומשתחרר למוכר רק לאחר{' '}
@@ -82,6 +95,8 @@ const FAQ = () => {
     },
     {
       question: 'האם TradeTix היא המפיקה של האירוע?',
+      plainAnswer:
+        'לא. TradeTix היא זירת מסחר משנית המחברת בין מוכרים מאומתים לקונים, ואינה המפיקה של האירוע.',
       answer: (
         <>
           לא. TradeTix היא <strong>זירת מסחר משנית</strong> (marketplace) המחברת בין מוכרים מאומתים
@@ -92,6 +107,8 @@ const FAQ = () => {
     },
     {
       question: 'איך פונים לתמיכה?',
+      plainAnswer:
+        'דרך עמוד צור קשר, כפתור ה-WhatsApp באתר, או פרטי הקשר בעמוד אודות. במחלוקת בכניסה לאירוע פנו בזמן אמת מהמקום.',
       answer: (
         <>
           דרך עמוד <Link to="/contact">צור קשר</Link>, כפתור ה-WhatsApp באתר, או פרטי הקשר בעמוד{' '}
@@ -107,22 +124,40 @@ const FAQ = () => {
 
   return (
     <div className="faq-container">
-      <div className="faq-header">
-        <h1>שאלות נפוצות</h1>
+      <PageSeo
+        title={`שאלות ותשובות | ${DEFAULT_SITE_TITLE}`}
+        description="תשובות על רכישת כרטיסים, הגנת הקונה, עמלות, ביטול אירוע ומסירת PDF ב-TradeTix."
+        path="/faq"
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'FAQPage',
+          mainEntity: faqs.map((faq) => ({
+            '@type': 'Question',
+            name: faq.question,
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: faq.plainAnswer || (typeof faq.answer === 'string' ? faq.answer : faq.question),
+            },
+          })),
+        }}
+      />
+      <header className="faq-header">
+        <h1>שאלות ותשובות</h1>
         <p>תשובות ברורות — מיושרות עם התקנון ומדיניות ההחזרים</p>
-      </div>
+      </header>
 
       <div className="faq-list">
         {faqs.map((faq, index) => (
           <div key={faq.question} className={`faq-item ${openIndex === index ? 'open' : ''}`}>
-            <button
-              className="faq-question"
-              onClick={() => toggleFAQ(index)}
-              aria-expanded={openIndex === index}
-              type="button"
-            >
-              <span>{faq.question}</span>
-              <svg
+            <h2 className="faq-question-heading">
+              <button
+                className="faq-question"
+                onClick={() => toggleFAQ(index)}
+                aria-expanded={openIndex === index}
+                type="button"
+              >
+                <span>{faq.question}</span>
+                <svg
                 className="faq-icon"
                 width="20"
                 height="20"
@@ -138,8 +173,9 @@ const FAQ = () => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
-              </svg>
-            </button>
+                </svg>
+              </button>
+            </h2>
             <div className="faq-answer">
               <p>{faq.answer}</p>
             </div>

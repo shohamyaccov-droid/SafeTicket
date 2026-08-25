@@ -1,7 +1,8 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
 import { eventHref } from '../utils/eventSeo';
+import { DEFAULT_SITE_DESCRIPTION, DEFAULT_SITE_TITLE } from '../utils/siteSeo';
+import PageSeo from '../components/PageSeo';
 import { artistAPI, eventAPI } from '../services/api';
 import { createListFetchAbort } from '../utils/listFetch';
 import { prefetchEventDetailsPage } from '../utils/routePrefetch';
@@ -34,10 +35,8 @@ function formatEventDateHe(iso) {
   });
 }
 
-const HOME_PAGE_TITLE =
-  'TradeTix (טריידטיקס) | זירת מסחר בטוחה לקנייה ומכירת כרטיסים';
-const HOME_PAGE_DESCRIPTION =
-  'נתקעתם עם כרטיס? מחפשים כרטיס להופעה שנגמרה? טריידטיקס היא הפלטפורמה הבטוחה בישראל לקנייה ומכירת כרטיסים מיד שנייה.';
+const HOME_PAGE_TITLE = DEFAULT_SITE_TITLE;
+const HOME_PAGE_DESCRIPTION = DEFAULT_SITE_DESCRIPTION;
 
 const Home = () => {
   const navigate = useNavigate();
@@ -278,11 +277,7 @@ const Home = () => {
   if (loading) {
     return (
       <div className="home-container home-container--loading">
-        <Helmet>
-          <title>{HOME_PAGE_TITLE}</title>
-          <meta name="robots" content="index, follow" />
-          <meta name="description" content={HOME_PAGE_DESCRIPTION} />
-        </Helmet>
+        <PageSeo title={HOME_PAGE_TITLE} description={HOME_PAGE_DESCRIPTION} path="/" />
         <EventsPageSkeleton variant="home" />
       </div>
     );
@@ -440,11 +435,7 @@ const Home = () => {
 
   return (
     <div className="home-container">
-      <Helmet>
-        <title>{HOME_PAGE_TITLE}</title>
-        <meta name="robots" content="index, follow" />
-        <meta name="description" content={HOME_PAGE_DESCRIPTION} />
-      </Helmet>
+      <PageSeo title={HOME_PAGE_TITLE} description={HOME_PAGE_DESCRIPTION} path="/" />
       {loadError && (
         <div className="home-fetch-banner" role="alert">
           <p>

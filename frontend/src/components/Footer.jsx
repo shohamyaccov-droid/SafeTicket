@@ -19,6 +19,9 @@ const Footer = () => {
             <h3>שירות לקוחות</h3>
             <ul>
               <li>
+                <Link to="/how-it-works">איך זה עובד</Link>
+              </li>
+              <li>
                 <Link to="/faq">שאלות ותשובות</Link>
               </li>
               <li>

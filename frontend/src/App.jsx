@@ -40,6 +40,7 @@ const AdminPayoutsPage = lazy(() => import('./pages/AdminPayoutsPage'));
 const AdminOffersPage = lazy(() => import('./pages/AdminOffersPage'));
 const AdminGodModePage = lazy(() => import('./pages/AdminGodModePage'));
 const FAQ = lazy(() => import('./pages/FAQ'));
+const HowItWorksPage = lazy(() => import('./pages/HowItWorksPage'));
 const Contact = lazy(() => import('./pages/Contact'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const RefundsPage = lazy(() => import('./pages/RefundsPage'));
@@ -161,7 +162,6 @@ function SessionExpiredRedirector() {
   return null;
 }
 
-/* eslint-disable-next-line react/prop-types */
 function AppChrome({ children }) {
   const location = useLocation();
   const isSellerFunnel = location.pathname === '/sell' || location.pathname === '/sell/new';
@@ -294,6 +294,7 @@ function App() {
               />
               <Route path="/admin/verification" element={routeElement(<AdminVerificationPage />, <DashboardSkeleton />)} />
               <Route path="/faq" element={routeElement(<FAQ />)} />
+              <Route path="/how-it-works" element={routeElement(<HowItWorksPage />)} />
               <Route path="/contact" element={routeElement(<Contact />)} />
               <Route path="/terms" element={routeElement(<TermsPage />)} />
               <Route path="/privacy" element={routeElement(<PrivacyPage />)} />
