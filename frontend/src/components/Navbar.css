@@ -2,7 +2,8 @@
 .navbar {
   position: sticky;
   top: 0;
-  z-index: 1000;
+  /* Above sticky event filter/map bars (1100) so the hamburger drawer always covers them */
+  z-index: 12000;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -387,7 +388,7 @@
 .nav-drawer-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1100;
+  z-index: 12001;
   margin: 0;
   padding: 0;
   border: none;
@@ -407,7 +408,7 @@
   height: 100dvh;
   background: var(--bg-secondary);
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
-  z-index: 1110;
+  z-index: 12002;
   display: flex;
   flex-direction: column;
   padding: 0 var(--spacing-lg) calc(var(--spacing-lg) + env(safe-area-inset-bottom, 0px));

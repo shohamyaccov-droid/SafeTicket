@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   defaultListingQuantity,
+  listingAvailabilityLabel,
   listingQuantityOptions,
   normalizeListingSplitType,
 } from './listingQuantity';
@@ -23,5 +24,12 @@ describe('listingQuantityOptions', () => {
     expect(normalizeListingSplitType('נמכר בזוגות')).toBe('pairs');
     expect(normalizeListingSplitType('הכל יחד')).toBe('all');
     expect(normalizeListingSplitType('')).toBe('any');
+  });
+
+  it('labels available quantity and sold-in-pairs', () => {
+    expect(listingAvailabilityLabel('any', 2)).toBe('2 כרטיסים זמינים');
+    expect(listingAvailabilityLabel('pairs', 2)).toBe('2 כרטיסים זמינים · נמכר בזוגות');
+    expect(listingAvailabilityLabel('זוגות בלבד', 4)).toBe('4 כרטיסים זמינים · נמכר בזוגות');
+    expect(listingAvailabilityLabel('any', 1)).toBe('1 כרטיס זמין');
   });
 });

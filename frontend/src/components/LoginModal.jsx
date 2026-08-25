@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 import { useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -16,7 +17,7 @@ function responseDetail(data) {
  * Shared login form for /login and future modals.
  * Mobile-oriented: autocomplete, no iOS auto-capitalize, touch-friendly submit, immediate navigation on success.
  */
-export function LoginForm() {
+export function LoginForm({ onSuccess } = {}) {
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -64,6 +65,10 @@ export function LoginForm() {
 
       if (result.success) {
         toastSuccess('התחברת בהצלחה');
+        if (typeof onSuccess === 'function') {
+          onSuccess();
+          return;
+        }
         const returnTo = resolveReturnTo();
         try {
           sessionStorage.removeItem('tradetix_return_to');

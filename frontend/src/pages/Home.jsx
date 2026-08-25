@@ -374,7 +374,7 @@ const Home = () => {
     if (!items?.length) return null;
 
     return (
-      <section className="home-carousel-section viagogo-row" aria-labelledby={`row-${id}`}>
+      <section className="home-carousel-section viagogo-row" aria-labelledby={`row-${id}`} data-home-row={id}>
         <div className="home-carousel-head">
           <h2 id={`row-${id}`} className="home-carousel-title">
             {title}
@@ -556,16 +556,16 @@ const Home = () => {
         ) : (
           <div className="home-viagogo-rows viagogo-home-discover home-layout__rows">
             <CarouselSection
-              slug="recommended"
-              title="מומלצים"
-              kind="performer"
-              performers={recommendedPerformers}
-            />
-            <CarouselSection
               slug="last-minute"
               title="כרטיסים של הדקה ה-90"
               kind="lastMinute"
               events={lastMinuteEvents}
+            />
+            <CarouselSection
+              slug="recommended"
+              title="מומלצים"
+              kind="performer"
+              performers={recommendedPerformers}
             />
             <CarouselSection slug="music" title="הופעות" kind="performer" performers={musicPerformers} />
             <CarouselSection slug="standup" title="סטנדאפ" kind="performer" performers={standupPerformers} />

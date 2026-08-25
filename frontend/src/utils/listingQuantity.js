@@ -28,3 +28,13 @@ export function defaultListingQuantity(splitType, availableCount) {
   const options = listingQuantityOptions(splitType, availableCount);
   return options[0] || 1;
 }
+
+/** Buyer-facing availability line: "2 כרטיסים זמינים" + optional "נמכר בזוגות". */
+export function listingAvailabilityLabel(splitType, availableCount) {
+  const n = Math.max(0, Number(availableCount) || 0);
+  const qty = n === 1 ? '1 כרטיס זמין' : `${n} כרטיסים זמינים`;
+  if (normalizeListingSplitType(splitType) === 'pairs') {
+    return `${qty} · נמכר בזוגות`;
+  }
+  return qty;
+}

@@ -7,7 +7,7 @@ import {
   formatAmountForCurrency,
   buyerChargeFromBase,
 } from '../utils/priceFormat';
-import { listingQuantityOptions, normalizeListingSplitType } from '../utils/listingQuantity';
+import { listingAvailabilityLabel, listingQuantityOptions, normalizeListingSplitType } from '../utils/listingQuantity';
 import TakenBuyButton from './TakenBuyButton';
 import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import { formatBuyerFeePercent } from '../services/pricingSettings';
@@ -167,7 +167,7 @@ export default function BloomfieldTicketListPanel({
                 ? buyerChargeFromBase(baseNum, buyerFeePercent).serviceFee
                 : 0;
             const qty = group.available_count || 1;
-            const qtyLabel = `${qty} ${qty === 1 ? 'כרטיס' : 'כרטיסים'}`;
+            const qtyLabel = listingAvailabilityLabel(splitType, qty);
 
             /* ── section title ────────────────────────────────────────────── */
             const rawSection =
@@ -356,7 +356,16 @@ export default function BloomfieldTicketListPanel({
                             </button>
                           ) : null
                         ) : group?.tickets?.[0]?.allow_negotiation !== false ? (
-                          <p className="text-xs text-slate-500">התחברו כדי להציע מחיר</p>
+                          <button
+                            type="button"
+                            className="min-h-[44px] rounded-lg border-2 border-emerald-600 bg-white px-5 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRequestLogin?.();
+                            }}
+                          >
+                            התחבר כדי להציע מחיר על המודעה
+                          </button>
                         ) : null}
                       </div>
                     )}

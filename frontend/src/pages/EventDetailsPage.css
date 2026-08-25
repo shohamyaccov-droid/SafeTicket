@@ -1055,6 +1055,15 @@
   white-space: nowrap;
 }
 
+.ticket-availability-text {
+  margin: 0.15rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #475569;
+  line-height: 1.35;
+  direction: rtl;
+}
+
 /* Mini Tags */
 .ticket-mini-tags {
   display: flex;
@@ -1319,6 +1328,14 @@
   font-size: 0.9rem;
   color: #64748b;
   direction: rtl;
+}
+
+.viagogo-offer-button--login {
+  width: 100%;
+  background: #fff;
+  color: #1d4ed8;
+  border: 2px solid #2563eb;
+  font-weight: 700;
 }
 
 /* Premium Badge */
@@ -2001,7 +2018,7 @@
     margin-bottom: var(--spacing-sm);
     position: sticky;
     top: calc(env(safe-area-inset-top, 0px) + 5.5rem);
-    z-index: 1000;
+    z-index: 40;
     flex: 0 0 auto;
     align-self: flex-start;
     background: var(--bg-primary, #ffffff);
@@ -2266,11 +2283,11 @@
     min-height: 44px;
   }
 
-  /* Sticky filter/sort bar — stays above the sticky map (higher z-index) */
+  /* Sticky filter/sort bar — above the map, below the global hamburger drawer */
   .tickets-section > .event-details-filters-sort-bar {
     position: sticky;
     top: env(safe-area-inset-top, 0px);
-    z-index: 1100;
+    z-index: 45;
     margin-bottom: 0.35rem;
     background: var(--bg-card, #ffffff);
     border-radius: var(--radius-md);

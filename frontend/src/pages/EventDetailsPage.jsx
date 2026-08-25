@@ -63,7 +63,8 @@ import {
 import { buildSectionMapStatus } from '../utils/mapSectionStatus';
 import TakenBuyButton from '../components/TakenBuyButton';
 import { createListFetchAbort } from '../utils/listFetch';
-import { defaultListingQuantity, listingQuantityOptions } from '../utils/listingQuantity';
+import { defaultListingQuantity, listingAvailabilityLabel, listingQuantityOptions } from '../utils/listingQuantity';
+import LoginQuickModal from '../components/LoginQuickModal';
 import './EventDetailsPage.css';
 
 /** Absolute URL for OG/Twitter when the SPA has no event image yet. */
@@ -103,6 +104,7 @@ const EventDetailsPage = () => {
   const [offerSubmitted, setOfferSubmitted] = useState(false);
   const [offerSubmitting, setOfferSubmitting] = useState(false);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [eventHasPassed, setEventHasPassed] = useState(false);
 
   // Filtering and sorting state
@@ -1570,6 +1572,7 @@ const EventDetailsPage = () => {
                     }}
                     onBuy={handleBuy}
                     onOffer={handleMakeOffer}
+                    onRequestLogin={() => setLoginModalOpen(true)}
                     buyQuantity={quantity}
                     onBuyQuantityChange={setQuantity}
                     buyingStableId={buyOpeningKey}
@@ -1666,6 +1669,9 @@ const EventDetailsPage = () => {
                       <div className="section-row-info">
                         <span className="section-row-text">{seatRange}</span>
                       </div>
+                      <p className="ticket-availability-text">
+                        {listingAvailabilityLabel(splitType, group.available_count || 1)}
+                      </p>
                     </div>
                     
                     {/* Left Side: Price */}
@@ -1727,7 +1733,6 @@ const EventDetailsPage = () => {
                                   'המשך לתשלום'
                                 )}
                               </button>
-                              <span className="micro-trust-text">🔒 תשלום מאובטח ב-PayMe — בלי אישור נוסף</span>
                             </div>
                             {allowsNegotiation ? (
                               user ? (
@@ -1743,7 +1748,16 @@ const EventDetailsPage = () => {
                                   הצע מחיר
                                 </button>
                               ) : (
-                                <p className="offer-login-hint">התחבר כדי להציע מחיר על המודעה</p>
+                                <button
+                                  type="button"
+                                  className="viagogo-offer-button viagogo-offer-button--login"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setLoginModalOpen(true);
+                                  }}
+                                >
+                                  התחבר כדי להציע מחיר על המודעה
+                                </button>
                               )
                             ) : null}
                           </>
@@ -1782,6 +1796,10 @@ const EventDetailsPage = () => {
       )}
 
       {/* Checkout Modal */}
+      {loginModalOpen ? (
+        <LoginQuickModal onClose={() => setLoginModalOpen(false)} />
+      ) : null}
+
       {waitlistOpen && event ? (
         <WaitlistSignupModal event={event} onClose={() => setWaitlistOpen(false)} />
       ) : null}
@@ -1792,7 +1810,7 @@ const EventDetailsPage = () => {
           ticketGroup={selectedTicketGroup}
           user={user}
           quantity={quantity}
-          autoStartPayme
+          autoStartPayme={Boolean(user)}
           onClose={handleCloseCheckout}
           onErrorToParent={(payload) => {
             setToast(payload);

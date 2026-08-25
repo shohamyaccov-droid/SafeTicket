@@ -32,6 +32,7 @@ import ShabbatModal from './ShabbatModal';
 import BuyerIdentityInlineForm from './BuyerIdentityInlineForm';
 import { buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
 import { isCheckoutAuthSessionFailure } from '../utils/checkoutAuth';
+import { guestHasCheckoutEmail, isGuestEmailRequiredError } from '../utils/checkoutGuest';
 import { useAuth } from '../context/AuthContext';
 import './CheckoutModal.css';
 
@@ -125,6 +126,9 @@ function toFriendlyCheckoutMessage(detail) {
   if (/buyer (name|phone) is required|phone is required|name is required|missing_buyer/i.test(text)) {
     return 'MISSING_BUYER_IDENTITY';
   }
+  if (/guest_email_required|נדרש אימייל כדי לשמור/.test(text)) {
+    return 'GUEST_EMAIL_REQUIRED';
+  }
   if (/payment failed|payment error|could not process payment|payment provider/i.test(text)) {
     return 'התשלום לא הושלם. בדקו את פרטי התשלום ונסו שוב.';
   }
@@ -198,7 +202,7 @@ function coerceCheckoutQuantity(value, fallback = 1) {
 
 const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 1, onClose, acceptedOffer = null, splitType: splitTypeOverride = null, onErrorToParent = null, autoStartPayme = false }) => {
   const { refreshProfile } = useAuth();
-  const [step, setStep] = useState(() => (autoStartPayme ? 'payment' : 'info')); // 'info', 'payment', 'success'
+  const [step, setStep] = useState(() => (autoStartPayme && user ? 'payment' : 'info')); // 'info', 'payment', 'success'
   const [quantity, setQuantity] = useState(() => coerceCheckoutQuantity(initialQuantity, 1));
   const [guestForm, setGuestForm] = useState({
     firstName: '',
@@ -237,7 +241,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const [appliedCoupon, setAppliedCoupon] = useState(null); // server preview payload
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponError, setCouponError] = useState('');
-  const [legalAccepted, setLegalAccepted] = useState(() => Boolean(autoStartPayme));
+  const [legalAccepted, setLegalAccepted] = useState(() => Boolean(autoStartPayme && user));
   const [legalError, setLegalError] = useState('');
   const [shabbatOpen, setShabbatOpen] = useState(false);
   const [shabbatHavdalah, setShabbatHavdalah] = useState(null);
@@ -1095,6 +1099,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         err.message ||
         '';
       const code = res?.data?.code || '';
+      if (isGuestEmailRequiredError(err) || code === 'guest_email_required') {
+        setError('');
+        setStep('info');
+        setLoading(false);
+        setPaymentPhase('idle');
+        paymentSubmittingRef.current = false;
+        return;
+      }
       const missingIdentity =
         code === 'missing_buyer_name' ||
         code === 'missing_buyer_phone' ||
@@ -1109,6 +1121,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         return;
       }
       const userFacing = toFriendlyCheckoutMessage(detail);
+      if (userFacing === 'GUEST_EMAIL_REQUIRED') {
+        setError('');
+        setStep('info');
+        setLoading(false);
+        setPaymentPhase('idle');
+        paymentSubmittingRef.current = false;
+        return;
+      }
       setError(userFacing === 'MISSING_BUYER_IDENTITY'
         ? 'חסרים פרטי קונה לתשלום — מלאו אותם כאן והמשיכו.'
         : userFacing);
@@ -1250,6 +1270,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       if (checkoutClosingRef.current) return;
       // Already holding a cart lock for this checkout session — do not re-lock.
       if (reservationRef.current || reserveInFlightRef.current) return;
+      if (!guestHasCheckoutEmail(user, guestEmailRef.current)) {
+        setReservationInitializing(false);
+        if (autoStartPayme) setStep('info');
+        return;
+      }
 
       try {
         reserveInFlightRef.current = true;
@@ -1322,6 +1347,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         }
       } catch (err) {
         if (cancelled || generation !== reserveGenerationRef.current || checkoutClosingRef.current) return;
+        if (isGuestEmailRequiredError(err)) {
+          setError('');
+          setStep('info');
+          return;
+        }
         const res = err.response;
         const errCode = res?.data?.code || '';
         if (

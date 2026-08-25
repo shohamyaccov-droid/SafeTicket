@@ -4,6 +4,9 @@
 import { eventHref } from './eventSeo';
 import { eventTicketCount } from './artistEventSupply';
 
+/** Homepage row order: last-minute buyers first, then recommended artists. */
+export const HOME_DISCOVER_ROW_ORDER = ['last-minute', 'recommended', 'music', 'standup', 'sports'];
+
 /** @param {object} ev */
 export function eventCategoryKey(ev) {
   const raw = ev?.category;

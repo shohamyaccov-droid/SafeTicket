@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { eventHref } from './eventSeo';
-import { groupEventsByPerformer, performerNavigateTarget } from './homeDiscover';
+import { groupEventsByPerformer, HOME_DISCOVER_ROW_ORDER, performerNavigateTarget } from './homeDiscover';
 
 describe('performerNavigateTarget', () => {
+  it('puts last-minute tickets above recommended on the homepage', () => {
+    expect(HOME_DISCOVER_ROW_ORDER[0]).toBe('last-minute');
+    expect(HOME_DISCOVER_ROW_ORDER.indexOf('last-minute')).toBeLessThan(
+      HOME_DISCOVER_ROW_ORDER.indexOf('recommended'),
+    );
+  });
   it('routes a single upcoming event with tickets straight to EventDetailsPage', () => {
     const event = { id: 11, slug: 'omer-adam-bloomfield', tickets_count: 4, date: '2099-08-01' };
     const target = performerNavigateTarget({
