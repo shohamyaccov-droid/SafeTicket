@@ -25,6 +25,7 @@ describe('ArtistPage', () => {
         seo_title: 'כרטיסים לאייל גולן - לוח הופעות וכרטיסים יד שנייה | TradeTix',
         seo_description: 'מחפשים כרטיסים לאייל גולן?',
         canonical_path: '/artist/eyal-golan',
+        bottom_seo_text: 'עומר אדם הוא ללא ספק אחד האמנים המצליחים בישראל.',
       },
     });
     artistAPI.getArtistEvents.mockResolvedValue({
@@ -60,6 +61,7 @@ describe('ArtistPage', () => {
       screen.getByRole('link', { name: 'יש לך כרטיס מיותר? לחץ כאן כדי למכור אותו בטוח' }),
     ).toHaveAttribute('href', '/how-it-works');
     expect(screen.getByText('בלומפילד')).toBeInTheDocument();
+    expect(screen.getByText('עומר אדם הוא ללא ספק אחד האמנים המצליחים בישראל.')).toBeInTheDocument();
     expect(artistAPI.getArtist).toHaveBeenCalled();
     expect(artistAPI.getArtistEvents).toHaveBeenCalled();
   });

@@ -91,3 +91,23 @@ class ArtistSlugAndSeoTests(TestCase):
         xml = build_sitemap_xml()
         self.assertIn('https://tradetix.co.il/artist/eyal-golan', xml)
         self.assertIn(f'https://tradetix.co.il/event/{self.event.slug}', xml)
+
+
+class ArtistBottomSeoCopyTests(TestCase):
+    def test_apply_fills_known_artist_and_skips_missing(self):
+        from users.artist_seo_copy import apply_artist_bottom_seo_texts
+
+        omer = Artist.objects.filter(name='עומר אדם').first() or Artist.objects.create(name='עומר אדם')
+        updated, skipped = apply_artist_bottom_seo_texts()
+        labels = {label for label, _count in updated}
+        self.assertIn('עומר אדם', labels)
+        omer.refresh_from_db()
+        self.assertIn('כרטיסים לעומר אדם מיד שנייה', omer.bottom_seo_text)
+        self.assertIn('נאמנות', omer.bottom_seo_text)
+
+        res = APIClient().get('/api/users/artists/omer-adam/')
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertIn('כרטיסים לעומר אדם', res.data.get('bottom_seo_text') or '')
+
+        seo = build_artist_seo_payload(omer)
+        self.assertIn('כרטיסים לעומר אדם מיד שנייה', seo['crawler_html'])

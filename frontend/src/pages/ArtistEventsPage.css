@@ -124,6 +124,29 @@
   text-decoration: underline;
 }
 
+.artist-page-seo-text {
+  margin-top: 3rem;
+  padding: 1.2rem 1.3rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  color: #4b5563;
+  line-height: 1.75;
+  font-size: 0.95rem;
+}
+
+.artist-page-seo-text p {
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .artist-page-seo-text {
+    margin-top: 1.75rem;
+    padding: 0.95rem 1rem;
+    font-size: 0.9rem;
+  }
+}
+
 /* Events List Section */
 .events-list-section {
   background: white;

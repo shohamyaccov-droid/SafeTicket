@@ -496,7 +496,7 @@ class ArtistAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at', 'slug', 'image_delivery_preview', 'cover_image_delivery_preview']
     fieldsets = (
         ('Basic Information', {
-            'fields': ('name', 'slug', 'category', 'is_international', 'genre', 'description')
+            'fields': ('name', 'slug', 'category', 'is_international', 'genre', 'description', 'bottom_seo_text')
         }),
         ('Media & Images', {
             'fields': ('image', 'cover_image', 'image_delivery_preview', 'cover_image_delivery_preview')

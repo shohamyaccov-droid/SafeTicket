@@ -261,6 +261,12 @@ const ArtistPage = () => {
         )}
       </section>
 
+      {(artist.bottom_seo_text && String(artist.bottom_seo_text).trim()) ? (
+        <section className="artist-page-seo-text" aria-label="מידע נוסף">
+          <p>{String(artist.bottom_seo_text).trim()}</p>
+        </section>
+      ) : null}
+
       {showAlertModal ? (
         <WaitlistSignupModal artist={artist} onClose={() => setShowAlertModal(false)} />
       ) : null}

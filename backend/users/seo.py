@@ -139,7 +139,18 @@ ARTIST_SLUG_ALIASES = {
     'עדן חסון': 'eden-hason',
     'eden hason': 'eden-hason',
     'עודיה': 'odeya',
+    'אודיה': 'odeya',
     'odeya': 'odeya',
+    'שלמה ארצי': 'shlomo-artzi',
+    'shlomo artzi': 'shlomo-artzi',
+    'נועה קירל': 'noa-kirel',
+    'noa kirel': 'noa-kirel',
+    'פאר טסי': 'peer-tasi',
+    'peer tasi': 'peer-tasi',
+    'טונה': 'tuna',
+    'tuna': 'tuna',
+    'עדן בן זקן': 'eden-ben-zaken',
+    'eden ben zaken': 'eden-ben-zaken',
 }
 
 
@@ -528,9 +539,17 @@ def build_artist_seo_payload(artist, *, request=None) -> dict[str, Any]:
             f'<p>{_xml_attr(intro)}</p>'
             f'<p><a href="{_xml_attr(origin)}/how-it-works">'
             'יש לך כרטיס מיותר? לחץ כאן כדי למכור אותו בטוח</a></p>'
+            f'{_artist_bottom_seo_crawler_html(artist)}'
             '</article>'
         ),
     }
+
+
+def _artist_bottom_seo_crawler_html(artist) -> str:
+    bottom = (getattr(artist, 'bottom_seo_text', None) or '').strip()
+    if not bottom:
+        return ''
+    return f'<p>{_xml_attr(bottom)}</p>'
 
 
 def _content_json_path(filename: str) -> Path:

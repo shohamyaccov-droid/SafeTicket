@@ -130,6 +130,11 @@ class Artist(models.Model):
         allow_unicode=True,
         help_text='URL-friendly unique slug for artist SEO pages (auto-generated).',
     )
+    bottom_seo_text = models.TextField(
+        blank=True,
+        null=True,
+        help_text='Long-form SEO copy rendered at the bottom of the public artist hub page.',
+    )
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)

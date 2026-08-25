@@ -605,6 +605,7 @@ class ArtistDetailSerializer(ArtistSerializer):
 
     class Meta(ArtistSerializer.Meta):
         fields = ArtistSerializer.Meta.fields + (
+            'bottom_seo_text',
             'seo_title', 'seo_description', 'canonical_url', 'canonical_path', 'json_ld',
         )
         read_only_fields = fields
