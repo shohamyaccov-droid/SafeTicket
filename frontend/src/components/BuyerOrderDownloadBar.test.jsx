@@ -20,7 +20,7 @@ describe('BuyerOrderDownloadBar', () => {
     const button = screen.getByRole('button', { name: 'הורד כרטיס' });
     expect(button).toBeInTheDocument();
     await user.click(button);
-    expect(onDownload).toHaveBeenCalledWith(42);
+    expect(onDownload).toHaveBeenCalledWith(42, expect.any(Object));
   });
 
   it('renders for paid orders with only ticket_details.id', async () => {
@@ -35,7 +35,7 @@ describe('BuyerOrderDownloadBar', () => {
     const button = screen.getByRole('button', { name: 'הורד כרטיס' });
     expect(button).toBeInTheDocument();
     await user.click(button);
-    expect(onDownload).toHaveBeenCalledWith(55);
+    expect(onDownload).toHaveBeenCalledWith(55, expect.any(Object));
   });
 
   it('renders for paid orders with empty tickets and only pdf_download_url', async () => {
@@ -55,7 +55,7 @@ describe('BuyerOrderDownloadBar', () => {
     expect(button).toBeInTheDocument();
     expect(button).toBeVisible();
     await user.click(button);
-    expect(onDownload).toHaveBeenCalledWith(77);
+    expect(onDownload).toHaveBeenCalledWith(77, expect.any(Object));
   });
 
   it('still renders הורד כרטיס for paid orders when no ticket id is present yet', () => {
@@ -68,13 +68,16 @@ describe('BuyerOrderDownloadBar', () => {
     expect(screen.getByRole('button', { name: 'הורד כרטיס' })).toBeInTheDocument();
   });
 
-  it('does not render for unpaid orders', () => {
+  it('resolves download from ticket_ids alone', async () => {
+    const user = userEvent.setup();
+    const onDownload = vi.fn();
     render(
       <BuyerOrderDownloadBar
-        purchase={{ status: 'pending', ticket: 42 }}
-        onDownload={vi.fn()}
+        purchase={{ status: 'paid', ticket: null, tickets: [], ticket_ids: [64] }}
+        onDownload={onDownload}
       />,
     );
-    expect(screen.queryByRole('button', { name: 'הורד כרטיס' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'הורד כרטיס' }));
+    expect(onDownload).toHaveBeenCalledWith(64, expect.objectContaining({ ticket_ids: [64] }));
   });
 });

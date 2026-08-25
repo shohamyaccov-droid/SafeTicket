@@ -1213,7 +1213,7 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = (
-            'id', 'ticket', 'ticket_details', 'tickets', 'status', 'total_amount', 'currency', 'quantity',
+            'id', 'ticket', 'ticket_ids', 'ticket_details', 'tickets', 'status', 'total_amount', 'currency', 'quantity',
             'event_name', 'created_at', 'pdf_download_url', 'receipt_url',
             'event_image_url', 'status_timeline',
             'related_offer', 'final_negotiated_price', 'buyer_service_fee', 'seller_service_fee',
@@ -1222,23 +1222,52 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
+    def _order_ticket_id_list(self, obj):
+        ids = []
+        for tid in list(getattr(obj, 'ticket_ids', None) or []):
+            try:
+                ids.append(int(tid))
+            except (TypeError, ValueError):
+                continue
+        if not ids and obj.ticket_id:
+            ids = [int(obj.ticket_id)]
+        return ids
+
+    def _resolve_ticket(self, obj, ticket_id=None):
+        """Prefer FK, then ticket_ids / cache (orders may SET_NULL the FK while JSON ids remain)."""
+        cache = self.context.get('profile_tickets_by_id') or {}
+        if ticket_id is not None:
+            try:
+                tid = int(ticket_id)
+            except (TypeError, ValueError):
+                return None
+            t = cache.get(tid)
+            if t is not None:
+                return t
+            try:
+                return Ticket.objects.select_related(
+                    'event', 'event__artist', 'event__venue_place', 'venue_section'
+                ).get(id=tid)
+            except Ticket.DoesNotExist:
+                return None
+        if obj.ticket_id and obj.ticket:
+            return obj.ticket
+        if obj.ticket_id:
+            return self._resolve_ticket(obj, obj.ticket_id)
+        ids = self._order_ticket_id_list(obj)
+        if ids:
+            return self._resolve_ticket(obj, ids[0])
+        return None
+
     def get_tickets(self, obj):
         """Return array of tickets with id and pdf_file_url for multi-ticket downloads"""
-        cache = self.context.get('profile_tickets_by_id') or {}
-        ids = list(getattr(obj, 'ticket_ids', None) or [])
-        if not ids and obj.ticket_id:
-            ids = [obj.ticket_id]
-        elif not ids and obj.ticket:
-            ids = [obj.ticket.id]
+        ids = self._order_ticket_id_list(obj)
         tickets = []
         request = self.context.get('request')
         for tid in ids:
-            t = cache.get(tid)
+            t = self._resolve_ticket(obj, tid)
             if t is None:
-                try:
-                    t = Ticket.objects.select_related('event', 'event__artist').get(id=tid)
-                except Ticket.DoesNotExist:
-                    continue
+                continue
             url = None
             if t.pdf_file:
                 if request:
@@ -1249,27 +1278,38 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
                 'id': t.id,
                 'pdf_file_url': url,
                 'has_pdf_file': bool(t.pdf_file),
+                'section': t.get_section_display(),
+                'row': (getattr(t, 'row', None) or getattr(t, 'row_number', None) or '') or '',
+                'seat_numbers': (getattr(t, 'seat_numbers', None) or getattr(t, 'seat_number', None) or '') or '',
+                'seat_row': getattr(t, 'seat_row', None) or '',
             })
         return tickets
     
     def get_ticket_details(self, obj):
-        if obj.ticket:
-            ev = obj.ticket.event
-            vlabel = ev.venue_display_name() if ev else (obj.ticket.venue or '')
+        ticket = self._resolve_ticket(obj)
+        if ticket:
+            ev = ticket.event
+            vlabel = ev.venue_display_name() if ev else (ticket.venue or '')
+            row = (getattr(ticket, 'row', None) or getattr(ticket, 'row_number', None) or '') or ''
+            seat = (getattr(ticket, 'seat_numbers', None) or getattr(ticket, 'seat_number', None) or '') or ''
             td = {
-                'id': obj.ticket.id,
-                'event_name': ev.name if ev else (obj.ticket.event_name or 'Unknown Event'),
-                'event_date': ev.date if ev else obj.ticket.event_date,
+                'id': ticket.id,
+                'event_name': ev.name if ev else (ticket.event_name or 'Unknown Event'),
+                'event_date': ev.date if ev else ticket.event_date,
                 'venue': vlabel,
                 'event_venue': vlabel,
                 'city': ev.city if ev else '',
                 'country': ev.country if ev else '',
-                'seat_row': getattr(obj.ticket, 'seat_row', None),
-                'section': obj.ticket.get_section_display() if obj.ticket else '',
-                'row': getattr(obj.ticket, 'row', None) or '',
-                'seat_numbers': getattr(obj.ticket, 'seat_numbers', None) or '',
-                'original_listing_price': str(obj.ticket.asking_price),
-                'asking_price': str(obj.ticket.asking_price),
+                'seat_row': getattr(ticket, 'seat_row', None) or '',
+                'section': ticket.get_section_display() or '',
+                'section_legacy': getattr(ticket, 'section_legacy', None) or '',
+                'custom_section_text': getattr(ticket, 'custom_section_text', None) or '',
+                'row': row,
+                'row_number': getattr(ticket, 'row_number', None) or '',
+                'seat_numbers': seat,
+                'seat_number': getattr(ticket, 'seat_number', None) or '',
+                'original_listing_price': str(ticket.asking_price),
+                'asking_price': str(ticket.asking_price),
             }
             if obj.final_negotiated_price is not None:
                 td['final_negotiated_price'] = str(obj.final_negotiated_price)
@@ -1279,11 +1319,20 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
         }
     
     def get_pdf_download_url(self, obj):
-        if obj.ticket and obj.ticket.pdf_file:
+        ticket = self._resolve_ticket(obj)
+        if ticket and ticket.pdf_file:
             request = self.context.get('request')
             if request:
-                return request.build_absolute_uri(f'/api/users/tickets/{obj.ticket.id}/download_pdf/')
-            return f'/api/users/tickets/{obj.ticket.id}/download_pdf/'
+                return request.build_absolute_uri(f'/api/users/tickets/{ticket.id}/download_pdf/')
+            return f'/api/users/tickets/{ticket.id}/download_pdf/'
+        # Still expose a download URL when the file may exist but wasn't eager-loaded
+        ids = self._order_ticket_id_list(obj)
+        if ids:
+            tid = ids[0]
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(f'/api/users/tickets/{tid}/download_pdf/')
+            return f'/api/users/tickets/{tid}/download_pdf/'
         return None
     
     def get_receipt_url(self, obj):
@@ -1295,9 +1344,10 @@ class ProfileOrderSerializer(serializers.ModelSerializer):
     
     def get_event_image_url(self, obj):
         """Event card image: event upload, or artist cover/image (fixes artists like Omar Adam with no per-event image)."""
-        if not obj.ticket:
+        ticket = self._resolve_ticket(obj)
+        if not ticket:
             return None
-        ev = obj.ticket.event
+        ev = ticket.event
         if not ev:
             return None
         return first_resolved_image_url_for_event(self.context.get('request'), ev)

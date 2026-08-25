@@ -24,12 +24,16 @@ export default function BuyerOrderDownloadBar({ purchase, onDownload }) {
   const anyFlagged = tickets.some(orderTicketIsDownloadable);
 
   const handleDownload = (explicitId) => {
-    const id = explicitId ?? resolveDownloadTicketId(purchase);
-    onDownload?.(id);
+    const resolved =
+      (explicitId != null && explicitId !== '' ? explicitId : null) ??
+      resolveDownloadTicketId(purchase);
+    onDownload?.(resolved, purchase);
   };
 
   if (ticketIds.length > 1) {
-    const ids = tickets.length === ticketIds.length ? tickets.map((t) => t.id) : ticketIds;
+    const ids = tickets.length === ticketIds.length
+      ? tickets.map((t, idx) => t?.id ?? ticketIds[idx])
+      : ticketIds;
     return (
       <div className="buyer-order-download-bar" data-testid="buyer-order-download-bar">
         <div className="multi-download-buttons">
@@ -58,7 +62,7 @@ export default function BuyerOrderDownloadBar({ purchase, onDownload }) {
     <div className="buyer-order-download-bar" data-testid="buyer-order-download-bar">
       <button
         type="button"
-        onClick={() => handleDownload(ticketIds[0])}
+        onClick={() => handleDownload(resolveDownloadTicketId(purchase))}
         className="primary-button download-button buyer-download-ticket-btn"
       >
         <DownloadIcon />

@@ -76,9 +76,35 @@ class BuyerOrderDownloadTimelineTests(TestCase):
         self.assertNotIn('מעבד', labels)
         self.assertTrue(purchase['tickets'][0]['has_pdf_file'])
         self.assertTrue(purchase['tickets'][0]['pdf_file_url'])
+        self.assertEqual(purchase['tickets'][0]['id'], self.ticket.pk)
+        self.assertIn('ticket_ids', purchase)
+        self.assertEqual(purchase['ticket_ids'], [self.ticket.pk])
+        self.assertEqual(purchase['ticket_details']['id'], self.ticket.pk)
 
     def test_buyer_can_download_paid_ticket_file(self):
         self.client.force_authenticate(user=self.buyer)
         res = self.client.get(f'/api/users/tickets/{self.ticket.pk}/download_pdf/')
         self.assertEqual(res.status_code, 200)
         self.assertGreater(len(res.content), 0)
+
+    def test_ticket_details_include_section_row_seat_when_fk_null(self):
+        self.ticket.custom_section_text = 'שער 7'
+        self.ticket.row = '12'
+        self.ticket.seat_numbers = '3-4'
+        self.ticket.save(update_fields=['custom_section_text', 'row', 'seat_numbers', 'section_legacy'])
+        self.order.ticket = None
+        self.order.ticket_ids = [self.ticket.pk]
+        self.order.save(update_fields=['ticket', 'ticket_ids'])
+
+        self.client.force_authenticate(user=self.buyer)
+        res = self.client.get('/api/users/dashboard/')
+        self.assertEqual(res.status_code, 200)
+        purchase = next(p for p in res.data['purchases'] if p['id'] == self.order.pk)
+        details = purchase['ticket_details']
+        self.assertEqual(details['id'], self.ticket.pk)
+        self.assertEqual(details['section'], 'שער 7')
+        self.assertEqual(details['row'], '12')
+        self.assertEqual(details['seat_numbers'], '3-4')
+        self.assertTrue(purchase['pdf_download_url'])
+        self.assertIn(str(self.ticket.pk), purchase['pdf_download_url'])
+        self.assertEqual(purchase['tickets'][0]['id'], self.ticket.pk)

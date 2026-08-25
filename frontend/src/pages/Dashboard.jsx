@@ -24,7 +24,11 @@ import { toastError, toastSuccess } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
 import { downloadTicketFromAxiosBlob } from '../utils/ticketDownload';
 import {
+  formatPurchaseSeat,
+  formatPurchaseSectionRow,
   isPaidActiveOrder,
+  purchaseSeatDetails,
+  resolveDownloadTicketId,
   timelineForBuyerDisplay,
 } from '../utils/buyerOrderActions';
 import { buyerHasPaymeIdentity, buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
@@ -663,14 +667,15 @@ const Dashboard = () => {
     }
   };
 
-  const handleDownloadPDF = async (ticketId) => {
-    if (!ticketId) {
+  const handleDownloadPDF = async (ticketId, purchase = null) => {
+    const resolvedId = ticketId || resolveDownloadTicketId(purchase);
+    if (!resolvedId) {
       toastError('שגיאה: מזהה כרטיס חסר');
       return;
     }
     try {
-      const response = await ticketAPI.downloadPDF(ticketId);
-      downloadTicketFromAxiosBlob(response, { ticketId });
+      const response = await ticketAPI.downloadPDF(resolvedId);
+      downloadTicketFromAxiosBlob(response, { ticketId: resolvedId });
     } catch (err) {
       toastError('הורדת הכרטיס נכשלה. אנא נסה שוב מאוחר יותר.');
     }
@@ -1016,7 +1021,17 @@ const Dashboard = () => {
             ) : (
               <div className="dashboard-list-container" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {purchases.map((purchase) => {
-                  const ticket = purchase.ticket_details || {};
+                  const ticket = purchaseSeatDetails(purchase);
+                  const sectionRowLabel = (() => {
+                    const section = (ticket.section || ticket.section_legacy || ticket.custom_section_text || '').trim();
+                    const row = (ticket.row || ticket.row_number || '').trim();
+                    const parts = [];
+                    if (section) parts.push(`גוש ${translateSectionDisplay(section)}`);
+                    if (row) parts.push(`שורה ${row}`);
+                    if (parts.length) return parts.join(', ');
+                    return formatPurchaseSectionRow(ticket) || 'לא צוין';
+                  })();
+                  const seatLabel = formatPurchaseSeat(ticket) || 'לא צוין';
                   const payCur = String(purchase.currency || 'ILS').toUpperCase();
                   const paySym = currencySymbol(payCur);
                   const timeline = timelineForBuyerDisplay(purchase, purchase.status_timeline);
@@ -1084,11 +1099,11 @@ const Dashboard = () => {
                             </div>
                             <div className="detail-row">
                               <span className="detail-label">📍 מיקום:</span>
-                              <span className="detail-value">{ticket.venue || 'לא צוין'}</span>
+                              <span className="detail-value">{sectionRowLabel}</span>
                             </div>
                             <div className="detail-row">
                               <span className="detail-label">💺 מושב:</span>
-                              <span className="detail-value">{getSeatDisplay(ticket)}</span>
+                              <span className="detail-value">{seatLabel}</span>
                             </div>
                             <div className="detail-row">
                               <span className="detail-label">💰 סה״כ שולמת (כולל עמלה):</span>

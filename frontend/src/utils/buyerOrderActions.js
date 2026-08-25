@@ -6,6 +6,8 @@ export function isPaidActiveOrder(purchase) {
 function coerceTicketId(value) {
   if (value == null || value === '') return null;
   if (typeof value === 'object') return value.id ?? value.ticket_id ?? null;
+  const n = Number(value);
+  if (Number.isFinite(n) && n > 0) return n;
   return value;
 }
 
@@ -29,6 +31,11 @@ export function orderTicketIds(purchase) {
   const tickets = Array.isArray(purchase?.tickets) ? purchase.tickets : [];
   const fromTickets = tickets.map(ticketIdFromTicketLike).filter((id) => id != null && id !== '');
   if (fromTickets.length) return fromTickets;
+
+  const fromTicketIds = (Array.isArray(purchase?.ticket_ids) ? purchase.ticket_ids : [])
+    .map(coerceTicketId)
+    .filter((id) => id != null && id !== '');
+  if (fromTicketIds.length) return fromTicketIds;
 
   const fallback =
     coerceTicketId(purchase?.ticket) ||
@@ -56,6 +63,44 @@ export function orderTicketIsDownloadable(ticket) {
 /** Paid/completed matches the stepper "ready to download" step — do not require ids up front. */
 export function orderCanDownloadTickets(purchase) {
   return isPaidActiveOrder(purchase);
+}
+
+/** Merge ticket_details + tickets[0] so section/row/seat survive thin payloads. */
+export function purchaseSeatDetails(purchase) {
+  const details = purchase?.ticket_details && typeof purchase.ticket_details === 'object'
+    ? purchase.ticket_details
+    : {};
+  const firstTicket = Array.isArray(purchase?.tickets) && purchase.tickets[0]
+    ? purchase.tickets[0]
+    : {};
+  return {
+    ...firstTicket,
+    ...details,
+    section: details.section || firstTicket.section || details.section_legacy || details.custom_section_text || '',
+    row: details.row || details.row_number || firstTicket.row || '',
+    seat_numbers: details.seat_numbers || details.seat_number || firstTicket.seat_numbers || '',
+    seat_number: details.seat_number || details.seat_numbers || firstTicket.seat_number || '',
+    seat_row: details.seat_row || firstTicket.seat_row || '',
+    venue: details.venue || details.event_venue || firstTicket.venue || '',
+    id: details.id || firstTicket.id || coerceTicketId(purchase?.ticket) || null,
+  };
+}
+
+export function formatPurchaseSectionRow(seat) {
+  const section = (seat?.section || seat?.section_legacy || seat?.custom_section_text || '').trim();
+  const row = (seat?.row || seat?.row_number || '').trim();
+  const parts = [];
+  if (section) parts.push(`גוש ${section}`);
+  if (row) parts.push(`שורה ${row}`);
+  if (parts.length) return parts.join(', ');
+  if ((seat?.seat_row || '').trim()) return String(seat.seat_row).trim();
+  if ((seat?.venue || '').trim()) return String(seat.venue).trim();
+  return '';
+}
+
+export function formatPurchaseSeat(seat) {
+  const value = (seat?.seat_numbers || seat?.seat_number || seat?.seat || '').trim();
+  return value;
 }
 
 const STEP1 = 'הזמנה אושרה';

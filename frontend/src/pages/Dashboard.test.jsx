@@ -132,4 +132,66 @@ describe('Dashboard buyer order download', () => {
       expect(ticketAPI.downloadPDF).toHaveBeenCalledWith(42);
     });
   });
+
+  it('downloads using ticket_ids when ticket FK is missing from the payload', async () => {
+    const user = userEvent.setup();
+    authAPI.getDashboard.mockResolvedValue({
+      data: {
+        purchases: [
+          paidPurchase({
+            ticket: null,
+            ticket_ids: [64],
+            tickets: [],
+            pdf_download_url: null,
+          }),
+        ],
+        listings: { active: [], sold: [] },
+        summary: { total_purchases: 1 },
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'הורד כרטיס' }));
+    await waitFor(() => {
+      expect(ticketAPI.downloadPDF).toHaveBeenCalledWith(64);
+    });
+  });
+
+  it('shows section/row and seat from ticket_details instead of לא צוין', async () => {
+    authAPI.getDashboard.mockResolvedValue({
+      data: {
+        purchases: [
+          paidPurchase({
+            ticket: 42,
+            ticket_details: {
+              event_name: 'הופעת בדיקה',
+              event_date: '2099-01-01T20:00:00Z',
+              venue: 'בלומפילד',
+              section: '11',
+              row: '4',
+              seat_numbers: '18',
+            },
+          }),
+        ],
+        listings: { active: [], sold: [] },
+        summary: { total_purchases: 1 },
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/גוש 11/)).toBeInTheDocument();
+    expect(screen.getByText(/שורה 4/)).toBeInTheDocument();
+    expect(screen.getByText('18')).toBeInTheDocument();
+    expect(screen.queryByText('לא צוין')).not.toBeInTheDocument();
+  });
 });
