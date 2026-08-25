@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAuthModal } from '../context/AuthModalContext';
 import { eventAPI, offerAPI, artistAPI } from '../services/api';
@@ -47,6 +47,7 @@ import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import { formatBuyerFeePercent } from '../services/pricingSettings';
 import EventJsonLd from '../components/EventJsonLd';
 import { eventHref } from '../utils/eventSeo';
+import { artistHrefFromEvent } from '../utils/artistSeo';
 import {
   eventArtistId,
   isEventDatePassed,
@@ -384,10 +385,10 @@ const EventDetailsPage = () => {
 
         const loadedEvent = eventResponse.data;
         if (isEventDatePassed(loadedEvent?.date)) {
-          const artistId = eventArtistId(loadedEvent);
-          if (artistId) {
+          const artistKey = loadedEvent?.artist?.slug || eventArtistId(loadedEvent);
+          if (artistKey) {
             try {
-              const othersRes = await artistAPI.getArtistEvents(artistId, { signal });
+              const othersRes = await artistAPI.getArtistEvents(artistKey, { signal });
               if (cancelled) return;
               const next = pickNextUpcomingEvent(normalizeArtistEventsPayload(othersRes.data), {
                 excludeId: loadedEvent.id ?? eventKey,
@@ -1213,7 +1214,13 @@ const EventDetailsPage = () => {
           <div className="event-hero-body">
             <h1 className="event-hero-title">{event.name}</h1>
             {artistDisplayName ? (
-              <p className="event-hero-artist">{artistDisplayName}</p>
+              artistHrefFromEvent(event) ? (
+                <Link className="event-hero-artist" to={artistHrefFromEvent(event)}>
+                  {artistDisplayName}
+                </Link>
+              ) : (
+                <p className="event-hero-artist">{artistDisplayName}</p>
+              )
             ) : null}
             {event.category === 'sport' && (event.home_team || event.away_team) ? (
               <p className="event-hero-matchup">
@@ -1240,11 +1247,10 @@ const EventDetailsPage = () => {
             type="button"
             className="event-passed-cta"
             onClick={() => {
-              const artistId = eventArtistId(event);
-              navigate(artistId ? `/artist/${artistId}` : '/');
+              navigate(artistHrefFromEvent(event) || '/');
             }}
           >
-            {eventArtistId(event) ? 'צפו במועדים אחרים' : 'חזרה לדף הבית'}
+            {artistHrefFromEvent(event) ? 'צפו במועדים אחרים' : 'חזרה לדף הבית'}
           </button>
         </div>
       ) : (

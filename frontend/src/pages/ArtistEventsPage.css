@@ -96,11 +96,32 @@
 }
 
 .compact-artist-name {
-  font-size: 1.65rem;
+  font-size: clamp(1.2rem, 2.4vw, 1.65rem);
   font-weight: 700;
   color: #1f2937;
   margin: 0;
   line-height: 1.2;
+}
+
+.artist-page-intro {
+  margin: 0 0 0.75rem;
+  color: #475569;
+  font-size: 0.98rem;
+  line-height: 1.55;
+}
+
+.artist-page-sell-cta {
+  display: inline-flex;
+  margin: 0 0 1rem;
+  font-weight: 700;
+  color: var(--primary-color, #0045af);
+  text-decoration: none;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.artist-page-sell-cta:hover {
+  text-decoration: underline;
 }
 
 /* Events List Section */

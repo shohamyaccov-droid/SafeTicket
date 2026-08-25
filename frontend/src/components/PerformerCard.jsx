@@ -1,10 +1,11 @@
 /* eslint-disable react/prop-types */
+import { Link } from 'react-router-dom';
 import { getFullImageUrl } from '../utils/formatters';
 
 /**
  * Homepage performer tile — one card per artist/show (multiple dates grouped).
  */
-export default function PerformerCard({ performerName, imageUrl, eventCount, onNavigate }) {
+export default function PerformerCard({ performerName, imageUrl, eventCount, onNavigate, artistHref }) {
   const img = getFullImageUrl(imageUrl) || '';
   const fallback = `https://via.placeholder.com/400x400/0f172a/e2e8f0?text=${encodeURIComponent(
     (performerName || 'אמן').slice(0, 18)
@@ -41,7 +42,20 @@ export default function PerformerCard({ performerName, imageUrl, eventCount, onN
         />
       </div>
       <div className="home-performer-card__body">
-        <h3 className="home-performer-card__title">{performerName}</h3>
+        <h3 className="home-performer-card__title">
+          {artistHref ? (
+            <Link
+              to={artistHref}
+              className="home-performer-card__artist-link"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              {performerName}
+            </Link>
+          ) : (
+            performerName
+          )}
+        </h3>
         <p
           className="home-performer-card__meta"
           aria-hidden={eventCount === 0 ? true : undefined}

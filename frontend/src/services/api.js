@@ -852,8 +852,8 @@ export const eventAPI = {
 
 export const artistAPI = {
   getArtists: (config = {}) => api.get('/users/artists/', config),
-  getArtist: (id, config = {}) => api.get(`/users/artists/${id}/`, config),
-  getArtistEvents: (id, config = {}) => api.get(`/users/artists/${id}/events/`, config),
+  getArtist: (id, config = {}) => api.get(`/users/artists/${encodeURIComponent(id)}/`, config),
+  getArtistEvents: (id, config = {}) => api.get(`/users/artists/${encodeURIComponent(id)}/events/`, config),
   createArtist: (data) => api.post('/users/artists/', data),
   updateArtist: (id, data) => api.put(`/users/artists/${id}/`, data),
   deleteArtist: (id) => api.delete(`/users/artists/${id}/`),

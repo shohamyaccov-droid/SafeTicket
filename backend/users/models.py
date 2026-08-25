@@ -121,11 +121,35 @@ class Artist(models.Model):
     cover_image = models.ImageField(upload_to='artist_covers/', blank=True, null=True, help_text="Artist cover/banner image")
     youtube_link = models.URLField(blank=True, null=True, help_text="YouTube channel or video link")
     spotify_link = models.URLField(blank=True, null=True, help_text="Spotify artist page link")
-    
+    slug = models.SlugField(
+        max_length=220,
+        unique=True,
+        blank=True,
+        null=True,
+        db_index=True,
+        allow_unicode=True,
+        help_text='URL-friendly unique slug for artist SEO pages (auto-generated).',
+    )
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
+    def save(self, *args, **kwargs):
+        creating = self.pk is None
+        if not (self.slug or '').strip():
+            from users.seo import build_artist_slug_base, ensure_unique_artist_slug
+
+            self.slug = ensure_unique_artist_slug(self, build_artist_slug_base(self))
+        super().save(*args, **kwargs)
+        if creating and self.pk:
+            from users.seo import build_artist_slug_base, ensure_unique_artist_slug
+
+            desired = ensure_unique_artist_slug(self, build_artist_slug_base(self))
+            if desired != self.slug:
+                Artist.objects.filter(pk=self.pk).update(slug=desired)
+                self.slug = desired
+
     def __str__(self):
         return self.name
     

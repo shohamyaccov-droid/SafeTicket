@@ -572,10 +572,10 @@ class ArtistSerializer(serializers.ModelSerializer):
     class Meta:
         model = Artist
         fields = (
-            'id', 'name', 'image', 'image_url', 'description', 'category', 'is_international',
+            'id', 'name', 'slug', 'image', 'image_url', 'description', 'category', 'is_international',
             'total_tickets_count', 'created_at', 'updated_at'
         )
-        read_only_fields = ('id', 'created_at', 'updated_at', 'total_tickets_count')
+        read_only_fields = ('id', 'slug', 'created_at', 'updated_at', 'total_tickets_count')
     
     def get_image_url(self, obj):
         return first_resolved_image_url_for_artist(self.context.get('request'), obj)
@@ -594,6 +594,49 @@ class ArtistSerializer(serializers.ModelSerializer):
         return total or 0
 
 
+class ArtistDetailSerializer(ArtistSerializer):
+    """Retrieve payload with programmatic SEO fields for artist hub pages."""
+
+    seo_title = serializers.SerializerMethodField()
+    seo_description = serializers.SerializerMethodField()
+    canonical_url = serializers.SerializerMethodField()
+    canonical_path = serializers.SerializerMethodField()
+    json_ld = serializers.SerializerMethodField()
+
+    class Meta(ArtistSerializer.Meta):
+        fields = ArtistSerializer.Meta.fields + (
+            'seo_title', 'seo_description', 'canonical_url', 'canonical_path', 'json_ld',
+        )
+        read_only_fields = fields
+
+    def _seo(self, obj):
+        cached = getattr(self, '_seo_cache', None)
+        if cached is None:
+            self._seo_cache = {}
+            cached = self._seo_cache
+        key = obj.pk
+        if key not in cached:
+            from users.seo import build_artist_seo_payload
+
+            cached[key] = build_artist_seo_payload(obj, request=self.context.get('request'))
+        return cached[key]
+
+    def get_seo_title(self, obj):
+        return self._seo(obj)['seo_title']
+
+    def get_seo_description(self, obj):
+        return self._seo(obj)['seo_description']
+
+    def get_canonical_url(self, obj):
+        return self._seo(obj)['canonical_url']
+
+    def get_canonical_path(self, obj):
+        return self._seo(obj)['canonical_path']
+
+    def get_json_ld(self, obj):
+        return self._seo(obj)['json_ld']
+
+
 class ArtistListSerializer(serializers.ModelSerializer):
     """Simplified serializer for Artist list view"""
     image_url = serializers.SerializerMethodField()
@@ -602,7 +645,7 @@ class ArtistListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Artist
         fields = (
-            'id', 'name', 'image_url', 'category', 'is_international', 'total_tickets_count'
+            'id', 'name', 'slug', 'image_url', 'category', 'is_international', 'total_tickets_count'
         )
         read_only_fields = fields
     
@@ -630,7 +673,7 @@ class ArtistCardSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Artist
-        fields = ('id', 'name', 'image_url', 'category')
+        fields = ('id', 'name', 'slug', 'image_url', 'category')
         read_only_fields = fields
 
     def get_image_url(self, obj):

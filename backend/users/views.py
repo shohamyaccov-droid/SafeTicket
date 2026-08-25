@@ -363,8 +363,8 @@ from .serializers import (
     UpgradeToSellerSerializer,
     EventSerializer,
     EventListSerializer,
-    ArtistSerializer,
     ArtistListSerializer,
+    ArtistDetailSerializer,
     TicketAlertSerializer,
     TicketAlertSubscribeSerializer,
     OfferSerializer,
@@ -4193,11 +4193,11 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
 
         artist_id = qp.get('artist')
         if artist_id not in (None, ''):
-            try:
-                aid = int(str(artist_id).strip())
-            except (TypeError, ValueError):
-                return Event.objects.none()
-            queryset = queryset.filter(artist_id=aid)
+            key = str(artist_id).strip()
+            if key.isdigit():
+                queryset = queryset.filter(artist_id=int(key))
+            else:
+                queryset = queryset.filter(artist__slug=key)
 
         city = qp.get('city')
         if city:
@@ -4424,7 +4424,7 @@ class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
     def get_serializer_class(self):
         if self.action == 'list':
             return ArtistListSerializer
-        return ArtistSerializer
+        return ArtistDetailSerializer
     
     def get_queryset(self):
         queryset = Artist.objects.all().exclude(
@@ -4501,13 +4501,27 @@ class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
+
+    def get_object(self):
+        from users.seo import resolve_artist_by_identifier
+
+        queryset = self.filter_queryset(self.get_queryset())
+        return resolve_artist_by_identifier(self.kwargs.get('pk'), queryset)
+
+    @action(detail=True, methods=['get'], url_path='seo')
+    def seo(self, request, pk=None):
+        """Public SEO payload for SPA inject servers / validators."""
+        from users.seo import build_artist_seo_payload
+
+        artist = self.get_object()
+        return Response(build_artist_seo_payload(artist, request=request))
     
     @action(detail=True, methods=['get'])
     def events(self, request, pk=None):
         """
         Get all events for a specific artist, sorted by date (ascending)
         """
-        artist = get_object_or_404(Artist, pk=pk)
+        artist = self.get_object()
         now = timezone.now()
         events = event_queryset_defer_rollout_columns(
             Event.objects.filter(artist=artist, date__gte=now, status='פעיל')

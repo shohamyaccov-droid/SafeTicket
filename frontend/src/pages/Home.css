@@ -1304,6 +1304,16 @@
   overflow: hidden;
 }
 
+.home-performer-card__artist-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.home-performer-card__artist-link:hover {
+  color: var(--primary-blue, #0045af);
+  text-decoration: underline;
+}
+
 .home-performer-card__meta {
   margin: 0;
   font-size: 0.76rem;

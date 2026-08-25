@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { eventHref } from '../utils/eventSeo';
+import { artistHrefFromGroup } from '../utils/artistSeo';
 import { DEFAULT_SITE_DESCRIPTION, DEFAULT_SITE_TITLE } from '../utils/siteSeo';
 import PageSeo from '../components/PageSeo';
 import { artistAPI, eventAPI } from '../services/api';
@@ -177,6 +178,7 @@ const Home = () => {
         .map((artist) => ({
           key: `artist:${artist.id}`,
           artistId: artist.id,
+          artistSlug: artist.slug || null,
           performerName: artist.name || 'אמן',
           imageUrl: artist.image_url || '',
           category: artist.category || 'music',
@@ -409,6 +411,7 @@ const Home = () => {
                       imageUrl={group.imageUrl}
                       eventCount={group.eventCount}
                       totalTickets={group.totalTickets}
+                      artistHref={artistHrefFromGroup(group)}
                       onNavigate={() => handlePerformerNavigate(group)}
                     />
                   </div>

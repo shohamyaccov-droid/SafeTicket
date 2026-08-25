@@ -1,9 +1,9 @@
 """
 URL configuration for safeticket project.
 
-SPA index serves Vite build from collectstatic. For /event/<slug|id> and marketing
-routes (/ , /how-it-works, /faq) we inject title/meta/JSON-LD and crawler HTML into
-the initial document so Googlebot and AI crawlers see SEO without waiting on React.
+SPA index serves Vite build from collectstatic. For /event/<slug|id>, /artist/<slug|id>,
+and marketing routes (/ , /how-it-works, /faq) we inject title/meta/JSON-LD and crawler HTML
+into the initial document so Googlebot and AI crawlers see SEO without waiting on React.
 """
 from pathlib import Path
 
@@ -48,14 +48,16 @@ def sitemap_xml(_request):
 
 def spa_index_view(request):
     """
-    React SPA (Vite build copied by collectstatic). Event and marketing paths get
+    React SPA (Vite build copied by collectstatic). Event, artist, and marketing paths get
     server-injected Schema.org JSON-LD, meta, and static HTML inside #root.
     """
     from users.seo import (
+        build_artist_seo_payload,
         build_event_seo_payload,
         get_static_page_seo,
         inject_seo_into_html,
         load_spa_index_html,
+        resolve_artist_by_identifier,
         resolve_event_by_identifier,
     )
 
@@ -69,6 +71,16 @@ def spa_index_view(request):
             try:
                 event = resolve_event_by_identifier(identifier)
                 seo = build_event_seo_payload(event, request=request)
+                html = inject_seo_into_html(load_spa_index_html(), seo)
+                cache_control = 'public, max-age=60, stale-while-revalidate=300'
+            except Exception:
+                html = None
+    elif path.startswith('artist/'):
+        identifier = path.split('/', 1)[1].split('/')[0].strip()
+        if identifier:
+            try:
+                artist = resolve_artist_by_identifier(identifier)
+                seo = build_artist_seo_payload(artist, request=request)
                 html = inject_seo_into_html(load_spa_index_html(), seo)
                 cache_control = 'public, max-age=60, stale-while-revalidate=300'
             except Exception:

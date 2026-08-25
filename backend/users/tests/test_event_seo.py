@@ -132,6 +132,7 @@ class EventSlugAndSeoTests(TestCase):
         self.assertIn('https://tradetix.co.il/how-it-works', xml)
         self.assertIn('https://tradetix.co.il/faq', xml)
         self.assertIn(f'https://tradetix.co.il/event/{self.event.slug}', xml)
+        self.assertIn('https://tradetix.co.il/artist/eyal-golan', xml)
         ET.fromstring(xml)
         cancelled = Event.objects.create(
             artist=self.artist,

@@ -176,6 +176,11 @@
   color: var(--primary-blue, #0045af);
   margin: 0;
   line-height: 1.25;
+  text-decoration: none;
+}
+
+a.event-hero-artist:hover {
+  text-decoration: underline;
 }
 
 .event-hero-matchup {

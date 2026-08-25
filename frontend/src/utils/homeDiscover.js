@@ -63,6 +63,7 @@ export function performerCategory(ev) {
  * @returns {Array<{
  *   key: string,
  *   artistId: string|number|null,
+ *   artistSlug: string|null,
  *   performerName: string,
  *   imageUrl: string,
  *   events: object[],
@@ -91,10 +92,12 @@ export function groupEventsByPerformer(list) {
     const hasTickets = totalTickets > 0;
     const waitlistOnly = !hasTickets && events.some((e) => Boolean(e.high_demand));
     const artistId = display.artist_detail?.id ?? display.artist ?? null;
+    const artistSlug = display.artist_detail?.slug || display.artist?.slug || null;
 
     out.push({
       key: `perf-${performerKey(display)}`,
       artistId: artistId != null ? artistId : null,
+      artistSlug: artistSlug || null,
       performerName: performerDisplayName(display),
       imageUrl: performerImageUrl(display),
       category: performerCategory(display),
@@ -153,15 +156,18 @@ export function performerEventsWithTickets(group) {
 /**
  * Homepage performer-card destination.
  * One upcoming event with tickets → EventDetailsPage.
- * Multiple events → ArtistEventsPage (or a date picker when there is no artist id).
+ * Multiple events → ArtistPage (or a date picker when there is no artist id).
  *
- * @param {{ artistId?: string|number|null, events?: object[] }} group
+ * @param {{ artistId?: string|number|null, artistSlug?: string|null, events?: object[] }} group
  * @returns {{ type: 'event'|'artist'|'picker'|'none', href?: string }}
  */
 export function performerNavigateTarget(group) {
   const stocked = performerEventsWithTickets(group);
   if (stocked.length === 1) {
     return { type: 'event', href: eventHref(stocked[0]) };
+  }
+  if (group?.artistSlug) {
+    return { type: 'artist', href: `/artist/${group.artistSlug}` };
   }
   if (group?.artistId != null && group.artistId !== '') {
     return { type: 'artist', href: `/artist/${group.artistId}` };

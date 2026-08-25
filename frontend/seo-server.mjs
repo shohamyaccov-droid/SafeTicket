@@ -3,7 +3,7 @@
  *
  * A pure Vite CSR SPA only exposes generic index.html meta to crawlers that do not
  * execute JS. This Node shell keeps the Vite assets, injects <title>/Open Graph/JSON-LD,
- * and embeds static article HTML inside #root for / , /how-it-works, /faq, and /event/*.
+ * and embeds static article HTML inside #root for / , /how-it-works, /faq, /event/*, and /artist/*.
  *
  * Start: node seo-server.mjs  (Render startCommand)
  */
@@ -165,6 +165,23 @@ app.get('/event/:eventKey', async (req, res) => {
     }
   } catch (err) {
     console.warn('[seo-server] event SEO fetch failed:', err?.message || err);
+  }
+  sendHtml(res, html, 'public, max-age=60, stale-while-revalidate=300');
+});
+
+app.get('/artist/:artistKey', async (req, res) => {
+  let html = readIndex();
+  try {
+    const key = encodeURIComponent(req.params.artistKey);
+    const response = await fetch(`${API}/api/users/artists/${key}/seo/`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (response.ok) {
+      const seo = await response.json();
+      html = injectSeo(html, seo);
+    }
+  } catch (err) {
+    console.warn('[seo-server] artist SEO fetch failed:', err?.message || err);
   }
   sendHtml(res, html, 'public, max-age=60, stale-while-revalidate=300');
 });

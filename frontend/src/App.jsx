@@ -29,7 +29,7 @@ import './App.css';
 const EventGroupPage = lazy(() => import('./pages/EventGroupPage'));
 const EventDetailsPage = lazy(() => import('./pages/EventDetailsPage'));
 const TicketSelectionPage = lazy(() => import('./pages/TicketSelectionPage'));
-const ArtistEventsPage = lazy(() => import('./pages/ArtistEventsPage'));
+const ArtistPage = lazy(() => import('./pages/ArtistPage'));
 const Sell = lazy(() => import('./pages/Sell'));
 const Profile = lazy(() => import('./pages/Profile'));
 const ProfileWallet = lazy(() => import('./pages/ProfileWallet'));
@@ -237,7 +237,7 @@ function App() {
         <AppChrome>
           <Routes>
               <Route path="/" element={<Home />} />
-              <Route path="/artist/:artistId" element={routeElement(<ArtistEventsPage />, <EventsPageSkeleton variant="compact" />)} />
+              <Route path="/artist/:artistSlug" element={routeElement(<ArtistPage />, <EventsPageSkeleton variant="compact" />)} />
               <Route path="/event/:eventSlug" element={routeElement(<EventDetailsPage />, <EventDetailsSkeleton />)} />
               <Route path="/event-group/:eventName" element={routeElement(<EventGroupPage />, <EventsPageSkeleton variant="compact" />)} />
               <Route path="/ticket/:ticketId" element={routeElement(<TicketSelectionPage />, <RouteSpinner label="טוען פרטי כרטיס..." />)} />

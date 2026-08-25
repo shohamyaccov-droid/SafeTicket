@@ -21,12 +21,13 @@ describe('performerNavigateTarget', () => {
   it('routes multiple in-stock dates to the artist page', () => {
     const target = performerNavigateTarget({
       artistId: 7,
+      artistSlug: 'eyal-golan',
       events: [
         { id: 11, slug: 'date-a', tickets_count: 2, date: '2099-08-01' },
         { id: 12, slug: 'date-b', tickets_count: 1, date: '2099-09-01' },
       ],
     });
-    expect(target).toEqual({ type: 'artist', href: '/artist/7' });
+    expect(target).toEqual({ type: 'artist', href: '/artist/eyal-golan' });
   });
 
   it('groups homepage events and still prefers a single in-stock date', () => {

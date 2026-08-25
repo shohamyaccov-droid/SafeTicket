@@ -1,13 +1,13 @@
 """
-Programmatic SEO helpers for Event pages (Schema.org Event + AggregateOffer).
+Programmatic SEO helpers for Event and Artist pages (Schema.org Event / MusicGroup).
 
 Architecture note (decoupled React SPA + Django API):
 - Pure client-side Helmet is NOT enough for reliable indexing: Googlebot can render JS
   (delayed), but social crawlers and many AI bots do not. JSON-LD / meta must appear
   in the *initial* HTML when possible.
 - This module builds title/description/canonical/JSON-LD once on the server.
-- Consumers: EventSerializer, Django spa_index_view injection, frontend seo-server.mjs
-  (serves injected HTML for /event/* on the public static host).
+- Consumers: EventSerializer, ArtistDetailSerializer, Django spa_index_view injection,
+  frontend seo-server.mjs (serves injected HTML for /event/* and /artist/*).
 """
 from __future__ import annotations
 
@@ -72,6 +72,15 @@ def event_canonical_url(event) -> str:
     return f'{frontend_origin()}{event_path(key)}'
 
 
+def artist_path(slug_or_id: str) -> str:
+    return f'/artist/{slug_or_id}'
+
+
+def artist_canonical_url(artist) -> str:
+    key = (getattr(artist, 'slug', None) or '').strip() or str(artist.pk)
+    return f'{frontend_origin()}{artist_path(key)}'
+
+
 def _strip_html(text: str) -> str:
     return re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', text or '')).strip()
 
@@ -111,6 +120,58 @@ def ensure_unique_event_slug(event, base: Optional[str] = None) -> str:
     if not qs.filter(slug=candidate).exists():
         return candidate
     suffix = event.pk or Event.objects.order_by('-pk').values_list('pk', flat=True).first() or 1
+    unique = f'{candidate}-{suffix}'[:200]
+    n = 2
+    while qs.filter(slug=unique).exists():
+        unique = f'{candidate}-{suffix}-{n}'[:200]
+        n += 1
+    return unique
+
+
+# ASCII slugs for high-volume Hebrew headliners (e.g. /artist/eyal-golan).
+ARTIST_SLUG_ALIASES = {
+    'אייל גולן': 'eyal-golan',
+    'eyal golan': 'eyal-golan',
+    'עומר אדם': 'omer-adam',
+    'omer adam': 'omer-adam',
+    'איתי לוי': 'itay-levi',
+    'itay levi': 'itay-levi',
+    'עדן חסון': 'eden-hason',
+    'eden hason': 'eden-hason',
+    'עודיה': 'odeya',
+    'odeya': 'odeya',
+}
+
+
+def _normalize_artist_name(name: str) -> str:
+    return re.sub(r'\s+', ' ', (name or '').strip()).lower()
+
+
+def build_artist_slug_base(artist) -> str:
+    """Prefer latin SEO slugs (eyal-golan); fall back to unicode slugify."""
+    name = (getattr(artist, 'name', None) or '').strip()
+    alias = ARTIST_SLUG_ALIASES.get(_normalize_artist_name(name))
+    if alias:
+        return alias[:180]
+    ascii_slug = slugify(name, allow_unicode=False)
+    if ascii_slug:
+        return ascii_slug[:180]
+    uni = slugify(name, allow_unicode=True)
+    if uni:
+        return uni[:180]
+    return f'artist-{getattr(artist, "pk", None) or "new"}'
+
+
+def ensure_unique_artist_slug(artist, base: Optional[str] = None) -> str:
+    from users.models import Artist
+
+    candidate = (base or build_artist_slug_base(artist)).strip('-')[:180] or f'artist-{artist.pk or "x"}'
+    qs = Artist.objects.all()
+    if artist.pk:
+        qs = qs.exclude(pk=artist.pk)
+    if not qs.filter(slug=candidate).exists():
+        return candidate
+    suffix = artist.pk or Artist.objects.order_by('-pk').values_list('pk', flat=True).first() or 1
     unique = f'{candidate}-{suffix}'[:200]
     n = 2
     while qs.filter(slug=unique).exists():
@@ -368,6 +429,110 @@ def build_event_seo_payload(event, *, request=None) -> dict[str, Any]:
     }
 
 
+def artist_display_name(artist) -> str:
+    return (getattr(artist, 'name', None) or '').strip() or 'אמן'
+
+
+def build_artist_seo_title(artist) -> str:
+    name = artist_display_name(artist)
+    return _strip_html(f'כרטיסים ל{name} - לוח הופעות וכרטיסים יד שנייה | TradeTix')
+
+
+def build_artist_seo_description(artist) -> str:
+    name = artist_display_name(artist)
+    return _strip_html(
+        f'מחפשים כרטיסים ל{name}? כל המועדים והכרטיסים הכי שווים מחכים לכם ב-TradeTix. '
+        f'קנייה ומכירה בטוחה ללא ספסרות.'
+    )
+
+
+def build_artist_intro(artist) -> str:
+    name = artist_display_name(artist)
+    return (
+        f'כאן תמצאו את כל המועדים, ההופעות והכרטיסים יד שנייה ל{name}. '
+        f'קנייה ומכירה מאובטחת.'
+    )
+
+
+def _upcoming_artist_events(artist, *, limit: int = 20):
+    from users.models import Event
+
+    return list(
+        Event.objects.filter(
+            artist=artist,
+            status__in=['פעיל', 'סולד אאוט'],
+            date__gte=timezone.now() - timedelta(hours=12),
+        )
+        .order_by('date', 'name')[:limit]
+    )
+
+
+def build_artist_json_ld(artist, *, request=None, upcoming_events=None) -> dict[str, Any]:
+    from users.serializers import first_resolved_image_url_for_artist
+
+    canonical = artist_canonical_url(artist)
+    image_url = first_resolved_image_url_for_artist(request, artist) if request is not None else None
+    if not image_url:
+        image_url = f'{frontend_origin()}/og-share.png'
+    data: dict[str, Any] = {
+        '@context': 'https://schema.org',
+        '@type': 'MusicGroup',
+        'name': artist_display_name(artist),
+        'url': canonical,
+        'image': image_url,
+        'description': build_artist_seo_description(artist),
+    }
+    events = upcoming_events if upcoming_events is not None else _upcoming_artist_events(artist)
+    if events:
+        data['event'] = [
+            {
+                '@type': 'Event',
+                'name': (event.name or '').strip() or artist_display_name(artist),
+                'startDate': iso_datetime(event.date),
+                'url': event_canonical_url(event),
+            }
+            for event in events
+        ]
+    return data
+
+
+def build_artist_seo_payload(artist, *, request=None) -> dict[str, Any]:
+    slug = (getattr(artist, 'slug', None) or '').strip() or str(artist.pk)
+    title = build_artist_seo_title(artist)
+    description = build_artist_seo_description(artist)
+    intro = build_artist_intro(artist)
+    canonical = artist_canonical_url(artist)
+    origin = frontend_origin()
+    upcoming = _upcoming_artist_events(artist)
+    image = None
+    try:
+        from users.serializers import first_resolved_image_url_for_artist
+
+        image = first_resolved_image_url_for_artist(request, artist) if request is not None else None
+    except Exception:
+        image = None
+    if not image:
+        image = f'{origin}/og-share.png'
+
+    return {
+        'slug': slug,
+        'seo_title': title,
+        'seo_description': description,
+        'canonical_url': canonical,
+        'canonical_path': artist_path(slug),
+        'og_image': image,
+        'json_ld': build_artist_json_ld(artist, request=request, upcoming_events=upcoming),
+        'crawler_html': (
+            '<article class="seo-crawler-snapshot">'
+            f'<h1>כרטיסים ל{_xml_attr(artist_display_name(artist))}</h1>'
+            f'<p>{_xml_attr(intro)}</p>'
+            f'<p><a href="{_xml_attr(origin)}/how-it-works">'
+            'יש לך כרטיס מיותר? לחץ כאן כדי למכור אותו בטוח</a></p>'
+            '</article>'
+        ),
+    }
+
+
 def _content_json_path(filename: str) -> Path:
     return Path(__file__).resolve().parents[2] / 'frontend' / 'src' / 'content' / filename
 
@@ -612,8 +777,8 @@ SITEMAP_STATIC_PATHS = (
 
 
 def build_sitemap_xml() -> str:
-    """XML sitemap of static marketing pages plus upcoming active events."""
-    from users.models import Event
+    """XML sitemap of static marketing pages, artist hubs, and upcoming events."""
+    from users.models import Artist, Event
 
     origin = frontend_origin()
     lines = [
@@ -626,12 +791,26 @@ def build_sitemap_xml() -> str:
         lines.append(
             f'  <url><loc>{_xml_attr(loc)}</loc><changefreq>{freq}</changefreq></url>'
         )
-    qs = (
-        Event.objects.filter(status__in=['פעיל', 'סולד אאוט'])
-        .filter(date__gte=timezone.now() - timedelta(hours=12))
+    cutoff = timezone.now() - timedelta(hours=12)
+    upcoming_events = Event.objects.filter(status__in=['פעיל', 'סולד אאוט']).filter(date__gte=cutoff)
+    artist_ids = upcoming_events.filter(artist_id__isnull=False).values_list('artist_id', flat=True).distinct()
+    artists = (
+        Artist.objects.filter(pk__in=artist_ids)
+        .exclude(slug__isnull=True)
+        .exclude(slug='')
         .only('id', 'slug', 'updated_at')
-        .order_by('-id')[:5000]
+        .order_by('name')[:2000]
     )
+    for artist in artists:
+        loc = artist_canonical_url(artist)
+        lastmod = ''
+        updated = getattr(artist, 'updated_at', None)
+        if updated:
+            lastmod = f'<lastmod>{timezone.localtime(updated).date().isoformat()}</lastmod>'
+        lines.append(
+            f'  <url><loc>{_xml_attr(loc)}</loc>{lastmod}<changefreq>weekly</changefreq></url>'
+        )
+    qs = upcoming_events.only('id', 'slug', 'updated_at').order_by('-id')[:5000]
     for event in qs:
         loc = event_canonical_url(event)
         lastmod = ''
@@ -680,6 +859,20 @@ def resolve_event_by_identifier(identifier: str, queryset=None):
     key = (identifier or '').strip()
     if not key:
         raise Event.DoesNotExist
+    if key.isdigit():
+        return get_object_or_404(qs, pk=int(key))
+    return get_object_or_404(qs, slug=key)
+
+
+def resolve_artist_by_identifier(identifier: str, queryset=None):
+    from django.shortcuts import get_object_or_404
+
+    from users.models import Artist
+
+    qs = queryset if queryset is not None else Artist.objects.all()
+    key = (identifier or '').strip()
+    if not key:
+        raise Artist.DoesNotExist
     if key.isdigit():
         return get_object_or_404(qs, pk=int(key))
     return get_object_or_404(qs, slug=key)
