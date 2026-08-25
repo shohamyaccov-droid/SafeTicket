@@ -37,5 +37,8 @@ describe('HowItWorksPage', () => {
     expect(container.textContent).toContain('איך למכור כרטיס');
     expect(container.textContent).toContain('כרטיסים יד שניה');
     expect(container.textContent).toContain('תשלום מאובטח');
+    expect(container.textContent).toContain('נאמנות');
+    expect(container.textContent).toContain('36 שעות');
+    expect(container.textContent).not.toContain('ישירות לאחר אישור העסקה');
   });
 });
