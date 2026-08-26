@@ -29,7 +29,11 @@ User = get_user_model()
 )
 class EventSlugAndSeoTests(TestCase):
     def setUp(self):
-        self.artist = Artist.objects.create(name='Eyal Golan')
+        # Launch seed already creates אייל גולן / איתי לוי; reuse them so
+        # ASCII slugs stay eyal-golan / itay-levi instead of -6 / -7 suffixes.
+        self.artist = Artist.objects.filter(name='אייל גולן').first()
+        if not self.artist:
+            self.artist = Artist.objects.create(name='אייל גולן')
         self.event = Event.objects.create(
             artist=self.artist,
             name='Eyal Golan Live',
@@ -82,6 +86,7 @@ class EventSlugAndSeoTests(TestCase):
         self.assertIn('eyal-golan', self.event.slug.lower())
         self.assertNotIn('tel-aviv', self.event.slug.lower())
         date_part = timezone.localtime(self.event.date).strftime('%Y-%m-%d')
+        self.assertEqual(self.artist.slug, 'eyal-golan')
         self.assertEqual(self.event.slug, f'eyal-golan-{date_part}')
         twin = Event.objects.create(
             artist=self.artist,
@@ -101,8 +106,10 @@ class EventSlugAndSeoTests(TestCase):
     def test_hebrew_artist_slug_is_english_artist_and_date(self):
         from datetime import datetime
 
-        artist = Artist.objects.create(name='איתי לוי')
-        self.assertTrue((artist.slug or '').startswith('itay-levi'))
+        artist = Artist.objects.filter(name='איתי לוי').first()
+        if not artist:
+            artist = Artist.objects.create(name='איתי לוי')
+        self.assertEqual(artist.slug, 'itay-levi')
         show_at = timezone.make_aware(datetime(2026, 8, 29, 20, 0, 0))
         event = Event.objects.create(
             artist=artist,
@@ -169,7 +176,7 @@ class EventSlugAndSeoTests(TestCase):
     def test_seo_title_uses_artist_and_venue(self):
         title = build_seo_title(self.event)
         self.assertTrue(title.startswith('כרטיסים ל'))
-        self.assertIn('Eyal Golan', title)
+        self.assertIn(self.artist.name, title)
         self.assertIn('TradeTix', title)
 
     def test_sitemap_includes_static_pages_and_active_events(self):
