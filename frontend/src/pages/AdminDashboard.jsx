@@ -539,6 +539,7 @@ export default function AdminDashboard() {
                   <tr>
                     <th>מס׳ הזמנה</th>
                     <th>קונה</th>
+                    <th>טלפון</th>
                     <th>מוכר</th>
                     <th>אירוע</th>
                     <th>סכום (מטבע הזמנה)</th>
@@ -554,6 +555,9 @@ export default function AdminDashboard() {
                       <td data-label="הזמנה">{row.id}</td>
                       <td data-label="קונה" className="admin-td-clip">
                         {row.buyer}
+                      </td>
+                      <td data-label="טלפון" className="admin-td-phone" dir="ltr">
+                        {row.buyer_phone || 'לא צוין'}
                       </td>
                       <td data-label="מוכר">{row.seller}</td>
                       <td data-label="אירוע" className="admin-td-clip">

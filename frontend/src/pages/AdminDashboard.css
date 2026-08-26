@@ -400,6 +400,12 @@
   white-space: nowrap;
 }
 
+.admin-td-phone {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
+}
+
 .admin-status {
   font-weight: 700;
   font-size: 0.8rem;
@@ -484,6 +490,11 @@
     max-width: none;
     white-space: normal;
     text-align: left;
+  }
+
+  .admin-td-phone {
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
 }
 

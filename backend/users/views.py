@@ -4732,6 +4732,30 @@ def admin_dashboard_stats(request):
     )
 
 
+ADMIN_BUYER_PHONE_UNSPECIFIED = 'לא צוין'
+
+
+def order_buyer_phone_display(order) -> str:
+    """Admin table phone: registered user phone, else guest_phone, else 'לא צוין'."""
+    try:
+        user = None
+        if getattr(order, 'user_id', None):
+            try:
+                user = order.user
+            except Exception:
+                user = None
+        if user is not None:
+            phone = str(getattr(user, 'phone_number', None) or '').strip()
+            if phone:
+                return phone
+        guest = str(getattr(order, 'guest_phone', None) or '').strip()
+        if guest:
+            return guest
+    except Exception:
+        pass
+    return ADMIN_BUYER_PHONE_UNSPECIFIED
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_transactions(request):
@@ -4808,6 +4832,7 @@ def admin_transactions(request):
             {
                 'id': o.id,
                 'buyer': buyer,
+                'buyer_phone': order_buyer_phone_display(o),
                 'seller': seller_name,
                 'event_name': event_nm or '—',
                 'amount': str(amount) if amount is not None else '0',
