@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   listingGroupTickets,
+  matchZoneFromOcr,
   seatingAssignmentsForGroup,
   seatingFromTicket,
   ticketFileKind,
@@ -15,6 +16,7 @@ import './AdminReviewModal.css';
 export default function AdminReviewModal({
   ticket,
   tickets = [],
+  sectionNames: sectionNamesProp,
   busy = false,
   onClose,
   onSave,
@@ -22,12 +24,27 @@ export default function AdminReviewModal({
 }) {
   const group = useMemo(() => listingGroupTickets(tickets, ticket), [tickets, ticket]);
   const [previewId, setPreviewId] = useState(ticket?.id);
+  const sectionNames = useMemo(() => {
+    if (Array.isArray(sectionNamesProp) && sectionNamesProp.length > 0) {
+      return [...new Set(sectionNamesProp.map((name) => String(name || '').trim()).filter(Boolean))];
+    }
+    return venueSectionNamesForTicket(ticket);
+  }, [sectionNamesProp, ticket]);
   const [values, setValues] = useState(() => seatingFromTicket(ticket));
 
   useEffect(() => {
     setPreviewId(ticket?.id);
-    setValues(seatingFromTicket(ticket));
-  }, [ticket]);
+    const next = seatingFromTicket(ticket);
+    const zones =
+      Array.isArray(sectionNamesProp) && sectionNamesProp.length > 0
+        ? sectionNamesProp
+        : venueSectionNamesForTicket(ticket);
+    if (!next.section) {
+      const hit = matchZoneFromOcr(ticket?.extracted_pdf_text, zones);
+      if (hit) next.section = hit;
+    }
+    setValues(next);
+  }, [ticket, sectionNamesProp]);
 
   useEffect(() => {
     const onKey = (event) => {
@@ -42,7 +59,6 @@ export default function AdminReviewModal({
   const previewTicket = group.find((row) => Number(row.id) === Number(previewId)) || ticket;
   const fileUrl = previewTicket.ticket_file_url || previewTicket.pdf_file_url || '';
   const kind = ticketFileKind(previewTicket);
-  const sectionNames = venueSectionNamesForTicket(ticket);
   const selectOptions = sectionNames.includes(values.section) || !values.section
     ? sectionNames
     : [values.section, ...sectionNames];

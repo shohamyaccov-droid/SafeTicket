@@ -1,3 +1,5 @@
+import { canonicalVenueName, generatedSectionOptionsForVenue } from './sellVenueSections';
+
 export function seatingFromTicket(ticket) {
   return {
     section: String(ticket?.section || ticket?.custom_section_text || '').trim(),
@@ -47,14 +49,43 @@ export function seatingAssignmentsForGroup({ tickets, anchorId, section, row, se
   }));
 }
 
+export function venueSectionNamesForEvent(eventLike) {
+  const sections = eventLike?.venue_detail?.sections;
+  if (Array.isArray(sections) && sections.length > 0) {
+    const names = [
+      ...new Set(sections.map((section) => String(section?.name || '').trim()).filter(Boolean)),
+    ];
+    names.sort((a, b) => a.localeCompare(b, 'he', { numeric: true }));
+    return names;
+  }
+  const fallback = generatedSectionOptionsForVenue(canonicalVenueName(eventLike || {}));
+  return fallback.map((option) => String(option.value || option.label || '').trim()).filter(Boolean);
+}
+
 export function venueSectionNamesForTicket(ticket) {
-  const sections = ticket?.event?.venue_detail?.sections;
-  if (!Array.isArray(sections) || sections.length === 0) return [];
-  const names = [
-    ...new Set(sections.map((section) => String(section?.name || '').trim()).filter(Boolean)),
-  ];
-  names.sort((a, b) => a.localeCompare(b, 'he', { numeric: true }));
-  return names;
+  return venueSectionNamesForEvent(ticket?.event || ticket);
+}
+
+function normalizeZoneNeedle(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/גוש\s+/g, 'גוש ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Pick the longest mapped zone name that appears in extracted PDF / OCR text. */
+export function matchZoneFromOcr(text, zoneNames) {
+  const hay = normalizeZoneNeedle(text);
+  if (!hay || !Array.isArray(zoneNames) || zoneNames.length === 0) return '';
+  const ranked = [...new Set(zoneNames.map((name) => String(name || '').trim()).filter(Boolean))].sort(
+    (a, b) => b.length - a.length,
+  );
+  for (const name of ranked) {
+    const needle = normalizeZoneNeedle(name);
+    if (needle && hay.includes(needle)) return name;
+  }
+  return '';
 }
 
 export function ticketFileKind(ticket) {

@@ -1,6 +1,6 @@
 from django.test import SimpleTestCase
 
-from users.admin_ticket_seating import increment_seat_label, ticket_file_kind
+from users.admin_ticket_seating import extract_ticket_pdf_text, increment_seat_label, ticket_file_kind
 
 
 class IncrementSeatLabelTests(SimpleTestCase):
@@ -27,3 +27,13 @@ class TicketFileKindTests(SimpleTestCase):
     def test_pdf_default(self):
         ticket = type('T', (), {'pdf_file': type('F', (), {'name': 'tickets/pdfs/a.pdf'})()})()
         self.assertEqual(ticket_file_kind(ticket), 'pdf')
+
+
+class ExtractTicketPdfTextTests(SimpleTestCase):
+    def test_images_are_skipped(self):
+        ticket = type('T', (), {'pdf_file': type('F', (), {'name': 'tickets/pdfs/a.jpg'})()})()
+        self.assertEqual(extract_ticket_pdf_text(ticket), '')
+
+    def test_missing_file_is_empty(self):
+        ticket = type('T', (), {'pdf_file': None})()
+        self.assertEqual(extract_ticket_pdf_text(ticket), '')

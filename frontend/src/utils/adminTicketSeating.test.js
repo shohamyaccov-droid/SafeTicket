@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   incrementSeatLabel,
   listingGroupTickets,
+  matchZoneFromOcr,
   mergeSeatingDraft,
   seatingAssignmentsForGroup,
   seatingFromTicket,
@@ -60,5 +61,23 @@ describe('adminTicketSeating', () => {
     ).toEqual(['14', 'Block 12']);
     expect(ticketFileKind({ ticket_file_kind: 'image' })).toBe('image');
     expect(ticketFileKind({ ticket_file_url: 'https://cdn.example/t.pdf' })).toBe('pdf');
+  });
+
+  it('falls back to Sultan\'s Pool sell zones when the venue has no DB sections', () => {
+    expect(
+      venueSectionNamesForTicket({
+        event: {
+          venue: 'ישראל',
+          venue_detail: { name: 'בריכת הסולטן', city: 'ירושלים', sections: [] },
+        },
+      }),
+    ).toEqual(['אורקסטרה', 'גוש 1', 'גוש 2', 'גוש 3', 'גוש 4', 'גוש 5', 'מושבים נגישים']);
+  });
+
+  it('matches the longest mapped zone name inside extracted PDF text', () => {
+    const zones = ['אורקסטרה', 'גוש 1', 'גוש 11', 'מושבים נגישים'];
+    expect(matchZoneFromOcr('כרטיס לאורקסטרה בריכת הסולטן', zones)).toBe('אורקסטרה');
+    expect(matchZoneFromOcr('כניסה גוש 11 שורה 4', zones)).toBe('גוש 11');
+    expect(matchZoneFromOcr('no zone here', zones)).toBe('');
   });
 });

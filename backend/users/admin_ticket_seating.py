@@ -159,3 +159,35 @@ def ticket_file_kind(ticket) -> str:
     if ext in _IMAGE_EXTS:
         return 'image'
     return 'pdf'
+
+
+def extract_ticket_pdf_text(ticket, *, max_pages: int = 4, max_chars: int = 6000) -> str:
+    """Best-effort text layer from an uploaded ticket PDF (empty for images / unreadable files)."""
+    if ticket_file_kind(ticket) == 'image':
+        return ''
+    pdf_file = getattr(ticket, 'pdf_file', None)
+    if not pdf_file:
+        return ''
+    try:
+        handle = pdf_file.open('rb')
+    except Exception:
+        return ''
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(handle, strict=False)
+        pages = list(getattr(reader, 'pages', []) or [])[:max_pages]
+        chunks = []
+        for page in pages:
+            try:
+                chunks.append(page.extract_text() or '')
+            except Exception:
+                continue
+        return '\n'.join(chunks).strip()[:max_chars]
+    except Exception:
+        return ''
+    finally:
+        try:
+            handle.close()
+        except Exception:
+            pass

@@ -389,6 +389,7 @@ from .models import (
 )
 from .admin_ticket_seating import (
     apply_admin_seating_to_ticket_or_group,
+    extract_ticket_pdf_text,
     optional_seating_from_request,
     request_flag,
     ticket_file_kind,
@@ -5015,6 +5016,7 @@ def admin_pending_tickets(request):
             ticket_data['ticket_file_url'] = get_ticket_pdf_admin_url(ticket)
             ticket_data['receipt_file_url'] = get_ticket_receipt_admin_url(ticket)
             ticket_data['ticket_file_kind'] = ticket_file_kind(ticket)
+            ticket_data['extracted_pdf_text'] = extract_ticket_pdf_text(ticket)
 
     return Response({
         'count': pending_tickets.count(),

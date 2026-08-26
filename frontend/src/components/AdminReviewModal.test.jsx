@@ -79,4 +79,38 @@ describe('AdminReviewModal', () => {
     expect(image.tagName).toBe('IMG');
     expect(image).toHaveAttribute('src', 'https://example.test/photo.jpg');
   });
+
+  it('loads Sultan\'s Pool mapped zones when venue_detail.sections is empty', async () => {
+    const user = userEvent.setup();
+    const ticket = {
+      id: 44,
+      event_name: 'מאירים בסליחות',
+      ticket_file_url: 'https://example.test/meirim.pdf',
+      ticket_file_kind: 'pdf',
+      extracted_pdf_text: 'כרטיס כניסה אורקסטרה בריכת הסולטן',
+      event: {
+        venue: 'ישראל',
+        venue_detail: { name: 'בריכת הסולטן', city: 'ירושלים', sections: [] },
+      },
+    };
+    render(
+      <AdminReviewModal
+        ticket={ticket}
+        tickets={[ticket]}
+        onClose={() => {}}
+        onSave={() => {}}
+        onApprove={() => {}}
+      />,
+    );
+
+    const select = screen.getByLabelText('גוש');
+    expect(select.tagName).toBe('SELECT');
+    expect(screen.queryByPlaceholderText('אין גושים ממופים — הזנה ידנית')).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'אורקסטרה' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'גוש 1' })).toBeInTheDocument();
+    expect(select).toHaveValue('אורקסטרה');
+
+    await user.selectOptions(select, 'גוש 4');
+    expect(select).toHaveValue('גוש 4');
+  });
 });
