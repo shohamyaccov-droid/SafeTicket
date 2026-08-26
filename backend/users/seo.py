@@ -193,6 +193,8 @@ ARTIST_SLUG_ALIASES = {
     'tuna': 'tuna',
     'עדן בן זקן': 'eden-ben-zaken',
     'eden ben zaken': 'eden-ben-zaken',
+    'מאירים בסליחות': 'meirim-bslichot',
+    'meirim bslichot': 'meirim-bslichot',
 }
 
 
