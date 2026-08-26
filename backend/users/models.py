@@ -351,7 +351,16 @@ class Event(models.Model):
         null=True,
         db_index=True,
         allow_unicode=True,
-        help_text='URL-friendly unique slug for programmatic SEO (auto-generated).',
+        help_text='ASCII URL slug: artist English slug + event date (e.g. itay-levi-2026-08-29).',
+    )
+    legacy_slug = models.SlugField(
+        max_length=220,
+        unique=True,
+        blank=True,
+        null=True,
+        db_index=True,
+        allow_unicode=True,
+        help_text='Previous Hebrew/unicode slug kept so old /event/… links still resolve.',
     )
 
     # Timestamps
@@ -371,20 +380,25 @@ class Event(models.Model):
         return raw
 
     def save(self, *args, **kwargs):
-        # Ensure slug exists before first insert; refresh uniqueness after PK assigned.
+        # ASCII artist-date slug; preserve the previous public slug on legacy_slug.
+        update_fields = kwargs.get('update_fields')
+        slug_fields = {'slug', 'legacy_slug', 'artist', 'date', 'name'}
+        skip_slug = update_fields is not None and slug_fields.isdisjoint(update_fields)
         creating = self.pk is None
-        if not (self.slug or '').strip():
-            from users.seo import build_event_slug_base, ensure_unique_event_slug
+        if not skip_slug:
+            from users.seo import apply_event_ascii_slug
 
-            self.slug = ensure_unique_event_slug(self, build_event_slug_base(self))
+            apply_event_ascii_slug(self)
+            if update_fields is not None:
+                kwargs['update_fields'] = list(dict.fromkeys([*update_fields, 'slug', 'legacy_slug']))
         super().save(*args, **kwargs)
         if creating and self.pk:
-            from users.seo import build_event_slug_base, ensure_unique_event_slug
+            from users.seo import apply_event_ascii_slug
 
-            desired = ensure_unique_event_slug(self, build_event_slug_base(self))
-            if desired != self.slug:
-                Event.objects.filter(pk=self.pk).update(slug=desired)
-                self.slug = desired
+            previous = self.slug
+            apply_event_ascii_slug(self)
+            if self.slug != previous or getattr(self, 'legacy_slug', None):
+                Event.objects.filter(pk=self.pk).update(slug=self.slug, legacy_slug=self.legacy_slug)
 
     def __str__(self):
         # For sports events with teams, show team matchup

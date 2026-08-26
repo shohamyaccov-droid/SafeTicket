@@ -8,7 +8,7 @@ into the initial document so Googlebot and AI crawlers see SEO without waiting o
 from pathlib import Path
 
 from django.contrib import admin
-from django.http import FileResponse, Http404, HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, HttpResponsePermanentRedirect, JsonResponse
 from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
@@ -59,6 +59,7 @@ def spa_index_view(request):
         load_spa_index_html,
         resolve_artist_by_identifier,
         resolve_event_by_identifier,
+        event_legacy_redirect_path,
     )
 
     raw = (request.path or '/').strip()
@@ -70,6 +71,9 @@ def spa_index_view(request):
         if identifier:
             try:
                 event = resolve_event_by_identifier(identifier)
+                redirect_to = event_legacy_redirect_path(identifier, event)
+                if redirect_to:
+                    return HttpResponsePermanentRedirect(redirect_to)
                 seo = build_event_seo_payload(event, request=request)
                 html = inject_seo_into_html(load_spa_index_html(), seo)
                 cache_control = 'public, max-age=60, stale-while-revalidate=300'

@@ -6,7 +6,7 @@ import { eventCanonicalPath, eventHref, safeJsonLdString } from './eventSeo.js';
 
 describe('eventSeo helpers', () => {
   it('prefers slug over id for href', () => {
-    expect(eventHref({ id: 92, slug: 'eyal-golan-tel-aviv' })).toBe('/event/eyal-golan-tel-aviv');
+    expect(eventHref({ id: 92, slug: 'itay-levi-2026-08-29' })).toBe('/event/itay-levi-2026-08-29');
     expect(eventHref({ id: 92 })).toBe('/event/92');
     expect(eventCanonicalPath('my-slug')).toBe('/event/my-slug');
   });

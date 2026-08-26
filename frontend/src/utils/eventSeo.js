@@ -1,6 +1,6 @@
 /**
  * Event page path helpers for programmatic SEO routes.
- * Prefer slug when present; fall back to numeric id for legacy links.
+ * Prefer the ASCII artist-date slug when present; fall back to numeric id.
  */
 export function eventCanonicalPath(eventOrSlug) {
   if (!eventOrSlug) return '/';

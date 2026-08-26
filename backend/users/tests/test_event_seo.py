@@ -78,8 +78,11 @@ class EventSlugAndSeoTests(TestCase):
 
     def test_slug_auto_generated_unique(self):
         self.assertTrue(self.event.slug)
+        self.assertTrue(all(ord(c) < 128 for c in self.event.slug), self.event.slug)
         self.assertIn('eyal-golan', self.event.slug.lower())
-        self.assertIn('tel-aviv', self.event.slug.lower())
+        self.assertNotIn('tel-aviv', self.event.slug.lower())
+        date_part = timezone.localtime(self.event.date).strftime('%Y-%m-%d')
+        self.assertEqual(self.event.slug, f'eyal-golan-{date_part}')
         twin = Event.objects.create(
             artist=self.artist,
             name='Eyal Golan Live 2',
@@ -91,11 +94,57 @@ class EventSlugAndSeoTests(TestCase):
             status='פעיל',
         )
         self.assertTrue(twin.slug)
+        self.assertTrue(all(ord(c) < 128 for c in twin.slug), twin.slug)
         self.assertNotEqual(twin.slug, self.event.slug)
+        self.assertTrue(twin.slug.startswith(f'eyal-golan-{date_part}'))
 
-    def test_slug_base_from_artist_city(self):
+    def test_hebrew_artist_slug_is_english_artist_and_date(self):
+        from datetime import datetime
+
+        artist = Artist.objects.create(name='איתי לוי')
+        self.assertTrue((artist.slug or '').startswith('itay-levi'))
+        show_at = timezone.make_aware(datetime(2026, 8, 29, 20, 0, 0))
+        event = Event.objects.create(
+            artist=artist,
+            name='איתי לוי בהופעה',
+            date=show_at,
+            venue='אמפי MAX',
+            city='ראשון לציון',
+            country='IL',
+            category='concert',
+            status='פעיל',
+        )
+        self.assertEqual(event.slug, 'itay-levi-2026-08-29')
+        self.assertTrue(all(ord(c) < 128 for c in event.slug))
+
+    def test_legacy_hebrew_slug_still_resolves(self):
+        from users.seo import event_legacy_redirect_path, resolve_event_by_identifier
+
+        hebrew = 'אייל-גולן-תל-אביב-2099-01-01'
+        Event.objects.filter(pk=self.event.pk).update(legacy_slug=hebrew)
+        self.event.refresh_from_db()
+
+        found = resolve_event_by_identifier(hebrew)
+        self.assertEqual(found.pk, self.event.pk)
+
+        client = APIClient()
+        res = client.get(f'/api/users/events/{hebrew}/')
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(res.data['id'], self.event.pk)
+        self.assertEqual(res.data['slug'], self.event.slug)
+        self.assertTrue(res.data['canonical_url'].endswith(f'/event/{self.event.slug}'))
+
+        tickets = client.get(f'/api/users/events/{hebrew}/tickets/')
+        self.assertEqual(tickets.status_code, 200)
+
+        self.assertEqual(event_legacy_redirect_path(hebrew, self.event), f'/event/{self.event.slug}')
+        self.assertIsNone(event_legacy_redirect_path(self.event.slug, self.event))
+
+    def test_slug_base_from_artist_and_date(self):
         base = build_event_slug_base(self.event)
         self.assertIn('eyal-golan', base.lower())
+        self.assertNotIn('tel-aviv', base.lower())
+        self.assertRegex(base, r'^eyal-golan-\d{4}-\d{2}-\d{2}$')
 
     def test_json_ld_event_and_aggregate_offer(self):
         data = build_event_json_ld(self.event)
@@ -233,6 +282,8 @@ class EventSlugAndSeoTests(TestCase):
         by_id = client.get(f'/api/users/events/{self.event.pk}/')
         self.assertEqual(by_id.status_code, 200)
         self.assertEqual(by_id.data['slug'], self.event.slug)
+        self.assertTrue(all(ord(c) < 128 for c in by_id.data['slug']))
+        self.assertTrue(by_id.data['canonical_url'].endswith(f'/event/{self.event.slug}'))
         self.assertIn('seo_title', by_id.data)
         self.assertEqual(by_id.data['json_ld']['@type'], 'Event')
 

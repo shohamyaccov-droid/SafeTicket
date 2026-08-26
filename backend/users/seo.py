@@ -67,9 +67,28 @@ def event_path(slug_or_id: str) -> str:
     return f'/event/{slug_or_id}'
 
 
+def event_public_slug(event) -> str:
+    return (getattr(event, 'slug', None) or '').strip() or str(getattr(event, 'pk', '') or '')
+
+
 def event_canonical_url(event) -> str:
-    key = (getattr(event, 'slug', None) or '').strip() or str(event.pk)
+    key = event_public_slug(event) or str(event.pk)
     return f'{frontend_origin()}{event_path(key)}'
+
+
+def normalize_event_identifier(identifier: str) -> str:
+    from urllib.parse import unquote
+
+    return unquote((identifier or '').strip())
+
+
+def event_legacy_redirect_path(identifier: str, event) -> Optional[str]:
+    """Return /event/<ascii-slug> when the request used an id or old Hebrew slug."""
+    key = normalize_event_identifier(identifier)
+    canonical = event_public_slug(event)
+    if not key or not canonical or key == canonical:
+        return None
+    return event_path(canonical)
 
 
 def artist_path(slug_or_id: str) -> str:
@@ -85,29 +104,52 @@ def _strip_html(text: str) -> str:
     return re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', text or '')).strip()
 
 
+def _ascii_slug_token(value: str) -> str:
+    return (slugify(value or '', allow_unicode=False) or '').strip('-')
+
+
+def _event_date_stamp(event) -> str:
+    dt = getattr(event, 'date', None)
+    if not dt:
+        return ''
+    try:
+        local = timezone.localtime(dt) if timezone.is_aware(dt) else dt
+        return local.strftime('%Y-%m-%d')
+    except Exception:
+        return ''
+
+
 def build_event_slug_base(event) -> str:
-    """URL slug base: artist/city (preferred) or event name; Unicode-safe for Hebrew SEO."""
-    artist_name = ''
-    if getattr(event, 'artist_id', None) and getattr(event, 'artist', None):
-        artist_name = (event.artist.name or '').strip()
-    city = (event.city or '').strip()
-    name = (event.name or '').strip()
-    if artist_name and city:
-        raw = f'{artist_name}-{city}'
-    elif artist_name:
-        raw = artist_name
-    else:
-        raw = name or city or 'event'
-    base = slugify(raw, allow_unicode=True)
-    if not base:
-        base = f'event-{event.pk or "new"}'
-    if event.date:
+    """ASCII URL slug: related artist's English slug + event date (e.g. itay-levi-2026-08-29)."""
+    artist_token = ''
+    artist = None
+    if getattr(event, 'artist_id', None):
         try:
-            local = timezone.localtime(event.date) if timezone.is_aware(event.date) else event.date
-            base = slugify(f'{base}-{local.strftime("%Y-%m-%d")}', allow_unicode=True)
+            artist = getattr(event, 'artist', None)
         except Exception:
-            pass
-    return (base or f'event-{event.pk or "new"}')[:180]
+            artist = None
+    if artist is not None:
+        artist_token = _ascii_slug_token(build_artist_slug_base(artist))
+        if not artist_token:
+            artist_token = _ascii_slug_token(getattr(artist, 'slug', None) or '')
+    if not artist_token:
+        artist_token = _ascii_slug_token(getattr(event, 'name', None) or '') or 'event'
+    stamp = _event_date_stamp(event)
+    raw = f'{artist_token}-{stamp}' if stamp else artist_token
+    base = _ascii_slug_token(raw) or artist_token
+    if not base:
+        base = f'event-{getattr(event, "pk", None) or "new"}'
+    return base[:180]
+
+
+def apply_event_ascii_slug(event) -> str:
+    """Set event.slug to the ASCII artist-date form; keep the previous slug on legacy_slug."""
+    desired = ensure_unique_event_slug(event, build_event_slug_base(event))
+    current = (getattr(event, 'slug', None) or '').strip()
+    if current and current != desired and not (getattr(event, 'legacy_slug', None) or '').strip():
+        event.legacy_slug = current
+    event.slug = desired
+    return desired
 
 
 def ensure_unique_event_slug(event, base: Optional[str] = None) -> str:
@@ -875,11 +917,17 @@ def resolve_event_by_identifier(identifier: str, queryset=None):
     from users.models import Event
 
     qs = queryset if queryset is not None else Event.objects.all()
-    key = (identifier or '').strip()
+    key = normalize_event_identifier(identifier)
     if not key:
         raise Event.DoesNotExist
     if key.isdigit():
         return get_object_or_404(qs, pk=int(key))
+    by_slug = qs.filter(slug=key).first()
+    if by_slug is not None:
+        return by_slug
+    by_legacy = qs.filter(legacy_slug=key).first()
+    if by_legacy is not None:
+        return by_legacy
     return get_object_or_404(qs, slug=key)
 
 

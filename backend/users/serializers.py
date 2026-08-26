@@ -1433,11 +1433,12 @@ class ProfileListingSerializer(serializers.ModelSerializer):
     listing_group_id = serializers.CharField(read_only=True, allow_null=True)
     
     event_id = serializers.SerializerMethodField()
+    event_slug = serializers.SerializerMethodField()
 
     class Meta:
         model = Ticket
         fields = (
-            'id', 'event_id', 'event_name', 'event_date', 'venue', 'seat_row',
+            'id', 'event_id', 'event_slug', 'event_name', 'event_date', 'venue', 'seat_row',
             'section', 'row', 'seat_numbers', 'row_number', 'seat_number',
             'original_price', 'asking_price', 'is_together', 'available_quantity',
             'quantity', 'order_id', 'listing_group_id',
@@ -1451,6 +1452,10 @@ class ProfileListingSerializer(serializers.ModelSerializer):
 
     def get_event_id(self, obj):
         return obj.event_id
+
+    def get_event_slug(self, obj):
+        ev = getattr(obj, 'event', None)
+        return (getattr(ev, 'slug', None) or '').strip() or None
 
     def _primary_order_for_sold_ticket(self, obj):
         if obj.status not in ['sold', 'pending_payout', 'paid_out']:

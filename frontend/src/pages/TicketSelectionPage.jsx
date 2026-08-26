@@ -17,6 +17,7 @@ import { formatBuyerFeePercent } from '../services/pricingSettings';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import { toastError } from '../utils/toast';
+import { eventHref } from '../utils/eventSeo';
 import './TicketSelectionPage.css';
 
 const TicketSelectionPage = () => {
@@ -31,11 +32,13 @@ const TicketSelectionPage = () => {
   const [quantity, setQuantity] = useState(1);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [showCheckout, setShowCheckout] = useState(false);
-  const returnToEventId = useMemo(() => {
-    const eventIdFromState = location.state?.eventId;
-    const eventIdFromTicket = ticket?.event_id || ticket?.event?.id;
-    return eventIdFromState || eventIdFromTicket || null;
-  }, [location.state?.eventId, ticket]);
+  const returnToEventPath = useMemo(() => {
+    const nested = ticket?.event && typeof ticket.event === 'object' ? ticket.event : null;
+    const slug = location.state?.eventSlug || nested?.slug || ticket?.event_slug;
+    const id = location.state?.eventId || nested?.id || ticket?.event_id;
+    if (!slug && !id) return null;
+    return eventHref({ slug, id });
+  }, [location.state?.eventSlug, location.state?.eventId, ticket]);
 
   const fetchTicketById = useCallback(async ({ keepQuantity = false, signal } = {}) => {
     const response = await ticketAPI.getTicket(ticketId, signal ? { signal } : undefined);
@@ -166,11 +169,11 @@ const TicketSelectionPage = () => {
             <button onClick={() => navigate(-1)} className="breadcrumb-link">
               ← חזרה
             </button>
-            {returnToEventId ? (
+            {returnToEventPath ? (
               <>
                 <span className="breadcrumb-separator">/</span>
                 <button
-                  onClick={() => navigate(`/event/${returnToEventId}`)}
+                  onClick={() => navigate(returnToEventPath)}
                   className="breadcrumb-link breadcrumb-link--event"
                 >
                   חזרה לאירוע

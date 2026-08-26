@@ -544,11 +544,11 @@ class EventAdmin(admin.ModelAdmin):
         'venue', 'city', 'country_display', 'created_at',
     ]
     list_filter = ['artist', 'category', 'high_demand', 'status', 'venue', 'city', 'country', 'age_restriction', 'date', 'created_at']
-    search_fields = ['name', 'slug', 'venue', 'city', 'artist__name', 'home_team', 'away_team', 'tournament']
-    readonly_fields = ['created_at', 'updated_at', 'view_count', 'image_delivery_preview', 'slug']
+    search_fields = ['name', 'slug', 'legacy_slug', 'venue', 'city', 'artist__name', 'home_team', 'away_team', 'tournament']
+    readonly_fields = ['created_at', 'updated_at', 'view_count', 'image_delivery_preview', 'slug', 'legacy_slug']
     fieldsets = (
         ('Basic Information', {
-            'fields': ('artist', 'name', 'slug', 'category', 'status', 'high_demand')
+            'fields': ('artist', 'name', 'slug', 'legacy_slug', 'category', 'status', 'high_demand')
         }),
         ('Location & Timing', {
             'fields': ('venue', 'venue_place', 'city', 'country', 'date', 'ends_at', 'doors_open')

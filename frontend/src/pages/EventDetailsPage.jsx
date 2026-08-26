@@ -46,6 +46,7 @@ import { Helmet } from 'react-helmet-async';
 import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import { formatBuyerFeePercent } from '../services/pricingSettings';
 import EventJsonLd from '../components/EventJsonLd';
+import PageSeo from '../components/PageSeo';
 import { eventHref } from '../utils/eventSeo';
 import { artistHrefFromEvent } from '../utils/artistSeo';
 import {
@@ -412,9 +413,9 @@ const EventDetailsPage = () => {
         setEvent(loadedEvent);
         setLoading(false);
 
-        const resolvedSlug = (eventResponse.data?.slug || '').trim();
+        const resolvedSlug = (loadedEvent?.slug || '').trim();
         if (resolvedSlug && String(eventKey) !== resolvedSlug) {
-          navigate(`/event/${encodeURIComponent(resolvedSlug)}`, { replace: true });
+          navigate(eventHref(loadedEvent), { replace: true });
         }
         Analytics.ticketViewed(loadedEvent?.id ?? eventKey, {
           contentName: loadedEvent?.name || loadedEvent?.title,
@@ -1163,9 +1164,9 @@ const EventDetailsPage = () => {
       ? `קנו או מכרו כרטיסים ל${eventName} ב${venueForSeo}. תשלום מאובטח והגנה מלאה על הכסף.`
       : `קנו או מכרו כרטיסים ל${eventName}. תשלום מאובטח והגנה מלאה על הכסף.`);
 
-  const pageCanonical = toPublicAbsoluteUrl(
-    (event.canonical_url && String(event.canonical_url).trim()) || eventHref(event)
-  );
+  const canonicalPath =
+    (event.canonical_path && String(event.canonical_path).trim()) || eventHref(event);
+  const pageCanonical = toPublicAbsoluteUrl(canonicalPath);
   const ogImageAbsolute = toPublicAbsoluteUrl(
     (event.og_image && String(event.og_image).trim()) ||
       (heroImageRaw ? heroImageSrc : defaultOgImageUrl())
@@ -1173,21 +1174,15 @@ const EventDetailsPage = () => {
 
   return (
     <div className="event-details-container">
+      <PageSeo
+        title={documentTitle}
+        description={metaDescription}
+        path={canonicalPath}
+        jsonLd={null}
+      />
       <Helmet>
-        <title>{documentTitle}</title>
-        <meta name="robots" content="index, follow" />
-        <meta name="description" content={metaDescription} />
-        <link rel="canonical" href={pageCanonical || undefined} />
-        <meta property="og:site_name" content="TradeTix" />
-        <meta property="og:type" content="website" />
-        <meta property="og:locale" content="he_IL" />
-        <meta property="og:title" content={documentTitle} />
-        <meta property="og:description" content={metaDescription} />
         <meta property="og:image" content={ogImageAbsolute} />
         {pageCanonical ? <meta property="og:url" content={pageCanonical} /> : null}
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={documentTitle} />
-        <meta name="twitter:description" content={metaDescription} />
         <meta name="twitter:image" content={ogImageAbsolute} />
       </Helmet>
       <EventJsonLd jsonLd={event.json_ld} />

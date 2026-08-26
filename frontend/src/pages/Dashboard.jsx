@@ -15,6 +15,7 @@ import {
   getAcceptedCheckoutSecondsRemaining,
 } from '../utils/offerTimer';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
+import { eventHref } from '../utils/eventSeo';
 import CheckoutModal from '../components/CheckoutModal';
 import NegotiationModal from '../components/NegotiationModal';
 import Toast from '../components/Toast';
@@ -687,7 +688,10 @@ const Dashboard = () => {
       toastError('לא ניתן להעתיק קישור — מזהה אירוע חסר');
       return;
     }
-    const url = `${window.location.origin}/event/${listing.event_slug || eventId}`;
+    const url = `${window.location.origin}${eventHref({
+      id: eventId,
+      slug: listing.event_slug,
+    })}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopiedListingId(listing.id);

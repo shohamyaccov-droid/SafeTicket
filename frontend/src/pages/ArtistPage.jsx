@@ -118,7 +118,7 @@ const ArtistPage = () => {
         navigate(eventHref(eventOrId));
         return;
       }
-      navigate(`/event/${eventOrId}`);
+      navigate(eventHref({ id: eventOrId }));
     },
     [navigate]
   );
