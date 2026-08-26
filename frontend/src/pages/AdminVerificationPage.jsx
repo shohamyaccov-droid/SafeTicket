@@ -78,8 +78,8 @@ const AdminVerificationPage = () => {
             ...saved,
             section: saved.section ?? values.section,
             row: saved.row ?? values.row,
-            seat_number: saved.seat_number ?? values.seat,
-            seat_numbers: saved.seat_numbers ?? values.seat,
+            seat_number: saved.seat_number ?? values.seatsByTicketId?.[row.id] ?? values.seat,
+            seat_numbers: saved.seat_numbers ?? values.seatsByTicketId?.[row.id] ?? values.seat,
           };
         }),
       );

@@ -44,22 +44,52 @@ describe('AdminReviewModal', () => {
     await user.type(screen.getByLabelText('שורה'), '7');
     await user.type(screen.getByLabelText('כיסא'), '12');
 
-    const preview = screen.getByTestId('admin-review-bulk-preview');
-    expect(preview).toHaveTextContent('כיסא 12');
-    expect(preview).toHaveTextContent('כיסא 13');
+    expect(screen.getByLabelText('כיסא לכרטיס 1')).toHaveValue('12');
+    expect(screen.getByLabelText('כיסא לכרטיס 2')).toHaveValue('13');
 
     await user.click(screen.getByRole('button', { name: 'שמור' }));
     expect(onSave).toHaveBeenCalledWith(
       groupedTickets[0],
-      { section: 'דשא', row: '7', seat: '12' },
+      { section: 'דשא', row: '7', seat: '12', seatsByTicketId: { 10: '12', 11: '13' } },
       { applyToGroup: true },
     );
 
     await user.click(screen.getByRole('button', { name: 'אישור ופרסום לכל הקבוצה' }));
     expect(onApprove).toHaveBeenCalledWith(
       groupedTickets[0],
-      { section: 'דשא', row: '7', seat: '12' },
+      { section: 'דשא', row: '7', seat: '12', seatsByTicketId: { 10: '12', 11: '13' } },
       { applyToGroup: true, approveGroup: true },
+    );
+  });
+
+  it('keeps an individual seat override without changing the other tickets', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(
+      <AdminReviewModal
+        ticket={groupedTickets[0]}
+        tickets={groupedTickets}
+        onClose={() => {}}
+        onSave={onSave}
+        onApprove={() => {}}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('כיסא'), '16');
+    expect(screen.getByLabelText('כיסא לכרטיס 1')).toHaveValue('16');
+    expect(screen.getByLabelText('כיסא לכרטיס 2')).toHaveValue('17');
+
+    await user.clear(screen.getByLabelText('כיסא לכרטיס 2'));
+    await user.type(screen.getByLabelText('כיסא לכרטיס 2'), '25');
+    expect(screen.getByLabelText('כיסא לכרטיס 1')).toHaveValue('16');
+    expect(screen.getByLabelText('כיסא לכרטיס 2')).toHaveValue('25');
+    expect(screen.getByLabelText('כיסא')).toHaveValue('16');
+
+    await user.click(screen.getByRole('button', { name: 'שמור' }));
+    expect(onSave).toHaveBeenCalledWith(
+      groupedTickets[0],
+      { section: '', row: '', seat: '16', seatsByTicketId: { 10: '16', 11: '25' } },
+      { applyToGroup: true },
     );
   });
 

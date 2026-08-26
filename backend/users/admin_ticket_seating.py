@@ -1,9 +1,10 @@
 """Admin pending-queue seating: section/row/seat plus listing-group auto-increment."""
 from __future__ import annotations
 
+import json
 import os
 import re
-from typing import List, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from .models import Ticket, VenueSection
 
@@ -19,6 +20,37 @@ def request_flag(data, key: str, default: bool = True) -> bool:
     if isinstance(raw, bool):
         return raw
     return str(raw).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def parse_seat_assignments(data) -> Optional[dict]:
+    """Return ``{ticket_id: seat}`` when the client sent per-ticket seats, else ``None``."""
+    if data is None or 'seats' not in data:
+        return None
+    raw = data.get('seats')
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (TypeError, ValueError):
+            return None
+    result = {}
+    if isinstance(raw, list):
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            tid = item.get('ticket_id', item.get('id'))
+            if tid is None:
+                continue
+            try:
+                result[int(tid)] = '' if item.get('seat') is None else str(item.get('seat')).strip()
+            except (TypeError, ValueError):
+                continue
+    elif isinstance(raw, dict):
+        for key, value in raw.items():
+            try:
+                result[int(key)] = '' if value is None else str(value).strip()
+            except (TypeError, ValueError):
+                continue
+    return result
 
 
 def optional_seating_from_request(request) -> dict:
@@ -38,6 +70,9 @@ def optional_seating_from_request(request) -> dict:
     if seat_key is not None:
         raw = data.get(seat_key)
         payload['seat'] = '' if raw is None else str(raw).strip()
+    assignments = parse_seat_assignments(data)
+    if assignments:
+        payload['seats_by_id'] = assignments
     return payload
 
 
@@ -124,8 +159,12 @@ def apply_admin_seating_to_ticket_or_group(
 ) -> List[Tuple[Ticket, list]]:
     """
     Apply section/row to every sibling in the listing group.
-    Auto-increment ``seat`` from the posted ticket's position (12, 13, 14…).
+
+    When ``seats_by_id`` is present, each ticket gets that exact seat.
+    Otherwise auto-increment ``seat`` from the posted ticket's position (12, 13, 14…).
     """
+    seating = seating or {}
+    seats_by_id = seating.get('seats_by_id') or None
     group = listing_group_members(ticket) if apply_to_group else [ticket]
     group = [member for member in group if member.status in allowed_statuses]
     if not group:
@@ -138,8 +177,13 @@ def apply_admin_seating_to_ticket_or_group(
 
     results = []
     for index, member in enumerate(group):
-        member_seating = dict(seating)
-        if 'seat' in member_seating:
+        member_seating = {key: seating[key] for key in ('section', 'row', 'seat') if key in seating}
+        if seats_by_id:
+            if member.pk in seats_by_id:
+                member_seating['seat'] = seats_by_id[member.pk]
+            elif 'seat' in member_seating:
+                member_seating['seat'] = increment_seat_label(member_seating.get('seat'), index)
+        elif 'seat' in member_seating:
             member_seating['seat'] = increment_seat_label(
                 member_seating.get('seat'),
                 index - anchor_idx,

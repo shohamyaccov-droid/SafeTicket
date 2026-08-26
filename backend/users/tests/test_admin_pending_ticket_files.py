@@ -235,6 +235,35 @@ class AdminPendingTicketFileUrlTests(TestCase):
         self.assertEqual(saved_seats[second.id], '13')
         self.assertEqual(saved_seats[third.id], '14')
 
+    def test_admin_seating_honors_per_ticket_seat_overrides(self):
+        self.client.force_authenticate(self.admin)
+        first, second, third = self._grouped_pending_tickets()
+        response = self.client.post(
+            f'/api/users/admin/tickets/{first.id}/seating/',
+            {
+                'section': 'Block 12',
+                'row': '7',
+                'seat': '16',
+                'seats': [
+                    {'ticket_id': first.id, 'seat': '16'},
+                    {'ticket_id': second.id, 'seat': '25'},
+                    {'ticket_id': third.id, 'seat': '18'},
+                ],
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        third.refresh_from_db()
+        self.assertEqual(first.seat_number, '16')
+        self.assertEqual(second.seat_number, '25')
+        self.assertEqual(third.seat_number, '18')
+        saved_seats = {row['id']: row['seat_number'] for row in response.data['tickets']}
+        self.assertEqual(saved_seats[first.id], '16')
+        self.assertEqual(saved_seats[second.id], '25')
+        self.assertEqual(saved_seats[third.id], '18')
+
     def test_approve_group_publishes_siblings_with_incremented_seats(self):
         self.client.force_authenticate(self.admin)
         first, second, third = self._grouped_pending_tickets()

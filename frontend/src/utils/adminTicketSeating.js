@@ -37,7 +37,35 @@ export function listingGroupTickets(tickets, ticket) {
     .sort((a, b) => Number(a.id) - Number(b.id));
 }
 
-export function seatingAssignmentsForGroup({ tickets, anchorId, section, row, seat }) {
+export function fillSequentialSeatsByTicketId(tickets, startSeat) {
+  const map = {};
+  (Array.isArray(tickets) ? tickets : []).forEach((row, index) => {
+    map[row.id] = startSeat ? incrementSeatLabel(startSeat, index) : '';
+  });
+  return map;
+}
+
+export function initialSeatsByTicketId(tickets, startSeat) {
+  const list = Array.isArray(tickets) ? tickets : [];
+  const hasStored = list.some((row) => String(row?.seat_number || row?.seat_numbers || '').trim());
+  if (!hasStored) return fillSequentialSeatsByTicketId(list, startSeat);
+  const map = {};
+  list.forEach((row, index) => {
+    const existing = String(row?.seat_number || row?.seat_numbers || '').trim();
+    map[row.id] = existing || (startSeat ? incrementSeatLabel(startSeat, index) : '');
+  });
+  return map;
+}
+
+export function seatForTicket(seatsByTicketId, ticketId) {
+  if (!seatsByTicketId) return '';
+  if (ticketId in seatsByTicketId) return String(seatsByTicketId[ticketId] ?? '');
+  const asString = String(ticketId);
+  if (asString in seatsByTicketId) return String(seatsByTicketId[asString] ?? '');
+  return '';
+}
+
+export function seatingAssignmentsForGroup({ tickets, anchorId, section, row, seat, seatsByTicketId }) {
   const list = Array.isArray(tickets) ? tickets : [];
   const found = list.findIndex((rowTicket) => Number(rowTicket.id) === Number(anchorId));
   const anchorIndex = found < 0 ? 0 : found;
@@ -45,7 +73,9 @@ export function seatingAssignmentsForGroup({ tickets, anchorId, section, row, se
     ticketId: rowTicket.id,
     section,
     row,
-    seat: incrementSeatLabel(seat, index - anchorIndex),
+    seat: seatsByTicketId
+      ? seatForTicket(seatsByTicketId, rowTicket.id)
+      : incrementSeatLabel(seat, index - anchorIndex),
   }));
 }
 
@@ -102,6 +132,13 @@ export function seatingPayload(values, { applyToGroup = true, approveGroup = fal
     seat: values?.seat ?? '',
     apply_to_group: applyToGroup,
   };
+  const map = values?.seatsByTicketId;
+  if (map && typeof map === 'object') {
+    payload.seats = Object.entries(map).map(([ticketId, seat]) => ({
+      ticket_id: Number(ticketId),
+      seat: String(seat ?? ''),
+    }));
+  }
   if (approveGroup) payload.approve_group = true;
   return payload;
 }

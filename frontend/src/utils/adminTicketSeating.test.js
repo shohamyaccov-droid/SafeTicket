@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  fillSequentialSeatsByTicketId,
   incrementSeatLabel,
   listingGroupTickets,
   matchZoneFromOcr,
   mergeSeatingDraft,
   seatingAssignmentsForGroup,
   seatingFromTicket,
+  seatingPayload,
   ticketFileKind,
   venueSectionNamesForTicket,
 } from './adminTicketSeating';
@@ -51,6 +53,36 @@ describe('adminTicketSeating', () => {
         seat: '12',
       }).map((row) => row.seat),
     ).toEqual(['12', '13', '14']);
+    expect(
+      seatingAssignmentsForGroup({
+        tickets,
+        anchorId: 10,
+        section: 'Block 12',
+        row: '7',
+        seat: '12',
+        seatsByTicketId: { 10: '16', 11: '25', 12: '18' },
+      }).map((row) => row.seat),
+    ).toEqual(['16', '25', '18']);
+    expect(fillSequentialSeatsByTicketId(tickets, '16')).toEqual({ 10: '16', 11: '17', 12: '18' });
+  });
+
+  it('includes per-ticket seats in the admin seating payload', () => {
+    expect(
+      seatingPayload(
+        { section: 'דשא', row: '2', seat: '16', seatsByTicketId: { 42: '16', 43: '25' } },
+        { applyToGroup: true, approveGroup: true },
+      ),
+    ).toEqual({
+      section: 'דשא',
+      row: '2',
+      seat: '16',
+      apply_to_group: true,
+      approve_group: true,
+      seats: [
+        { ticket_id: 42, seat: '16' },
+        { ticket_id: 43, seat: '25' },
+      ],
+    });
   });
 
   it('lists mapped venue sections and detects image tickets', () => {

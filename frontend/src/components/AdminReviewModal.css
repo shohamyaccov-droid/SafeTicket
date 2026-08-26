@@ -159,9 +159,38 @@
   color: #334155;
 }
 
-.admin-review-bulk ul {
+.admin-review-seat-list {
   margin: 0;
-  padding: 0 1.1rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.admin-review-seat-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+}
+
+.admin-review-seat-input {
+  width: 4.4rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.28rem 0.4rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-family: inherit;
+  color: #0f172a;
+  background: #fff;
+  text-align: center;
+}
+
+.admin-review-seat-input:focus {
+  outline: 2px solid #0045af;
+  outline-offset: 1px;
+  border-color: #0045af;
 }
 
 .admin-review-actions {

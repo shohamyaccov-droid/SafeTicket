@@ -4,18 +4,22 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useMemo, useState } from 'react';
 import {
+  fillSequentialSeatsByTicketId,
+  initialSeatsByTicketId,
   listingGroupTickets,
   matchZoneFromOcr,
-  seatingAssignmentsForGroup,
+  seatForTicket,
   seatingFromTicket,
   ticketFileKind,
   venueSectionNamesForTicket,
 } from '../utils/adminTicketSeating';
 import './AdminReviewModal.css';
 
+const EMPTY_TICKETS = [];
+
 export default function AdminReviewModal({
   ticket,
-  tickets = [],
+  tickets = EMPTY_TICKETS,
   sectionNames: sectionNamesProp,
   busy = false,
   onClose,
@@ -23,6 +27,7 @@ export default function AdminReviewModal({
   onApprove,
 }) {
   const group = useMemo(() => listingGroupTickets(tickets, ticket), [tickets, ticket]);
+  const groupIds = useMemo(() => group.map((row) => row.id).join(','), [group]);
   const [previewId, setPreviewId] = useState(ticket?.id);
   const sectionNames = useMemo(() => {
     if (Array.isArray(sectionNamesProp) && sectionNamesProp.length > 0) {
@@ -30,7 +35,11 @@ export default function AdminReviewModal({
     }
     return venueSectionNamesForTicket(ticket);
   }, [sectionNamesProp, ticket]);
-  const [values, setValues] = useState(() => seatingFromTicket(ticket));
+  const [values, setValues] = useState(() => {
+    const next = seatingFromTicket(ticket);
+    next.seatsByTicketId = initialSeatsByTicketId(group, next.seat);
+    return next;
+  });
 
   useEffect(() => {
     setPreviewId(ticket?.id);
@@ -43,8 +52,9 @@ export default function AdminReviewModal({
       const hit = matchZoneFromOcr(ticket?.extracted_pdf_text, zones);
       if (hit) next.section = hit;
     }
+    next.seatsByTicketId = initialSeatsByTicketId(group, next.seat);
     setValues(next);
-  }, [ticket, sectionNamesProp]);
+  }, [ticket, sectionNamesProp, groupIds]);
 
   useEffect(() => {
     const onKey = (event) => {
@@ -62,16 +72,24 @@ export default function AdminReviewModal({
   const selectOptions = sectionNames.includes(values.section) || !values.section
     ? sectionNames
     : [values.section, ...sectionNames];
-  const assignments = seatingAssignmentsForGroup({
-    tickets: group,
-    anchorId: ticket.id,
-    section: values.section,
-    row: values.row,
-    seat: values.seat,
-  });
   const isGroup = group.length > 1;
 
   const patch = (partial) => setValues((prev) => ({ ...prev, ...partial }));
+
+  const handleGlobalSeatChange = (seat) => {
+    setValues((prev) => ({
+      ...prev,
+      seat,
+      seatsByTicketId: fillSequentialSeatsByTicketId(group, seat),
+    }));
+  };
+
+  const handleTicketSeatChange = (ticketId, seat) => {
+    setValues((prev) => ({
+      ...prev,
+      seatsByTicketId: { ...prev.seatsByTicketId, [ticketId]: seat },
+    }));
+  };
 
   return (
     <div className="admin-review-overlay" role="presentation" onClick={() => !busy && onClose?.()}>
@@ -178,8 +196,9 @@ export default function AdminReviewModal({
               <span>{isGroup ? 'כיסא (ראשון שנבחר)' : 'כיסא'}</span>
               <input
                 type="text"
+                inputMode="numeric"
                 value={values.seat}
-                onChange={(event) => patch({ seat: event.target.value })}
+                onChange={(event) => handleGlobalSeatChange(event.target.value)}
                 placeholder="למשל 12"
                 disabled={busy}
                 autoComplete="off"
@@ -190,13 +209,25 @@ export default function AdminReviewModal({
             {isGroup ? (
               <div className="admin-review-bulk" data-testid="admin-review-bulk-preview">
                 <p className="admin-review-bulk-lead">
-                  אותו גוש ושורה יוחלו על כל הכרטיסים. מספרי הכיסאות יעלו אוטומטית.
+                  אותו גוש ושורה יוחלו על כל הכרטיסים. מספר הכיסא הראשון ממלא את כולם ברצף —
+                  אפשר לתקן כיסא בודד כאן בלי לשנות את השאר.
                 </p>
-                <ul>
-                  {assignments.map((row, index) => (
-                    <li key={row.ticketId}>
-                      כרטיס {index + 1} (#{row.ticketId}): גוש {row.section || '—'} · שורה {row.row || '—'} · כיסא{' '}
-                      {row.seat || '—'}
+                <ul className="admin-review-seat-list">
+                  {group.map((row, index) => (
+                    <li key={row.id} className="admin-review-seat-row">
+                      <span>
+                        כרטיס {index + 1} (#{row.id}): גוש {values.section || '—'} · שורה {values.row || '—'} · כיסא
+                      </span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        className="admin-review-seat-input"
+                        value={seatForTicket(values.seatsByTicketId, row.id)}
+                        onChange={(event) => handleTicketSeatChange(row.id, event.target.value)}
+                        disabled={busy}
+                        autoComplete="off"
+                        aria-label={`כיסא לכרטיס ${index + 1}`}
+                      />
                     </li>
                   ))}
                 </ul>

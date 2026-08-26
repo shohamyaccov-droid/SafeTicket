@@ -206,8 +206,16 @@ export default function AdminDashboard() {
           ...(saved || {}),
           section: source?.section ?? fallbackValues.section,
           row: source?.row ?? fallbackValues.row,
-          seat_number: source?.seat_number ?? source?.seat ?? fallbackValues.seat,
-          seat_numbers: source?.seat_numbers ?? source?.seat ?? fallbackValues.seat,
+          seat_number:
+            source?.seat_number ??
+            source?.seat ??
+            fallbackValues?.seatsByTicketId?.[row.id] ??
+            fallbackValues.seat,
+          seat_numbers:
+            source?.seat_numbers ??
+            source?.seat ??
+            fallbackValues?.seatsByTicketId?.[row.id] ??
+            fallbackValues.seat,
         };
       }),
     );

@@ -102,7 +102,8 @@ describe('AdminDashboard pending review modal', () => {
     await user.selectOptions(screen.getByLabelText('גוש'), 'דשא');
     await user.type(screen.getByLabelText('שורה'), '2');
     await user.type(screen.getByLabelText('כיסא'), '12');
-    expect(screen.getByTestId('admin-review-bulk-preview')).toHaveTextContent('כיסא 13');
+    expect(screen.getByLabelText('כיסא לכרטיס 1')).toHaveValue('12');
+    expect(screen.getByLabelText('כיסא לכרטיס 2')).toHaveValue('13');
 
     await user.click(screen.getByRole('button', { name: 'שמור' }));
     await waitFor(() => {
@@ -111,6 +112,10 @@ describe('AdminDashboard pending review modal', () => {
         row: '2',
         seat: '12',
         apply_to_group: true,
+        seats: [
+          { ticket_id: 42, seat: '12' },
+          { ticket_id: 43, seat: '13' },
+        ],
       });
     });
 
@@ -122,6 +127,10 @@ describe('AdminDashboard pending review modal', () => {
         seat: '12',
         apply_to_group: true,
         approve_group: true,
+        seats: [
+          { ticket_id: 42, seat: '12' },
+          { ticket_id: 43, seat: '13' },
+        ],
       });
     });
   });
