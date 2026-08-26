@@ -17,7 +17,15 @@ import BloomfieldConcertMap from '../components/BloomfieldConcertMap';
 import BloomfieldTicketListPanel from '../components/BloomfieldTicketListPanel';
 import JerusalemArenaMap from '../components/JerusalemArenaMap';
 import InteractiveStadiumMap from '../components/InteractiveStadiumMap';
+import SultansPoolMap from '../components/SultansPoolMap';
 import { VENUE_MAPS, VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN, VENUE_CAESAREA, VENUE_MENORA, getVenueConfig, isMenoraVenueName, normalizeSection } from '../utils/venueMaps';
+import {
+  VENUE_SULTANS_POOL,
+  SULTANS_POOL_ZONE_LABELS,
+  isSultansPoolVenueName,
+  sultansPoolTicketMatchesZone,
+  sultansPoolZoneIdFromTicket,
+} from '../utils/sultansPoolMap';
 import { CAESAREA_SECTION_IDS } from '../utils/caesareaGeometry';
 import {
   buildRamatGanActiveListingsSummary,
@@ -125,6 +133,7 @@ const EventDetailsPage = () => {
   /** Ramat Gan map: filter ticket list by stadium section id (e.g. "11A"). */
   const [ramatGanSectionFilter, setRamatGanSectionFilter] = useState(null);
   const [ramatGanSelectedSectionId, setRamatGanSelectedSectionId] = useState(null);
+  const [sultansPoolActiveZone, setSultansPoolActiveZone] = useState(null);
   /** Prevents double-opens / race when Buy Now refetches listings before showing checkout. */
   const buyOpeningRef = useRef(false);
   const [buyOpeningKey, setBuyOpeningKey] = useState(null);
@@ -281,6 +290,13 @@ const EventDetailsPage = () => {
         if (/אורקסטרה|אוקסטרה|אוקקוסטר/i.test(raw)) return 'אורקסטרה';
         const hebTier = raw.match(/(\d+)\s*(תחתון|אמצע|עליון)/);
         if (hebTier) return `${hebTier[1]} ${hebTier[2]}`;
+      }
+
+      const isSultansPoolHall =
+        isSultansPoolVenueName(event?.venue_detail?.name) ||
+        isSultansPoolVenueName(venueHay);
+      if (isSultansPoolHall) {
+        return sultansPoolZoneIdFromTicket(ticket) || section;
       }
 
       // Menora (היכל מנורה): real bowl labels 101–112 / 301–312 → SVG ids "1 Lower" … "12 Upper"
@@ -922,6 +938,13 @@ const EventDetailsPage = () => {
       return VENUE_CAESAREA;
     }
 
+    if (
+      candidates.some((v) => isSultansPoolVenueName(v)) ||
+      candidates.includes(VENUE_SULTANS_POOL)
+    ) {
+      return VENUE_SULTANS_POOL;
+    }
+
     const haystack = candidates.join(' ');
     if (haystack.includes('בלומפילד')) return 'אצטדיון בלומפילד';
     if (
@@ -953,10 +976,14 @@ const EventDetailsPage = () => {
   const isCaesareaVenue = canonicalVenueForMap === VENUE_CAESAREA;
   const isJerusalemArenaVenue = canonicalVenueForMap === 'פיס ארנה ירושלים';
   const isRamatGanVenue = canonicalVenueForMap === VENUE_RAMAT_GAN;
+  const isSultansPoolVenue =
+    canonicalVenueForMap === VENUE_SULTANS_POOL ||
+    isSultansPoolVenueName(event?.venue_detail?.name);
 
   useEffect(() => {
     setRamatGanSectionFilter(null);
     setRamatGanSelectedSectionId(null);
+    setSultansPoolActiveZone(null);
   }, [eventKey]);
 
   const ramatGanActiveListingsSummary = useMemo(
@@ -971,6 +998,18 @@ const EventDetailsPage = () => {
       return sid && sid === ramatGanSectionFilter;
     });
   }, [isRamatGanVenue, ramatGanSectionFilter, ticketGroups]);
+
+  const sultansPoolDisplayGroups = useMemo(() => {
+    if (!isSultansPoolVenue || !sultansPoolActiveZone) return ticketGroups;
+    return ticketGroups.filter((g) =>
+      sultansPoolTicketMatchesZone(g.tickets?.[0], sultansPoolActiveZone)
+    );
+  }, [isSultansPoolVenue, sultansPoolActiveZone, ticketGroups]);
+
+  const handleSultansPoolZoneClick = useCallback((zoneId) => {
+    if (!zoneId) return;
+    setSultansPoolActiveZone((prev) => (prev === zoneId ? null : zoneId));
+  }, []);
 
   const handleRamatGanSectionSelect = useCallback(
     (sectionId) => {
@@ -1394,7 +1433,7 @@ const EventDetailsPage = () => {
         </div>
         <div
           className={`tickets-split-container${
-            isBloomfieldVenue || isJerusalemArenaVenue || isRamatGanVenue || isCaesareaVenue
+            isBloomfieldVenue || isJerusalemArenaVenue || isRamatGanVenue || isCaesareaVenue || isSultansPoolVenue
               ? ' tickets-split-container--bloomfield'
               : ''
           }${isRamatGanVenue ? ' tickets-split-container--ramat-gan' : ''}`}
@@ -1421,6 +1460,14 @@ const EventDetailsPage = () => {
                   <p className="venue-map-card-subtitle">
                     מפת אצטדיון רמת גן · בחרו גוש לסינון הכרטיסים
                     {ramatGanSectionFilter ? ` · מציג: ${ramatGanSectionFilter}` : ''}
+                  </p>
+                ) : null}
+                {isSultansPoolVenue ? (
+                  <p className="venue-map-card-subtitle">
+                    מפת בריכת הסולטן · בחרו גוש לסינון הכרטיסים
+                    {sultansPoolActiveZone
+                      ? ` · מציג: ${SULTANS_POOL_ZONE_LABELS[sultansPoolActiveZone] || sultansPoolActiveZone}`
+                      : ''}
                   </p>
                 ) : null}
               </div>
@@ -1505,6 +1552,15 @@ const EventDetailsPage = () => {
                           highlightStableId={jerusalemMapHighlight}
                           onSelectGroup={handleJerusalemMapSelect}
                           onHoverGroup={setJerusalemHoverId}
+                        />
+                      );
+                    }
+
+                    if (isSultansPoolVenue) {
+                      return (
+                        <SultansPoolMap
+                          activeZone={sultansPoolActiveZone}
+                          onZoneClick={handleSultansPoolZoneClick}
                         />
                       );
                     }
@@ -1603,7 +1659,29 @@ const EventDetailsPage = () => {
                 </button>
               </div>
             ) : null}
-            {(isRamatGanVenue ? ramatGanDisplayGroups : ticketGroups).map((group) => {
+            {isSultansPoolVenue && sultansPoolActiveZone ? (
+              <div className="ramat-gan-section-filter-banner" role="status">
+                <span>
+                  מציג כרטיסים ב
+                  <strong>
+                    {SULTANS_POOL_ZONE_LABELS[sultansPoolActiveZone] || sultansPoolActiveZone}
+                  </strong>
+                </span>
+                <button
+                  type="button"
+                  className="ramat-gan-section-filter-clear"
+                  onClick={() => setSultansPoolActiveZone(null)}
+                >
+                  הצג את כל הכרטיסים
+                </button>
+              </div>
+            ) : null}
+            {(isRamatGanVenue
+              ? ramatGanDisplayGroups
+              : isSultansPoolVenue
+                ? sultansPoolDisplayGroups
+                : ticketGroups
+            ).map((group) => {
               const seatRange = getSeatRange(group);
               const firstTicket = group.tickets[0];
               const sectionName = getSectionNameForMap(firstTicket);

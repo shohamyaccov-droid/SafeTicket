@@ -104,6 +104,19 @@ export const VENUE_MAPS = {
     imageUrl: 'https://www.leaan.co.il/he-IL/images/menora_map.png',
     sections: {},
   },
+  // בריכת הסולטן — interactive SVG map (see SultansPoolMap.jsx)
+  'בריכת הסולטן': {
+    imageUrl: '',
+    sections: {
+      'אורקסטרה': { x: 50, y: 28 },
+      'גוש 1': { x: 78, y: 40 },
+      'גוש 2': { x: 78, y: 72 },
+      'גוש 3': { x: 50, y: 78 },
+      'גוש 4': { x: 22, y: 72 },
+      'גוש 5': { x: 22, y: 40 },
+      'מושבים נגישים': { x: 50, y: 48 },
+    },
+  },
   // מנורה תל אביב - Alias for מנורה מבטחים
   'מנורה תל אביב': {
     imageUrl: 'https://www.leaan.co.il/he-IL/images/menora_map.png',
@@ -230,6 +243,10 @@ export const getVenueConfig = (venueName) => {
     (normalized.includes('ירושלים') && normalized.includes('ארנה'))
   ) {
     return { config: VENUE_MAPS['פיס ארנה ירושלים'], matchedName: 'פיס ארנה ירושלים' };
+  }
+
+  if (normalized.includes('בריכת הסולטן') || /sultan'?s?\s*pool/i.test(normalized)) {
+    return { config: VENUE_MAPS['בריכת הסולטן'], matchedName: 'בריכת הסולטן' };
   }
 
   // Keyword-based flexible matching

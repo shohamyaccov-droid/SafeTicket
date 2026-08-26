@@ -9,6 +9,7 @@ import { apiErrorMessageHe } from '../utils/apiErrors';
 import { Analytics } from '../utils/analytics';
 import { iso4217FromCountry, currencySymbol, formatAmountForCurrency } from '../utils/priceFormat';
 import { VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN, VENUE_CAESAREA } from '../utils/venueMaps';
+import { isSultansPoolVenueName, sultansPoolSellSectionOptions, VENUE_SULTANS_POOL } from '../utils/sultansPoolMap';
 import { CONCERT_BLOCK_COUNT, CONCERT_SECTION_NAMES } from '../utils/bloomfieldConcertGeometry';
 import { isRamatGanVenueEvent, ramatGanSellSectionOptions } from '../utils/ramatGanSellSections';
 import { isCaesareaVenueEvent, caesareaSellSectionOptions } from '../utils/caesareaSellSections';
@@ -278,6 +279,9 @@ function canonicalVenueName(eventLike) {
   if (haystack.includes('מנורה') || haystack.includes('מבטחים')) return 'היכל מנורה מבטחים';
   if (isCaesareaVenueEvent(eventLike)) return VENUE_CAESAREA;
   if (isRamatGanVenueEvent(eventLike)) return VENUE_RAMAT_GAN;
+  if (values.some((v) => isSultansPoolVenueName(v)) || haystack.includes('בריכת הסולטן')) {
+    return VENUE_SULTANS_POOL;
+  }
   return values[0] || '';
 }
 
@@ -305,6 +309,9 @@ function generatedSectionOptionsForVenue(venueName) {
   }
   if (venueName === VENUE_CAESAREA) {
     return caesareaSellSectionOptions();
+  }
+  if (venueName === VENUE_SULTANS_POOL || isSultansPoolVenueName(venueName)) {
+    return sultansPoolSellSectionOptions();
   }
   return [];
 }
