@@ -93,3 +93,32 @@ export function sortListingGroupsForBuyer(groups, user, primaryCompare) {
   );
   return list;
 }
+
+/** Unit asking price for a listing group (ILS), or Infinity if missing. */
+export function listingGroupUnitPrice(group) {
+  const raw =
+    group?.price ??
+    group?.tickets?.[0]?.asking_price ??
+    group?.tickets?.[0]?.original_price;
+  const n = parseFloat(raw);
+  return Number.isFinite(n) ? n : Infinity;
+}
+
+/**
+ * Cheapest buyable listing in the visible set (skips taken / own / empty).
+ * Used by the mobile sticky buy bar to open the best-priced ticket.
+ */
+export function pickCheapestBuyableGroup(groups, user) {
+  let best = null;
+  let bestPrice = Infinity;
+  for (const group of groups || []) {
+    if (!group || isListingUnavailableForBuyer(group, user)) continue;
+    if (!(Number(group.available_count) > 0)) continue;
+    const price = listingGroupUnitPrice(group);
+    if (price < bestPrice) {
+      best = group;
+      bestPrice = price;
+    }
+  }
+  return best;
+}

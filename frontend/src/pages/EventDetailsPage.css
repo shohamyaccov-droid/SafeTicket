@@ -1132,6 +1132,26 @@ a.event-hero-artist:hover {
   justify-content: flex-end;
 }
 
+.ticket-row-cta {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.viagogo-buy-button--row {
+  width: auto;
+  min-width: 7.25rem;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.micro-trust-text--row {
+  display: block;
+  margin: 0 0 0.35rem;
+  text-align: right;
+}
+
 .ticket-price-container {
   display: flex;
   flex-direction: column;
@@ -1897,6 +1917,15 @@ a.event-hero-artist:hover {
     padding: 0.5rem 0;
     gap: 0.5rem;
     min-height: 56px;
+    flex-wrap: wrap;
+  }
+
+  .ticket-row-cta {
+    flex: 1 1 100%;
+  }
+
+  .viagogo-buy-button--row {
+    width: 100%;
   }
 
   .ticket-row-price {

@@ -9,6 +9,7 @@ import {
 } from '../utils/priceFormat';
 import { listingAvailabilityLabel, listingQuantityOptions, normalizeListingSplitType } from '../utils/listingQuantity';
 import TakenBuyButton from './TakenBuyButton';
+import { isListingGroupTaken } from '../utils/ticketAvailability';
 import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import { formatBuyerFeePercent } from '../services/pricingSettings';
 
@@ -38,6 +39,27 @@ const ROW_STYLE = {
   minHeight: '64px',
 };
 
+const CTA_COL_STYLE = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'stretch',
+  flexShrink: 0,
+};
+
+const ROW_BUY_BTN_STYLE = {
+  minHeight: 40,
+  minWidth: 108,
+  padding: '8px 12px',
+  border: 'none',
+  borderRadius: 8,
+  background: '#059669',
+  color: '#fff',
+  fontSize: 13,
+  fontWeight: 800,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+};
+
 const PRICE_COL_STYLE = {
   display: 'flex',
   flexDirection: 'column',
@@ -52,15 +74,6 @@ const SECTION_COL_STYLE = {
   textAlign: 'right',
   minWidth: 0,
   flex: 1,
-};
-
-const BADGES_ROW_STYLE = {
-  display: 'flex',
-  flexDirection: 'row',
-  flexWrap: 'wrap',
-  justifyContent: 'flex-end',
-  gap: 6,
-  marginTop: 6,
 };
 
 export default function BloomfieldTicketListPanel({
@@ -79,6 +92,7 @@ export default function BloomfieldTicketListPanel({
   buyingStableId = null,
   user,
   isSellerFn,
+  onRequestLogin,
   totalListingsBeforeQuantityFilter = 0,
 }) {
   const buyerFeePercent = useBuyerServiceFeePercent();
@@ -151,7 +165,6 @@ export default function BloomfieldTicketListPanel({
             const sellerOwns = isSellerFn(user, firstTicket, group);
             const isTakenListing = isListingGroupTaken(group);
             const isUnavailableListing = sellerOwns || isTakenListing;
-            const showActions = isExpanded || isUnavailableListing;
             const splitType = normalizeListingSplitType(
               firstTicket?.split_type || group.split_type || ''
             );
@@ -288,23 +301,43 @@ export default function BloomfieldTicketListPanel({
                     </span>
                   </div>
 
+                  <div
+                    style={CTA_COL_STYLE}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    {sellerOwns ? (
+                      <TakenBuyButton label="הכרטיס שלך" variant="own" />
+                    ) : isTakenListing ? (
+                      <TakenBuyButton label="נתפס" variant="taken" />
+                    ) : (
+                      <button
+                        type="button"
+                        style={ROW_BUY_BTN_STYLE}
+                        disabled={group.available_count <= 0 || isBuying}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onBuy(group);
+                        }}
+                      >
+                        {isBuying ? 'מעביר לתשלום…' : 'קנה עכשיו'}
+                      </button>
+                    )}
+                  </div>
+
                 </div>
                 {/* ── END HORIZONTAL ROW ─────────────────────────────────── */}
 
-                {/* Actions: always visible for taken/own; expand for buyable */}
-                {showActions ? (
+                {isTakenListing ? (
+                  <p className="px-4 pb-2 text-xs text-slate-500" dir="rtl">
+                    כרטיס זה כבר אינו זמין לרכישה
+                  </p>
+                ) : null}
+
+                {/* Quantity + offer after expand; buy CTA is always on the collapsed row */}
+                {isExpanded && !isUnavailableListing ? (
                   <div className="border-t border-slate-100 px-4 pb-4 pt-3" dir="rtl">
-                    {sellerOwns ? (
-                      <div className="buy-button-wrapper flex flex-col gap-2">
-                        <TakenBuyButton label="הכרטיס שלך" variant="own" />
-                      </div>
-                    ) : isTakenListing ? (
-                      <div className="buy-button-wrapper flex flex-col gap-2">
-                        <TakenBuyButton label="נתפס" variant="taken" />
-                        <p className="text-xs text-slate-500">כרטיס זה כבר אינו זמין לרכישה</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
                         <label className="flex flex-col gap-1 text-xs font-semibold text-slate-700">
                           כמות
                           <select
@@ -324,23 +357,6 @@ export default function BloomfieldTicketListPanel({
                             ))}
                           </select>
                         </label>
-                        <button
-                          type="button"
-                          className="min-h-[44px] rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={group.available_count <= 0 || isBuying}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onBuy(group);
-                          }}
-                        >
-                          {isBuying ? (
-                            <>
-                              מעביר לתשלום… <span className="button-spinner" aria-hidden />
-                            </>
-                          ) : (
-                            'המשך לתשלום'
-                          )}
-                        </button>
                         {user ? (
                           group?.tickets?.[0]?.allow_negotiation !== false ? (
                             <button
@@ -368,7 +384,6 @@ export default function BloomfieldTicketListPanel({
                           </button>
                         ) : null}
                       </div>
-                    )}
                   </div>
                 ) : null}
               </article>

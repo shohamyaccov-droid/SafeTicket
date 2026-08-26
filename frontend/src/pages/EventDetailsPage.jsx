@@ -70,10 +70,12 @@ import {
   isCurrentUserOwnListing,
   isListingGroupTaken,
   isListingUnavailableForBuyer,
+  pickCheapestBuyableGroup,
   sortListingGroupsForBuyer,
 } from '../utils/ticketAvailability';
 import { buildSectionMapStatus } from '../utils/mapSectionStatus';
 import TakenBuyButton from '../components/TakenBuyButton';
+import EventMobileBuyBar from '../components/EventMobileBuyBar';
 import { createListFetchAbort } from '../utils/listFetch';
 import { defaultListingQuantity, listingAvailabilityLabel, listingQuantityOptions } from '../utils/listingQuantity';
 import './EventDetailsPage.css';
@@ -724,7 +726,7 @@ const EventDetailsPage = () => {
     }
   }, [ticketGroups, getSectionNameForMap, scrollTicketRowIntoTopView]);
 
-  const handleBuy = async (ticketGroup) => {
+  const handleBuy = async (ticketGroup, qtyOverride) => {
     if (!ticketGroup) {
       return;
     }
@@ -780,7 +782,10 @@ const EventDetailsPage = () => {
       );
       const avail = matchingFresh.available_count || 1;
       const options = listingQuantityOptions(split, avail);
-      const chosen = options.includes(quantity) ? quantity : defaultListingQuantity(split, avail);
+      const requested = qtyOverride != null ? Number(qtyOverride) : quantity;
+      const chosen = options.includes(requested)
+        ? requested
+        : defaultListingQuantity(split, avail);
       setQuantity(chosen);
       setShowCheckout(true);
     } catch (err) {
@@ -792,6 +797,29 @@ const EventDetailsPage = () => {
       buyOpeningRef.current = false;
       setBuyOpeningKey(null);
     }
+  };
+
+  const beginBuy = (ticketGroup) => {
+    if (!ticketGroup) return;
+    const first = ticketGroup.tickets?.[0];
+    const split = normalizeSplitType(first?.split_type || ticketGroup.split_type || '');
+    const groupId = ticketGroup.listing_group_id || ticketGroup.id;
+    const options = listingQuantityOptions(split, ticketGroup.available_count || 1);
+    const isThisRowActive =
+      activeTicketId != null && String(activeTicketId) === String(groupId);
+    const qty =
+      isThisRowActive && options.includes(quantity)
+        ? quantity
+        : defaultListingQuantity(split, ticketGroup.available_count || 1);
+    setQuantity(qty);
+    const price = parseFloat(getTicketPrice(first));
+    Analytics.addToCart(first?.id, {
+      value: Number.isFinite(price) ? price : undefined,
+      currency: resolveTicketCurrency(first) || 'ILS',
+      quantity: qty,
+      event_id: event?.id,
+    });
+    handleBuy(ticketGroup, qty);
   };
 
   const handleMakeOffer = (ticketGroup) => {
@@ -1134,6 +1162,42 @@ const EventDetailsPage = () => {
     [jerusalemRows, scrollTicketRowIntoTopView]
   );
 
+  const visibleListingGroups = useMemo(() => {
+    if (isBloomfieldVenue) return bloomfieldRows.map((r) => r.group);
+    if (isRamatGanVenue) return ramatGanDisplayGroups;
+    if (isSultansPoolVenue) return sultansPoolDisplayGroups;
+    return ticketGroups;
+  }, [
+    isBloomfieldVenue,
+    bloomfieldRows,
+    isRamatGanVenue,
+    ramatGanDisplayGroups,
+    isSultansPoolVenue,
+    sultansPoolDisplayGroups,
+    ticketGroups,
+  ]);
+
+  const cheapestBuyableGroup = useMemo(
+    () => pickCheapestBuyableGroup(visibleListingGroups, user),
+    [visibleListingGroups, user]
+  );
+
+  const showMobileBuyBar =
+    !eventHasPassed &&
+    !ticketsLoading &&
+    !showCheckout &&
+    !showMakeOffer &&
+    !waitlistOpen &&
+    Boolean(cheapestBuyableGroup);
+
+  useEffect(() => {
+    const cls = 'has-event-mobile-buy-bar';
+    if (typeof document === 'undefined') return undefined;
+    if (showMobileBuyBar) document.body.classList.add(cls);
+    else document.body.classList.remove(cls);
+    return () => document.body.classList.remove(cls);
+  }, [showMobileBuyBar]);
+
   if (loading) {
     return (
       <div className="event-details-container">
@@ -1301,7 +1365,7 @@ const EventDetailsPage = () => {
         </div>
       ) : ticketGroups.length === 0 ? (
         <div className="event-waitlist-hero-banner" dir="rtl">
-          <p className="event-waitlist-hero-text">No tickets available right now</p>
+          <p className="event-waitlist-hero-text">אין כרטיסים זמינים כרגע</p>
           <button type="button" className="event-waitlist-cta" onClick={() => setWaitlistOpen(true)}>
             התראת כרטיסים
           </button>
@@ -1578,7 +1642,7 @@ const EventDetailsPage = () => {
           </div>
 
           {/* Scrollable Tickets List (Right side in RTL) */}
-          <div className="tickets-list-container">
+          <div className="tickets-list-container" id="event-ticket-list">
             {ticketGroups.length > 0 ? (
               <>
                 {/* TradeTix buyer-protection banner */}
@@ -1630,7 +1694,7 @@ const EventDetailsPage = () => {
                         setQuantity(defaultListingQuantity(split, group.available_count || 1));
                       }
                     }}
-                    onBuy={handleBuy}
+                    onBuy={beginBuy}
                     onOffer={handleMakeOffer}
                     onRequestLogin={openLogin}
                     buyQuantity={quantity}
@@ -1699,10 +1763,7 @@ const EventDetailsPage = () => {
               const isTakenListing = isListingGroupTaken(group);
               const isUnavailableListing =
                 isOwnListing || isTakenListing || isListingUnavailableForBuyer(group, user);
-              // Taken / own CTAs stay visible without expand; buy/offer still expand
-              const showActions = isExpanded || isUnavailableListing;
-              
-              
+
               // Handle click to toggle expansion and update map
               const handleTicketClick = (e) => {
                 e.stopPropagation();
@@ -1762,88 +1823,86 @@ const EventDetailsPage = () => {
                         <BuyerListingPrice ticket={firstTicket} />
                       </div>
                     </div>
+
+                    <div
+                      className="ticket-row-cta"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {isOwnListing ? (
+                        <TakenBuyButton label="הכרטיס שלך" variant="own" />
+                      ) : isTakenListing ? (
+                        <TakenBuyButton label="נתפס" variant="taken" />
+                      ) : (
+                        <button
+                          type="button"
+                          className="viagogo-buy-button viagogo-buy-button--row"
+                          disabled={group.available_count <= 0 || isBuyOpening}
+                          onClick={() => beginBuy(group)}
+                        >
+                          {isBuyOpening ? (
+                            <>
+                              מעביר לתשלום… <span className="button-spinner" aria-hidden />
+                            </>
+                          ) : (
+                            'קנה עכשיו'
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  
-                  {/* Action Buttons — always visible for taken/own; expand for buyable */}
-                  {showActions && (
+                  {isTakenListing ? (
+                    <span className="micro-trust-text micro-trust-text--row">כרטיס זה כבר אינו זמין לרכישה</span>
+                  ) : null}
+
+                  {/* Quantity + offer — expand the row; buy CTA is always on the collapsed row */}
+                  {isExpanded && !isUnavailableListing && (
                     <div className="ticket-row-expanded">
                       <div className="ticket-actions-row">
-                        {isOwnListing ? (
-                          <div className="buy-button-wrapper">
-                            <TakenBuyButton label="הכרטיס שלך" variant="own" />
-                          </div>
-                        ) : isTakenListing ? (
-                          <div className="buy-button-wrapper">
-                            <TakenBuyButton label="נתפס" variant="taken" />
-                            <span className="micro-trust-text">כרטיס זה כבר אינו זמין לרכישה</span>
-                          </div>
-                        ) : (
-                          <>
-                            <div
-                              className="ticket-expanded-qty"
-                              onClick={(e) => e.stopPropagation()}
+                        <div
+                          className="ticket-expanded-qty"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <label htmlFor={`listing-qty-${groupId}`}>כמות</label>
+                          <select
+                            id={`listing-qty-${groupId}`}
+                            className="ticket-qty-select"
+                            value={quantity}
+                            onChange={(e) => setQuantity(Number(e.target.value))}
+                            disabled={group.available_count <= 0 || isBuyOpening}
+                          >
+                            {listingQuantityOptions(splitType, group.available_count || 1).map((n) => (
+                              <option key={n} value={n}>
+                                {n} {n === 1 ? 'כרטיס' : 'כרטיסים'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        {allowsNegotiation ? (
+                          user ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMakeOffer(group);
+                              }}
+                              className="viagogo-offer-button viagogo-offer-button--prominent"
+                              disabled={group.available_count <= 0}
+                              type="button"
                             >
-                              <label htmlFor={`listing-qty-${groupId}`}>כמות</label>
-                              <select
-                                id={`listing-qty-${groupId}`}
-                                className="ticket-qty-select"
-                                value={quantity}
-                                onChange={(e) => setQuantity(Number(e.target.value))}
-                                disabled={group.available_count <= 0 || isBuyOpening}
-                              >
-                                {listingQuantityOptions(splitType, group.available_count || 1).map((n) => (
-                                  <option key={n} value={n}>
-                                    {n} {n === 1 ? 'כרטיס' : 'כרטיסים'}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                            <div className="buy-button-wrapper">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleBuy(group);
-                                }}
-                                className="viagogo-buy-button"
-                                disabled={group.available_count <= 0 || isBuyOpening}
-                              >
-                                {isBuyOpening ? (
-                                  <>
-                                    מעביר לתשלום… <span className="button-spinner" aria-hidden />
-                                  </>
-                                ) : (
-                                  'המשך לתשלום'
-                                )}
-                              </button>
-                            </div>
-                            {allowsNegotiation ? (
-                              user ? (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleMakeOffer(group);
-                                  }}
-                                  className="viagogo-offer-button viagogo-offer-button--prominent"
-                                  disabled={group.available_count <= 0}
-                                  type="button"
-                                >
-                                  הצע מחיר
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="viagogo-offer-button viagogo-offer-button--login"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openLogin();
-                                  }}
-                                >
-                                  התחבר כדי להציע מחיר על המודעה
-                                </button>
-                              )
-                            ) : null}
-                          </>
-                        )}
+                              הצע מחיר
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="viagogo-offer-button viagogo-offer-button--login"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openLogin();
+                              }}
+                            >
+                              התחבר כדי להציע מחיר על המודעה
+                            </button>
+                          )
+                        ) : null}
                       </div>
                     </div>
                   )}
@@ -1855,7 +1914,7 @@ const EventDetailsPage = () => {
               </>
             ) : (
               <div className="empty-state">
-                <p>No tickets available right now</p>
+                <p>אין כרטיסים זמינים כרגע</p>
                 <button type="button" className="event-waitlist-cta event-waitlist-cta--block" onClick={() => setWaitlistOpen(true)}>
                   התראת כרטיסים
                 </button>
@@ -2157,6 +2216,21 @@ const EventDetailsPage = () => {
           </div>
         </div>
       )}
+
+      {showMobileBuyBar ? (
+        <EventMobileBuyBar
+          ticket={cheapestBuyableGroup?.tickets?.[0]}
+          busy={Boolean(buyOpeningKey)}
+          onBuy={() => {
+            const group = cheapestBuyableGroup;
+            if (!group) return;
+            const gid = group.listing_group_id || group.id;
+            setActiveTicketId(gid);
+            scrollTicketRowIntoTopView(gid);
+            beginBuy(group);
+          }}
+        />
+      ) : null}
 
       {/* Toast Notification */}
       {toast && (

@@ -98,6 +98,23 @@ export const Analytics = {
     });
   },
 
+  /** Buyer tapped קנה עכשיו on a listing (before checkout modal). */
+  addToCart: (ticketId, extra = {}) => {
+    trackEvent('add_to_cart', window.location.pathname, {
+      ticket_id: ticketId,
+      ...extra,
+    });
+    const qty = extra.quantity != null ? Number(extra.quantity) : 1;
+    trackGa4Event('add_to_cart', {
+      currency: extra.currency || 'ILS',
+      value: extra.value,
+      items:
+        ticketId != null
+          ? [{ item_id: String(ticketId), quantity: Number.isFinite(qty) && qty > 0 ? qty : 1 }]
+          : undefined,
+    });
+  },
+
   checkoutStart: (ticketId, extra = {}) => {
     trackEvent('checkout_start', window.location.pathname, {
       ticket_id: ticketId,
