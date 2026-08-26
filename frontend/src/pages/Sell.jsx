@@ -652,6 +652,7 @@ const Sell = () => {
       const selectedVenueId = venueDetail?.id ? String(venueDetail.id) : '';
       const concertNameSet = concertLayout ? new Set(CONCERT_SECTION_NAMES) : null;
       return [...structured]
+        .filter((section) => section != null && section.id != null && section.id !== '')
         .filter((section) => !selectedVenueId || String(section.venue_id || selectedVenueId) === selectedVenueId)
         .filter((section) => {
           if (!concertNameSet) return true;

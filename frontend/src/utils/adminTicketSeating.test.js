@@ -38,6 +38,9 @@ describe('adminTicketSeating', () => {
   it('auto-increments numeric seats across a listing group', () => {
     expect(incrementSeatLabel('12', 1)).toBe('13');
     expect(incrementSeatLabel('A12', 2)).toBe('A14');
+    expect(incrementSeatLabel('12', Number.NaN)).toBe('12');
+    expect(incrementSeatLabel('12', 'x')).toBe('12');
+    expect(incrementSeatLabel('12', 0)).toBe('12');
     const tickets = [
       { id: 10, listing_group_id: 'g1' },
       { id: 11, listing_group_id: 'g1' },

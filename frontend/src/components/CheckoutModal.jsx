@@ -65,6 +65,13 @@ function responseDataLooksLikeHtml(data) {
 }
 
 function formatCheckoutBackendError(err) {
+  if (
+    err?.code === 'ECONNABORTED' ||
+    err?.code === 'ERR_NETWORK' ||
+    err?.code === 'ERR_CANCELED'
+  ) {
+    return 'יש בעיית חיבור לשרת. בדקו את האינטרנט ונסו שוב.';
+  }
   const data = err?.response?.data;
   const status = err?.response?.status;
   if (data == null || data === '') {
@@ -134,7 +141,7 @@ function toFriendlyCheckoutMessage(detail) {
   if (/payment failed|payment error|could not process payment|payment provider/i.test(text)) {
     return 'התשלום לא הושלם. בדקו את פרטי התשלום ונסו שוב.';
   }
-  if (/timeout|network|failed to fetch|ecconn/i.test(text)) {
+  if (/timeout|network|failed to fetch|econnaborted|err_network|err_canceled/i.test(text)) {
     return 'יש בעיית חיבור לשרת. בדקו את האינטרנט ונסו שוב.';
   }
   if (/insufficient_inventory|not enough tickets|order quantity must match|invalid quantity|אין מספיק כרטיסים/i.test(text)) {

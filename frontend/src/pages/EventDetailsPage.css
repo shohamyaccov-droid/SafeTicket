@@ -2504,6 +2504,7 @@ a.event-hero-artist:hover {
   
   .filters-section.mobile-open {
     display: flex;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   }
   
   .filters-title {

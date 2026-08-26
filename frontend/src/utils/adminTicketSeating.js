@@ -21,11 +21,15 @@ export function mergeSeatingDraft(ticket, drafts) {
 
 export function incrementSeatLabel(seat, offset) {
   const text = String(seat ?? '').trim();
-  if (!text || !offset) return text;
+  const delta = Number(offset);
+  if (!text || !Number.isFinite(delta) || delta === 0) return text;
   const match = text.match(/^(.*?)(\d+)(\D*)$/);
   if (!match) return text;
   const [, prefix, digits, suffix] = match;
-  const next = Math.max(0, Number(digits) + Number(offset));
+  const base = Number(digits);
+  if (!Number.isFinite(base)) return text;
+  const next = Math.max(0, base + delta);
+  if (!Number.isFinite(next)) return text;
   return `${prefix}${String(next).padStart(digits.length, '0')}${suffix}`;
 }
 

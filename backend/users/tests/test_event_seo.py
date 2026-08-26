@@ -147,6 +147,32 @@ class EventSlugAndSeoTests(TestCase):
         self.assertEqual(event_legacy_redirect_path(hebrew, self.event), f'/event/{self.event.slug}')
         self.assertIsNone(event_legacy_redirect_path(self.event.slug, self.event))
 
+    def test_api_retrieve_past_event_by_slug_and_legacy(self):
+        """Event details must not 404 after the show date (passed-event UI + old bookmarks)."""
+        past = Event.objects.create(
+            artist=self.artist,
+            name='Past Eyal Show',
+            date=timezone.now() - timedelta(days=2),
+            venue='היכל מנורה מבטחים',
+            city='Tel Aviv',
+            country='IL',
+            category='concert',
+            status='פעיל',
+        )
+        hebrew = 'אייל-גולן-עבר-לשעבר'
+        Event.objects.filter(pk=past.pk).update(legacy_slug=hebrew)
+        past.refresh_from_db()
+
+        client = APIClient()
+        by_slug = client.get(f'/api/users/events/{past.slug}/')
+        self.assertEqual(by_slug.status_code, 200, by_slug.content)
+        self.assertEqual(by_slug.data['id'], past.pk)
+
+        by_legacy = client.get(f'/api/users/events/{hebrew}/')
+        self.assertEqual(by_legacy.status_code, 200, by_legacy.content)
+        self.assertEqual(by_legacy.data['id'], past.pk)
+        self.assertEqual(by_legacy.data['slug'], past.slug)
+
     def test_slug_base_from_artist_and_date(self):
         base = build_event_slug_base(self.event)
         self.assertIn('eyal-golan', base.lower())

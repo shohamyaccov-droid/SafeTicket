@@ -1189,6 +1189,7 @@ const EventDetailsPage = () => {
     !showCheckout &&
     !showMakeOffer &&
     !waitlistOpen &&
+    !filtersOpen &&
     Boolean(cheapestBuyableGroup);
 
   useEffect(() => {

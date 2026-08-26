@@ -4213,8 +4213,19 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
     def get_object(self):
         from users.seo import resolve_event_by_identifier
 
-        queryset = self.filter_queryset(self.get_queryset())
-        return resolve_event_by_identifier(self.kwargs.get('pk'), queryset)
+        # Marketplace list is upcoming-only. Detail retrieve / SEO must still
+        # resolve past events (passed-event UX) and legacy_slug aliases without 404.
+        queryset = event_queryset_defer_rollout_columns(
+            Event.objects.select_related('artist', 'venue_place').prefetch_related(
+                Prefetch(
+                    'venue_place__sections',
+                    queryset=VenueSection.objects.order_by('name'),
+                ),
+            )
+        )
+        obj = resolve_event_by_identifier(self.kwargs.get('pk'), queryset)
+        self.check_object_permissions(self.request, obj)
+        return obj
 
     def retrieve(self, request, *args, **kwargs):
         """Override retrieve to increment view_count"""
