@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isSultansPoolVenueName,
+  normalizeSultansPoolZoneId,
   sultansPoolTicketMatchesZone,
   sultansPoolZoneIdFromTicket,
 } from './sultansPoolMap';
@@ -15,8 +16,12 @@ describe('sultansPoolMap', () => {
   it('maps ticket sections to zone ids', () => {
     expect(sultansPoolZoneIdFromTicket({ section: 'גוש 1' })).toBe('gush-1');
     expect(sultansPoolZoneIdFromTicket({ section: 'אורקסטרה' })).toBe('orchestra');
+    expect(sultansPoolZoneIdFromTicket({ section: 'גוש אורקסטרה' })).toBe('orchestra');
     expect(sultansPoolZoneIdFromTicket({ section: 'מושבים נגישים' })).toBe('accessible');
     expect(sultansPoolZoneIdFromTicket({ section: 'גוש 11' })).toBe(null);
+    expect(normalizeSultansPoolZoneId('orchestra')).toBe('orchestra');
+    expect(normalizeSultansPoolZoneId('גוש גוש 1')).toBe('gush-1');
+    expect(normalizeSultansPoolZoneId('gush-3')).toBe('gush-3');
   });
 
   it('matches tickets to a clicked zone', () => {

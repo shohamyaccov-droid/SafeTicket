@@ -23,6 +23,7 @@ import {
   VENUE_SULTANS_POOL,
   SULTANS_POOL_ZONE_LABELS,
   isSultansPoolVenueName,
+  normalizeSultansPoolZoneId,
   sultansPoolTicketMatchesZone,
   sultansPoolZoneIdFromTicket,
 } from '../utils/sultansPoolMap';
@@ -1621,9 +1622,10 @@ const EventDetailsPage = () => {
                     }
 
                     if (isSultansPoolVenue) {
+                      const hoveredZone = normalizeSultansPoolZoneId(activeSectionName);
                       return (
                         <SultansPoolMap
-                          activeZone={sultansPoolActiveZone}
+                          activeZone={hoveredZone || sultansPoolActiveZone}
                           onZoneClick={handleSultansPoolZoneClick}
                         />
                       );
@@ -1780,7 +1782,16 @@ const EventDetailsPage = () => {
               
               // Handle hover to update map without expanding (only if not already expanded)
               const handleTicketHover = () => {
-                if (!isExpanded && sectionName && event?.venue && VENUE_MAPS[event.venue]) {
+                const venueHasInteractiveMap =
+                  Boolean(event?.venue && VENUE_MAPS[event.venue]) ||
+                  Boolean(event?.venue_detail?.name && VENUE_MAPS[event.venue_detail.name]) ||
+                  isSultansPoolVenue ||
+                  isCaesareaVenue ||
+                  isMenoraVenue ||
+                  isBloomfieldVenue ||
+                  isJerusalemArenaVenue ||
+                  isRamatGanVenue;
+                if (!isExpanded && sectionName && venueHasInteractiveMap) {
                   setActiveTicketId(groupId);
                   setQuantity(defaultListingQuantity(splitType, group.available_count || 1));
                 }

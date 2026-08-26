@@ -3,7 +3,7 @@
  * Sultan's Pool (בריכת הסולטן) seating map.
  * Zone paths are the Figma export (frame 375×288); Hebrew labels match the designed overlay.
  */
-import { SULTANS_POOL_ZONE_LABELS } from '../utils/sultansPoolMap';
+import { normalizeSultansPoolZoneId, SULTANS_POOL_ZONE_LABELS } from '../utils/sultansPoolMap';
 
 const VIEWBOX = '0 0 375 288';
 const STROKE_ZONE = '#c9a227';
@@ -139,7 +139,7 @@ function ZoneLabel({ zone, isActive }) {
 }
 
 export default function SultansPoolMap({ activeZone = null, onZoneClick }) {
-  const activeId = activeZone ? String(activeZone).trim() : null;
+  const activeId = normalizeSultansPoolZoneId(activeZone);
 
   const handleActivate = (zoneId) => {
     if (typeof onZoneClick === 'function') onZoneClick(zoneId);
@@ -206,12 +206,14 @@ export default function SultansPoolMap({ activeZone = null, onZoneClick }) {
             >
               <path
                 d={zone.d}
-                stroke={STROKE_ZONE}
-                strokeWidth={isActive ? 2.25 : 1.6}
+                fill={isActive ? '#22c55e' : '#f4efe4'}
+                stroke={isActive ? '#16a34a' : STROKE_ZONE}
+                strokeWidth={isActive ? 2.4 : 1.6}
                 strokeLinejoin="round"
+                data-active={isActive ? 'true' : 'false'}
                 className={
                   isActive
-                    ? 'fill-[#f0d060] transition-colors duration-200'
+                    ? 'fill-green-500 transition-colors duration-200'
                     : 'fill-[#f4efe4] transition-colors duration-200 group-hover:fill-[#ebe3d0]'
                 }
               />
