@@ -456,6 +456,7 @@ const Home = () => {
         <div className="hero-stack">
           <div className="hero-content">
             <p className="hero-eyebrow">TradeTix</p>
+            <p className="hero-blessing">הכל בחסדי השם יתברך</p>
             <h1 className="hero-title">מצאו את הכרטיסים המושלמים</h1>
             <div className="search-wrapper">
               <input

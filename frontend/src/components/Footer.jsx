@@ -75,6 +75,7 @@ const Footer = () => {
 
         <div className="footer-bottom">
           <p>&copy; {new Date().getFullYear()} TradeTix. כל הזכויות שמורות.</p>
+          <p className="footer-shabbat">אתר שומר שבת.</p>
           <p className="footer-legal-links">
             <Link to="/terms">תקנון</Link>
             {' · '}

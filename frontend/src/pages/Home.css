@@ -128,6 +128,12 @@
     margin-bottom: 0.65rem;
   }
 
+  .hero-blessing {
+    font-size: 0.8rem;
+    margin-bottom: 0.4rem;
+    letter-spacing: 0.04em;
+  }
+
   .hero-search-input {
     padding: 0.85rem 2.75rem 0.85rem 1rem;
     font-size: 0.95rem;
@@ -354,6 +360,18 @@
   color: rgba(255, 255, 255, 0.92);
   margin: 0 0 0.75rem;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.hero-blessing {
+  margin: 0 0 0.55rem;
+  font-size: 0.92rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.72);
+  text-align: center;
+  direction: rtl;
+  line-height: 1.45;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
 }
 
 /* ============================================
@@ -1002,6 +1020,10 @@
 @media (max-width: 480px) {
   .hero-title {
     font-size: 1.5rem;
+  }
+
+  .hero-blessing {
+    font-size: 0.78rem;
   }
   
   .hero-search-section {

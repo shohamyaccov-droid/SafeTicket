@@ -64,6 +64,13 @@
   margin: 0;
 }
 
+.footer-shabbat {
+  margin-top: 0.45rem !important;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  color: #9ca3af;
+}
+
 .footer-entity {
   margin-top: 0.75rem;
   font-size: 0.82rem !important;
