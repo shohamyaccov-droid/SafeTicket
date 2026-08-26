@@ -3,6 +3,8 @@
  * Sultan's Pool (בריכת הסולטן) seating map.
  * Zone paths are the Figma export (frame 375×288); Hebrew labels match the designed overlay.
  */
+import { currencySymbol, formatAmountForCurrency } from '../utils/priceFormat';
+import { MAP_TAKEN_BUBBLE_LABEL } from '../utils/mapSectionStatus';
 import { normalizeSultansPoolZoneId, SULTANS_POOL_ZONE_LABELS } from '../utils/sultansPoolMap';
 
 const VIEWBOX = '0 0 375 288';
@@ -22,6 +24,8 @@ const CLICKABLE_ZONES = [
     labelY: 46,
     fontSize: 13,
     badge: { x: 28, y: 34, w: 80, h: 24 },
+    pinX: 67.5,
+    pinY: 10,
   },
   {
     id: 'gush-5',
@@ -32,6 +36,8 @@ const CLICKABLE_ZONES = [
     labelY: 52,
     fontSize: 12,
     badge: { x: 4, y: 40, w: 44, h: 24 },
+    pinX: 22,
+    pinY: 16,
   },
   {
     id: 'gush-1',
@@ -42,6 +48,8 @@ const CLICKABLE_ZONES = [
     labelY: 52,
     fontSize: 12,
     badge: { x: 4, y: 40, w: 44, h: 24 },
+    pinX: 24,
+    pinY: 16,
   },
   {
     id: 'accessible',
@@ -52,6 +60,8 @@ const CLICKABLE_ZONES = [
     labelY: 8,
     fontSize: 6.5,
     badge: null,
+    pinX: 29,
+    pinY: 4,
   },
   {
     id: 'gush-4',
@@ -62,6 +72,8 @@ const CLICKABLE_ZONES = [
     labelY: 78,
     fontSize: 13,
     badge: { x: 40, y: 66, w: 56, h: 24 },
+    pinX: 68,
+    pinY: 22,
   },
   {
     id: 'gush-3',
@@ -72,6 +84,8 @@ const CLICKABLE_ZONES = [
     labelY: 52,
     fontSize: 13,
     badge: { x: 19, y: 40, w: 56, h: 24 },
+    pinX: 46,
+    pinY: 16,
   },
   {
     id: 'gush-2',
@@ -82,8 +96,53 @@ const CLICKABLE_ZONES = [
     labelY: 78,
     fontSize: 13,
     badge: { x: 38, y: 66, w: 56, h: 24 },
+    pinX: 65,
+    pinY: 22,
   },
 ];
+
+function zoneStatusKeys(zone) {
+  const label = SULTANS_POOL_ZONE_LABELS[zone.id];
+  return [zone.id, label, label ? `גוש ${label}` : null, zone.id === 'orchestra' ? 'גוש אורקסטרה' : null].filter(
+    Boolean,
+  );
+}
+
+function listingForZone(zone, sectionMapStatus, lowestPrices) {
+  for (const key of zoneStatusKeys(zone)) {
+    if (sectionMapStatus?.[key]) return sectionMapStatus[key];
+  }
+  for (const key of zoneStatusKeys(zone)) {
+    const price = lowestPrices?.[key];
+    if (price != null && price !== '') return { status: 'available', minPrice: Number(price) };
+  }
+  return null;
+}
+
+function ZonePricePin({ x, y, label, taken }) {
+  const fill = taken ? '#e5e7eb' : '#ffffff';
+  const stroke = taken ? '#9ca3af' : '#e5e7eb';
+  const text = taken ? '#6b7280' : '#1f2937';
+  return (
+    <g transform={`translate(${x} ${y})`} pointerEvents="none" data-testid="sultans-price-pin" filter="url(#sultans-pin-shadow)">
+      <rect x="-34" y="-11" width="68" height="22" rx="4" fill={fill} stroke={stroke} strokeWidth="1" />
+      <text
+        x="0"
+        y="0"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill={text}
+        fontSize="12"
+        fontWeight="700"
+        style={{ fontFamily: 'inherit' }}
+      >
+        {label}
+      </text>
+      <polygon points="0,11 -5.5,16.5 5.5,16.5" fill={fill} stroke={stroke} strokeWidth="1" />
+      <rect x="-6" y="9.5" width="12" height="3" fill={fill} />
+    </g>
+  );
+}
 
 function ZoneLabel({ zone, isActive }) {
   const label = SULTANS_POOL_ZONE_LABELS[zone.id] || zone.id;
@@ -138,18 +197,46 @@ function ZoneLabel({ zone, isActive }) {
   );
 }
 
-export default function SultansPoolMap({ activeZone = null, onZoneClick }) {
+export default function SultansPoolMap({
+  activeZone = null,
+  onZoneClick,
+  lowestPrices = {},
+  sectionMapStatus = {},
+  currencyIso = 'ILS',
+  pinPrice = null,
+}) {
   const activeId = normalizeSultansPoolZoneId(activeZone);
 
   const handleActivate = (zoneId) => {
     if (typeof onZoneClick === 'function') onZoneClick(zoneId);
   };
 
+  const pinForZone = (zone) => {
+    const isActive = activeId === zone.id;
+    const meta = listingForZone(zone, sectionMapStatus, lowestPrices);
+    const isTaken = meta?.status === 'taken' && !isActive;
+    const rawPrice =
+      isActive && pinPrice != null && pinPrice !== ''
+        ? Number(pinPrice)
+        : meta?.status === 'available'
+          ? meta.minPrice
+          : lowestPrices[zone.id];
+    const price = rawPrice != null && rawPrice !== '' ? Number(rawPrice) : null;
+    const hasPrice = !isTaken && price != null && !Number.isNaN(price);
+    if (!hasPrice && !isTaken) return null;
+    return {
+      taken: Boolean(isTaken),
+      label: isTaken
+        ? MAP_TAKEN_BUBBLE_LABEL
+        : `${currencySymbol(currencyIso)}${formatAmountForCurrency(price, currencyIso)}`,
+    };
+  };
+
   return (
-    <div className="relative w-full overflow-hidden rounded-xl bg-slate-100">
+    <div className="relative w-full overflow-visible rounded-xl bg-slate-100">
       <svg
         viewBox={VIEWBOX}
-        className="block h-auto w-full"
+        className="block h-auto w-full overflow-visible"
         preserveAspectRatio="xMidYMid meet"
         role="img"
         aria-label="מפת ישיבה בריכת הסולטן"
@@ -157,6 +244,9 @@ export default function SultansPoolMap({ activeZone = null, onZoneClick }) {
         <defs>
           <filter id="sultans-zone-glow" x="-12%" y="-12%" width="124%" height="124%">
             <feDropShadow dx="0" dy="1" stdDeviation="1.2" floodColor="#c9a227" floodOpacity="0.4" />
+          </filter>
+          <filter id="sultans-pin-shadow" x="-40%" y="-50%" width="180%" height="200%">
+            <feDropShadow dx="0" dy="1.5" stdDeviation="1.4" floodColor="#0f172a" floodOpacity="0.22" />
           </filter>
         </defs>
 
@@ -218,6 +308,16 @@ export default function SultansPoolMap({ activeZone = null, onZoneClick }) {
                 }
               />
               <ZoneLabel zone={zone} isActive={isActive} />
+            </g>
+          );
+        })}
+
+        {CLICKABLE_ZONES.map((zone) => {
+          const pin = pinForZone(zone);
+          if (!pin) return null;
+          return (
+            <g key={`pin-${zone.id}`} transform={`translate(${zone.x} ${zone.y})`}>
+              <ZonePricePin x={zone.pinX} y={zone.pinY} label={pin.label} taken={pin.taken} />
             </g>
           );
         })}

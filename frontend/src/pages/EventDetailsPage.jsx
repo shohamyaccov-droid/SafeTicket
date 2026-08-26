@@ -1623,10 +1623,22 @@ const EventDetailsPage = () => {
 
                     if (isSultansPoolVenue) {
                       const hoveredZone = normalizeSultansPoolZoneId(activeSectionName);
+                      let activePinPrice = null;
+                      if (activeTicketId) {
+                        const activeGroup = ticketGroups.find(
+                          (g) => String(g.listing_group_id ?? g.id) === String(activeTicketId),
+                        );
+                        const p = parseFloat(getTicketPrice(activeGroup?.tickets?.[0]));
+                        if (Number.isFinite(p)) activePinPrice = p;
+                      }
                       return (
                         <SultansPoolMap
                           activeZone={hoveredZone || sultansPoolActiveZone}
                           onZoneClick={handleSultansPoolZoneClick}
+                          lowestPrices={lowestPricesPerSection}
+                          sectionMapStatus={sectionMapStatus}
+                          currencyIso={listingCurrency}
+                          pinPrice={activePinPrice}
                         />
                       );
                     }
