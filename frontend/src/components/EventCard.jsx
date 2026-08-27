@@ -47,7 +47,7 @@ export default function EventCard({
             <span className="home-carousel-card__badge-icon" aria-hidden>
               ⏱
             </span>
-            נמכר מהר
+            כרטיסים אחרונים
           </span>
         ) : null}
         {multiDates ? (

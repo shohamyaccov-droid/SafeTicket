@@ -1398,12 +1398,17 @@
 .home-carousel-card__badge--urgent {
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: 0.18rem;
+  max-width: calc(100% - 16px);
+  box-sizing: border-box;
+  white-space: nowrap;
   background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
   color: #fff;
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 800;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
+  line-height: 1.2;
+  padding: 0.28rem 0.45rem;
   animation: home-urgent-pulse 2s ease-in-out infinite;
 }
 
