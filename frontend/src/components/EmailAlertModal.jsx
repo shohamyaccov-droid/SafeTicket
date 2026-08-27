@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { alertAPI } from '../services/api';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import './EmailAlertModal.css';
 
 const EmailAlertModal = ({ event, onClose, onSuccess }) => {
+  useBodyScrollLock(true);
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

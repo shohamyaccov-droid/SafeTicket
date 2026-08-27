@@ -14,6 +14,7 @@ import {
   venueSectionNamesForTicket,
 } from '../utils/adminTicketSeating';
 import './AdminReviewModal.css';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 const EMPTY_TICKETS = [];
 
@@ -26,6 +27,7 @@ export default function AdminReviewModal({
   onSave,
   onApprove,
 }) {
+  useBodyScrollLock(true);
   const group = useMemo(() => listingGroupTickets(tickets, ticket), [tickets, ticket]);
   const groupIds = useMemo(() => group.map((row) => row.id).join(','), [group]);
   const [previewId, setPreviewId] = useState(ticket?.id);

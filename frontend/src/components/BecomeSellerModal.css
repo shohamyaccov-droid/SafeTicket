@@ -2,11 +2,13 @@
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.55);
-  z-index: 1000;
+  z-index: 13050;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .become-seller-modal {
@@ -16,7 +18,9 @@
   max-width: 520px;
   width: 100%;
   max-height: min(92vh, 720px);
+  max-height: min(92dvh, 720px);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 1.5rem;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
   position: relative;
@@ -167,4 +171,18 @@
 .become-seller-submit:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .become-seller-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .become-seller-modal {
+    max-width: 100%;
+    max-height: 100dvh;
+    border-radius: 14px 14px 0 0;
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
+  }
 }

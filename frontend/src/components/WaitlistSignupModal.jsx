@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { alertAPI } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import './WaitlistSignupModal.css';
 
 function validateEmail(em) {
@@ -39,6 +40,7 @@ export default function WaitlistSignupModal({ event, artist, onClose }) {
 
   const isArtistScope = Boolean(artist?.id) && !event?.id;
   const isEventScope = Boolean(event?.id);
+  useBodyScrollLock(Boolean(isArtistScope || isEventScope));
 
   if (!isArtistScope && !isEventScope) return null;
 

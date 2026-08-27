@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { authAPI, orderAPI, paymentAPI, ticketAPI, ensureCsrfToken, getEffectiveBearerAccess, syncAxiosDefaultAuthHeader, notifySessionExpired, refreshAccessToken } from '../services/api';
@@ -210,6 +211,7 @@ function coerceCheckoutQuantity(value, fallback = 1) {
 }
 
 const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 1, onClose, acceptedOffer = null, splitType: splitTypeOverride = null, onErrorToParent = null, autoStartPayme = false }) => {
+  useBodyScrollLock(true);
   const { refreshProfile } = useAuth();
   const { openLogin, openRegister } = useAuthModal();
   const [step, setStep] = useState('info'); // 'info', 'payment', 'success'

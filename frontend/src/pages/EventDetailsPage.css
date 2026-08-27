@@ -817,6 +817,7 @@ a.event-hero-artist:hover {
   display: flex;
   flex-direction: column;
   gap: 0;
+  min-height: 8rem;
 }
 
 /* Desktop Split Screen Layout - Unbreakable 50/50 Flexbox */
@@ -2639,6 +2640,8 @@ a.event-hero-artist:hover {
   -webkit-backdrop-filter: blur(10px) saturate(1.05);
   align-items: flex-end;
   padding: 0;
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 @media (min-width: 480px) {

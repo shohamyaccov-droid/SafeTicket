@@ -2,7 +2,7 @@
   position: fixed;
   top: 20px;
   right: 20px;
-  z-index: 10000;
+  z-index: 16000;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -87,5 +87,13 @@
     left: 10px;
     min-width: auto;
     max-width: none;
+    top: max(12px, env(safe-area-inset-top, 0px));
+  }
+
+  .toast-close {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
   }
 }

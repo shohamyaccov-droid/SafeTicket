@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Clock } from 'lucide-react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import './ShabbatModal.css';
 
 /**
@@ -50,6 +51,8 @@ export default function ShabbatModal({
     const id = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, [open, havdalahTime]);
+
+  useBodyScrollLock(Boolean(open));
 
   if (!open || typeof document === 'undefined') return null;
 

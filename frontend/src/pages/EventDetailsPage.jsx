@@ -77,6 +77,7 @@ import {
 import { buildSectionMapStatus } from '../utils/mapSectionStatus';
 import TakenBuyButton from '../components/TakenBuyButton';
 import EventMobileBuyBar from '../components/EventMobileBuyBar';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { createListFetchAbort } from '../utils/listFetch';
 import { defaultListingQuantity, listingAvailabilityLabel, listingQuantityOptions } from '../utils/listingQuantity';
 import './EventDetailsPage.css';
@@ -1205,6 +1206,8 @@ const EventDetailsPage = () => {
     else document.body.classList.remove(cls);
     return () => document.body.classList.remove(cls);
   }, [showMobileBuyBar]);
+
+  useBodyScrollLock(Boolean(showMakeOffer));
 
   if (loading) {
     return (

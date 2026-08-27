@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import {
   buyerChargeFromBase,
   formatOfferAmount,
@@ -40,6 +41,7 @@ const NegotiationModal = ({
   canCompletePurchase = true,
   onNeedProfileDetails = null,
 }) => {
+  useBodyScrollLock(true);
   const serviceFeePercent = useBuyerServiceFeePercent();
   const [counterAmount, setCounterAmount] = useState('');
   const bodyRef = useRef(null);

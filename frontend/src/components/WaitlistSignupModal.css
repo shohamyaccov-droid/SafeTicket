@@ -2,11 +2,13 @@
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.55);
-  z-index: 10050;
+  z-index: 13050;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .waitlist-modal-content {
@@ -14,21 +16,27 @@
   border-radius: 12px;
   max-width: 420px;
   width: 100%;
+  max-height: min(92dvh, 720px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 1.5rem 1.5rem 1.25rem;
   position: relative;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
 }
 
 .waitlist-modal-close {
-  position: absolute;
-  top: 0.5rem;
-  left: 0.75rem;
+  position: sticky;
+  top: 0;
+  float: left;
   border: none;
-  background: transparent;
+  background: #fff;
   font-size: 1.5rem;
   line-height: 1;
   cursor: pointer;
   color: #64748b;
+  min-width: 44px;
+  min-height: 44px;
+  z-index: 2;
 }
 
 .waitlist-modal-title {
@@ -141,4 +149,18 @@
 .waitlist-modal-qty-btn:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .waitlist-modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .waitlist-modal-content {
+    max-width: 100%;
+    max-height: 100dvh;
+    border-radius: 14px 14px 0 0;
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+  }
 }

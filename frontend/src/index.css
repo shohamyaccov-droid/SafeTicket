@@ -100,6 +100,8 @@ a:hover {
 
 html {
   max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {
@@ -113,11 +115,41 @@ body {
   direction: rtl;
   text-align: right;
   padding: 0;
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
+html.tt-scroll-lock,
+html.tt-scroll-lock body {
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 #root {
   max-width: 100%;
   min-width: 0;
+  overflow-x: clip;
+}
+
+/* Shared dialog layer: above sticky navbar (12000) so close/scroll always work on iOS */
+.modal-overlay,
+.login-quick-modal-overlay,
+.waitlist-modal-overlay,
+.become-seller-overlay,
+.negotiation-modal-overlay,
+.email-alert-modal-overlay,
+.home-date-modal-overlay,
+.sell-completion-overlay,
+.shabbat-modal-overlay {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+button,
+[role='button'],
+input[type='submit'],
+input[type='button'] {
+  touch-action: manipulation;
 }
 
 /* Mobile edge padding - prevent content from touching screen edges */

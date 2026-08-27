@@ -12,6 +12,7 @@
 .admin-review-modal {
   width: min(1180px, 100%);
   max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -49,6 +50,8 @@
   line-height: 1;
   color: #64748b;
   cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .admin-review-split {

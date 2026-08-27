@@ -19,6 +19,7 @@ import {
   performerNavigateTarget,
 } from '../utils/homeDiscover';
 import { formatEventLocation } from '../utils/eventLocalTime';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import './Home.css';
 
 /* eslint-disable react/prop-types */
@@ -296,6 +297,8 @@ const Home = () => {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [datePickGroup]);
+
+  useBodyScrollLock(Boolean(datePickGroup));
 
   if (loading) {
     return (

@@ -1199,7 +1199,8 @@
 }
 
 .home-carousel-section {
-  margin-bottom: 2.25rem;
+  margin: 0 0 1.65rem;
+  min-height: 12.5rem;
 }
 
 .home-carousel-head {
@@ -1563,18 +1564,23 @@
 .home-date-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1200;
+  z-index: 13050;
   background: rgba(15, 23, 42, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
   direction: rtl;
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .home-date-modal {
   width: 100%;
   max-width: 380px;
+  max-height: min(90dvh, 640px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: #fff;
   border-radius: 14px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
@@ -1629,6 +1635,7 @@
 .home-date-modal-close {
   margin-top: 0.75rem;
   width: 100%;
+  min-height: 44px;
   padding: 0.55rem;
   border-radius: 10px;
   border: none;

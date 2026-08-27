@@ -5,6 +5,7 @@ import { useAuthModal } from '../context/AuthModalContext';
 import { offerAPI } from '../services/api';
 import { isAcceptedOfferCheckoutExpired } from '../utils/offerTimer';
 import { prefetchSellPage } from '../utils/routePrefetch';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import './Navbar.css';
 
 /** Local part of email / short username for compact navbar greeting */
@@ -42,13 +43,12 @@ const Navbar = () => {
       if (e.key === 'Escape') closeDrawer();
     };
     document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
     };
   }, [isDrawerOpen, closeDrawer]);
+
+  useBodyScrollLock(isDrawerOpen);
 
   const submitNavSearch = (e) => {
     e.preventDefault();

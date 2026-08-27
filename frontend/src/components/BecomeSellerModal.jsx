@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { authAPI } from '../services/api';
 import { toastError } from '../utils/toast';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import './BecomeSellerModal.css';
 
 const initialBank = {
@@ -31,6 +32,7 @@ export default function BecomeSellerModal({
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  useBodyScrollLock(Boolean(open));
 
   if (!open) return null;
 

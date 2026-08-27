@@ -3,6 +3,7 @@ import { LoginForm } from './LoginModal';
 import RegisterForm from './RegisterForm';
 import '../pages/Auth.css';
 import './LoginQuickModal.css';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 export default function LoginQuickModal({
   onClose,
@@ -10,6 +11,7 @@ export default function LoginQuickModal({
   onSwitchToLogin,
   onSwitchToRegister,
 }) {
+  useBodyScrollLock(true);
   const isRegister = mode === 'register';
   const title = isRegister ? 'הרשמה' : 'התחברות';
   const titleId = isRegister ? 'register-quick-modal-title' : 'login-quick-modal-title';
