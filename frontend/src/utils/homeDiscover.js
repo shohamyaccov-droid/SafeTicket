@@ -4,6 +4,9 @@
 import { eventHref } from './eventSeo';
 import { eventTicketCount } from './artistEventSupply';
 
+/** Homepage last-minute row: upcoming events within this many days. */
+export const LAST_MINUTE_WINDOW_DAYS = 14;
+
 /** Homepage row order: last-minute buyers first, then recommended artists. */
 export const HOME_DISCOVER_ROW_ORDER = ['last-minute', 'recommended', 'music', 'standup', 'sports'];
 
@@ -114,12 +117,12 @@ export function groupEventsByPerformer(list) {
 }
 
 /**
- * Events starting within the next `days` days (inclusive), with inventory.
+ * Events starting within the next `days` days (inclusive of today, exclusive of past).
  * @param {object[]} list
  * @param {Date} todayStart
  * @param {number} days
  */
-export function filterLastMinuteEvents(list, todayStart, days = 4) {
+export function filterLastMinuteEvents(list, todayStart, days = LAST_MINUTE_WINDOW_DAYS) {
   const end = new Date(todayStart);
   end.setDate(end.getDate() + days);
   end.setHours(23, 59, 59, 999);

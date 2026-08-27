@@ -4208,6 +4208,17 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
         if search:
             queryset = queryset.filter(name__icontains=search)
 
+        if self.action == 'list':
+            last_minute_raw = str(qp.get('last_minute', '')).lower()
+            if last_minute_raw in ('1', 'true', 'yes', 'on'):
+                # Homepage "דקה 90": upcoming within 14 days, soonest first.
+                horizon = now + timedelta(days=14)
+                queryset = (
+                    queryset.filter(date__lte=horizon)
+                    .filter(_active_tickets_total__gt=0)
+                    .order_by('date', 'name')
+                )
+
         return event_queryset_defer_rollout_columns(queryset)
     
     def get_object(self):

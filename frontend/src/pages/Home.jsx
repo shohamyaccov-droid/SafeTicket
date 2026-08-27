@@ -15,7 +15,6 @@ import BuyerGuarantee from '../components/BuyerGuarantee';
 import { toastError } from '../utils/toast';
 import {
   groupEventsByPerformer,
-  filterLastMinuteEvents,
   sortPerformersByDemand,
   performerNavigateTarget,
 } from '../utils/homeDiscover';
@@ -43,6 +42,7 @@ const Home = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [events, setEvents] = useState([]);
+  const [lastMinuteEvents, setLastMinuteEvents] = useState([]);
   const [artists, setArtists] = useState([]);
   const [recommendedArtists, setRecommendedArtists] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,8 +74,9 @@ const Home = () => {
       setLoadError(null);
       setLoading(true);
       try {
-        const [eventsResponse, artistsResponse, recommendedArtistsResponse] = await Promise.all([
+        const [eventsResponse, lastMinuteResponse, artistsResponse, recommendedArtistsResponse] = await Promise.all([
           eventAPI.getEvents({ signal }),
+          eventAPI.getEvents({ signal, params: { last_minute: '1' } }),
           artistAPI.getArtists({ signal }),
           artistAPI.getArtists({ signal, params: { recommended: '1' } }),
         ]);
@@ -90,6 +91,16 @@ const Home = () => {
           }
         }
         setEvents(eventsData);
+
+        let lastMinuteData = [];
+        if (lastMinuteResponse.data) {
+          if (Array.isArray(lastMinuteResponse.data)) {
+            lastMinuteData = lastMinuteResponse.data;
+          } else if (lastMinuteResponse.data.results && Array.isArray(lastMinuteResponse.data.results)) {
+            lastMinuteData = lastMinuteResponse.data.results;
+          }
+        }
+        setLastMinuteEvents(lastMinuteData);
         const artistsPayload = artistsResponse?.data;
         const artistsData = Array.isArray(artistsPayload)
           ? artistsPayload
@@ -115,6 +126,7 @@ const Home = () => {
           msg.toLowerCase().includes('canceled');
         setLoadError(aborted ? 'timeout' : 'error');
         setEvents([]);
+        setLastMinuteEvents([]);
         setArtists([]);
         setRecommendedArtists([]);
         if (!aborted) {
@@ -216,10 +228,19 @@ const Home = () => {
     [inventoryEvents, mergePerformerGroupsWithArtists]
   );
 
-  const lastMinuteEvents = useMemo(
-    () => filterLastMinuteEvents(inventoryEvents, todayStart, 4),
-    [inventoryEvents, todayStart]
-  );
+  const lastMinuteDisplayEvents = useMemo(() => {
+    const list = Array.isArray(lastMinuteEvents) ? lastMinuteEvents : [];
+    if (!searchQuery.trim()) return list;
+    const q = searchQuery.toLowerCase().trim();
+    return list.filter((event) => {
+      const eventName = event.name?.toLowerCase() || '';
+      const artistName =
+        event.artist_detail?.name?.toLowerCase() || event.artist_name?.toLowerCase() || '';
+      const city = event.city?.toLowerCase() || '';
+      const venue = event.venue?.toLowerCase() || '';
+      return eventName.includes(q) || artistName.includes(q) || city.includes(q) || venue.includes(q);
+    });
+  }, [lastMinuteEvents, searchQuery]);
 
   const recommendedArtistIds = useMemo(
     () =>
@@ -554,7 +575,7 @@ const Home = () => {
               slug="last-minute"
               title="כרטיסים של הדקה ה-90"
               kind="lastMinute"
-              events={lastMinuteEvents}
+              events={lastMinuteDisplayEvents}
             />
             <CarouselSection
               slug="recommended"
