@@ -29,6 +29,13 @@ vi.mock('../utils/toast', () => ({
 
 vi.mock('../utils/analytics', () => ({
   Analytics: { ticketListed: vi.fn() },
+  isListingCreateHttpSuccess: (res) => {
+    const status = res?.status;
+    if (status == null) return Boolean(res?.data);
+    const n = Number(status);
+    return Number.isFinite(n) && n >= 200 && n < 300;
+  },
+  listingIdFromCreateResponse: (data) => data?.id ?? null,
 }));
 
 const SELL_DRAFT_STORAGE_KEY = 'safeticket_sell_listing_draft_v1';

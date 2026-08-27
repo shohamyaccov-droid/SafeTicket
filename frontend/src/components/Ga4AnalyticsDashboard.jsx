@@ -64,7 +64,7 @@ function FunnelRow({ step, nextDropoff }) {
  * - Seller /sell/new vs generate_lead: a large drop-off means the listing form
  *   is too long or upload/validation fails — shorten steps or surface errors
  *   earlier. High /sell/new with almost no leads also flags ads sending the
- *   wrong audience. generate_lead also fires on offer submit.
+ *   wrong audience. generate_lead fires only after a successful listing upload.
  * - Bounce + short duration: users are not finding a relevant show. Bounce +
  *   long duration on an event page can still be healthy (reading seating).
  */
@@ -182,10 +182,9 @@ export default function Ga4AnalyticsDashboard() {
         <article className="ga4-panel">
           <h3>משפך מוכרים — /sell/new</h3>
           <p className="ga4-panel-note">
-            {/* generate_lead fires on successful listing. Big drop-off = form length, PDF validation, or auth wall.
-                Offer submit also fires generate_lead, so conversion can look slightly high. */}
-            רק /sell/new (לא כל /sell). generate_lead נורה אחרי העלאה מוצלחת — וגם בהגשת הצעה, אז ההמרה
-            עלולה להיות מעט מנופחת. נטישה גדולה = טופס ארוך, ולידציית PDF, או חומת הרשמה.
+            {/* generate_lead fires only after a successful listing upload. */}
+            רק /sell/new (לא כל /sell). generate_lead נורה רק אחרי העלאה מוצלחת של מודעה.
+            נטישה גדולה = טופס ארוך, ולידציית PDF, או חומת הרשמה.
           </p>
           <ol className="ga4-funnel-list">
             {(seller.steps || []).map((step, i) => (

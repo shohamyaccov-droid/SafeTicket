@@ -17,6 +17,7 @@ import { formatBuyerFeePercent } from '../services/pricingSettings';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import { toastError } from '../utils/toast';
+import { Analytics } from '../utils/analytics';
 import { eventHref } from '../utils/eventSeo';
 import './TicketSelectionPage.css';
 
@@ -93,6 +94,12 @@ const TicketSelectionPage = () => {
         return;
       }
       if (quantity > 0 && quantity <= maxQty) {
+        Analytics.checkoutStart(ticket.id, {
+          value: getTicketPrice(ticket),
+          currency: resolveTicketCurrency(ticket) || 'ILS',
+          quantity,
+          source: 'continue_to_payment',
+        });
         setSelectedTicket(ticket);
         setShowCheckout(true);
       } else {

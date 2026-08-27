@@ -22,6 +22,7 @@ import Toast from '../components/Toast';
 import DashboardSkeleton from '../components/skeletons/DashboardSkeleton';
 import ProfileWalletPage from './ProfileWallet';
 import { toastError, toastSuccess } from '../utils/toast';
+import { Analytics } from '../utils/analytics';
 import { apiErrorMessageHe } from '../utils/apiErrors';
 import { downloadTicketFromAxiosBlob } from '../utils/ticketDownload';
 import {
@@ -623,6 +624,12 @@ const Dashboard = () => {
     };
     setCheckoutTicket(ticket);
     setCheckoutAcceptedOffer({ ...offer, quantity: offerQty });
+    Analytics.checkoutStart(ticketId, {
+      value: ticket.asking_price ?? ticket.original_price ?? offer.amount,
+      currency: resolveTicketCurrency(ticket) || 'ILS',
+      quantity: offerQty,
+      source: 'continue_to_payment',
+    });
     setShowCheckout(true);
   };
 

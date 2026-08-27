@@ -56,6 +56,7 @@ describe('Meta pixel conversion helpers', () => {
     _resetMetaPixelForTests();
 
     trackMetaLead({ contentName: 'ticket_listing', value: 20, eventID: 'test-lead-1' });
+    trackMetaLead({ contentName: 'should_not_fire' });
     trackMetaPurchase({ orderId: 42, value: 250, currency: 'ILS' });
     trackMetaInitiateCheckout({ ticketId: 7, value: 250 });
 
@@ -64,6 +65,9 @@ describe('Meta pixel conversion helpers', () => {
       'Lead',
       expect.objectContaining({ content_name: 'ticket_listing', value: 20 }),
       expect.objectContaining({ eventID: 'test-lead-1' }),
+    );
+    expect(fbq.mock.calls.some((call) => call[1] === 'Lead' && call[2]?.content_name === 'should_not_fire')).toBe(
+      false,
     );
     expect(fbq).toHaveBeenCalledWith(
       'track',

@@ -820,6 +820,12 @@ const EventDetailsPage = () => {
       quantity: qty,
       event_id: event?.id,
     });
+    Analytics.checkoutStart(first?.id, {
+      value: Number.isFinite(price) ? price : undefined,
+      currency: resolveTicketCurrency(first) || 'ILS',
+      quantity: qty,
+      source: 'buy_now',
+    });
     handleBuy(ticketGroup, qty);
   };
 

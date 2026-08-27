@@ -6,6 +6,7 @@ import './ListingCreatedSuccessView.css';
 /**
  * Confirmation after a successful /sell/new listing.
  * Mounts only on success so the Google Ads conversion cannot fire on form entry.
+ * Meta Lead / GA4 generate_lead are fired from Sell.jsx after HTTP 2xx — not here.
  * Payout details are optional — TradeTix never charges the seller to publish.
  */
 export default function ListingCreatedSuccessView({

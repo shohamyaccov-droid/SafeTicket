@@ -40,6 +40,8 @@ export function ensureMetaPixel() {
       if (!ensured) {
         // Re-declare init is safe; Meta ignores duplicate init for same ID.
         window.fbq('init', META_PIXEL_ID);
+        // Disable automatic "Lead" / "InitiateCheckout" inference from buttons and forms.
+        window.fbq('set', 'autoConfig', false, META_PIXEL_ID);
         ensured = true;
       }
       return true;
@@ -66,6 +68,7 @@ export function ensureMetaPixel() {
     /* eslint-enable prefer-rest-params, no-unused-expressions */
 
     window.fbq('init', META_PIXEL_ID);
+    window.fbq('set', 'autoConfig', false, META_PIXEL_ID);
     window.fbq('track', 'PageView');
     ensured = true;
     return true;
@@ -90,8 +93,9 @@ export function trackMetaPageView() {
 export function trackMetaLead(opts = {}) {
   try {
     if (!ensureMetaPixel()) return;
-    const eventID = opts.eventID || `lead_${Date.now()}`;
-    if (!oncePerSession(opts.eventID ? `lead_${opts.eventID}` : null)) return;
+    const eventID = opts.eventID ? String(opts.eventID) : '';
+    if (!eventID) return;
+    if (!oncePerSession(`lead_${eventID}`)) return;
     safeFbq(
       'track',
       'Lead',

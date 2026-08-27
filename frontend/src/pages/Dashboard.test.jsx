@@ -33,6 +33,10 @@ vi.mock('../utils/toast', () => ({
   toastSuccess: vi.fn(),
 }));
 
+vi.mock('../utils/analytics', () => ({
+  Analytics: { checkoutStart: vi.fn() },
+}));
+
 vi.mock('../utils/ticketDownload', () => ({
   downloadTicketFromAxiosBlob: vi.fn(),
 }));

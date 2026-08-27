@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ticketAPI } from '../services/api';
-import { currencySymbol, formatAmountForCurrency, resolveTicketCurrency } from '../utils/priceFormat';
+import { currencySymbol, formatAmountForCurrency, getTicketPrice, resolveTicketCurrency } from '../utils/priceFormat';
 import BuyerListingPrice from '../components/BuyerListingPrice';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
+import { Analytics } from '../utils/analytics';
 import { toastError } from '../utils/toast';
 import { formatEventLocalTimeLine } from '../utils/eventLocalTime';
 import './EventGroupPage.css';
@@ -95,7 +96,12 @@ const EventGroupPage = () => {
   }, [eventName, retryKey]);
 
   const handleBuy = (ticket) => {
-    // Navigate to ticket selection page instead of opening checkout directly
+    Analytics.checkoutStart(ticket?.id, {
+      value: ticket ? getTicketPrice(ticket) : undefined,
+      currency: resolveTicketCurrency(ticket) || 'ILS',
+      quantity: 1,
+      source: 'buy_now',
+    });
     navigate(`/ticket/${ticket.id}`);
   };
 

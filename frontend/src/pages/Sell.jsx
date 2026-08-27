@@ -6,7 +6,11 @@ import { createListFetchAbort } from '../utils/listFetch';
 import SellFormSkeleton from '../components/skeletons/SellFormSkeleton';
 import { toastError } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
-import { Analytics } from '../utils/analytics';
+import {
+  Analytics,
+  isListingCreateHttpSuccess,
+  listingIdFromCreateResponse,
+} from '../utils/analytics';
 import { iso4217FromCountry, currencySymbol, formatAmountForCurrency } from '../utils/priceFormat';
 import { CONCERT_BLOCK_COUNT, CONCERT_SECTION_NAMES } from '../utils/bloomfieldConcertGeometry';
 import {
@@ -318,6 +322,7 @@ const Sell = () => {
   const [eventDetail, setEventDetail] = useState(null);
   const [seatingDetailsOpen, setSeatingDetailsOpen] = useState(false);
   const publishAfterAuthRef = useRef(false);
+  const listingSubmitLockRef = useRef(false);
 
   useEffect(() => {
     if (!submitAttemptedRef.current) return;
@@ -991,6 +996,8 @@ const Sell = () => {
   };
 
   const executeTicketUpload = async (snapshot = null) => {
+    if (listingSubmitLockRef.current) return;
+    listingSubmitLockRef.current = true;
     const activeForm = snapshot?.formData ?? formData;
     const activeUploadMethod = snapshot?.uploadMethod ?? uploadMethod;
     const ilEvent = isIsraelEvent(activeForm.selectedEvent);
@@ -1044,6 +1051,7 @@ const Sell = () => {
     if (useSingleFile) {
       const pdf0 = activeForm.singleMultiPagePdf;
       if (!(pdf0 instanceof File) && !(pdf0 instanceof Blob)) {
+        listingSubmitLockRef.current = false;
         setFieldErrors({ upload_single: 'שגיאה פנימית: קובץ כרטיס חסר. נסו לבחור את הקובץ שוב.' });
         setLoading(false);
         return;
@@ -1074,16 +1082,24 @@ const Sell = () => {
       progressTimer = window.setInterval(() => {
         setUploadProgress((prev) => Math.min(90, prev + 4));
       }, 700);
-      await ticketAPI.createTicket(submitData);
-      try {
-        Analytics.ticketListed({
-          contentName: 'ticket_listing',
-          bonusValue: 20,
-          event_id: activeForm?.event_id,
-          quantity: qtyNum,
-        });
-      } catch {
-        /* analytics must not block listing success */
+      const created = await ticketAPI.createTicket(submitData);
+      if (!isListingCreateHttpSuccess(created)) {
+        throw new Error('יצירת רשימת הכרטיס נכשלה. אנא נסה שוב.');
+      }
+      const listingId = listingIdFromCreateResponse(created?.data);
+      if (listingId != null) {
+        try {
+          Analytics.ticketListed({
+            contentName: 'ticket_listing',
+            bonusValue: 20,
+            event_id: activeForm?.event_id,
+            quantity: qtyNum,
+            ticketId: listingId,
+            eventID: `listing_${listingId}`,
+          });
+        } catch {
+          /* analytics must not block listing success */
+        }
       }
       setUploadProgress(100);
       setUploadPhase('הכרטיסים נשמרו בהצלחה.');
@@ -1101,6 +1117,7 @@ const Sell = () => {
       toastError(errorMessage);
     } finally {
       if (progressTimer != null) window.clearInterval(progressTimer);
+      listingSubmitLockRef.current = false;
       setLoading(false);
       setUploadProgress(0);
       setUploadPhase('');
@@ -1109,6 +1126,7 @@ const Sell = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (listingSubmitLockRef.current || loading) return;
     submitAttemptedRef.current = true;
     setError('');
     setFieldErrors({});

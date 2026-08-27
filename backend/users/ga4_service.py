@@ -340,9 +340,7 @@ def fetch_ga4_behavior_dashboard(property_id: str | None = None, start_date='7da
       `begin_checkout` → `purchase`. Checkout is a modal on the event page, so
       we use GA4 events rather than a `/checkout` path (PayMe return URLs exist
       but are not the start of checkout).
-    - Seller: sessions on `/sell/new` → `generate_lead` (successful listing).
-      `generate_lead` also fires on offer submit, so seller conversion can be
-      slightly inflated.
+    - Seller: sessions on `/sell/new` → `generate_lead` (successful listing only).
 
     Direct landings on `/event` can make ticket-detail sessions exceed homepage.
 
@@ -487,7 +485,7 @@ def fetch_ga4_behavior_dashboard(property_id: str | None = None, start_date='7da
             'notes': [
                 'Path and event counts are independent, not a same-session sequential funnel.',
                 'Checkout is a modal on the event page; begin_checkout/purchase events are used instead of /checkout paths.',
-                'Seller step is /sell/new only (not the /sell prefix). generate_lead also fires on offer submit.',
+                'Seller step is /sell/new only (not the /sell prefix). generate_lead fires after a successful listing upload.',
                 'Direct landings on /event can make ticket-detail sessions exceed homepage sessions.',
             ],
         },

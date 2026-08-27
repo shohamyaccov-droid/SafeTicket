@@ -43,6 +43,62 @@ function oncePerSession(dedupeKey) {
   }
 }
 
+/** In-memory double-click lock (ticket id → last fire ms). */
+const beginCheckoutClickLock = new Map();
+const BEGIN_CHECKOUT_CLICK_MS = 2000;
+/** Collapse Buy Now + Continue-to-payment for the same listing into one ads event. */
+const BEGIN_CHECKOUT_TTL_MS = 10 * 60 * 1000;
+
+/**
+ * True when the listing-create HTTP response is success.
+ * Missing status (unit-test mocks) is treated as success only if `data` is present.
+ */
+export function isListingCreateHttpSuccess(response) {
+  const status = response?.status;
+  if (status == null) return Boolean(response?.data);
+  const n = Number(status);
+  return Number.isFinite(n) && n >= 200 && n < 300;
+}
+
+/** First created ticket id from POST /tickets/ (single object or `{ tickets: [] }`). */
+export function listingIdFromCreateResponse(data) {
+  if (!data) return null;
+  if (Array.isArray(data)) {
+    const hit = data.find((row) => row?.id != null);
+    return hit?.id ?? null;
+  }
+  if (Array.isArray(data.tickets)) {
+    const hit = data.tickets.find((row) => row?.id != null);
+    return hit?.id ?? null;
+  }
+  return data.id ?? null;
+}
+
+function shouldFireBeginCheckout(ticketId) {
+  const key = String(ticketId ?? '');
+  if (!key) return false;
+  const now = Date.now();
+  const lastClick = beginCheckoutClickLock.get(key) || 0;
+  if (now - lastClick < BEGIN_CHECKOUT_CLICK_MS) return false;
+  beginCheckoutClickLock.set(key, now);
+  try {
+    const storageKey = `_tt_an_begin_checkout_${key}`;
+    const prev = Number(sessionStorage.getItem(storageKey) || '');
+    if (Number.isFinite(prev) && prev > 0 && now - prev < BEGIN_CHECKOUT_TTL_MS) {
+      return false;
+    }
+    sessionStorage.setItem(storageKey, String(now));
+  } catch {
+    /* private mode: click lock still applies */
+  }
+  return true;
+}
+
+/** Test helper — clear conversion guards between specs. */
+export function _resetAnalyticsConversionGuardsForTests() {
+  beginCheckoutClickLock.clear();
+}
+
 /**
  * Track an analytics event (backend only).
  *
@@ -115,21 +171,29 @@ export const Analytics = {
     });
   },
 
+  /**
+   * Meta InitiateCheckout + GA4 begin_checkout.
+   * Call only from explicit קנה עכשיו / המשך לתשלום clicks — never from modal mount or PayMe redirect.
+   */
   checkoutStart: (ticketId, extra = {}) => {
+    if (ticketId == null || ticketId === '') return;
+    if (!shouldFireBeginCheckout(ticketId)) return;
     trackEvent('checkout_start', window.location.pathname, {
       ticket_id: ticketId,
       ...extra,
     });
+    const qty = extra.quantity != null ? Number(extra.quantity) : 1;
+    const safeQty = Number.isFinite(qty) && qty > 0 ? qty : 1;
     trackMetaInitiateCheckout({
       ticketId,
       value: extra.value,
       currency: extra.currency || 'ILS',
-      numItems: extra.quantity || 1,
+      numItems: safeQty,
     });
     trackGa4Event('begin_checkout', {
       currency: extra.currency || 'ILS',
       value: extra.value,
-      items: ticketId != null ? [{ item_id: String(ticketId), quantity: extra.quantity || 1 }] : undefined,
+      items: [{ item_id: String(ticketId), quantity: safeQty }],
     });
   },
 
@@ -158,16 +222,21 @@ export const Analytics = {
   },
 
   /**
-   * Seller successfully listed ticket(s) — primary FB Lead + GA4 generate_lead.
+   * Seller successfully listed ticket(s) — the only Meta Lead / GA4 generate_lead source.
+   * Requires a listing id (created ticket) so mount/retry cannot emit a nameless Lead.
    */
   ticketListed: (extra = {}) => {
+    const listingId = extra.ticketId ?? extra.listingId;
+    const eventID = extra.eventID || (listingId != null ? `listing_${listingId}` : '');
+    if (!eventID) return;
+    if (!oncePerSession(`lead_${eventID}`)) return;
     trackEvent('ticket_listed', window.location.pathname, extra || {});
     const bonus = extra.bonusValue != null ? Number(extra.bonusValue) : 20;
     trackMetaLead({
       contentName: extra.contentName || 'ticket_listing',
       value: Number.isFinite(bonus) ? bonus : 20,
       currency: 'ILS',
-      eventID: extra.eventID,
+      eventID,
     });
     trackGa4Event('generate_lead', {
       currency: 'ILS',
@@ -176,12 +245,8 @@ export const Analytics = {
     });
   },
 
+  /** Offer bid — backend funnel only. Must not emit Meta Lead or GA4 generate_lead. */
   offerSubmitted: (ticketId) => {
     trackEvent('offer_submitted', window.location.pathname, { ticket_id: ticketId });
-    trackGa4Event('generate_lead', {
-      currency: 'ILS',
-      lead_type: 'offer_submitted',
-      item_id: ticketId != null ? String(ticketId) : undefined,
-    });
   },
 };

@@ -597,6 +597,16 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     }
 
     setError('');
+    setLegalError('');
+
+    const checkoutStartValue = (negotiatedBundleBreakdown || listBreakdown)?.totalAmount;
+    Analytics.checkoutStart(ticket?.id, {
+      value: checkoutStartValue,
+      currency: resolveTicketCurrency(ticket) || 'ILS',
+      quantity,
+      source: 'continue_to_payment',
+    });
+
     try {
       await executeCheckout(Boolean(isLocalDev && !usePayme));
     } finally {
@@ -938,11 +948,6 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
       if (usePayme) {
         setPaymentPhase('redirecting');
-        Analytics.checkoutStart(ticket?.id, {
-          value: paidSnapshot?.totalAmount,
-          currency: 'ILS',
-          quantity: orderQuantity,
-        });
         await ensureCsrfToken();
         const origin = window.location.origin.replace(/\/+$/, '');
         const successUrl = `${origin}/checkout/payme/success?order_id=${encodeURIComponent(String(pendingId))}`;
@@ -1180,12 +1185,26 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
     e.stopPropagation();
+    const checkoutStartValue = (negotiatedBundleBreakdown || listBreakdown)?.totalAmount;
+    Analytics.checkoutStart(ticket?.id, {
+      value: checkoutStartValue,
+      currency: resolveTicketCurrency(ticket) || 'ILS',
+      quantity,
+      source: 'continue_to_payment',
+    });
     await executeCheckout(false);
   };
 
   const handleMockPayment = async (e) => {
     e.preventDefault();
     e.stopPropagation();
+    const checkoutStartValue = (negotiatedBundleBreakdown || listBreakdown)?.totalAmount;
+    Analytics.checkoutStart(ticket?.id, {
+      value: checkoutStartValue,
+      currency: resolveTicketCurrency(ticket) || 'ILS',
+      quantity,
+      source: 'continue_to_payment',
+    });
     await executeCheckout(true);
   };
 
