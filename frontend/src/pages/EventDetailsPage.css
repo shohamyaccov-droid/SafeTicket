@@ -102,13 +102,20 @@
   font-size: 1rem;
   cursor: pointer;
   margin-bottom: var(--spacing-md);
-  padding: 0.5rem 0;
+  padding: 0.5rem 0.35rem;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
   text-decoration: none;
-  display: inline-block;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .back-button:hover {
   text-decoration: underline;
+}
+
+.back-button:active {
+  opacity: 0.75;
 }
 
 /* Side-by-side hero: image on the left (LTR flex), Hebrew copy stays RTL in the text column */
@@ -362,6 +369,11 @@ a.event-hero-artist:hover {
 
 .mobile-filter-toggle:hover {
   background: var(--primary-blue-hover);
+}
+
+.mobile-filter-toggle:active {
+  transform: scale(0.985);
+  opacity: 0.92;
 }
 
 .mobile-filter-toggle svg:first-child {

@@ -2,10 +2,13 @@
   position: fixed;
   bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
   left: calc(1.25rem + env(safe-area-inset-left, 0px));
-  z-index: 1100;
+  z-index: 880;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
+  min-width: 48px;
+  min-height: 48px;
   padding: 0.65rem 1rem 0.65rem 0.75rem;
   background: #25d366;
   color: #fff;
@@ -14,28 +17,43 @@
   text-decoration: none;
   font-weight: 600;
   font-size: 0.95rem;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform 0.22s ease, box-shadow 0.2s ease, opacity 0.22s ease;
 }
 
 .floating-whatsapp:hover {
   background: #20ba5a;
   color: #fff;
+  text-decoration: none;
   transform: translateY(-2px);
   box-shadow: 0 6px 24px rgba(37, 211, 102, 0.55);
+}
+
+.floating-whatsapp:active {
+  transform: scale(0.94);
+  opacity: 0.88;
+}
+
+.floating-whatsapp--away {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(1.15rem) scale(0.92);
 }
 
 .floating-whatsapp-label {
   white-space: nowrap;
 }
 
-@media (max-width: 768px) {
-  /* Stack above mobile sell FAB (56px + 0.75rem gap) */
-  .floating-whatsapp {
-    bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
-  }
+/* Dialogs / drawer lock: never paint over checkout, login, or the buy bar */
+html.tt-scroll-lock .floating-whatsapp {
+  visibility: hidden;
+  pointer-events: none;
+}
 
+@media (max-width: 768px) {
   .App > main {
-    padding-bottom: calc(10rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -44,10 +62,11 @@
     display: none;
   }
   .floating-whatsapp {
-    width: 56px;
-    height: 56px;
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
     padding: 0;
     border-radius: 50%;
-    justify-content: center;
   }
 }

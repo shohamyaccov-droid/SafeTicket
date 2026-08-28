@@ -150,6 +150,29 @@ button,
 input[type='submit'],
 input[type='button'] {
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Native-feeling press feedback on coarse pointers (iPhone). */
+@media (hover: none) {
+  button:active:not(:disabled),
+  [role='button']:active,
+  input[type='submit']:active:not(:disabled),
+  input[type='button']:active:not(:disabled) {
+    opacity: 0.82;
+  }
+}
+
+@media (max-width: 768px) {
+  h2 {
+    font-size: 1.2rem;
+    line-height: 1.3;
+  }
+
+  h3 {
+    font-size: 1.05rem;
+    line-height: 1.35;
+  }
 }
 
 /* Mobile edge padding - prevent content from touching screen edges */

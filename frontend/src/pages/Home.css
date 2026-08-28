@@ -124,8 +124,10 @@
   }
 
   .hero-title {
-    font-size: 1.45rem;
-    margin-bottom: 0.65rem;
+    font-size: 1.32rem;
+    margin-bottom: 0.55rem;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
   }
 
   .hero-blessing {
@@ -1156,17 +1158,75 @@
 
 @media (max-width: 768px) {
   .home-carousel-arrow {
-    width: 44px;
-    height: 44px;
-    opacity: 0.55;
+    display: none;
   }
 
-  .home-carousel-arrow--prev {
-    inset-inline-start: 0.05rem;
+  .home-carousel-wrap::before,
+  .home-carousel-wrap::after {
+    display: none;
   }
 
-  .home-carousel-arrow--next {
-    inset-inline-end: 0.05rem;
+  .home-carousel-scroll,
+  .viagogo-carousel-track {
+    padding: 0.2rem 1rem 0.9rem;
+    gap: 0.7rem;
+    overscroll-behavior-x: contain;
+  }
+
+  .home-carousel-head {
+    padding: 0 1rem;
+    margin-bottom: 0.55rem;
+  }
+
+  .home-carousel-title {
+    font-size: 1.12rem;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+  }
+
+  .home-carousel-section:first-of-type .home-carousel-title {
+    font-size: 1.14rem;
+    font-weight: 750;
+  }
+
+  .home-carousel-section {
+    margin: 0 0 1.35rem;
+  }
+
+  .home-carousel-card__tickets,
+  .home-performer-card__cta {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    margin-top: 0.4rem;
+    padding: 0.2rem 0;
+    font-size: 0.82rem;
+    font-weight: 700;
+  }
+
+  .home-carousel-card:hover,
+  .home-performer-card:hover:not(.home-performer-card--waitlist) {
+    transform: none;
+  }
+
+  .home-carousel-card:active,
+  .home-performer-card:active:not(.home-performer-card--waitlist) {
+    transform: scale(0.98);
+  }
+
+  .home-performer-card__notify-btn,
+  .home-carousel-card__notify-btn {
+    min-height: 44px;
+  }
+
+  .home-date-modal-list button {
+    min-height: 44px;
+  }
+
+  .home-viagogo-rows,
+  .viagogo-home-discover {
+    padding-bottom: 1.25rem;
   }
 }
 
@@ -1643,4 +1703,14 @@
   font-weight: 700;
   cursor: pointer;
   font-family: inherit;
+}
+
+@media (max-width: 768px) {
+  .home-carousel-title,
+  .home-carousel-section:first-of-type .home-carousel-title {
+    font-size: 1.12rem;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+  }
 }

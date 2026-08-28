@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import './FloatingWhatsApp.css';
 
 /** Dedicated TradeTix WhatsApp Business support link (pre-filled Hebrew greeting). */
@@ -6,14 +7,51 @@ const WHATSAPP_SUPPORT_HREF =
 
 /**
  * Global floating WhatsApp support (RTL-friendly: fixed corner).
+ * Hides while the user scrolls down so it never covers purchase CTAs; returns on scroll-up or idle.
  */
 const FloatingWhatsApp = () => {
+  const [away, setAway] = useState(false);
+
+  useEffect(() => {
+    let lastY = window.scrollY || 0;
+    let ticking = false;
+    let idleTimer = 0;
+
+    const reveal = () => setAway(false);
+
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        const y = window.scrollY || 0;
+        const dy = y - lastY;
+        if (y < 32) {
+          setAway(false);
+        } else if (dy > 10) {
+          setAway(true);
+        } else if (dy < -10) {
+          setAway(false);
+        }
+        lastY = y;
+        ticking = false;
+        window.clearTimeout(idleTimer);
+        idleTimer = window.setTimeout(reveal, 1400);
+      });
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.clearTimeout(idleTimer);
+    };
+  }, []);
+
   return (
     <a
       href={WHATSAPP_SUPPORT_HREF}
       target="_blank"
       rel="noopener noreferrer"
-      className="floating-whatsapp"
+      className={`floating-whatsapp${away ? ' floating-whatsapp--away' : ''}`}
       aria-label="שירות לקוחות ב-WhatsApp"
     >
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>

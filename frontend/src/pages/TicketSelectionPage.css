@@ -483,6 +483,11 @@
   background: var(--primary-blue-hover);
 }
 
+.back-button:active {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
+
 /* Responsive Design */
 @media (max-width: 968px) {
   .ticket-selection-container {

@@ -66,6 +66,11 @@
   text-decoration: none;
 }
 
+.nav-sell-cta-inline:active {
+  transform: scale(0.97);
+  opacity: 0.88;
+}
+
 .nav-sell-cta-icon {
   display: inline-flex;
   align-items: center;
@@ -132,12 +137,19 @@
   color: var(--primary-blue);
   text-decoration: none;
   padding: 0.35rem 0.6rem;
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 8px;
   border: 1px solid var(--border-color);
   background: var(--bg-primary);
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease, opacity 0.12s ease;
   cursor: pointer;
   font-family: inherit;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .nav-login-inline:hover {
@@ -145,6 +157,11 @@
   background: rgba(0, 69, 175, 0.06);
   color: var(--primary-blue);
   text-decoration: none;
+}
+
+.nav-login-inline:active {
+  transform: scale(0.97);
+  opacity: 0.88;
 }
 
 /* Hamburger — all breakpoints */
@@ -170,6 +187,11 @@
 .nav-drawer-toggle:hover {
   background: rgba(0, 69, 175, 0.06);
   border-color: var(--primary-blue);
+}
+
+.nav-drawer-toggle:active {
+  transform: scale(0.96);
+  opacity: 0.88;
 }
 
 .nav-drawer-toggle:focus-visible {
@@ -547,6 +569,11 @@ button.nav-drawer-link {
   box-shadow: 0 6px 16px rgba(0, 69, 175, 0.5);
 }
 
+.mobile-sell-fab:active {
+  transform: scale(0.94);
+  opacity: 0.9;
+}
+
 .mobile-sell-fab svg {
   width: 24px;
   height: 24px;
@@ -554,7 +581,7 @@ button.nav-drawer-link {
 
 @media (max-width: 768px) {
   .navbar {
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: 0.45rem 0.7rem;
   }
 
   .nav-container {
@@ -562,19 +589,20 @@ button.nav-drawer-link {
   }
 
   .nav-container.nav-container--bar {
-    gap: 0.35rem;
+    gap: 0.3rem;
   }
 
   .nav-right-cluster {
-    gap: 0.3rem;
+    gap: 0.35rem;
     justify-content: flex-start;
   }
 
   .nav-sell-cta-inline {
     min-height: 44px;
-    padding: 0.4rem 0.55rem;
-    font-size: 0.76rem;
-    border-radius: 9px;
+    min-width: 44px;
+    padding: 0 0.7rem;
+    font-size: 0.78rem;
+    border-radius: 11px;
   }
 
   .nav-sell-cta-label-full {
@@ -586,8 +614,8 @@ button.nav-drawer-link {
   }
 
   .nav-center-cluster {
-    max-width: min(58vw, 230px);
-    padding-inline: 2px;
+    max-width: min(46vw, 168px);
+    padding-inline: 0;
   }
 
   .nav-center-cluster .nav-logo {
@@ -597,7 +625,7 @@ button.nav-drawer-link {
     text-overflow: ellipsis;
     white-space: nowrap;
     text-align: center;
-    font-size: clamp(1.1rem, 4.1vw, 1.3rem);
+    font-size: clamp(1.05rem, 3.8vw, 1.22rem);
   }
 
   .nav-left-cluster {
@@ -605,40 +633,59 @@ button.nav-drawer-link {
     justify-content: flex-end;
   }
 
-  /* Long campus emails must not cover the centered logo */
+  /* Greeting lives in the drawer — showing it in the bar collides with the logo. */
   .nav-user-inline {
-    max-width: 100px;
-    font-size: 0.72rem;
+    display: none;
   }
 
+  .nav-login-inline {
+    font-size: 0.8rem;
+    padding: 0 0.7rem;
+  }
+
+  /* Navbar already has + מכירה; a second + FAB covered purchase links. */
   .mobile-sell-fab {
-    display: flex;
+    display: none !important;
   }
 }
 
 @media (max-width: 380px) {
-  .nav-sell-cta-inline {
-    padding: 0.34rem 0.45rem;
-    font-size: 0.72rem;
+  .navbar {
+    padding: 0.4rem 0.5rem;
   }
 
-  .nav-sell-cta-icon {
-    width: 14px;
-    height: 14px;
-    font-size: 0.68rem;
+  .nav-right-cluster {
+    gap: 0.28rem;
+  }
+
+  .nav-sell-cta-inline {
+    padding: 0;
+    width: 44px;
+    justify-content: center;
   }
 
   .nav-sell-cta-label-compact {
-    letter-spacing: -0.01em;
+    display: none;
+  }
+
+  .nav-sell-cta-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 0.85rem;
   }
 
   .nav-drawer-toggle {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
   }
 
-  .nav-user-inline {
-    max-width: 100px;
+  .nav-login-inline {
+    font-size: 0.75rem;
+    padding: 0 0.55rem;
+  }
+
+  .nav-center-cluster {
+    max-width: min(42vw, 140px);
   }
 }
 

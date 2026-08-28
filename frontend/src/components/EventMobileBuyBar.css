@@ -60,16 +60,20 @@
     cursor: not-allowed;
   }
 
-  /* Push footer + FABs above the bar so links stay tappable. */
+  .event-mobile-buy-bar__cta:active:not(:disabled) {
+    transform: scale(0.97);
+    opacity: 0.9;
+  }
+
+  /* Push footer + WhatsApp just above the bar. Do not stack a second FAB
+     mid-viewport — that covered "סינון ומיון" and purchase rows. */
   body.has-event-mobile-buy-bar .footer {
     padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
   }
 
-  body.has-event-mobile-buy-bar .mobile-sell-fab {
-    bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
-  }
-
+  /* Hide support FAB on the event buy surface so it cannot cover
+     סינון ומיון, ticket rows, or קנה עכשיו. Navbar still has + מכירה. */
   body.has-event-mobile-buy-bar .floating-whatsapp {
-    bottom: calc(9.75rem + env(safe-area-inset-bottom, 0px));
+    display: none;
   }
 }

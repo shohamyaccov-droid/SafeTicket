@@ -322,6 +322,12 @@
   background-color: #003894 !important;
 }
 
+.user-checkout .checkout-button:active:not(:disabled),
+.guest-checkout form .checkout-button:active:not(:disabled) {
+  transform: scale(0.985);
+  opacity: 0.92;
+}
+
 .user-checkout .checkout-button:disabled,
 .guest-checkout form .checkout-button:disabled {
   opacity: 0.6 !important;
@@ -386,6 +392,11 @@
 
 .checkout-button:hover:not(:disabled) {
   background-color: var(--primary-blue-hover);
+}
+
+.checkout-button:active:not(:disabled) {
+  transform: scale(0.985);
+  opacity: 0.92;
 }
 
 .checkout-button:disabled {
@@ -1605,6 +1616,17 @@
   margin-bottom: 0.5rem;
 }
 
+.checkout-legal-acceptance__checkbox {
+  margin-top: 0.05rem;
+  width: 1.35rem;
+  height: 1.35rem;
+  min-width: 22px;
+  min-height: 22px;
+  flex-shrink: 0;
+  accent-color: var(--primary-blue, #0045af);
+  cursor: pointer;
+}
+
 .checkout-legal-acceptance__label {
   display: flex;
   align-items: flex-start;
@@ -1614,15 +1636,7 @@
   font-size: 0.95rem;
   line-height: 1.45;
   color: var(--text-primary, #0f172a);
-}
-
-.checkout-legal-acceptance__checkbox {
-  margin-top: 0.2rem;
-  width: 1.15rem;
-  height: 1.15rem;
-  flex-shrink: 0;
-  accent-color: var(--primary-blue, #0045af);
-  cursor: pointer;
+  min-height: 44px;
 }
 
 .checkout-legal-acceptance__text a {
@@ -1672,9 +1686,83 @@
   text-decoration: underline;
 }
 
+.checkout-coupon-box {
+  margin: 0.85rem 0 0.35rem;
+  text-align: right;
+}
+
+.checkout-coupon-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.88rem;
+  font-weight: 650;
+  color: #334155;
+}
+
+.checkout-coupon-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.45rem;
+}
+
+.checkout-coupon-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  font-family: inherit;
+}
+
+.checkout-coupon-btn {
+  flex-shrink: 0;
+  min-height: 44px;
+  min-width: 4.5rem;
+  padding: 0 0.9rem;
+  border: none;
+  border-radius: 10px;
+  background: #e2e8f0;
+  color: #0f172a;
+  font-weight: 700;
+  font-size: 0.88rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.checkout-coupon-btn:hover:not(:disabled) {
+  background: #cbd5e1;
+}
+
+.checkout-coupon-btn:active:not(:disabled) {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
+
+.checkout-coupon-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.checkout-coupon-error {
+  margin: 0.4rem 0 0;
+  color: #b91c1c;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.checkout-coupon-ok {
+  margin: 0.4rem 0 0;
+  color: #166534;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 @media (max-width: 480px) {
   .checkout-hold-timer-line {
     font-size: 0.72rem;
+    white-space: normal;
   }
 }
 

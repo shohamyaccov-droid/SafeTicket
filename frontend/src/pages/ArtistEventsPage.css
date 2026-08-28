@@ -31,14 +31,20 @@
   cursor: pointer;
   margin-bottom: 0.75rem;
   padding: 0.35rem 0.5rem;
-  min-height: 40px;
+  min-height: 44px;
+  min-width: 44px;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .back-button:hover {
   text-decoration: underline;
+}
+
+.back-button:active {
+  opacity: 0.75;
 }
 
 .loading-state,
@@ -72,6 +78,7 @@
 
 .artist-notify-cta {
   padding: 0.55rem 1rem;
+  min-height: 44px;
   border: none;
   border-radius: 8px;
   background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
@@ -84,6 +91,11 @@
 
 .artist-notify-cta:hover {
   filter: brightness(1.05);
+}
+
+.artist-notify-cta:active {
+  transform: scale(0.97);
+  opacity: 0.9;
 }
 
 .compact-artist-image {
