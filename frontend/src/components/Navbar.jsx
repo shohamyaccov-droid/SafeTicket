@@ -158,6 +158,9 @@ const Navbar = () => {
       <Link to="/how-it-works" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
         איך זה עובד
       </Link>
+      <Link to="/how-to-sell" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
+        איך למכור כרטיס להופעה
+      </Link>
       <Link to="/faq" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
         שאלות ותשובות
       </Link>

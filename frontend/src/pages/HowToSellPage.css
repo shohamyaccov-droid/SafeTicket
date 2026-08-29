@@ -1,0 +1,160 @@
+.how-to-sell {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.15rem calc(7.25rem + env(safe-area-inset-bottom, 0px));
+  direction: rtl;
+  color: var(--text-primary, #000);
+  background: var(--bg-primary, #f8f9fa);
+}
+
+.how-to-sell__article {
+  background: var(--bg-card, #fff);
+  padding: 1.5rem 1.25rem 2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.05);
+  line-height: 1.65;
+}
+
+.how-to-sell h1 {
+  margin: 0 0 1rem;
+  color: #111827;
+  font-size: clamp(1.65rem, 6.4vw, 2.15rem);
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.how-to-sell h2 {
+  margin: 1.75rem 0 0.75rem;
+  padding-bottom: 0.45rem;
+  color: var(--primary-blue, #0045af);
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.4;
+  border-bottom: 1px solid var(--border-light, #eee);
+}
+
+.how-to-sell p,
+.how-to-sell li {
+  color: #374151;
+  font-size: 1.05rem;
+}
+
+.how-to-sell__intro {
+  margin-bottom: 0.25rem;
+}
+
+.how-to-sell ol {
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: sell-step;
+}
+
+.how-to-sell ol li {
+  counter-increment: sell-step;
+  display: grid;
+  grid-template-columns: 2.25rem 1fr;
+  column-gap: 0.85rem;
+  margin: 0 0 1rem;
+  padding: 0.95rem 1rem;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.how-to-sell ol li::before {
+  content: counter(sell-step);
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: start;
+  border-radius: 999px;
+  background: var(--primary-blue, #0045af);
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+
+.how-to-sell ol li strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #111827;
+  font-size: 1.08rem;
+}
+
+.how-to-sell__inline-cta {
+  margin: 2rem 0 0;
+  text-align: center;
+}
+
+.how-to-sell__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  width: 100%;
+  padding: 0.85rem 1.25rem;
+  border-radius: 12px;
+  background: var(--primary-blue, #0045af);
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 800;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.how-to-sell__button:hover {
+  background: var(--primary-blue-hover, #003894);
+  color: #fff;
+  text-decoration: none;
+}
+
+.how-to-sell__button:active {
+  transform: scale(0.98);
+}
+
+.how-to-sell__sticky {
+  position: fixed;
+  right: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 900;
+  padding: 0.7rem 1rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.how-to-sell__button--sticky {
+  width: 100%;
+}
+
+body.has-how-to-sell-cta .footer {
+  padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+body.has-how-to-sell-cta .floating-whatsapp,
+body.has-how-to-sell-cta .mobile-sell-fab {
+  display: none;
+}
+
+@media (min-width: 769px) {
+  .how-to-sell {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  .how-to-sell__article {
+    padding: 2.25rem 2.5rem 2.5rem;
+  }
+
+  .how-to-sell__button {
+    width: auto;
+    min-width: 16rem;
+  }
+}

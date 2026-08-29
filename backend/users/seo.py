@@ -634,6 +634,47 @@ def _how_it_works_crawler_html(page: dict[str, Any]) -> str:
     return ''.join(parts)
 
 
+def _how_to_sell_faq_json_ld(page: dict[str, Any]) -> dict[str, Any]:
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        'mainEntity': [
+            {
+                '@type': 'Question',
+                'name': item.get('question') or '',
+                'acceptedAnswer': {'@type': 'Answer', 'text': item.get('answer') or ''},
+            }
+            for item in page.get('faqs') or []
+        ],
+    }
+
+
+def _how_to_sell_crawler_html(page: dict[str, Any]) -> str:
+    steps = ''.join(
+        f'<li><strong>{_xml_attr(item.get("name") or "")}</strong> {_xml_attr(item.get("text") or "")}</li>'
+        for item in page.get('steps') or []
+    )
+    faqs = ''.join(
+        '<section>'
+        f'<h2>{_xml_attr(item.get("question") or "")}</h2>'
+        f'<p>{_xml_attr(item.get("answer") or "")}</p>'
+        '</section>'
+        for item in page.get('faqs') or []
+    )
+    return (
+        '<article class="seo-crawler-snapshot">'
+        f'<h1>{_xml_attr(page.get("h1") or "")}</h1>'
+        f'<p>{_xml_attr(page.get("intro") or "")}</p>'
+        '<section>'
+        f'<h2>{_xml_attr(page.get("steps_h2") or "")}</h2>'
+        f'<p>{_xml_attr(page.get("steps_lead") or "")}</p>'
+        f'<ol>{steps}</ol>'
+        '</section>'
+        f'{faqs}'
+        '</article>'
+    )
+
+
 def _faq_crawler_html(page: dict[str, Any]) -> str:
     parts = [
         '<article class="seo-crawler-snapshot">',
@@ -704,6 +745,16 @@ def get_static_page_seo(path: str) -> dict[str, Any] | None:
             'og_image': og_image,
             'json_ld': _how_it_works_json_ld(page),
             'crawler_html': _how_it_works_crawler_html(page),
+        }
+    if route == '/how-to-sell':
+        page = _load_content_json('how-to-sell.json')
+        return {
+            'seo_title': page.get('title') or page.get('h1') or DEFAULT_SITE_TITLE,
+            'seo_description': page.get('description') or DEFAULT_SITE_DESCRIPTION,
+            'canonical_url': f'{origin}/how-to-sell',
+            'og_image': og_image,
+            'json_ld': _how_to_sell_faq_json_ld(page),
+            'crawler_html': _how_to_sell_crawler_html(page),
         }
     if route == '/faq':
         page = _load_content_json('faq-crawler.json')
@@ -827,6 +878,7 @@ def _xml_attr(value: str) -> str:
 SITEMAP_STATIC_PATHS = (
     '/',
     '/how-it-works',
+    '/how-to-sell',
     '/faq',
     '/about',
     '/contact',

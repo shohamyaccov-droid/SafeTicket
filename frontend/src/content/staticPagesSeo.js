@@ -4,6 +4,7 @@ import { buildHowItWorksCrawlerHtml, buildHowToJsonLd } from './howItWorksRender
 
 const require = createRequire(import.meta.url);
 const howItWorks = require('./how-it-works.json');
+const howToSell = require('./how-to-sell.json');
 const faqCrawler = require('./faq-crawler.json');
 
 function escapeHtml(value) {
@@ -26,6 +27,40 @@ function buildFaqCrawlerHtml(page = faqCrawler) {
     `<h1>${escapeHtml(page.h1)}</h1>` +
     `<p>${escapeHtml(page.intro)}</p>` +
     items +
+    `</article>`
+  );
+}
+
+function buildHowToSellFaqJsonLd(page = howToSell) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: (page.faqs || []).map((item) => ({
+      '@type': 'Question',
+      name: item.question,
+      acceptedAnswer: { '@type': 'Answer', text: item.answer },
+    })),
+  };
+}
+
+function buildHowToSellCrawlerHtml(page = howToSell) {
+  const steps = (page.steps || [])
+    .map((step) => `<li><strong>${escapeHtml(step.name)}</strong> ${escapeHtml(step.text)}</li>`)
+    .join('');
+  const faqs = (page.faqs || [])
+    .map(
+      (item) =>
+        `<section><h2>${escapeHtml(item.question)}</h2><p>${escapeHtml(item.answer)}</p></section>`,
+    )
+    .join('');
+  return (
+    `<article class="seo-crawler-snapshot">` +
+    `<h1>${escapeHtml(page.h1)}</h1>` +
+    `<p>${escapeHtml(page.intro)}</p>` +
+    `<section><h2>${escapeHtml(page.steps_h2)}</h2>` +
+    `<p>${escapeHtml(page.steps_lead)}</p>` +
+    `<ol>${steps}</ol></section>` +
+    faqs +
     `</article>`
   );
 }
@@ -63,6 +98,16 @@ export function getStaticPageSeo(pathname, origin) {
       og_image: `${base}/og-share.png`,
       json_ld: buildHowToJsonLd(howItWorks),
       crawler_html: buildHowItWorksCrawlerHtml(howItWorks),
+    };
+  }
+  if (path === '/how-to-sell') {
+    return {
+      seo_title: howToSell.title,
+      seo_description: howToSell.description,
+      canonical_url: `${base}/how-to-sell`,
+      og_image: `${base}/og-share.png`,
+      json_ld: buildHowToSellFaqJsonLd(howToSell),
+      crawler_html: buildHowToSellCrawlerHtml(howToSell),
     };
   }
   if (path === '/faq') {

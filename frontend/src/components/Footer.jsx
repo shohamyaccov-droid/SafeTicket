@@ -22,6 +22,9 @@ const Footer = () => {
                 <Link to="/how-it-works">איך זה עובד</Link>
               </li>
               <li>
+                <Link to="/how-to-sell">איך למכור כרטיס להופעה</Link>
+              </li>
+              <li>
                 <Link to="/faq">שאלות ותשובות</Link>
               </li>
               <li>

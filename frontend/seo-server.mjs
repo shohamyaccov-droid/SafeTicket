@@ -3,7 +3,7 @@
  *
  * A pure Vite CSR SPA only exposes generic index.html meta to crawlers that do not
  * execute JS. This Node shell keeps the Vite assets, injects <title>/Open Graph/JSON-LD,
- * and embeds static article HTML inside #root for / , /how-it-works, /faq, /event/*, and /artist/*.
+ * and embeds static article HTML inside #root for / , /how-it-works, /how-to-sell, /faq, /event/*, and /artist/*.
  *
  * Start: node seo-server.mjs  (Render startCommand)
  */
@@ -121,7 +121,7 @@ app.get('/sitemap.xml', async (_req, res) => {
   } catch (err) {
     console.warn('[seo-server] sitemap proxy failed:', err?.message || err);
   }
-  const staticLocs = ['/', '/how-it-works', '/faq', '/about', '/contact', '/terms', '/privacy', '/refunds', '/buyer-guarantee', '/accessibility', '/sell/new'];
+  const staticLocs = ['/', '/how-it-works', '/how-to-sell', '/faq', '/about', '/contact', '/terms', '/privacy', '/refunds', '/buyer-guarantee', '/accessibility', '/sell/new'];
   const urls = staticLocs.map((p) => (p === '/' ? `${PUBLIC_ORIGIN}/` : `${PUBLIC_ORIGIN}${p}`));
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -197,6 +197,7 @@ function sendStaticMarketingPage(req, res) {
 
 app.get('/', sendStaticMarketingPage);
 app.get('/how-it-works', sendStaticMarketingPage);
+app.get('/how-to-sell', sendStaticMarketingPage);
 app.get('/faq', sendStaticMarketingPage);
 
 app.use(express.static(DIST, { index: false, maxAge: '1h' }));

@@ -41,6 +41,7 @@ const AdminOffersPage = lazy(() => import('./pages/AdminOffersPage'));
 const AdminGodModePage = lazy(() => import('./pages/AdminGodModePage'));
 const FAQ = lazy(() => import('./pages/FAQ'));
 const HowItWorksPage = lazy(() => import('./pages/HowItWorksPage'));
+const HowToSellPage = lazy(() => import('./pages/HowToSellPage'));
 const Contact = lazy(() => import('./pages/Contact'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const RefundsPage = lazy(() => import('./pages/RefundsPage'));
@@ -295,6 +296,7 @@ function App() {
               <Route path="/admin/verification" element={routeElement(<AdminVerificationPage />, <DashboardSkeleton />)} />
               <Route path="/faq" element={routeElement(<FAQ />)} />
               <Route path="/how-it-works" element={routeElement(<HowItWorksPage />)} />
+              <Route path="/how-to-sell" element={routeElement(<HowToSellPage />)} />
               <Route path="/contact" element={routeElement(<Contact />)} />
               <Route path="/terms" element={routeElement(<TermsPage />)} />
               <Route path="/privacy" element={routeElement(<PrivacyPage />)} />

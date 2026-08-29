@@ -39,6 +39,8 @@ const HowItWorksPage = () => {
 
         <p className="how-it-works-cta">
           מוכנים להתחיל?{' '}
+          <Link to="/how-to-sell">איך למכור כרטיס להופעה</Link>
+          {' · '}
           <Link to="/sell/new">מכירת כרטיס שקניתי</Link>
           {' · '}
           <Link to="/">קניית כרטיסים יד שניה</Link>

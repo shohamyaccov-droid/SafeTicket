@@ -2,7 +2,7 @@
 URL configuration for safeticket project.
 
 SPA index serves Vite build from collectstatic. For /event/<slug|id>, /artist/<slug|id>,
-and marketing routes (/ , /how-it-works, /faq) we inject title/meta/JSON-LD and crawler HTML
+and marketing routes (/ , /how-it-works, /how-to-sell, /faq) we inject title/meta/JSON-LD and crawler HTML
 into the initial document so Googlebot and AI crawlers see SEO without waiting on React.
 """
 from pathlib import Path
