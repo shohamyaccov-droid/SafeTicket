@@ -548,10 +548,10 @@
   margin-top: 1.5rem;
   flex-shrink: 0;
   padding-top: 1rem;
-  padding-bottom: 1.5rem;
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--border-color);
   position: sticky;
-  bottom: 0;
+  bottom: var(--vv-keyboard-inset, 0px);
   background-color: var(--bg-card);
   z-index: 100;
   margin-left: -2rem;
@@ -1489,7 +1489,8 @@
     border-radius: var(--radius-md) var(--radius-md) 0 0;
     padding: 1.25rem 1rem 2rem;
     /* Keep sticky checkout actions reachable when the keyboard / safe-area shrinks the viewport */
-    scroll-padding-bottom: max(6rem, env(safe-area-inset-bottom, 0px));
+    scroll-padding-bottom: max(6rem, env(safe-area-inset-bottom, 0px), var(--vv-keyboard-inset, 0px));
+    padding-bottom: calc(2rem + var(--vv-keyboard-inset, 0px));
   }
   .checkout-buttons-row.modal-actions {
     flex-direction: row;

@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import useFocusScrollIntoView from '../hooks/useFocusScrollIntoView';
+import useVisualViewportInset from '../hooks/useVisualViewportInset';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { authAPI, orderAPI, paymentAPI, ticketAPI, ensureCsrfToken, getEffectiveBearerAccess, syncAxiosDefaultAuthHeader, notifySessionExpired, refreshAccessToken } from '../services/api';
@@ -31,6 +33,7 @@ import CheckoutLegalAcceptance, {
 } from './CheckoutLegalAcceptance';
 import ShabbatModal from './ShabbatModal';
 import BuyerIdentityInlineForm from './BuyerIdentityInlineForm';
+import SafePayTrustLine from './SafePayTrustLine';
 import { buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
 import { isGuestContactComplete, validateGuestContact as sharedValidateGuestContact } from '../utils/contactValidation';
 import { isCheckoutAuthSessionFailure } from '../utils/checkoutAuth';
@@ -197,6 +200,8 @@ function coerceCheckoutQuantity(value, fallback = 1) {
 
 const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 1, onClose, acceptedOffer = null, splitType: splitTypeOverride = null, onErrorToParent = null, autoStartPayme = false }) => {
   useBodyScrollLock(true);
+  useFocusScrollIntoView(true);
+  useVisualViewportInset(true);
   const { refreshProfile } = useAuth();
   const { openLogin, openRegister } = useAuthModal();
   const [step, setStep] = useState('info'); // 'info', 'payment', 'success'
@@ -1871,6 +1876,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               />
             </div>
           </div>
+          <SafePayTrustLine />
 
           {isLocalDev ? (
             <button
@@ -2288,6 +2294,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           </svg>
           <h2>סיכום והמשך לתשלום</h2>
         </div>
+        <SafePayTrustLine />
         
         
           <div className="ticket-summary">

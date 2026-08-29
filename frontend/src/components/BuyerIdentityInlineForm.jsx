@@ -80,7 +80,7 @@ export default function BuyerIdentityInlineForm({
   return (
     <form className="buyer-identity-inline" onSubmit={handleSubmit} dir="rtl" noValidate>
       <p className="buyer-identity-inline__lead">
-        חסר מספר טלפון להשלמת התשלום. מלאו אותו כאן והמשיכו בלי לעזוב את העמוד.
+        אישור הרכישה יישלח ב-SMS. מספר נייד בלבד — בלי לעזוב את הקופה.
       </p>
       {needName ? (
         <div className="buyer-identity-inline__row">
@@ -141,7 +141,13 @@ export default function BuyerIdentityInlineForm({
           className="buyer-identity-inline__submit"
           disabled={saving || (needPhone && phone.replace(/\D/g, '').length < 9)}
         >
-          {saving ? 'שומר…' : submitLabel}
+          {saving ? (
+            <>
+              שומר… <span className="button-spinner" aria-hidden />
+            </>
+          ) : (
+            submitLabel
+          )}
         </button>
       </div>
     </form>

@@ -98,4 +98,15 @@ describe('conversion event guards', () => {
     Analytics.checkoutStart(5, { source: 'buy_now' });
     expect(trackMetaInitiateCheckout).toHaveBeenCalledTimes(1);
   });
+
+  it('fires begin_ticket_upload once per session', () => {
+    Analytics.beginTicketUpload({ source: 'single_file' });
+    Analytics.beginTicketUpload({ source: 'package_file' });
+    expect(trackGa4Event).toHaveBeenCalledTimes(1);
+    expect(trackGa4Event).toHaveBeenCalledWith(
+      'begin_ticket_upload',
+      expect.objectContaining({ source: 'single_file' }),
+    );
+    expect(trackMetaLead).not.toHaveBeenCalled();
+  });
 });

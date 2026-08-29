@@ -41,6 +41,13 @@
     margin-top: 0.1rem;
   }
 
+  .event-mobile-buy-bar__scarcity {
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #b45309;
+    margin-top: 0.1rem;
+  }
+
   .event-mobile-buy-bar__cta {
     flex-shrink: 0;
     min-height: 44px;

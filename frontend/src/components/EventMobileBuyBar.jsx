@@ -9,6 +9,7 @@ import './EventMobileBuyBar.css';
  */
 export default function EventMobileBuyBar({
   ticket,
+  remainingCount = null,
   busy = false,
   onBuy,
 }) {
@@ -16,12 +17,20 @@ export default function EventMobileBuyBar({
   const cur = resolveTicketCurrency(ticket);
   const sym = currencySymbol(cur);
   const priceLabel = formatAmountForCurrency(ticket.asking_price || ticket.original_price, cur);
+  const remaining = Number(remainingCount);
+  const showScarcity = Number.isFinite(remaining) && remaining > 0 && remaining <= 3;
+  const scarcityLabel =
+    remaining === 1 ? 'נשאר כרטיס אחד בקבוצה הזו' : `נשארו ${remaining} כרטיסים בקבוצה הזו`;
 
   return (
     <div className="event-mobile-buy-bar" dir="rtl" role="region" aria-label="רכישה מהירה">
       <div className="event-mobile-buy-bar__price">
         <span className="event-mobile-buy-bar__from">כרטיסים מ-{sym}{priceLabel}</span>
-        <span className="event-mobile-buy-bar__hint">לכרטיס, לפני דמי שירות</span>
+        {showScarcity ? (
+          <span className="event-mobile-buy-bar__scarcity">{scarcityLabel}</span>
+        ) : (
+          <span className="event-mobile-buy-bar__hint">לכרטיס, לפני דמי שירות</span>
+        )}
       </div>
       <button
         type="button"

@@ -23,6 +23,7 @@ import SellCompletionModal from '../components/SellCompletionModal';
 import TicketUploadWizard from '../components/TicketUploadWizard';
 import OptionalSeatingDisclosure from '../components/OptionalSeatingDisclosure';
 import ListingCreatedSuccessView from './ListingCreatedSuccessView';
+import useFocusScrollIntoView from '../hooks/useFocusScrollIntoView';
 import { clampSellWizardStep } from '../utils/sellWizard';
 import PageSeo from '../components/PageSeo';
 import { HOW_TO_SELL, buildHowToSellFaqJsonLd } from '../content/howToSellContent';
@@ -329,6 +330,12 @@ const Sell = () => {
   const [seatingDetailsOpen, setSeatingDetailsOpen] = useState(false);
   const publishAfterAuthRef = useRef(false);
   const listingSubmitLockRef = useRef(false);
+  useFocusScrollIntoView(true);
+
+  useEffect(() => {
+    document.body.classList.add('has-sell-mobile-cta');
+    return () => document.body.classList.remove('has-sell-mobile-cta');
+  }, []);
 
   useEffect(() => {
     if (!submitAttemptedRef.current) return;
@@ -839,6 +846,7 @@ const Sell = () => {
           return next;
         });
         setError('');
+        Analytics.beginTicketUpload({ source: 'multi_file' });
       }
     } else if (name === 'single_multi_page_pdf') {
       // Single file: multi-page PDF auto-split when quantity > 1; otherwise PDF or image OK
@@ -863,6 +871,7 @@ const Sell = () => {
           return next;
         });
         setError('');
+        Analytics.beginTicketUpload({ source: 'single_file' });
       }
     } else if (name && name.startsWith('pdf_file_package_')) {
       // Handle individual package PDF file uploads (uploadMethod === 'separate_files')
@@ -889,6 +898,7 @@ const Sell = () => {
           return next;
         });
         setError('');
+        Analytics.beginTicketUpload({ source: 'package_file' });
       }
     } else if (name && name.startsWith('seat_number_pkg_')) {
       const index = parseInt(name.replace('seat_number_pkg_', ''), 10);
@@ -2079,11 +2089,15 @@ const Sell = () => {
               חזרה לאירוע
             </button>
             <button type="submit" className="sell-wizard-next" disabled={loading || authSaving}>
-              {loading
-                ? 'מפרסם כרטיס…'
-                : user
-                  ? 'פרסם כרטיס'
-                  : 'המשך לחשבון'}
+              {loading ? (
+                <>
+                  מפרסם כרטיס… <span className="button-spinner" aria-hidden />
+                </>
+              ) : user ? (
+                'פרסם כרטיס'
+              ) : (
+                'המשך לחשבון'
+              )}
             </button>
           </div>
           </div>

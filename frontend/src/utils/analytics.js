@@ -249,4 +249,17 @@ export const Analytics = {
   offerSubmitted: (ticketId) => {
     trackEvent('offer_submitted', window.location.pathname, { ticket_id: ticketId });
   },
+
+  /**
+   * Seller started uploading a ticket file (or entered listing details after choosing an event).
+   * Once per session so retries / extra files do not inflate the funnel.
+   */
+  beginTicketUpload: (extra = {}) => {
+    if (!oncePerSession('begin_ticket_upload')) return;
+    trackEvent('begin_ticket_upload', window.location.pathname, extra || {});
+    trackGa4Event('begin_ticket_upload', {
+      currency: 'ILS',
+      source: extra.source || 'sell_wizard',
+    });
+  },
 };

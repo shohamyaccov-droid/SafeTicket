@@ -1712,7 +1712,7 @@ const EventDetailsPage = () => {
                     />
                   </svg>
                   <span>
-                    אחריות 100%: אנחנו מוודאים שתקבלו כרטיסים תקפים בזמן לאירוע, או שתקבלו את כספכם בחזרה.
+                    SafePay: הכסף בנאמנות עד 36 שעות אחרי האירוע. כרטיס תקף בזמן — או החזר מלא.
                   </span>
                 </div>
                 {isBloomfieldVenue ? (
@@ -2271,6 +2271,7 @@ const EventDetailsPage = () => {
       {showMobileBuyBar ? (
         <EventMobileBuyBar
           ticket={cheapestBuyableGroup?.tickets?.[0]}
+          remainingCount={cheapestBuyableGroup?.available_count}
           busy={Boolean(buyOpeningKey)}
           onBuy={() => {
             const group = cheapestBuyableGroup;

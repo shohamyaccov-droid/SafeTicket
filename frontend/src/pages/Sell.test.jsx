@@ -29,7 +29,7 @@ vi.mock('../utils/toast', () => ({
 }));
 
 vi.mock('../utils/analytics', () => ({
-  Analytics: { ticketListed: vi.fn() },
+  Analytics: { ticketListed: vi.fn(), beginTicketUpload: vi.fn() },
   isListingCreateHttpSuccess: (res) => {
     const status = res?.status;
     if (status == null) return Boolean(res?.data);

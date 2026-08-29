@@ -22,4 +22,15 @@ describe('EventMobileBuyBar', () => {
     const { container } = render(<EventMobileBuyBar ticket={null} onBuy={() => {}} />);
     expect(container.firstChild).toBeNull();
   });
+
+  it('shows a scarcity cue when three or fewer tickets remain', () => {
+    render(
+      <EventMobileBuyBar
+        ticket={{ asking_price: '90.00', currency: 'ILS' }}
+        remainingCount={2}
+        onBuy={() => {}}
+      />
+    );
+    expect(screen.getByText('נשארו 2 כרטיסים בקבוצה הזו')).toBeInTheDocument();
+  });
 });

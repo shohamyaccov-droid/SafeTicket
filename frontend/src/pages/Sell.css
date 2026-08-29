@@ -1815,7 +1815,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 40;
+    z-index: 900;
     padding: 0.75rem 1rem;
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
     background: #fff;
@@ -1836,6 +1836,17 @@
   }
 }
 
+@media (max-width: 768px) {
+  body.has-sell-mobile-cta .floating-whatsapp,
+  body.has-sell-mobile-cta .mobile-sell-fab {
+    display: none;
+  }
+
+  body.has-sell-mobile-cta .footer {
+    padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 .sell-optional-seating {
   margin: 0 0 1rem;
 }
@@ -1844,6 +1855,7 @@
   display: inline-flex;
   align-items: center;
   width: 100%;
+  min-height: 44px;
   padding: 0.7rem 0.85rem;
   border: 1px dashed #94a3b8;
   border-radius: 10px;
