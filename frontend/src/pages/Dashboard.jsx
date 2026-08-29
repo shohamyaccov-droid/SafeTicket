@@ -17,6 +17,7 @@ import {
   getAcceptedCheckoutSecondsRemaining,
 } from '../utils/offerTimer';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
+import { getFullImageUrl } from '../utils/formatters';
 import { eventHref } from '../utils/eventSeo';
 import CheckoutModal from '../components/CheckoutModal';
 import NegotiationModal from '../components/NegotiationModal';
@@ -1076,7 +1077,7 @@ const Dashboard = () => {
                         <div className="row-thumbnail purchase-card-accordion-thumb">
                           {purchase.event_image_url ? (
                             <img
-                              src={purchase.event_image_url}
+                              src={getFullImageUrl(purchase.event_image_url) || purchase.event_image_url}
                               alt={ticket.event_name || purchase.event_name || 'אירוע'}
                               loading="lazy"
                               decoding="async"
@@ -1294,7 +1295,7 @@ const Dashboard = () => {
                               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 {group.ticketDetails?.event_image_url ? (
                                   <img
-                                    src={group.ticketDetails.event_image_url}
+                                    src={getFullImageUrl(group.ticketDetails.event_image_url) || group.ticketDetails.event_image_url}
                                     alt=""
                                     loading="lazy"
                                     decoding="async"
@@ -1358,7 +1359,7 @@ const Dashboard = () => {
                               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
                                 {group.ticketDetails?.event_image_url ? (
                                   <img
-                                    src={group.ticketDetails.event_image_url}
+                                    src={getFullImageUrl(group.ticketDetails.event_image_url) || group.ticketDetails.event_image_url}
                                     alt=""
                                     loading="lazy"
                                     decoding="async"

@@ -330,6 +330,18 @@ const Sell = () => {
   const [seatingDetailsOpen, setSeatingDetailsOpen] = useState(false);
   const publishAfterAuthRef = useRef(false);
   const listingSubmitLockRef = useRef(false);
+  const acquireListingSubmitLock = () => {
+    if (listingSubmitLockRef.current) return false;
+    listingSubmitLockRef.current = true;
+    setLoading(true);
+    return true;
+  };
+  const releaseListingSubmitLock = () => {
+    listingSubmitLockRef.current = false;
+    setLoading(false);
+    setUploadProgress(0);
+    setUploadPhase('');
+  };
   useFocusScrollIntoView(true);
 
   useEffect(() => {
@@ -1012,9 +1024,8 @@ const Sell = () => {
     }
   };
 
-  const executeTicketUpload = async (snapshot = null) => {
-    if (listingSubmitLockRef.current) return;
-    listingSubmitLockRef.current = true;
+  const executeTicketUpload = async (snapshot = null, { lockHeld = false } = {}) => {
+    if (!lockHeld && !acquireListingSubmitLock()) return;
     const activeForm = snapshot?.formData ?? formData;
     const activeUploadMethod = snapshot?.uploadMethod ?? uploadMethod;
     const ilEvent = isIsraelEvent(activeForm.selectedEvent);
@@ -1068,9 +1079,8 @@ const Sell = () => {
     if (useSingleFile) {
       const pdf0 = activeForm.singleMultiPagePdf;
       if (!(pdf0 instanceof File) && !(pdf0 instanceof Blob)) {
-        listingSubmitLockRef.current = false;
         setFieldErrors({ upload_single: 'שגיאה פנימית: קובץ כרטיס חסר. נסו לבחור את הקובץ שוב.' });
-        setLoading(false);
+        releaseListingSubmitLock();
         return;
       }
       const fname0 = pdf0 instanceof File ? pdf0.name : 'ticket.pdf';
@@ -1143,37 +1153,36 @@ const Sell = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (listingSubmitLockRef.current || loading) return;
+    if (!acquireListingSubmitLock()) return;
     submitAttemptedRef.current = true;
     setError('');
     setFieldErrors({});
     setSuccess(false);
     setUploadProgress(5);
     setUploadPhase('בודק את פרטי הכרטיס והקבצים...');
-    setLoading(true);
 
     if (!sellerListingTermsAccepted) {
       setFieldErrors({ terms: 'יש לאשר את תנאי ההצהרה כדי להמשיך' });
-      setLoading(false);
+      releaseListingSubmitLock();
       return;
     }
 
     // Validate required fields
     if (!formData.event_id) {
       setFieldErrors({ event: 'אנא בחר אירוע מהרשימה.' });
-      setLoading(false);
+      releaseListingSubmitLock();
       return;
     }
 
     if (formData.listing_price === '' || formData.listing_price == null) {
       setFieldErrors({ listing_price: 'נא להזין מחיר מכירה.' });
-      setLoading(false);
+      releaseListingSubmitLock();
       return;
     }
     const askVal = parseFloat(String(formData.listing_price).replace(',', '.'));
     if (!Number.isFinite(askVal) || askVal <= 0) {
       setFieldErrors({ listing_price: 'מחיר המכירה חייב להיות מספר חיובי.' });
-      setLoading(false);
+      releaseListingSubmitLock();
       return;
     }
 
@@ -1183,7 +1192,7 @@ const Sell = () => {
     // Ensure ticket_packages array is initialized
     if (!formData.ticket_packages || formData.ticket_packages.length !== requiredCount) {
       setFieldErrors({ packages: `אנא השלם את כל פרטי הכרטיסים (${requiredCount} כרטיסים נדרשים).` });
-      setLoading(false);
+      releaseListingSubmitLock();
       return;
     }
 
@@ -1198,7 +1207,7 @@ const Sell = () => {
         const singleFileError = ticketFileValidationError(formData.singleMultiPagePdf, { requirePdf: true });
         if (singleFileError) {
           setFieldErrors({ upload_single: singleFileError });
-          setLoading(false);
+          releaseListingSubmitLock();
           return;
         }
       } else if (useSeparateFiles) {
@@ -1207,7 +1216,7 @@ const Sell = () => {
           setFieldErrors({
             upload_packages: 'כל כרטיס חייב לכלול קובץ כרטיס (PDF או תמונה) ייחודי. אנא השלם את כל הפרטים.',
           });
-          setLoading(false);
+          releaseListingSubmitLock();
           return;
         }
         const pdfFiles = formData.ticket_packages.map((p) => p?.pdf_file).filter(Boolean);
@@ -1216,7 +1225,7 @@ const Sell = () => {
           setFieldErrors({
             upload_packages: 'כל כרטיס חייב להיות עם קובץ ייחודי. לא ניתן להשתמש באותו קובץ פעמיים.',
           });
-          setLoading(false);
+          releaseListingSubmitLock();
           return;
         }
         const invalidFiles = pdfFiles.filter((f) => !isTicketAttachmentFile(f));
@@ -1225,7 +1234,7 @@ const Sell = () => {
           setFieldErrors({
             upload_packages: fileError || 'נא להעלות לכל כרטיס קובץ PDF או תמונה (JPG, PNG).',
           });
-          setLoading(false);
+          releaseListingSubmitLock();
           return;
         }
       } else {
@@ -1235,7 +1244,7 @@ const Sell = () => {
               ? 'אנא העלה קובץ PDF אחד המכיל את כל הכרטיסים.'
               : 'אנא העלה קובץ (PDF או תמונה) לכל כרטיס.',
         });
-        setLoading(false);
+        releaseListingSubmitLock();
         return;
       }
     } else {
@@ -1243,45 +1252,43 @@ const Sell = () => {
       if (useSeparateFiles) {
         if (!formData.ticket_packages?.[0]?.pdf_file) {
           setFieldErrors({ upload_packages: 'אנא העלה קובץ כרטיס (PDF או תמונה).' });
-          setLoading(false);
+          releaseListingSubmitLock();
           return;
         }
         const pdfFile = formData.ticket_packages[0].pdf_file;
         const fileError = ticketFileValidationError(pdfFile);
         if (fileError) {
           setFieldErrors({ upload_packages: fileError });
-          setLoading(false);
+          releaseListingSubmitLock();
           return;
         }
       } else if (useSingleFile) {
         if (!formData.singleMultiPagePdf) {
           setFieldErrors({ upload_single: 'אנא העלה קובץ כרטיס (PDF או תמונה).' });
-          setLoading(false);
+          releaseListingSubmitLock();
           return;
         }
         const fileError = ticketFileValidationError(formData.singleMultiPagePdf);
         if (fileError) {
           setFieldErrors({ upload_single: fileError });
-          setLoading(false);
+          releaseListingSubmitLock();
           return;
         }
       } else {
         setFieldErrors({ upload_single: 'אנא העלה קובץ כרטיס (PDF או תמונה).' });
-        setLoading(false);
+        releaseListingSubmitLock();
         return;
       }
     }
 
     if (!user) {
-      setLoading(false);
-      setUploadProgress(0);
-      setUploadPhase('');
+      releaseListingSubmitLock();
       setWizardStep(3);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    await executeTicketUpload();
+    await executeTicketUpload(null, { lockHeld: true });
   };
 
   const feeBasis = parseFloat(String(formData.listing_price || 0)) || 0;
@@ -1416,7 +1423,7 @@ const Sell = () => {
             </p>
           ) : null}
         </header>
-        {error && <div className="error-message">{error}</div>}
+        {error && <div className="error-message" role="alert">{error}</div>}
         {Object.keys(fieldErrors).length > 0 && (
           <div className="error-message sell-validation-summary" role="alert">
             יש שדות שדורשים תיקון לפני פרסום הכרטיס. גללו לשדה המסומן ונסו שוב.
@@ -2088,7 +2095,7 @@ const Sell = () => {
             >
               חזרה לאירוע
             </button>
-            <button type="submit" className="sell-wizard-next" disabled={loading || authSaving}>
+            <button type="submit" className="sell-wizard-next" disabled={loading || authSaving} aria-busy={loading}>
               {loading ? (
                 <>
                   מפרסם כרטיס… <span className="button-spinner" aria-hidden />
@@ -2125,6 +2132,7 @@ const Sell = () => {
             type="submit"
             form="sell-listing-form"
             disabled={loading || authSaving}
+            aria-busy={loading}
             className="submit-button sell-submit-sticky-btn"
           >
             {loading ? (

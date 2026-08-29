@@ -8,6 +8,7 @@ import {
 } from '../utils/priceFormat';
 import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
+import { getFullImageUrl } from '../utils/formatters';
 import { getAcceptedCheckoutSecondsRemaining } from '../utils/offerTimer';
 import BuyerIdentityInlineForm from './BuyerIdentityInlineForm';
 import { buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
@@ -148,7 +149,7 @@ const NegotiationModal = ({
           <div className="negotiation-header-content">
             {ticketDetails?.event_image_url ? (
               <img
-                src={ticketDetails.event_image_url}
+                src={getFullImageUrl(ticketDetails.event_image_url) || ticketDetails.event_image_url}
                 alt=""
                 className="negotiation-header-img"
                 loading="lazy"

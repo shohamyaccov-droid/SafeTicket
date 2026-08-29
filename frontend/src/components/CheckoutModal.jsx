@@ -224,6 +224,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   });
   const [loading, setLoading] = useState(false);
   const [infoStepBusy, setInfoStepBusy] = useState(false);
+  const infoStepBusyRef = useRef(false);
   const [pdfDownloadBusyId, setPdfDownloadBusyId] = useState(null);
   /** 'idle' | 'creating_order' | 'confirming_payment' | 'redirecting' — shown while pending_payment → paid / Payme */
   const [paymentPhase, setPaymentPhase] = useState('idle');
@@ -530,78 +531,74 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
   const handleInfoSubmit = async (e) => {
     e.preventDefault();
-    if (infoStepBusy) return;
+    if (infoStepBusyRef.current || infoStepBusy || paymentSubmittingRef.current || loading) return;
+    infoStepBusyRef.current = true;
     setInfoStepBusy(true);
     setError('');
-    const q = coerceCheckoutQuantity(quantity, NaN);
-    const availNum = coerceCheckoutQuantity(availableQuantity, 1);
-    const validOptions = buildQuantityOptions().map((n) => coerceCheckoutQuantity(n, NaN)).filter(Number.isFinite);
-    if (!Number.isFinite(q) || q < 1 || q > availNum) {
-      setError(`כמות לא תקינה. ניתן לבחור בין 1 ל-${availNum} כרטיסים`);
-      setInfoStepBusy(false);
-      return;
-    }
-    if (!validOptions.includes(q)) {
-      if (splitType === 'all') {
-        setError('חובה לקנות את כל הכמות יחד');
-      } else if (splitType === 'pairs') {
-        setError('ניתן לקנות בזוגות בלבד');
-      } else {
-        setError(`כמות לא תקינה. בחר מתוך: ${validOptions.join(', ')}`);
-      }
-      setInfoStepBusy(false);
-      return;
-    }
-    if (!user) {
-      if (!isGuestContactComplete(guestForm)) {
-        setError(validateGuestContact(guestForm) || 'נא להזין אימייל ומספר טלפון');
-        setInfoStepBusy(false);
-        return;
-      }
-      const gErr = validateGuestContact(guestForm);
-      if (gErr) {
-        setError(gErr);
-        setInfoStepBusy(false);
-        return;
-      }
-      guestEmailRef.current = guestForm.email.trim();
-      try {
-        await ensureCsrfToken();
-      } catch {
-        /* reserve/order calls will surface a concrete API error if CSRF is unavailable */
-      }
-    }
-
-    // TOS must be accepted before opening payment / locking inventory.
-    const legalMsg = validateLegalAcceptance(legalAccepted);
-    if (legalMsg) {
-      setLegalError(legalMsg);
-      setError(legalMsg);
-      setInfoStepBusy(false);
-      return;
-    }
-    setLegalError('');
-
-    // Shomer Shabbat: intercept "המשך לתשלום" before opening the payment step
-    if (await guardShabbatBeforePayment()) {
-      setInfoStepBusy(false);
-      return;
-    }
-
-    setError('');
-    setLegalError('');
-
-    const checkoutStartValue = (negotiatedBundleBreakdown || listBreakdown)?.totalAmount;
-    Analytics.checkoutStart(ticket?.id, {
-      value: checkoutStartValue,
-      currency: resolveTicketCurrency(ticket) || 'ILS',
-      quantity,
-      source: 'continue_to_payment',
-    });
-
     try {
+      const q = coerceCheckoutQuantity(quantity, NaN);
+      const availNum = coerceCheckoutQuantity(availableQuantity, 1);
+      const validOptions = buildQuantityOptions().map((n) => coerceCheckoutQuantity(n, NaN)).filter(Number.isFinite);
+      if (!Number.isFinite(q) || q < 1 || q > availNum) {
+        setError(`כמות לא תקינה. ניתן לבחור בין 1 ל-${availNum} כרטיסים`);
+        return;
+      }
+      if (!validOptions.includes(q)) {
+        if (splitType === 'all') {
+          setError('חובה לקנות את כל הכמות יחד');
+        } else if (splitType === 'pairs') {
+          setError('ניתן לקנות בזוגות בלבד');
+        } else {
+          setError(`כמות לא תקינה. בחר מתוך: ${validOptions.join(', ')}`);
+        }
+        return;
+      }
+      if (!user) {
+        if (!isGuestContactComplete(guestForm)) {
+          setError(validateGuestContact(guestForm) || 'נא להזין אימייל ומספר טלפון');
+          return;
+        }
+        const gErr = validateGuestContact(guestForm);
+        if (gErr) {
+          setError(gErr);
+          return;
+        }
+        guestEmailRef.current = guestForm.email.trim();
+        try {
+          await ensureCsrfToken();
+        } catch {
+          /* reserve/order calls will surface a concrete API error if CSRF is unavailable */
+        }
+      }
+
+      // TOS must be accepted before opening payment / locking inventory.
+      const legalMsg = validateLegalAcceptance(legalAccepted);
+      if (legalMsg) {
+        setLegalError(legalMsg);
+        setError(legalMsg);
+        return;
+      }
+      setLegalError('');
+
+      // Shomer Shabbat: intercept "המשך לתשלום" before opening the payment step
+      if (await guardShabbatBeforePayment()) {
+        return;
+      }
+
+      setError('');
+      setLegalError('');
+
+      const checkoutStartValue = (negotiatedBundleBreakdown || listBreakdown)?.totalAmount;
+      Analytics.checkoutStart(ticket?.id, {
+        value: checkoutStartValue,
+        currency: resolveTicketCurrency(ticket) || 'ILS',
+        quantity,
+        source: 'continue_to_payment',
+      });
+
       await executeCheckout(Boolean(isLocalDev && !usePayme));
     } finally {
+      infoStepBusyRef.current = false;
       setInfoStepBusy(false);
     }
   };
@@ -695,9 +692,18 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     if (checkoutSucceeded || transactionCompleteRef.current) {
       return;
     }
-    if (loading) {
+    if (paymentSubmittingRef.current || isProcessingPaymentRef.current) {
       return;
     }
+    // Lock synchronously before any await so double-taps cannot race past React state.
+    paymentSubmittingRef.current = true;
+    isProcessingPaymentRef.current = true;
+    setLoading(true);
+    setPaymentPhase('idle');
+
+    let paymeRedirectStarted = false;
+
+    try {
     const legalMsg = validateLegalAcceptance(legalAccepted);
     if (legalMsg) {
       setLegalError(legalMsg);
@@ -743,14 +749,6 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         return;
       }
     }
-
-    setLoading(true);
-    setPaymentPhase('idle');
-    paymentSubmittingRef.current = true;
-    isProcessingPaymentRef.current = true;
-    let paymeRedirectStarted = false;
-
-    try {
       // Validate quantity before processing payment
       if (quantity < 1 || quantity > availableQuantity) {
         throw new Error(`כמות לא תקינה. ניתן לבחור בין 1 ל-${availableQuantity} כרטיסים`);
@@ -1163,8 +1161,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       }
     } finally {
       if (paymeRedirectStarted) {
-        // Stay locked: unload handlers must not release inventory mid-PayMe.
-        setLoading(false);
+        // Stay visually and logically locked through PayMe navigation.
         return;
       }
       isProcessingPaymentRef.current = false;
@@ -1884,6 +1881,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               className="checkout-mock-payment-btn checkout-mock-payment-btn--prominent"
               onClick={handleMockPayment}
               disabled={paymentSubmitDisabled}
+              aria-busy={loading}
             >
               {loading
                 ? (
@@ -2221,6 +2219,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               <button
                 type="submit"
                 disabled={paymentSubmitDisabled}
+                aria-busy={loading}
                 className="checkout-button checkout-row-btn modal-action-primary"
               >
                 {loading
@@ -2494,6 +2493,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               type="button"
               onClick={handleInfoSubmit}
               disabled={infoSubmitDisabled}
+              aria-busy={loading || infoStepBusy}
               className="checkout-button"
             >
               {loading || infoStepBusy ? (
@@ -2597,6 +2597,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               <button
                 type="submit"
                 disabled={infoSubmitDisabled}
+                aria-busy={loading || infoStepBusy}
                 className="checkout-button"
               >
                 {loading || infoStepBusy ? (

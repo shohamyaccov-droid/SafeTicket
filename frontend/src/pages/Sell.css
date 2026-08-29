@@ -882,9 +882,12 @@
   background: var(--primary-blue-hover);
 }
 
-.submit-button:disabled {
+.submit-button:disabled,
+.sell-wizard-next:disabled,
+.sell-submit-sticky-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 .submit-button:active:not(:disabled) {
@@ -1704,6 +1707,7 @@
   background: rgba(15, 23, 42, 0.45);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+  pointer-events: auto;
 }
 
 .sell-upload-overlay-card {

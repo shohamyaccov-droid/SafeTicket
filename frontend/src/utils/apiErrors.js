@@ -36,6 +36,7 @@ const COMMON_TRANSLATIONS = [
   [/authentication credentials were not provided|not authenticated/i, 'נדרש להתחבר כדי לבצע פעולה זו.'],
   [/permission|forbidden|not have permission/i, 'אין לך הרשאה לבצע פעולה זו.'],
   [/csrf/i, 'שגיאת אבטחה בתקשורת. רעננו את העמוד ונסו שוב.'],
+  [/timeout|timed out|econnaborted/i, 'יש בעיית חיבור לשרת. בדקו את האינטרנט ונסו שוב.'],
   [/network error/i, 'שגיאת תקשורת עם השרת. בדקו את החיבור ונסו שוב.'],
   [/server error|internal server error|request failed with status code 500/i, 'שגיאת שרת זמנית. נסו שוב בעוד רגע.'],
   [/this field is required|required/i, 'שדה חובה חסר.'],
@@ -87,6 +88,16 @@ function flattenMessages(value, field = '') {
 export function apiErrorMessageHe(errorOrData, fallback = 'אירעה שגיאה. אנא נסו שוב.') {
   const data = errorOrData?.response?.data ?? errorOrData?.data ?? errorOrData;
   const status = errorOrData?.response?.status;
+
+  const code = errorOrData?.code;
+  if (
+    code === 'ECONNABORTED' ||
+    code === 'ERR_NETWORK' ||
+    code === 'ERR_CANCELED' ||
+    /timeout|network error/i.test(String(errorOrData?.message || ''))
+  ) {
+    return 'יש בעיית חיבור לשרת. בדקו את האינטרנט ונסו שוב.';
+  }
 
   if (status === 401) return 'החיבור שלך פג תוקף. אנא התחבר מחדש.';
   if (status === 403 && data == null) return 'אין לך הרשאה לבצע פעולה זו.';
