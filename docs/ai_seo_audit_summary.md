@@ -50,11 +50,11 @@ Event crawler snapshot (`crawler_html`) is no longer a title-only stub. It is an
 
 ### Schema injections
 
-Exact seller FAQ copy (0% fees, mandatory phone verification, SafePay escrow) is reused from `frontend/src/content/how-to-sell.json`:
+Exact seller FAQ copy is reused from `frontend/src/content/how-to-sell.json`:
 
 1. **איך למכור כרטיס להופעה בצורה בטוחה?** — SafePay holds funds until after the show.
-2. **כמה עולה למכור כרטיס להופעה יד שנייה?** — 0% seller fee.
-3. **איך נמנעים מנוכלים במכירת כרטיסים?** — mandatory phone + email verification.
+2. **מה עושים אם נתקעתי עם כרטיס וזמן הביטול עבר?** — list second-hand at 0% instead of losing cancellation fees.
+3. **כמה עולה למכור כרטיס להופעה?** — 0% seller fee; the buyer pays the platform fee.
 
 | Surface | Schema | Notes |
 |---|---|---|

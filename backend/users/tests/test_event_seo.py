@@ -289,14 +289,21 @@ class EventSlugAndSeoTests(TestCase):
     def test_how_to_sell_crawler_has_exact_h1_and_faq_schema(self):
         seo = get_static_page_seo('/how-to-sell')
         self.assertIsNotNone(seo)
-        self.assertEqual(seo['seo_title'], 'איך למכור כרטיס להופעה בבטחה - TradeTix')
-        self.assertIn('<h1>איך למכור כרטיס להופעה</h1>', seo['crawler_html'])
+        self.assertEqual(
+            seo['seo_title'],
+            'איך למכור כרטיס להופעה - מדריך למכירה בטוחה | TradeTix',
+        )
+        self.assertIn('<h1>איך למכור כרטיס להופעה (ולא להיעקץ)</h1>', seo['crawler_html'])
         self.assertIn('<ol>', seo['crawler_html'])
         self.assertIn('העלאת הכרטיס', seo['crawler_html'])
         self.assertIn('אימות טלפוני', seo['crawler_html'])
-        self.assertIn('קבלת התשלום', seo['crawler_html'])
+        self.assertIn('קבלת התשלום לנאמנות', seo['crawler_html'])
         self.assertEqual(seo['json_ld']['@type'], 'FAQPage')
         self.assertEqual(len(seo['json_ld']['mainEntity']), 3)
+        self.assertEqual(
+            seo['json_ld']['mainEntity'][1]['name'],
+            'מה עושים אם נתקעתי עם כרטיס וזמן הביטול עבר?',
+        )
         html = inject_seo_into_html(
             '<html><head><title>Old</title><meta name="description" content="x"></head>'
             '<body><div id="root"></div></body></html>',
