@@ -19,6 +19,7 @@ from services.payme_service import (
     PayMeError,
     PayMeSettings,
     confirm_payme_sale_status,
+    fallback_buyer_name_from_email,
     generate_payme_sale_for_order,
     normalize_payme_buyer_phone,
     resolve_buyer_details_for_order,
@@ -853,13 +854,11 @@ def payme_init_checkout(request):
         buyer_details['buyer_phone_number'] = phone_norm
 
     if not buyer_details.get('buyer_name'):
-        return Response(
-            {
-                'error': 'Buyer name is required for PayMe checkout. Complete guest details or update your profile.',
-                'code': 'missing_buyer_name',
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        fallback = fallback_buyer_name_from_email(buyer_email)
+        if fallback:
+            buyer_details['buyer_name'] = fallback
+            buyer_details['buyer_full_name'] = fallback
+            buyer_details['buyer_first_name'] = buyer_details.get('buyer_first_name') or fallback
     if not buyer_details.get('buyer_phone'):
         return Response(
             {

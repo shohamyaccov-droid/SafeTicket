@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toastError, toastSuccess } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
+import { isValidRequiredEmail, isValidRequiredPhone, validateRequiredEmail, validateRequiredPhone } from '../utils/contactValidation';
 import '../pages/Auth.css';
 
 export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 'register' } = {}) {
@@ -11,6 +12,7 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
     first_name: '',
     last_name: '',
     email: '',
+    phone_number: '',
     password: '',
     password2: '',
   });
@@ -42,8 +44,18 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
     setError('');
     setFieldErrors({});
 
+    const nextFieldErrors = {};
+    const emailErr = validateRequiredEmail(formData.email);
+    if (emailErr) nextFieldErrors.email = emailErr;
+    const phoneErr = validateRequiredPhone(formData.phone_number);
+    if (phoneErr) nextFieldErrors.phone_number = phoneErr;
     if (formData.password !== formData.password2) {
-      setFieldErrors({ password2: 'הסיסמאות אינן תואמות' });
+      nextFieldErrors.password2 = 'הסיסמאות אינן תואמות';
+    }
+    if (Object.keys(nextFieldErrors).length) {
+      setFieldErrors(nextFieldErrors);
+      const firstMsg = nextFieldErrors.phone_number || nextFieldErrors.email || nextFieldErrors.password2;
+      if (firstMsg) setError(firstMsg);
       return;
     }
 
@@ -53,6 +65,7 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
       email: formData.email,
       first_name: formData.first_name,
       last_name: formData.last_name,
+      phone_number: formData.phone_number.trim(),
       password: formData.password,
       password2: formData.password2,
       role: 'buyer',
@@ -99,7 +112,6 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
             name="first_name"
             value={formData.first_name}
             onChange={handleChange}
-            required
             placeholder="הזן שם פרטי"
             dir="rtl"
             autoComplete="given-name"
@@ -114,7 +126,6 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
             name="last_name"
             value={formData.last_name}
             onChange={handleChange}
-            required
             placeholder="הזן שם משפחה"
             dir="rtl"
             autoComplete="family-name"
@@ -122,7 +133,7 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
           {fieldErrors.last_name ? <span className="field-error-text">{fieldErrors.last_name}</span> : null}
         </div>
         <div className="form-group">
-          <label htmlFor={fieldId('email')}>אימייל</label>
+          <label htmlFor={fieldId('email')}>אימייל *</label>
           <input
             type="email"
             id={fieldId('email')}
@@ -138,6 +149,22 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
             spellCheck="false"
           />
           {fieldErrors.email ? <span className="field-error-text">{fieldErrors.email}</span> : null}
+        </div>
+        <div className="form-group">
+          <label htmlFor={fieldId('phone_number')}>מספר טלפון *</label>
+          <input
+            type="tel"
+            id={fieldId('phone_number')}
+            name="phone_number"
+            value={formData.phone_number}
+            onChange={handleChange}
+            required
+            placeholder="050-1234567"
+            inputMode="tel"
+            autoComplete="tel"
+            dir="ltr"
+          />
+          {fieldErrors.phone_number ? <span className="field-error-text">{fieldErrors.phone_number}</span> : null}
         </div>
         <div className="form-group">
           <label htmlFor={fieldId('password')}>סיסמה</label>
@@ -169,7 +196,17 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
           />
           {fieldErrors.password2 ? <span className="field-error-text">{fieldErrors.password2}</span> : null}
         </div>
-        <button type="submit" disabled={loading} className="auth-button">
+        <button
+          type="submit"
+          disabled={
+            loading ||
+            !isValidRequiredEmail(formData.email) ||
+            !isValidRequiredPhone(formData.phone_number) ||
+            !formData.password ||
+            !formData.password2
+          }
+          className="auth-button"
+        >
           {loading ? 'נרשם...' : 'הרשמה'}
         </button>
       </form>

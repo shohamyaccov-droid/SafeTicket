@@ -144,7 +144,7 @@ def register_user(username, email, password, role='buyer'):
         'password': password,
         'password2': password,
         'role': role,
-        'phone_number': ''
+        'phone_number': '0501234567'
     }
     try:
         response = requests.post(url, json=data)

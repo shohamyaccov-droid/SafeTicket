@@ -29,6 +29,17 @@ from .currency import (
 )
 
 
+def normalize_required_phone(value, *, field_label='מספר טלפון'):
+    """API-level required phone: non-blank, at least 9 digits. Model null/blank stays unchanged."""
+    s = (value or '').strip()
+    digits = ''.join(ch for ch in s if ch.isdigit())
+    if not s or len(digits) < 9:
+        raise serializers.ValidationError(f'נא להזין {field_label} תקין (לפחות 9 ספרות).')
+    if len(digits) > 15:
+        raise serializers.ValidationError(f'נא להזין {field_label} תקין.')
+    return s
+
+
 def build_profile_orders_serialization_context(request, orders_queryset):
     """
     Select-related orders + one batched ticket fetch for ProfileOrderSerializer
@@ -286,16 +297,33 @@ def first_resolved_image_url_for_event(request, event):
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
+    first_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    last_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    phone_number = serializers.CharField(required=True, allow_blank=False, max_length=30)
     
     class Meta:
         model = User
         fields = ('username', 'email', 'password', 'password2', 'first_name', 'last_name', 'phone_number')
         extra_kwargs = {
-            'email': {'required': True},
-            'phone_number': {'required': False},
-            'first_name': {'required': False},
-            'last_name': {'required': False},
+            'email': {'required': True, 'allow_blank': False},
+            'first_name': {'required': False, 'allow_blank': True},
+            'last_name': {'required': False, 'allow_blank': True},
         }
+
+    def validate_email(self, value):
+        s = (value or '').strip()
+        if not s:
+            raise serializers.ValidationError('נא להזין אימייל.')
+        return s
+
+    def validate_phone_number(self, value):
+        return normalize_required_phone(value)
+
+    def validate_first_name(self, value):
+        return (value or '').strip()
+
+    def validate_last_name(self, value):
+        return (value or '').strip()
     
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -304,9 +332,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         validated_data.pop('password2')
-        phone_number = validated_data.get('phone_number')
-        if phone_number == '':
-            phone_number = None
         user = User.objects.create_user(
             username=validated_data['username'],
             email=validated_data['email'],
@@ -314,7 +339,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             first_name=validated_data.get('first_name', ''),
             last_name=validated_data.get('last_name', ''),
             role='buyer',
-            phone_number=phone_number,
+            phone_number=validated_data['phone_number'],
         )
         return user
 
@@ -372,10 +397,7 @@ class UpgradeToSellerSerializer(serializers.Serializer):
     accepted_escrow_terms = serializers.BooleanField(required=True)
 
     def validate_phone_number(self, value):
-        s = (value or '').strip()
-        if len(s) < 8:
-            raise serializers.ValidationError('נא להזין מספר טלפון תקין.')
-        return s
+        return normalize_required_phone(value)
 
     def validate_bit_phone_number(self, value):
         if value in (None, ''):
@@ -556,11 +578,16 @@ class OrderSerializer(serializers.ModelSerializer):
         return None
     
     def validate(self, attrs):
-        # Ensure either user or guest fields are provided
-        if not attrs.get('user') and not (attrs.get('guest_email') or attrs.get('guest_phone')):
-            raise serializers.ValidationError(
-                "Either a registered user or guest contact information (email/phone) is required."
-            )
+        if not attrs.get('user'):
+            guest_email = (attrs.get('guest_email') or '').strip()
+            guest_phone = (attrs.get('guest_phone') or '').strip()
+            errors = {}
+            if not guest_email:
+                errors['guest_email'] = 'נא להזין אימייל.'
+            if not guest_phone:
+                errors['guest_phone'] = 'נא להזין מספר טלפון.'
+            if errors:
+                raise serializers.ValidationError(errors)
         return attrs
 
 
@@ -852,10 +879,14 @@ class EventListSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializ
 
 
 class GuestCheckoutSerializer(serializers.Serializer):
-    guest_first_name = serializers.CharField(max_length=100, required=True, trim_whitespace=True)
-    guest_last_name = serializers.CharField(max_length=100, required=True, trim_whitespace=True)
-    guest_email = serializers.EmailField(required=True)
-    guest_phone = serializers.CharField(max_length=20, required=True)
+    guest_first_name = serializers.CharField(
+        max_length=100, required=False, allow_blank=True, default='', trim_whitespace=True
+    )
+    guest_last_name = serializers.CharField(
+        max_length=100, required=False, allow_blank=True, default='', trim_whitespace=True
+    )
+    guest_email = serializers.EmailField(required=True, allow_blank=False)
+    guest_phone = serializers.CharField(max_length=20, required=True, allow_blank=False)
     ticket_id = serializers.IntegerField(required=True)  # Used to find the ticket
     total_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
     quantity = serializers.IntegerField(required=True, min_value=1, max_value=10)
@@ -863,6 +894,9 @@ class GuestCheckoutSerializer(serializers.Serializer):
     listing_group_id = serializers.CharField(required=False, allow_blank=True, max_length=120)
     coupon_code = serializers.CharField(required=False, allow_blank=True, max_length=40)
     accepted_terms = serializers.BooleanField(required=True)
+
+    def validate_guest_phone(self, value):
+        return normalize_required_phone(value)
 
     def validate_accepted_terms(self, value):
         if value is not True:

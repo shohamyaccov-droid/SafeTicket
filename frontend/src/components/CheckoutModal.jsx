@@ -32,6 +32,7 @@ import CheckoutLegalAcceptance, {
 import ShabbatModal from './ShabbatModal';
 import BuyerIdentityInlineForm from './BuyerIdentityInlineForm';
 import { buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
+import { isGuestContactComplete, validateGuestContact as sharedValidateGuestContact } from '../utils/contactValidation';
 import { isCheckoutAuthSessionFailure } from '../utils/checkoutAuth';
 import { guestCanReserveCart, isGuestEmailRequiredError } from '../utils/checkoutGuest';
 import { getOrCreateCartToken, holdTimerLabel } from '../utils/cartToken';
@@ -155,24 +156,8 @@ function toFriendlyCheckoutMessage(detail) {
   return text;
 }
 
-function validateGuestContact({ firstName, lastName, email, phone }) {
-  const fn = String(firstName || '').trim();
-  if (fn.length < 2) {
-    return 'נא להזין שם פרטי תקין';
-  }
-  const ln = String(lastName || '').trim();
-  if (ln.length < 2) {
-    return 'נא להזין שם משפחה תקין';
-  }
-  const em = String(email || '').trim();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
-    return 'נא להזין אימייל תקין';
-  }
-  const digits = String(phone || '').replace(/\D/g, '');
-  if (digits.length < 9 || digits.length > 15) {
-    return 'נא להזין מספר טלפון תקין (לפחות 9 ספרות)';
-  }
-  return null;
+function validateGuestContact({ email, phone }) {
+  return sharedValidateGuestContact({ email, phone });
 }
 
 /** Pre-production mock gateway: digits-only PAN length 13–19; no Luhn (e.g. 1111111111111111 allowed). */
@@ -563,8 +548,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       return;
     }
     if (!user) {
-      if (!guestForm.firstName || !guestForm.lastName || !guestForm.email || !guestForm.phone) {
-        setError('אנא מלא את כל השדות הנדרשים');
+      if (!isGuestContactComplete(guestForm)) {
+        setError(validateGuestContact(guestForm) || 'נא להזין אימייל ומספר טלפון');
         setInfoStepBusy(false);
         return;
       }
@@ -1224,7 +1209,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     if (!skipCartReserveForNegotiatedOffer && !reservationActive) return;
     if (!user) {
       const g = guestForm;
-      if (!g.firstName || !g.lastName || !g.email || !g.phone) {
+      if (!isGuestContactComplete(g)) {
         setShowIdentityForm(true);
         setRetryPayAfterIdentity(true);
         return;
@@ -1591,12 +1576,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     budget > 0 ? Math.min(100, Math.max(0, ((budget - timeRemaining) / budget) * 100)) : 0;
   const waitingForReservation =
     !skipCartReserveForNegotiatedOffer && !reservationActive && step === 'payment';
+  const guestContactIncomplete = !user && !isGuestContactComplete(guestForm);
   const infoSubmitDisabled =
     loading ||
     infoStepBusy ||
     !legalAccepted ||
     timeRemaining === 0 ||
-    (!skipCartReserveForNegotiatedOffer && !reservationActive);
+    (!skipCartReserveForNegotiatedOffer && !reservationActive) ||
+    guestContactIncomplete;
   const paymentSubmitDisabled =
     loading ||
     checkoutSucceeded ||
@@ -2182,7 +2169,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                         last_name: identityOverride?.lastName ?? user.last_name,
                         phone_number: identityOverride?.phone ?? user.phone_number,
                       })
-                    : ['name', 'phone']
+                    : ['phone']
                 }
                 onCancel={() => {
                   setShowIdentityForm(false);
@@ -2526,27 +2513,25 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             </p>
             <form onSubmit={handleInfoSubmit}>
               <div className="form-group">
-                <label htmlFor="firstName">שם פרטי *</label>
+                <label htmlFor="firstName">שם פרטי</label>
                 <input
                   type="text"
                   id="firstName"
                   name="firstName"
                   value={guestForm.firstName}
                   onChange={handleGuestChange}
-                  required
                   placeholder="ישראל"
                   autoComplete="given-name"
                 />
               </div>
               <div className="form-group">
-                <label htmlFor="lastName">שם משפחה *</label>
+                <label htmlFor="lastName">שם משפחה</label>
                 <input
                   type="text"
                   id="lastName"
                   name="lastName"
                   value={guestForm.lastName}
                   onChange={handleGuestChange}
-                  required
                   placeholder="ישראלי"
                   autoComplete="family-name"
                 />

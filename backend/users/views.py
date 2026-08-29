@@ -1312,12 +1312,12 @@ def user_profile(request):
         if 'phone_number' in data:
             raw_phone = str(data.get('phone_number') or '').strip()
             digits = ''.join(ch for ch in raw_phone if ch.isdigit())
-            if digits and len(digits) < 9:
+            if not raw_phone or len(digits) < 9 or len(digits) > 15:
                 return Response(
                     {'error': 'נא להזין מספר טלפון תקין (לפחות 9 ספרות).', 'code': 'invalid_phone'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            user.phone_number = raw_phone or None
+            user.phone_number = raw_phone
             update_fields.append('phone_number')
 
         if not update_fields:
@@ -1325,14 +1325,6 @@ def user_profile(request):
                 {'error': 'No updatable fields provided (first_name, last_name, phone_number).'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        full = f'{(user.first_name or "").strip()} {(user.last_name or "").strip()}'.strip()
-        if 'first_name' in update_fields or 'last_name' in update_fields:
-            if len(full) < 2:
-                return Response(
-                    {'error': 'נא להזין שם מלא לתשלום.', 'code': 'invalid_name'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
 
         user.save(update_fields=update_fields)
         return Response({'user': UserSerializer(user, context={'request': request}).data})
@@ -3127,8 +3119,8 @@ def guest_checkout(request):
             order = Order.objects.create(
                 guest_email=order_data['guest_email'],
                 guest_phone=order_data['guest_phone'],
-                guest_first_name=order_data['guest_first_name'],
-                guest_last_name=order_data['guest_last_name'],
+                guest_first_name=order_data.get('guest_first_name') or '',
+                guest_last_name=order_data.get('guest_last_name') or '',
                 ticket=ticket,
                 total_amount=server_total,
                 currency=order_cur,

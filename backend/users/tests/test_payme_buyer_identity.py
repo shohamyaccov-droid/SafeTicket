@@ -97,6 +97,15 @@ class PaymeBuyerIdentityTests(TestCase):
         self.assertEqual(details['buyer_first_name'], 'Dana')
         self.assertEqual(details['buyer_last_name'], 'Cohen')
 
+    def test_resolve_buyer_details_falls_back_to_email_when_names_empty(self):
+        self.user.first_name = ''
+        self.user.last_name = ''
+        self.user.phone_number = '0501234567'
+        self.user.save()
+        details = resolve_buyer_details_for_order(self.order)
+        self.assertEqual(details['buyer_phone'], '0501234567')
+        self.assertTrue(details['buyer_name'])
+
     def test_generate_sale_body_includes_name_and_phone_aliases(self):
         body = build_standard_generate_sale_body(
             amount=Decimal('107.00'),

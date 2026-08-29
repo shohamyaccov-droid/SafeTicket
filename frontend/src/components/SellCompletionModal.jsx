@@ -54,7 +54,9 @@ export default function SellCompletionModal({
   const [authMode, setAuthMode] = useState('register');
   const [authForm, setAuthForm] = useState({
     first_name: '',
+    last_name: '',
     email: '',
+    phone_number: '',
     password: '',
   });
 
@@ -75,7 +77,7 @@ export default function SellCompletionModal({
         {authMode === 'register' ? 'יצירת חשבון מהירה' : 'התחברות'}
       </h2>
       <p className="sell-completion-lead">
-        רק שם, אימייל וסיסמה. הוספת חשבון בנק או ביט תתבצע לאחר העלאת הכרטיס.
+        רק אימייל, טלפון וסיסמה. שם הוא אופציונלי. הוספת חשבון בנק או ביט תתבצע לאחר העלאת הכרטיס.
       </p>
 
       {error ? (
@@ -87,13 +89,12 @@ export default function SellCompletionModal({
       <form onSubmit={handleSubmit} className="sell-completion-form sell-auth-form">
         {authMode === 'register' ? (
           <div className="form-group sell-completion-field">
-            <label htmlFor="sell_auth_first_name">שם</label>
+            <label htmlFor="sell_auth_first_name">שם (אופציונלי)</label>
             <input
               id="sell_auth_first_name"
               name="first_name"
               value={authForm.first_name}
               onChange={onAuthChange}
-              required
               autoComplete="given-name"
             />
             {fieldErrors.first_name ? (
@@ -102,7 +103,7 @@ export default function SellCompletionModal({
           </div>
         ) : null}
         <div className="form-group sell-completion-field">
-          <label htmlFor="sell_auth_email">אימייל</label>
+            <label htmlFor="sell_auth_email">אימייל *</label>
           <input
             id="sell_auth_email"
             type="email"
@@ -115,6 +116,26 @@ export default function SellCompletionModal({
           />
           {fieldErrors.email ? <span className="become-seller-field-error">{fieldErrors.email}</span> : null}
         </div>
+        {authMode === 'register' ? (
+          <div className="form-group sell-completion-field">
+            <label htmlFor="sell_auth_phone_number">מספר טלפון *</label>
+            <input
+              id="sell_auth_phone_number"
+              type="tel"
+              name="phone_number"
+              value={authForm.phone_number}
+              onChange={onAuthChange}
+              required
+              dir="ltr"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="050-1234567"
+            />
+            {fieldErrors.phone_number ? (
+              <span className="become-seller-field-error">{fieldErrors.phone_number}</span>
+            ) : null}
+          </div>
+        ) : null}
         <PasswordField
           id="sell_auth_password"
           name="password"
@@ -138,7 +159,16 @@ export default function SellCompletionModal({
           <button type="button" className="sell-wizard-back" onClick={onBack} disabled={saving}>
             חזרה
           </button>
-          <button type="submit" className="become-seller-submit sell-completion-submit" disabled={saving}>
+          <button
+            type="submit"
+            className="become-seller-submit sell-completion-submit"
+            disabled={
+              saving ||
+              !(authForm.email || '').trim() ||
+              !(authForm.password || '').trim() ||
+              (authMode === 'register' && String(authForm.phone_number || '').replace(/\D/g, '').length < 9)
+            }
+          >
             {saving ? 'מפרסם…' : 'פרסם כרטיס'}
           </button>
         </div>

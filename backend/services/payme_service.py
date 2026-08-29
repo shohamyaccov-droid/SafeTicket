@@ -305,6 +305,12 @@ def _looks_like_email(value: str) -> bool:
     return '@' in (value or '')
 
 
+def fallback_buyer_name_from_email(email: str) -> str:
+    """PayMe still wants a buyer_name; use the email local-part when legal name is optional."""
+    local = (email or '').split('@')[0].strip()
+    return local[:100] if local else ''
+
+
 def resolve_buyer_details_for_order(order) -> dict[str, str]:
     """Buyer identity for PayMe generate-sale + hosted page prefill (Bit / cards)."""
     if getattr(order, 'user_id', None):
@@ -325,11 +331,14 @@ def resolve_buyer_details_for_order(order) -> dict[str, str]:
             last = (getattr(user, 'last_name', None) or '').strip()
             full = f'{first} {last}'.strip()
             if not full:
-                # Do not treat email-like usernames as a legal buyer name for PayMe.
                 uname = (getattr(user, 'username', None) or '').strip()
                 if uname and not _looks_like_email(uname):
                     full = uname
                     first, last = split_buyer_name(full)
+                else:
+                    full = fallback_buyer_name_from_email(getattr(user, 'email', None) or uname)
+                    if full and not first:
+                        first = full
             phone_raw = (
                 getattr(user, 'phone_number', None)
                 or getattr(user, 'bit_phone_number', None)
@@ -348,6 +357,10 @@ def resolve_buyer_details_for_order(order) -> dict[str, str]:
     first = (getattr(order, 'guest_first_name', None) or '').strip()
     last = (getattr(order, 'guest_last_name', None) or '').strip()
     full = f'{first} {last}'.strip()
+    if not full:
+        full = fallback_buyer_name_from_email(getattr(order, 'guest_email', None) or '')
+        if full and not first:
+            first = full
     phone = normalize_payme_buyer_phone(getattr(order, 'guest_phone', None))
     return {
         'buyer_first_name': first,

@@ -4,14 +4,14 @@ import { authAPI } from '../services/api';
 import './BuyerIdentityInlineForm.css';
 
 /**
- * Collect missing PayMe identity (first/last name + phone) without leaving checkout.
+ * Collect missing checkout identity (phone required; names optional) without leaving checkout.
  */
 export default function BuyerIdentityInlineForm({
   user,
   initialFirstName = '',
   initialLastName = '',
   initialPhone = '',
-  missingFields = ['name', 'phone'],
+  missingFields = ['phone'],
   submitLabel = 'שמור והמשך לתשלום',
   onSaved,
   onCancel,
@@ -36,16 +36,6 @@ export default function BuyerIdentityInlineForm({
     const fn = firstName.trim();
     const ln = lastName.trim();
     const ph = phone.trim();
-    if (needName) {
-      if (fn.length < 2) {
-        setError('נא להזין שם פרטי תקין');
-        return;
-      }
-      if (ln.length < 2) {
-        setError('נא להזין שם משפחה תקין');
-        return;
-      }
-    }
     if (needPhone) {
       const digits = ph.replace(/\D/g, '');
       if (digits.length < 9 || digits.length > 15) {
@@ -90,7 +80,7 @@ export default function BuyerIdentityInlineForm({
   return (
     <form className="buyer-identity-inline" onSubmit={handleSubmit} dir="rtl" noValidate>
       <p className="buyer-identity-inline__lead">
-        חסרים פרטים להשלמת התשלום. מלאו אותם כאן והמשיכו בלי לעזוב את העמוד.
+        חסר מספר טלפון להשלמת התשלום. מלאו אותו כאן והמשיכו בלי לעזוב את העמוד.
       </p>
       {needName ? (
         <div className="buyer-identity-inline__row">
@@ -103,7 +93,6 @@ export default function BuyerIdentityInlineForm({
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
               disabled={saving}
-              required
             />
           </div>
           <div className="buyer-identity-inline__field">
@@ -115,7 +104,6 @@ export default function BuyerIdentityInlineForm({
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
               disabled={saving}
-              required
             />
           </div>
         </div>
@@ -148,7 +136,11 @@ export default function BuyerIdentityInlineForm({
             ביטול
           </button>
         ) : null}
-        <button type="submit" className="buyer-identity-inline__submit" disabled={saving}>
+        <button
+          type="submit"
+          className="buyer-identity-inline__submit"
+          disabled={saving || (needPhone && phone.replace(/\D/g, '').length < 9)}
+        >
           {saving ? 'שומר…' : submitLabel}
         </button>
       </div>

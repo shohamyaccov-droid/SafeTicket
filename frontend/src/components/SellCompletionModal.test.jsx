@@ -14,7 +14,7 @@ describe('SellCompletionModal copy', () => {
       />,
     );
     expect(
-      screen.getByText('רק שם, אימייל וסיסמה. הוספת חשבון בנק או ביט תתבצע לאחר העלאת הכרטיס.'),
+      screen.getByText('רק אימייל, טלפון וסיסמה. שם הוא אופציונלי. הוספת חשבון בנק או ביט תתבצע לאחר העלאת הכרטיס.'),
     ).toBeInTheDocument();
   });
 });

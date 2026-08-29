@@ -125,10 +125,6 @@ const AccountSettingsTab = () => {
     const firstName = String(personal.firstName || '').trim();
     const lastName = String(personal.lastName || '').trim();
     const phone = String(personal.phone || '').trim();
-    if (`${firstName} ${lastName}`.trim().length < 2) {
-      toastError('נא להזין שם מלא.');
-      return;
-    }
     if (phone.replace(/\D/g, '').length < 9) {
       toastError('נא להזין מספר טלפון תקין (לפחות 9 ספרות).');
       return;
@@ -161,7 +157,7 @@ const AccountSettingsTab = () => {
         <section className="settings-section">
           <h3 className="settings-section-title">פרטים אישיים</h3>
           <p className="settings-section-hint">
-            שם מלא ומספר טלפון נדרשים להשלמת תשלום (PayMe / Apple Pay).
+            אימייל ומספר טלפון נדרשים להשלמת תשלום. שם פרטי ושם משפחה הם אופציונליים.
           </p>
           <div className="settings-fields">
             <div className="settings-field">
@@ -180,7 +176,7 @@ const AccountSettingsTab = () => {
               />
             </div>
             <div className="settings-field">
-              <label htmlFor="firstName">שם פרטי *</label>
+              <label htmlFor="firstName">שם פרטי</label>
               <input
                 id="firstName"
                 type="text"
@@ -188,11 +184,10 @@ const AccountSettingsTab = () => {
                 onChange={(e) => handlePersonalChange('firstName', e.target.value)}
                 placeholder="ישראל"
                 autoComplete="given-name"
-                required
               />
             </div>
             <div className="settings-field">
-              <label htmlFor="lastName">שם משפחה *</label>
+              <label htmlFor="lastName">שם משפחה</label>
               <input
                 id="lastName"
                 type="text"
@@ -200,7 +195,6 @@ const AccountSettingsTab = () => {
                 onChange={(e) => handlePersonalChange('lastName', e.target.value)}
                 placeholder="ישראלי"
                 autoComplete="family-name"
-                required
               />
             </div>
             <div className="settings-field">
@@ -283,7 +277,11 @@ const AccountSettingsTab = () => {
           </div>
         </section>
 
-        <button type="submit" className="primary-button save-settings-btn" disabled={saving}>
+        <button
+          type="submit"
+          className="primary-button save-settings-btn"
+          disabled={saving || String(personal.phone || '').replace(/\D/g, '').length < 9}
+        >
           {saving ? 'שומר...' : 'שמור שינויים'}
         </button>
       </form>

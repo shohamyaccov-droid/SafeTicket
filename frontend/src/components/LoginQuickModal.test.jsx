@@ -33,6 +33,9 @@ describe('LoginQuickModal', () => {
     expect(screen.getByRole('dialog', { name: 'הרשמה' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'הרשמה' })).toBeInTheDocument();
     expect(screen.getByLabelText('שם פרטי')).toBeInTheDocument();
+    expect(screen.getByLabelText('שם פרטי')).not.toBeRequired();
+    expect(screen.getByLabelText('מספר טלפון *')).toBeRequired();
+    expect(screen.getByRole('button', { name: 'הרשמה' })).toBeDisabled();
     expect(screen.queryByRole('link', { name: /הירשם כאן/ })).not.toBeInTheDocument();
   });
 });

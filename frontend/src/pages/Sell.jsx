@@ -192,10 +192,13 @@ function buildSellListingDraftSnapshot({
 function validateAuthPayload(payload) {
   const fe = {};
   const { authMode, authForm } = payload;
-  if (authMode === 'register' && !(authForm?.first_name || '').trim()) {
-    fe.first_name = 'נא להזין שם.';
-  }
   if (!(authForm?.email || '').trim()) fe.email = 'נא להזין אימייל.';
+  if (authMode === 'register') {
+    const digits = String(authForm?.phone_number || '').replace(/\D/g, '');
+    if (digits.length < 9 || digits.length > 15) {
+      fe.phone_number = 'נא להזין מספר טלפון תקין (לפחות 9 ספרות).';
+    }
+  }
   if (!(authForm?.password || '').trim()) fe.password = 'נא להזין סיסמה.';
   return fe;
 }
@@ -957,8 +960,9 @@ const Sell = () => {
         const reg = await register({
           username: authForm.email.trim(),
           email: authForm.email.trim(),
-          first_name: authForm.first_name.trim(),
-          last_name: authForm.first_name.trim() || '-',
+          first_name: (authForm.first_name || '').trim(),
+          last_name: (authForm.last_name || '').trim(),
+          phone_number: (authForm.phone_number || '').trim(),
           password: authForm.password,
           password2: authForm.password,
           role: 'buyer',
