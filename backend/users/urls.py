@@ -11,6 +11,7 @@ from .shabbat import shabbat_status_view
 from .views import (
     RegisterView,
     verify_email,
+    request_sms_verification,
     CustomTokenObtainPairView,
     CookieTokenRefreshView,
     csrf_token_view,
@@ -57,6 +58,7 @@ urlpatterns = [
     path('csrf/', csrf_token_view, name='csrf_token'),
     path('register/', RegisterView.as_view(), name='register'),
     path('verify-email/', verify_email, name='verify_email'),
+    path('sms/request/', request_sms_verification, name='sms_request'),
     path('login/', CustomTokenObtainPairView.as_view(), name='login'),
     path('logout/', logout_view, name='logout'),
     path('token/refresh/', CookieTokenRefreshView.as_view(), name='token_refresh'),

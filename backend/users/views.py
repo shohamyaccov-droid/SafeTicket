@@ -12,6 +12,14 @@ from .throttles import (
     CheckoutMutationScopedThrottle,
     CheckoutReserveScopedThrottle,
     OffersMutationScopedThrottle,
+    PublicCatalogScopedThrottle,
+    SmsVerificationScopedThrottle,
+)
+from .querysets import (
+    EVENT_CATALOG_SELECT_RELATED,
+    TICKET_CATALOG_SELECT_RELATED,
+    annotate_active_tickets_total,
+    event_venue_sections_prefetch,
 )
 from rest_framework.decorators import api_view, permission_classes, action, throttle_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
@@ -1155,6 +1163,49 @@ def verify_email(request):
     }, status=status.HTTP_200_OK)
 
 
+@csrf_required
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([SmsVerificationScopedThrottle])
+def request_sms_verification(request):
+    """
+    Start phone OTP. Does not send SMS unless SMS_PROVIDER_ENABLED is configured.
+    The endpoint exists so abuse is absorbed by sms_verification throttle, not an open send path.
+    """
+    import hashlib
+    import secrets
+
+    from django.conf import settings
+    from django.core.cache import cache
+    from rest_framework.serializers import ValidationError as DrfValidationError
+
+    from users.serializers import normalize_required_phone
+
+    try:
+        phone = normalize_required_phone(request.data.get('phone'))
+    except DrfValidationError as exc:
+        return Response({'error': exc.detail}, status=status.HTTP_400_BAD_REQUEST)
+
+    digits = ''.join(ch for ch in phone if ch.isdigit())
+    phone_hash = hashlib.sha256(digits.encode('utf-8')).hexdigest()
+    otp = f'{secrets.randbelow(1_000_000):06d}'
+    cache.set(f'sms_otp:{phone_hash}', otp, timeout=600)
+
+    sent = False
+    if getattr(settings, 'SMS_PROVIDER_ENABLED', False):
+        # Provider hook is intentionally closed until a sender is wired.
+        sent = False
+
+    return Response(
+        {
+            'ok': True,
+            'sent': sent,
+            'phone_suffix': digits[-4:] if len(digits) >= 4 else '',
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
 @method_decorator(csrf_exempt, name='dispatch')
 class CustomTokenObtainPairView(TokenObtainPairView):
     """
@@ -1486,7 +1537,7 @@ def user_activity(request):
         all_listings = list(
             Ticket.objects.filter(seller=user)
             .order_by('-created_at')
-            .select_related('event', 'event__venue_place')
+            .select_related('event', 'event__artist', 'event__venue_place')
             .prefetch_related(
                 Prefetch('orders', queryset=Order.objects.only('id', 'ticket_id', 'status'))
             )
@@ -3186,9 +3237,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
     
     def get_queryset(self):
-        import logging
         from django.db.models import Q
-        logger = logging.getLogger(__name__)
         # Lazy cart abandonment cleanup
         release_abandoned_carts()
         now = timezone.now()
@@ -3205,24 +3254,24 @@ class TicketViewSet(viewsets.ModelViewSet):
                 | Q(status__in=('sold', 'pending_payout'))
             )
             .filter(upcoming_filter)
-            .select_related('event', 'event__venue_place', 'seller', 'venue_section')
+            .select_related(*TICKET_CATALOG_SELECT_RELATED)
         )
-        
-        # Log the count for verification
-        count = queryset.count()
-        logger.debug(f'Active tickets ready: {count}')
-        logger.info(f'TicketViewSet.get_queryset: Active tickets ready: {count}')
         
         # For authenticated users, also show their own tickets (for sellers to manage) - same upcoming filter
         if self.request.user.is_authenticated:
             user_tickets = ticket_queryset_defer_event_rollout_columns(
                 Ticket.objects.filter(seller=self.request.user)
                 .filter(upcoming_filter)
-                .select_related('event', 'event__venue_place', 'seller', 'venue_section')
+                .select_related(*TICKET_CATALOG_SELECT_RELATED)
             )
             queryset = queryset | user_tickets
         
         return queryset.distinct().order_by('-created_at')
+
+    def get_throttles(self):
+        if getattr(self, 'action', None) in ('list', 'retrieve'):
+            return [PublicCatalogScopedThrottle()]
+        return super().get_throttles()
     
     def create(self, request, *args, **kwargs):
         """
@@ -4110,6 +4159,7 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Event.objects.all()
     permission_classes = [IsAuthenticatedOrReadOnly]
+    throttle_classes = [PublicCatalogScopedThrottle]
     # Homepage / Sell need the full upcoming marketplace (default PAGE_SIZE=20 hid whole categories).
     pagination_class = None
 
@@ -4166,7 +4216,7 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
                 search = qp.get('search')
                 if search:
                     qs = qs.filter(name__icontains=search)
-                return event_queryset_defer_rollout_columns(qs)
+                return qs
 
         queryset = (
             Event.objects.filter(date__gte=now)
@@ -4219,19 +4269,16 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
                     .order_by('date', 'name')
                 )
 
-        return event_queryset_defer_rollout_columns(queryset)
+        return queryset
     
     def get_object(self):
         from users.seo import resolve_event_by_identifier
 
         # Marketplace list is upcoming-only. Detail retrieve / SEO must still
         # resolve past events (passed-event UX) and legacy_slug aliases without 404.
-        queryset = event_queryset_defer_rollout_columns(
-            Event.objects.select_related('artist', 'venue_place').prefetch_related(
-                Prefetch(
-                    'venue_place__sections',
-                    queryset=VenueSection.objects.order_by('name'),
-                ),
+        queryset = annotate_active_tickets_total(
+            Event.objects.select_related(*EVENT_CATALOG_SELECT_RELATED).prefetch_related(
+                event_venue_sections_prefetch(),
             )
         )
         obj = resolve_event_by_identifier(self.kwargs.get('pk'), queryset)
@@ -4290,7 +4337,7 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
                 | Q(status=TICKET_STATUS_TAKEN)
                 | Q(status__in=('sold', 'pending_payout'))
             )
-            .select_related('event', 'event__venue_place', 'seller', 'venue_section')
+            .select_related(*TICKET_CATALOG_SELECT_RELATED)
         )
         
         # Filtering
@@ -4423,11 +4470,6 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
         else:
             tickets = tickets.order_by('asking_price', '-created_at')
         
-        # Log the count for verification
-        count = tickets.count()
-        logger.debug(f'Active tickets found for event {pk}: {count}')
-        logger.info(f'EventViewSet.tickets: Active tickets found for event {pk}: {count}')
-        
         tickets = tickets.distinct()
         serializer = TicketListSerializer(tickets, many=True, context={'request': request})
         response = Response(serializer.data)
@@ -4442,6 +4484,7 @@ class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Artist.objects.all()
     permission_classes = [IsAuthenticatedOrReadOnly]
+    throttle_classes = [PublicCatalogScopedThrottle]
     pagination_class = None
 
     def get_serializer_class(self):
@@ -4546,17 +4589,11 @@ class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
         """
         artist = self.get_object()
         now = timezone.now()
-        events = event_queryset_defer_rollout_columns(
+        events = annotate_active_tickets_total(
             Event.objects.filter(artist=artist, date__gte=now, status='פעיל')
-            .select_related('artist')
-            .annotate(
-                _active_tickets_total=Coalesce(
-                    Sum('tickets__available_quantity', filter=Q(tickets__status='active')),
-                    Value(0),
-                )
-            )
-            .order_by('date', 'name')
-        )
+            .select_related(*EVENT_CATALOG_SELECT_RELATED)
+            .prefetch_related(event_venue_sections_prefetch())
+        ).order_by('date', 'name')
         serializer = EventListSerializer(events, many=True, context={'request': request})
         return Response(serializer.data)
 

@@ -466,8 +466,16 @@ REST_FRAMEWORK = {
         'offers_mutations': '90/minute',
         'checkout': '60/minute',
         'checkout_reserve': '120/minute',
+        'public_catalog': '90/minute',
+        'sms_verification': '5/hour',
     },
 }
+
+# SMS OTP send is off unless an explicit provider is wired. The request endpoint
+# still exists so bots hit the throttle instead of an unbounded send path.
+SMS_PROVIDER_ENABLED = os.environ.get('SMS_PROVIDER_ENABLED', '').strip().lower() in (
+    '1', 'true', 'yes', 'on',
+)
 
 # Simple JWT settings
 from datetime import timedelta
