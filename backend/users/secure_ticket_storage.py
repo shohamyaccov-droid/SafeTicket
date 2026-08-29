@@ -33,6 +33,29 @@ def ticket_attachment_magic_bytes_ok(head: bytes) -> bool:
     return False
 
 
+def validate_receipt_upload(uploaded_file, *, max_bytes: int = 15 * 1024 * 1024) -> str | None:
+    """Return a Hebrew error string if the receipt is not a real PDF/JPEG/PNG."""
+    if not uploaded_file:
+        return None
+    size = getattr(uploaded_file, 'size', None)
+    if size is not None and int(size) < 1:
+        return 'קובץ הוכחת קנייה ריק.'
+    if size is not None and int(size) > max_bytes:
+        return 'קובץ הוכחת קנייה גדול מדי (מקס׳ 15MB).'
+    name = (getattr(uploaded_file, 'name', '') or '').lower()
+    if name and not any(name.endswith(ext) for ext in ('.pdf', '.jpg', '.jpeg', '.png')):
+        return 'הוכחת קנייה חייבת להיות PDF, JPG או PNG.'
+    if hasattr(uploaded_file, 'seek'):
+        uploaded_file.seek(0)
+        head = uploaded_file.read(12)
+        uploaded_file.seek(0)
+    else:
+        head = b''
+    if not ticket_attachment_magic_bytes_ok(head):
+        return 'הוכחת קנייה חייבת להיות קובץ PDF, JPG או PNG תקף.'
+    return None
+
+
 def _normalize_ticket_ext(filename: str, *, default: str = '.pdf') -> str:
     ext = os.path.splitext(filename or '')[1].lower()
     if ext in _ALLOWED_TICKET_EXTS:

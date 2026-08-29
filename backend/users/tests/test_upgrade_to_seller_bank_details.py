@@ -113,3 +113,16 @@ class UpgradeToSellerBankDetailsTests(TestCase):
             format='json',
         )
         self.assertEqual(res.status_code, 400)
+
+    def test_upgrade_rejects_omitted_phone(self):
+        self.client.force_authenticate(self.buyer)
+        payload = _valid_payload()
+        payload.pop('phone_number')
+        res = self.client.post(UPGRADE_URL, payload, format='json')
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn('phone_number', res.json())
+
+    def test_upgrade_rejects_blank_phone(self):
+        self.client.force_authenticate(self.buyer)
+        res = self.client.post(UPGRADE_URL, _valid_payload(phone_number=''), format='json')
+        self.assertEqual(res.status_code, 400, res.content)

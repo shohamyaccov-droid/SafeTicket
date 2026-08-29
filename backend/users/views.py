@@ -3254,7 +3254,10 @@ class TicketViewSet(viewsets.ModelViewSet):
             pdf_files_count = 1
         
         available_quantity = max(1, min(10, _safe_int(request.data.get('available_quantity', 1), 1)))
-        relax_pdf = getattr(settings, 'RELAX_PDF_UPLOAD_VALIDATION', False)
+        # Never honor the relax flag outside DEBUG — production must keep magic+MIME checks.
+        relax_pdf = bool(getattr(settings, 'RELAX_PDF_UPLOAD_VALIDATION', False)) and bool(
+            settings.DEBUG
+        )
 
         # AUTO-SPLIT MODE: 1 multi-page PDF for N tickets (images cannot be split)
         is_auto_split_mode = len(pdf_files) == 1 and available_quantity > 1
@@ -3401,6 +3404,11 @@ class TicketViewSet(viewsets.ModelViewSet):
         receipt_upload = request.FILES.get('receipt_file')
         receipt_dup = None
         if receipt_upload:
+            from users.secure_ticket_storage import validate_receipt_upload
+
+            receipt_error = validate_receipt_upload(receipt_upload)
+            if receipt_error:
+                return Response({'error': receipt_error}, status=status.HTTP_400_BAD_REQUEST)
             receipt_upload.seek(0)
             receipt_dup = (receipt_upload.read(), getattr(receipt_upload, 'name', 'receipt') or 'receipt')
             receipt_upload.seek(0)

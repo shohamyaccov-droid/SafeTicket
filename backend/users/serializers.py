@@ -1044,10 +1044,11 @@ class TicketSerializer(serializers.ModelSerializer):
     def validate_receipt_file(self, value):
         if not value:
             return value
-        if getattr(value, 'size', None) is not None and int(value.size) < 1:
-            raise serializers.ValidationError('קובץ הוכחת קנייה ריק.')
-        if getattr(value, 'size', None) is not None and int(value.size) > 15 * 1024 * 1024:
-            raise serializers.ValidationError('קובץ הוכחת קנייה גדול מדי (מקס׳ 15MB).')
+        from users.secure_ticket_storage import validate_receipt_upload
+
+        error = validate_receipt_upload(value)
+        if error:
+            raise serializers.ValidationError(error)
         return value
 
     def validate(self, attrs):
@@ -1196,6 +1197,20 @@ class TicketSerializer(serializers.ModelSerializer):
         for k in ('original_price', 'asking_price'):
             if k in ret and ret[k] is not None:
                 ret[k] = money_amount_for_api(getattr(instance, k), cur)
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        is_privileged = bool(
+            user
+            and getattr(user, 'is_authenticated', False)
+            and (
+                instance.seller_id == getattr(user, 'id', None)
+                or getattr(user, 'is_staff', False)
+                or getattr(user, 'is_superuser', False)
+            )
+        )
+        if not is_privileged:
+            ret.pop('reservation_email', None)
+            ret.pop('reserved_by', None)
         return ret
 
 

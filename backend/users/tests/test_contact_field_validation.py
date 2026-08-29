@@ -164,3 +164,10 @@ class GuestCheckoutContactValidationTests(TestCase):
             format='json',
         )
         self.assertEqual(res.status_code, 400, res.data)
+
+    def test_guest_checkout_rejects_omitted_phone_field(self):
+        payload = self._guest_payload()
+        payload.pop('guest_phone')
+        res = self.client.post('/api/users/orders/guest/', payload, format='json')
+        self.assertEqual(res.status_code, 400, res.data)
+        self.assertFalse(Order.objects.filter(guest_email='guest_optional_name@example.test').exists())
