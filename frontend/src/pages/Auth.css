@@ -19,6 +19,7 @@
   box-shadow: var(--shadow-sm);
 }
 
+.auth-card h1,
 .auth-card h2 {
   margin-bottom: var(--spacing-lg);
   text-align: center;
@@ -171,7 +172,8 @@
     border-radius: 16px;
   }
 
-  .auth-card h2 {
+  .auth-card h1,
+.auth-card h2 {
     font-size: 1.55rem;
     margin-bottom: 1rem;
   }

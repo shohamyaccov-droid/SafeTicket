@@ -303,7 +303,12 @@ const Home = () => {
   if (loading) {
     return (
       <div className="home-container home-container--loading">
-        <PageSeo title={HOME_PAGE_TITLE} description={HOME_PAGE_DESCRIPTION} path="/" />
+        <PageSeo
+          title={HOME_PAGE_TITLE}
+          description={HOME_PAGE_DESCRIPTION}
+          path="/"
+          breadcrumbs={[{ name: 'דף הבית', path: '/' }]}
+        />
         <EventsPageSkeleton variant="home" />
       </div>
     );
@@ -462,7 +467,12 @@ const Home = () => {
 
   return (
     <div className="home-container">
-      <PageSeo title={HOME_PAGE_TITLE} description={HOME_PAGE_DESCRIPTION} path="/" />
+      <PageSeo
+        title={HOME_PAGE_TITLE}
+        description={HOME_PAGE_DESCRIPTION}
+        path="/"
+        breadcrumbs={[{ name: 'דף הבית', path: '/' }]}
+      />
       {loadError && (
         <div className="home-fetch-banner" role="alert">
           <p>
@@ -520,8 +530,8 @@ const Home = () => {
         <aside className="hero-buyer-guarantee" aria-label="ביטחון קונים">
           <BuyerGuarantee />
         </aside>
-        <div className="hero-trust-ribbon" role="list" aria-label="שלושת השלבים עם TradeTix">
-          <div className="hero-trust-item" role="listitem">
+        <ol className="hero-trust-ribbon" aria-label="שלושת השלבים עם TradeTix">
+          <li className="hero-trust-item">
             <span className="hero-trust-icon" aria-hidden="true">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
@@ -529,13 +539,13 @@ const Home = () => {
               </svg>
             </span>
             <span className="hero-trust-text">1. חיפוש</span>
-          </div>
-          <span className="hero-trust-sep" aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M15 6L9 12L15 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </span>
-          <div className="hero-trust-item" role="listitem">
+            <span className="hero-trust-sep" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M15 6L9 12L15 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          </li>
+          <li className="hero-trust-item">
             <span className="hero-trust-icon" aria-hidden="true">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <path d="M12 3L20 7V12C20 16.418 16.418 20 12 21C7.582 20 4 16.418 4 12V7L12 3Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
@@ -543,13 +553,13 @@ const Home = () => {
               </svg>
             </span>
             <span className="hero-trust-text">2. אימות</span>
-          </div>
-          <span className="hero-trust-sep" aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M15 6L9 12L15 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </span>
-          <div className="hero-trust-item" role="listitem">
+            <span className="hero-trust-sep" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M15 6L9 12L15 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          </li>
+          <li className="hero-trust-item">
             <span className="hero-trust-icon" aria-hidden="true">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <path d="M4 10L12 4L20 10V20H4V10Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
@@ -557,11 +567,11 @@ const Home = () => {
               </svg>
             </span>
             <span className="hero-trust-text">3. כניסה</span>
-          </div>
-        </div>
+          </li>
+        </ol>
       </section>
 
-      <div ref={resultsRef} className="home-layout">
+      <section ref={resultsRef} className="home-layout" aria-label="אירועים ואמנים">
         {inventoryEvents.length === 0 && allPerformers.length === 0 ? (
           <div className="home-empty-wrap home-layout__rows">
             <EmptyState
@@ -591,7 +601,7 @@ const Home = () => {
             <CarouselSection slug="sports" title="כדורגל וספורט" kind="performer" performers={sportsPerformers} />
           </div>
         )}
-      </div>
+      </section>
 
       {datePickGroup ? (
         <div

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 
 import Dashboard from './Dashboard';
 import { authAPI, offerAPI, ticketAPI } from '../services/api';
@@ -80,9 +81,11 @@ describe('Dashboard buyer order download', () => {
     });
 
     render(
-      <MemoryRouter>
-        <Dashboard />
-      </MemoryRouter>,
+      <HelmetProvider>
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>
+      </HelmetProvider>,
     );
 
     const button = await screen.findByRole('button', { name: 'הורד כרטיס' });
@@ -107,9 +110,11 @@ describe('Dashboard buyer order download', () => {
     });
 
     render(
-      <MemoryRouter>
-        <Dashboard />
-      </MemoryRouter>,
+      <HelmetProvider>
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>
+      </HelmetProvider>,
     );
 
     expect(await screen.findByRole('button', { name: 'הורד כרטיס' })).toBeInTheDocument();
@@ -126,9 +131,11 @@ describe('Dashboard buyer order download', () => {
     });
 
     render(
-      <MemoryRouter>
-        <Dashboard />
-      </MemoryRouter>,
+      <HelmetProvider>
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>
+      </HelmetProvider>,
     );
 
     await user.click(await screen.findByRole('button', { name: 'הורד כרטיס' }));
@@ -155,9 +162,11 @@ describe('Dashboard buyer order download', () => {
     });
 
     render(
-      <MemoryRouter>
-        <Dashboard />
-      </MemoryRouter>,
+      <HelmetProvider>
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>
+      </HelmetProvider>,
     );
 
     await user.click(await screen.findByRole('button', { name: 'הורד כרטיס' }));
@@ -188,9 +197,11 @@ describe('Dashboard buyer order download', () => {
     });
 
     render(
-      <MemoryRouter>
-        <Dashboard />
-      </MemoryRouter>,
+      <HelmetProvider>
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>
+      </HelmetProvider>,
     );
 
     expect(await screen.findByText(/גוש 11/)).toBeInTheDocument();

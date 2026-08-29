@@ -1,0 +1,54 @@
+{
+  "/about": {
+    "title": "אודות TradeTix - זירת מסחר מאובטחת לכרטיסים יד שנייה",
+    "description": "TradeTix היא זירת מסחר דיגיטלית מאובטחת לקנייה ומכירה של כרטיסים יד שנייה בישראל. תשלום בנאמנות (SafePay) והגנה על הקונה והמוכר."
+  },
+  "/terms": {
+    "title": "תקנון ותנאי שימוש | TradeTix",
+    "description": "תקנון TradeTix: זירת מסחר משנית לכרטיסים, Merchant of Record, נאמנות SafePay, עמלות ואימות משתמשים."
+  },
+  "/privacy": {
+    "title": "מדיניות פרטיות | TradeTix",
+    "description": "מדיניות הפרטיות של TradeTix לפי חוק הגנת הפרטיות בישראל: איסוף מידע, אימות טלפון, ופניות בנושא פרטיות."
+  },
+  "/refunds": {
+    "title": "ביטולים, אחריות והחזרים | TradeTix",
+    "description": "מדיניות החזרים של TradeTix: נאמנות 36 שעות אחרי האירוע, ביטול או דחיית הופעה, וכרטיס לא תקף."
+  },
+  "/buyer-guarantee": {
+    "title": "הגנת הקונה | TradeTix",
+    "description": "הגנת הקונה ב-TradeTix: הכסף נשמר בנאמנות עד לאחר ההופעה. אם הכרטיס לא תקף — זכאים להחזר לפי התקנון."
+  },
+  "/accessibility": {
+    "title": "הצהרת נגישות | TradeTix",
+    "description": "הצהרת הנגישות של TradeTix: מחויבות להנגשת האתר לכלל המשתמשים בהתאם לעקרונות הנגישות בישראל."
+  },
+  "/contact": {
+    "title": "צור קשר | TradeTix",
+    "description": "צרו קשר עם צוות TradeTix בנושא הזמנה, מכירת כרטיס או תמיכה. נחזור אליכם בהקדם."
+  },
+  "/sell/new": {
+    "title": "מכירת כרטיס להופעה ב-0% עמלה | TradeTix",
+    "description": "מכרו כרטיס להופעה ב-TradeTix בחינם (0% עמלה למוכר). אימות טלפון חובה, והכסף נשמר בנאמנות SafePay עד אחרי ההופעה."
+  },
+  "/login": {
+    "title": "התחברות | TradeTix",
+    "description": "התחברו ל-TradeTix כדי לקנות או למכור כרטיסים יד שנייה בבטחה."
+  },
+  "/register": {
+    "title": "הרשמה | TradeTix",
+    "description": "הירשמו ל-TradeTix: אימייל וטלפון חובה. מכירה ב-0% עמלה וקנייה עם הגנת קונה."
+  },
+  "/faq": {
+    "title": "שאלות ותשובות | TradeTix",
+    "description": "תשובות על רכישת כרטיסים, הגנת הקונה, עמלות, ביטול אירוע ומסירת PDF ב-TradeTix."
+  },
+  "/dashboard": {
+    "title": "האזור האישי | TradeTix",
+    "description": "ניהול הרכישות, המכירות וההצעות שלך ב-TradeTix."
+  },
+  "/profile": {
+    "title": "הפרופיל שלי | TradeTix",
+    "description": "פרטי החשבון, רכישות ומודעות ב-TradeTix."
+  }
+}

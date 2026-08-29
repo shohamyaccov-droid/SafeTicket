@@ -1,13 +1,22 @@
 import { Link } from 'react-router-dom';
+import PageSeo from '../components/PageSeo';
+import { getStaticPageMeta, staticPageBreadcrumbs } from '../content/staticPageMeta';
 import './Terms.css';
 
 /**
  * ביטולים, אחריות והחזרים — מטריצת החזרים מיושרת עם התקנון וה-FAQ.
  */
 const RefundsPage = () => {
+  const meta = getStaticPageMeta('/refunds');
   return (
     <div className="terms-container">
-      <div className="terms-card">
+      <PageSeo
+        title={meta.title}
+        description={meta.description}
+        path="/refunds"
+        breadcrumbs={staticPageBreadcrumbs('/refunds')}
+      />
+      <article className="terms-card">
         <h1 className="terms-title">ביטולים, אחריות והחזרים</h1>
         <p className="terms-lead" style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
           מסמך זה משלים את <Link to="/terms">תקנון השימוש</Link> ואת{' '}
@@ -123,7 +132,7 @@ const RefundsPage = () => {
             <Link to="/about">אודות</Link>.
           </p>
         </section>
-      </div>
+      </article>
     </div>
   );
 };

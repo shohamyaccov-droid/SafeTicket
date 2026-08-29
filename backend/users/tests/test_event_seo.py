@@ -262,6 +262,12 @@ class EventSlugAndSeoTests(TestCase):
         self.assertIn('https://tradetix.co.il/event/', seo['canonical_url'])
         self.assertIn('name="robots" content="index, follow"', html)
         self.assertNotIn('noindex', html)
+        self.assertEqual(seo['breadcrumb_json_ld']['@type'], 'BreadcrumbList')
+        self.assertIn('BreadcrumbList', html)
+        self.assertIn(self.event.name, seo['crawler_html'])
+        self.assertIn('פרטי האירוע', seo['crawler_html'])
+        self.assertIn('מיקום:', seo['crawler_html'])
+        self.assertIn('מחיר מ-', seo['crawler_html'])
 
     def test_how_it_works_crawler_html_has_headings_and_steps(self):
         seo = get_static_page_seo('/how-it-works')
@@ -299,6 +305,16 @@ class EventSlugAndSeoTests(TestCase):
         self.assertIn('FAQPage', html)
         self.assertIn('איך למכור כרטיס להופעה בצורה בטוחה?', html)
         self.assertIn('application/ld+json', html)
+        self.assertEqual(seo['breadcrumb_json_ld']['@type'], 'BreadcrumbList')
+
+    def test_sell_new_crawler_has_faq_and_numbered_steps(self):
+        seo = get_static_page_seo('/sell/new')
+        self.assertIsNotNone(seo)
+        self.assertEqual(seo['json_ld']['@type'], 'FAQPage')
+        self.assertIn('<ol>', seo['crawler_html'])
+        self.assertIn('0% עמלה', seo['crawler_html'])
+        self.assertIn('SafePay', seo['crawler_html'])
+        self.assertIn('אימות טלפון', seo['crawler_html'])
 
     def test_faq_crawler_html_lists_questions(self):
         seo = get_static_page_seo('/faq')

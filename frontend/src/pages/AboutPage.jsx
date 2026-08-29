@@ -1,13 +1,22 @@
 import { Link } from 'react-router-dom';
+import PageSeo from '../components/PageSeo';
+import { getStaticPageMeta, staticPageBreadcrumbs } from '../content/staticPageMeta';
 import './Terms.css';
 
 /**
  * אודות — שקיפות עסקית (פרטי רישום לעדכון בעת קבלת ח.פ. סופי).
  */
 const AboutPage = () => {
+  const meta = getStaticPageMeta('/about');
   return (
     <div className="terms-container">
-      <div className="terms-card">
+      <PageSeo
+        title={meta.title}
+        description={meta.description}
+        path="/about"
+        breadcrumbs={staticPageBreadcrumbs('/about')}
+      />
+      <article className="terms-card">
         <h1 className="terms-title">אודות TradeTix</h1>
         <p style={{ textAlign: 'center', color: '#6b7280', marginBottom: '2rem' }}>
           זירת מסחר מאובטחת לכרטיסים בישראל
@@ -82,7 +91,7 @@ const AboutPage = () => {
             <Link to="/accessibility">הצהרת נגישות</Link> · <Link to="/faq">שאלות נפוצות</Link>.
           </p>
         </section>
-      </div>
+      </article>
     </div>
   );
 };

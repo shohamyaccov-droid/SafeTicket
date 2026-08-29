@@ -43,7 +43,21 @@ function injectSeo(html, seo) {
   const description = esc(seo.seo_description || '');
   const canonical = esc(seo.canonical_url || '');
   const ogImage = esc(seo.og_image || `${PUBLIC_ORIGIN}/og-share.png`);
-  const ld = JSON.stringify(seo.json_ld || {}).replace(/</g, '\\u003c');
+  const scripts = [];
+  const pushLd = (data, id) => {
+    if (!data) return;
+    scripts.push(
+      `<script type="application/ld+json" id="${id}">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`,
+    );
+  };
+  pushLd(seo.json_ld || {}, 'tradetix-jsonld');
+  pushLd(seo.breadcrumb_json_ld, 'tradetix-breadcrumb-jsonld');
+  const extra = Array.isArray(seo.extra_json_ld)
+    ? seo.extra_json_ld
+    : seo.extra_json_ld
+      ? [seo.extra_json_ld]
+      : [];
+  extra.forEach((node, index) => pushLd(node, `tradetix-extra-jsonld-${index}`));
   const crawlerHtml = String(seo.crawler_html || '').trim();
 
   html = html.replace(/<title>[^<]*<\/title>/i, `<title>${title}</title>`);
@@ -69,7 +83,7 @@ function injectSeo(html, seo) {
     <meta name="twitter:title" content="${title}" />
     <meta name="twitter:description" content="${description}" />
     <meta name="twitter:image" content="${ogImage}" />
-    <script type="application/ld+json" id="tradetix-jsonld">${ld}</script>
+    ${scripts.join('\n    ')}
   `;
   html = html.replace(/<\/head>/i, `${block}</head>`);
   if (crawlerHtml) {

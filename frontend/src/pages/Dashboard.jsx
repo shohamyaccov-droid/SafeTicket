@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import PageSeo from '../components/PageSeo';
+import { getStaticPageMeta } from '../content/staticPageMeta';
 import { useAuth } from '../context/AuthContext';
 import { authAPI, ticketAPI, offerAPI } from '../services/api';
 import {
@@ -895,8 +897,15 @@ const Dashboard = () => {
   );
   const canPayAcceptedOffers = buyerHasPaymeIdentity(user);
 
+  const dashMeta = getStaticPageMeta('/dashboard');
   return (
     <div className="dashboard-container">
+      <PageSeo
+        title={dashMeta?.title || 'האזור האישי | TradeTix'}
+        description={dashMeta?.description || 'ניהול הרכישות והמכירות שלך ב-TradeTix.'}
+        path="/dashboard"
+        robots="noindex, nofollow"
+      />
       <div className="dashboard-header">
         <div className="dashboard-header-content">
           <div>

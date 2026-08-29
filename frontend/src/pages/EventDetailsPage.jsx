@@ -56,7 +56,9 @@ import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import { formatBuyerFeePercent } from '../services/pricingSettings';
 import EventJsonLd from '../components/EventJsonLd';
 import PageSeo from '../components/PageSeo';
+import BreadcrumbNav from '../components/BreadcrumbNav';
 import { eventHref } from '../utils/eventSeo';
+import { crumbs } from '../utils/breadcrumbSeo';
 import { artistHrefFromEvent } from '../utils/artistSeo';
 import {
   eventArtistId,
@@ -1230,11 +1232,13 @@ const EventDetailsPage = () => {
       <div className="event-details-container">
         <Helmet>
           <title>אירוע לא נמצא | TradeTix</title>
-          <meta name="robots" content="index, follow" />
+          <meta name="robots" content="noindex, follow" />
+          <meta name="description" content="האירוע שחיפשתם אינו קיים או שהועבר. חזרו לדף הבית של TradeTix." />
         </Helmet>
         <div className="empty-state">
-          <p>אירוע לא נמצא</p>
-          <button onClick={() => navigate('/')} className="back-button">
+          <h1>אירוע לא נמצא</h1>
+          <p>הקישור אינו תקף או שהאירוע הוסר.</p>
+          <button type="button" onClick={() => navigate('/')} className="back-button" aria-label="חזרה לדף הבית">
             חזרה לדף הבית
           </button>
         </div>
@@ -1285,30 +1289,41 @@ const EventDetailsPage = () => {
     (event.og_image && String(event.og_image).trim()) ||
       (heroImageRaw ? heroImageSrc : defaultOgImageUrl())
   );
+  const eventBreadcrumbs = crumbs(
+    artistDisplayName && artistHrefFromEvent(event)
+      ? { name: artistDisplayName, path: artistHrefFromEvent(event) }
+      : null,
+    { name: eventName, path: canonicalPath },
+  );
+  const heroAlt = venueForSeo
+    ? `כרטיסים ל${eventName} ב${venueForSeo}`
+    : `כרטיסים ל${eventName}`;
 
   return (
-    <div className="event-details-container">
+    <article className="event-details-container">
       <PageSeo
         title={documentTitle}
         description={metaDescription}
         path={canonicalPath}
         jsonLd={null}
+        breadcrumbs={eventBreadcrumbs}
       />
       <Helmet>
         <meta property="og:image" content={ogImageAbsolute} />
         {pageCanonical ? <meta property="og:url" content={pageCanonical} /> : null}
         <meta name="twitter:image" content={ogImageAbsolute} />
       </Helmet>
-      <EventJsonLd jsonLd={event.json_ld} />
-      <div className="event-header">
-        <button type="button" onClick={() => navigate(-1)} className="back-button">
+      <EventJsonLd jsonLd={event.json_ld} event={event} tickets={tickets} />
+      <header className="event-header">
+        <BreadcrumbNav items={eventBreadcrumbs} />
+        <button type="button" onClick={() => navigate(-1)} className="back-button" aria-label="חזרה לעמוד הקודם">
           ← חזרה
         </button>
-        <div className="event-hero-card">
+        <section className="event-hero-card" aria-labelledby="event-hero-title">
           <div className="event-hero-media">
             <img
               src={heroImageSrc}
-              alt=""
+              alt={heroAlt}
               className="event-hero-image"
               loading="lazy"
               decoding="async"
@@ -1345,8 +1360,8 @@ const EventDetailsPage = () => {
               </p>
             </div>
           </div>
-        </div>
-      </div>
+        </section>
+      </header>
 
       {eventHasPassed ? (
         <div className="event-passed-banner" dir="rtl" role="status">
@@ -1355,6 +1370,7 @@ const EventDetailsPage = () => {
           <button
             type="button"
             className="event-passed-cta"
+            aria-label={artistHrefFromEvent(event) ? 'צפו במועדים אחרים של האמן' : 'חזרה לדף הבית'}
             onClick={() => {
               navigate(artistHrefFromEvent(event) || '/');
             }}
@@ -1485,8 +1501,9 @@ const EventDetailsPage = () => {
           </div>
         </div>
 
+        <section className="event-tickets-section" aria-labelledby="event-tickets-heading">
         <div className="section-title-row">
-          <h2 className="section-title">כרטיסים זמינים</h2>
+          <h2 id="event-tickets-heading" className="section-title">כרטיסים זמינים</h2>
           <div className="live-refresh-controls">
             <span className="live-indicator" title="עדכון אוטומטי כל 15 שניות">
               <span className="live-dot" />
@@ -1520,12 +1537,12 @@ const EventDetailsPage = () => {
           */}
           <div className="event-details-map-list-stack">
           {/* Sticky Map Container (Left side in RTL) */}
-          <div className="venue-map-sticky-container max-md:sticky max-md:top-0 max-md:z-40 max-md:border-b max-md:border-slate-200 max-md:shadow-[0_4px_12px_rgba(15,23,42,0.08)]">
+          <aside className="venue-map-sticky-container max-md:sticky max-md:top-0 max-md:z-40 max-md:border-b max-md:border-slate-200 max-md:shadow-[0_4px_12px_rgba(15,23,42,0.08)]" aria-label="מפת אולם">
             <div className="venue-map-card">
               <div className="venue-map-card-header">
-                <h2>
+                <h3>
                   מפת אולם{finalVenueNameForMap ? ` - ${finalVenueNameForMap}` : ''}
-                </h2>
+                </h3>
                 {isBloomfieldConcertLayout ? (
                   <p className="venue-map-card-subtitle">
                     {CONCERT_BLOCK_COUNT} גושים · פריסת הופעה בבלומפילד
@@ -1663,7 +1680,7 @@ const EventDetailsPage = () => {
                   <p className="venue-map-footer-label" aria-hidden="true">מפת האולם</p>
                 </div>
             </div>
-          </div>
+          </aside>
 
           {/* Scrollable Tickets List (Right side in RTL) */}
           <div className="tickets-list-container" id="event-ticket-list">
@@ -1964,6 +1981,7 @@ const EventDetailsPage = () => {
           </div>
           </div>
         </div>
+        </section>
       </div>
       ) : null}
       </>
@@ -2274,7 +2292,7 @@ const EventDetailsPage = () => {
           duration={toast.type === 'success' ? 3000 : 4000}
         />
       )}
-    </div>
+    </article>
   );
 };
 

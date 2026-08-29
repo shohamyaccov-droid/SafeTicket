@@ -7,6 +7,7 @@ import {
   buildHowToSellFaqJsonLd,
   buildHowToSellHowToJsonLd,
 } from '../content/howToSellContent';
+import { staticPageBreadcrumbs } from '../content/staticPageMeta';
 import './HowToSellPage.css';
 
 const HowToSellPage = () => {
@@ -23,6 +24,7 @@ const HowToSellPage = () => {
         description={HOW_TO_SELL.description}
         path={HOW_TO_SELL.path}
         jsonLd={buildHowToSellFaqJsonLd(HOW_TO_SELL)}
+        breadcrumbs={staticPageBreadcrumbs('/how-to-sell')}
       />
       <JsonLdScript id="how-to-sell-howto-jsonld" data={buildHowToSellHowToJsonLd(HOW_TO_SELL)} />
 

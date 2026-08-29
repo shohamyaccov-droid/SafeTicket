@@ -1,10 +1,13 @@
 import { Link } from 'react-router-dom';
 import PageSeo from '../components/PageSeo';
+import JsonLdScript from '../components/JsonLdScript';
 import {
   HOW_IT_WORKS,
   HOW_IT_WORKS_DOCUMENT_TITLE,
   buildHowToJsonLd,
 } from '../content/howItWorksContent';
+import { buildHowToSellFaqJsonLd } from '../content/howToSellContent';
+import { staticPageBreadcrumbs } from '../content/staticPageMeta';
 import './Terms.css';
 
 const HowItWorksPage = () => {
@@ -15,7 +18,9 @@ const HowItWorksPage = () => {
         description={HOW_IT_WORKS.description}
         path={HOW_IT_WORKS.path}
         jsonLd={buildHowToJsonLd(HOW_IT_WORKS)}
+        breadcrumbs={staticPageBreadcrumbs('/how-it-works')}
       />
+      <JsonLdScript id="how-it-works-seller-faq" data={buildHowToSellFaqJsonLd()} />
       <article className="terms-card how-it-works-card">
         <h1>{HOW_IT_WORKS.h1}</h1>
         <p>{HOW_IT_WORKS.intro}</p>

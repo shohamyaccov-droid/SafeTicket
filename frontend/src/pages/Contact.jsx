@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { contactAPI } from '../services/api';
 import { apiErrorMessageHe } from '../utils/apiErrors';
+import PageSeo from '../components/PageSeo';
+import { getStaticPageMeta, staticPageBreadcrumbs } from '../content/staticPageMeta';
 import './Contact.css';
 
 const Contact = () => {
@@ -48,12 +50,19 @@ const Contact = () => {
     }
   };
 
+  const meta = getStaticPageMeta('/contact');
   return (
-    <div className="contact-container">
-      <div className="contact-header">
+    <article className="contact-container">
+      <PageSeo
+        title={meta.title}
+        description={meta.description}
+        path="/contact"
+        breadcrumbs={staticPageBreadcrumbs('/contact')}
+      />
+      <header className="contact-header">
         <h1>צור קשר</h1>
         <p>אנחנו כאן לעזור לך. שלח לנו הודעה ונחזור אליך בהקדם</p>
-      </div>
+      </header>
 
       {showSuccess && (
         <div className="contact-success">
@@ -143,11 +152,12 @@ const Contact = () => {
           type="submit"
           className="contact-submit-btn"
           disabled={isSubmitting}
+          aria-label={isSubmitting ? 'שולח את ההודעה' : 'שלח הודעת יצירת קשר'}
         >
           {isSubmitting ? 'שולח...' : 'שלח הודעה'}
         </button>
       </form>
-    </div>
+    </article>
   );
 };
 

@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { HelmetProvider } from 'react-helmet-async';
 
 import TicketSelectionPage from './TicketSelectionPage';
 import { ticketAPI } from '../services/api';
@@ -61,7 +62,11 @@ describe('TicketSelectionPage', () => {
   });
 
   it('loads a single ticket by id instead of fetching the full tickets list', async () => {
-    render(<TicketSelectionPage />);
+    render(
+      <HelmetProvider>
+        <TicketSelectionPage />
+      </HelmetProvider>,
+    );
 
     expect(await screen.findByRole('heading', { name: 'QA Concert' })).toBeInTheDocument();
     await waitFor(() => {

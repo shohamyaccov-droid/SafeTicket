@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import { formatBuyerFeePercent } from '../services/pricingSettings';
+import PageSeo from '../components/PageSeo';
+import { getStaticPageMeta, staticPageBreadcrumbs } from '../content/staticPageMeta';
 import './Terms.css';
 
 /**
@@ -10,9 +12,16 @@ const TermsPage = () => {
   const buyerFeePercent = useBuyerServiceFeePercent();
   const feeLabel = formatBuyerFeePercent(buyerFeePercent);
 
+  const meta = getStaticPageMeta('/terms');
   return (
     <div className="terms-container">
-      <div className="terms-card">
+      <PageSeo
+        title={meta.title}
+        description={meta.description}
+        path="/terms"
+        breadcrumbs={staticPageBreadcrumbs('/terms')}
+      />
+      <article className="terms-card">
         <h1 className="terms-title">תקנון ותנאי שימוש — TradeTix</h1>
         <p style={{ textAlign: 'center', color: '#6b7280', marginBottom: '2rem' }}>
           עודכן לאחרונה: יולי 2026 · מסמך מחייב לכל שימוש בפלטפורמה
@@ -225,7 +234,7 @@ const TermsPage = () => {
             <Link to="/about">אודות</Link> · <Link to="/privacy">מדיניות פרטיות</Link>.
           </p>
         </section>
-      </div>
+      </article>
     </div>
   );
 };

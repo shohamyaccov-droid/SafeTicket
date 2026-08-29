@@ -12,6 +12,8 @@ import { translateSectionDisplay } from '../utils/venueMaps';
 import { toastError } from '../utils/toast';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import { downloadTicketFromAxiosBlob } from '../utils/ticketDownload';
+import PageSeo from '../components/PageSeo';
+import { getStaticPageMeta } from '../content/staticPageMeta';
 import './Profile.css';
 
 const Profile = () => {
@@ -199,9 +201,16 @@ const Profile = () => {
   // Ensure arrays and filter null values
   const orders = Array.isArray(rawOrders) ? rawOrders.filter(item => item !== null && item !== undefined) : [];
   const listings = Array.isArray(rawListings) ? rawListings.filter(item => item !== null && item !== undefined) : [];
+  const profileMeta = getStaticPageMeta('/profile');
 
   return (
     <div className="profile-container">
+      <PageSeo
+        title={profileMeta?.title || 'הפרופיל שלי | TradeTix'}
+        description={profileMeta?.description || 'פרטי החשבון, רכישות ומודעות ב-TradeTix.'}
+        path="/profile"
+        robots="noindex, nofollow"
+      />
       <div className="profile-header">
         <h1>הפרופיל שלי</h1>
         <div className="user-info-card">

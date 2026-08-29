@@ -9,6 +9,9 @@ import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
 import { Analytics } from '../utils/analytics';
 import { toastError } from '../utils/toast';
 import { formatEventLocalTimeLine } from '../utils/eventLocalTime';
+import PageSeo from '../components/PageSeo';
+import { crumbs } from '../utils/breadcrumbSeo';
+import { DEFAULT_SITE_TITLE } from '../utils/siteSeo';
 import './EventGroupPage.css';
 
 const EventGroupPage = () => {
@@ -170,8 +173,17 @@ const EventGroupPage = () => {
     );
   }
 
+  const groupPath = `/event-group/${eventName}`;
+  const groupCrumbs = crumbs({ name: decodedEventName, path: groupPath });
+
   return (
-    <div className="event-group-container">
+    <article className="event-group-container">
+      <PageSeo
+        title={`כרטיסים ל${decodedEventName} | ${DEFAULT_SITE_TITLE}`}
+        description={`מועדים וכרטיסים יד שנייה ל${decodedEventName} ב-TradeTix. השוו מחירים וקנו בבטחה.`}
+        path={groupPath}
+        breadcrumbs={groupCrumbs}
+      />
       {loadError && (
         <div className="event-group-fetch-banner" role="alert">
           <p>
@@ -334,7 +346,7 @@ const EventGroupPage = () => {
         )}
       </section>
 
-    </div>
+    </article>
   );
 };
 

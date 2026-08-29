@@ -1,13 +1,22 @@
 import { Link } from 'react-router-dom';
+import PageSeo from '../components/PageSeo';
+import { getStaticPageMeta, staticPageBreadcrumbs } from '../content/staticPageMeta';
 import './Terms.css';
 
 /**
  * הצהרת נגישות — ציפייה מקובלת באתרים בישראל.
  */
 const AccessibilityPage = () => {
+  const meta = getStaticPageMeta('/accessibility');
   return (
     <div className="terms-container">
-      <div className="terms-card">
+      <PageSeo
+        title={meta.title}
+        description={meta.description}
+        path="/accessibility"
+        breadcrumbs={staticPageBreadcrumbs('/accessibility')}
+      />
+      <article className="terms-card">
         <h1 className="terms-title">הצהרת נגישות</h1>
         <p style={{ textAlign: 'center', color: '#6b7280', marginBottom: '2rem' }}>
           עודכן לאחרונה: יולי 2026
@@ -49,7 +58,7 @@ const AccessibilityPage = () => {
             פרטי העסק: <Link to="/about">אודות TradeTix</Link>.
           </p>
         </section>
-      </div>
+      </article>
     </div>
   );
 };

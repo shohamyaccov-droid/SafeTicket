@@ -22,7 +22,7 @@ export default function ListingCreatedSuccessView({
     <div className="sell-container sell-success-screen" data-testid="listing-success">
       <div className="listing-card success-message">
         <div className="success-icon-large" aria-hidden="true">✓</div>
-        <h2 className="success-title">הכרטיס הועלה בהצלחה!</h2>
+        <h1 className="success-title">הכרטיס הועלה בהצלחה!</h1>
         <p className="success-text listing-success-subtitle">
           {successWasIsrael
             ? 'הוא יפורסם באתר לאחר אישור קצר (עד 24 שעות).'

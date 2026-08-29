@@ -4,6 +4,7 @@ import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import { formatBuyerFeePercent } from '../services/pricingSettings';
 import PageSeo from '../components/PageSeo';
 import { DEFAULT_SITE_TITLE } from '../utils/siteSeo';
+import { staticPageBreadcrumbs } from '../content/staticPageMeta';
 import './FAQ.css';
 
 const FAQ = () => {
@@ -128,6 +129,7 @@ const FAQ = () => {
         title={`שאלות ותשובות | ${DEFAULT_SITE_TITLE}`}
         description="תשובות על רכישת כרטיסים, הגנת הקונה, עמלות, ביטול אירוע ומסירת PDF ב-TradeTix."
         path="/faq"
+        breadcrumbs={staticPageBreadcrumbs('/faq')}
         jsonLd={{
           '@context': 'https://schema.org',
           '@type': 'FAQPage',

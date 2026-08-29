@@ -1,10 +1,17 @@
 import { Link } from 'react-router-dom';
+import PageSeo from '../components/PageSeo';
 import './Terms.css';
 
 const NotFoundPage = () => {
   return (
     <div className="terms-container">
-      <div className="terms-card not-found-card">
+      <PageSeo
+        title="העמוד לא נמצא | TradeTix"
+        description="העמוד שחיפשתם אינו קיים. חזרו לדף הבית של TradeTix לחיפוש כרטיסים."
+        path="/"
+        robots="noindex, follow"
+      />
+      <article className="terms-card not-found-card">
         <h1 className="terms-title">העמוד לא נמצא</h1>
         <p>
           נראה שהקישור שביקשת אינו קיים או שהעמוד הועבר. אפשר לחזור לדף הבית ולהמשיך לחפש כרטיסים.
@@ -14,7 +21,7 @@ const NotFoundPage = () => {
             חזרה לעמוד הבית
           </Link>
         </div>
-      </div>
+      </article>
     </div>
   );
 };

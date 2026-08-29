@@ -76,6 +76,27 @@ def event_canonical_url(event) -> str:
     return f'{frontend_origin()}{event_path(key)}'
 
 
+def build_breadcrumb_json_ld(items: list[tuple[str, str]]) -> dict[str, Any]:
+    """Schema.org BreadcrumbList. items are (name, path_or_url)."""
+    origin = frontend_origin()
+    elements = []
+    for index, (name, path) in enumerate(items, start=1):
+        loc = path if str(path).startswith('http') else f'{origin}{path}'
+        elements.append(
+            {
+                '@type': 'ListItem',
+                'position': index,
+                'name': (name or '').strip() or path,
+                'item': loc,
+            }
+        )
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        'itemListElement': elements,
+    }
+
+
 def normalize_event_identifier(identifier: str) -> str:
     from urllib.parse import unquote
 
@@ -463,6 +484,13 @@ def build_event_seo_payload(event, *, request=None) -> dict[str, Any]:
     if not image:
         image = f'{frontend_origin()}/og-share.png'
 
+    crumb_items: list[tuple[str, str]] = [('דף הבית', '/')]
+    if getattr(event, 'artist_id', None) and getattr(event, 'artist', None):
+        artist = event.artist
+        artist_slug = (getattr(artist, 'slug', None) or '').strip() or str(artist.pk)
+        crumb_items.append((artist_display_name(artist), artist_path(artist_slug)))
+    crumb_items.append(((event.name or '').strip() or title, event_path(slug)))
+
     return {
         'slug': slug,
         'seo_title': title,
@@ -471,17 +499,54 @@ def build_event_seo_payload(event, *, request=None) -> dict[str, Any]:
         'canonical_path': event_path(slug),
         'og_image': image,
         'json_ld': json_ld,
-        'crawler_html': (
-            '<article class="seo-crawler-snapshot">'
-            f'<h1>{_xml_attr(title)}</h1>'
-            f'<p>{_xml_attr(description)}</p>'
-            '</article>'
+        'breadcrumb_json_ld': build_breadcrumb_json_ld(crumb_items),
+        'crawler_html': _event_crawler_html(
+            event,
+            description=description,
+            stats=stats,
+            currency=currency,
         ),
         'lowest_price': str(stats['low']) if stats['low'] is not None else None,
         'highest_price': str(stats['high']) if stats['high'] is not None else None,
         'available_ticket_count': stats['count'],
         'currency': currency,
     }
+
+
+def _event_crawler_html(event, *, description: str, stats: dict[str, Any], currency: str) -> str:
+    name = (event.name or '').strip() or 'Event'
+    try:
+        venue = event.venue_display_name() or event.venue or event.city or ''
+    except Exception:
+        venue = getattr(event, 'venue', None) or getattr(event, 'city', None) or ''
+    date_s = iso_datetime(getattr(event, 'date', None)) or ''
+    count = int(stats.get('count') or 0)
+    availability = 'זמינים' if count > 0 else 'אזלו'
+    price_html = ''
+    if stats.get('low') is not None:
+        price_html = (
+            f'<p>מחיר מ-{_xml_attr(str(stats["low"]))} {_xml_attr(currency)}</p>'
+        )
+    crumbs = (
+        '<nav aria-label="breadcrumb"><ol>'
+        '<li>דף הבית</li>'
+        f'<li>{_xml_attr(name)}</li>'
+        '</ol></nav>'
+    )
+    return (
+        '<article class="seo-crawler-snapshot">'
+        f'{crumbs}'
+        f'<h1>{_xml_attr(name)}</h1>'
+        '<section>'
+        '<h2>פרטי האירוע</h2>'
+        f'<p>תאריך: {_xml_attr(date_s)}</p>'
+        f'<p>מיקום: {_xml_attr(str(venue))}</p>'
+        f'<p>כרטיסים: {availability} ({count})</p>'
+        f'{price_html}'
+        '</section>'
+        f'<p>{_xml_attr(description)}</p>'
+        '</article>'
+    )
 
 
 def artist_display_name(artist) -> str:
@@ -577,6 +642,9 @@ def build_artist_seo_payload(artist, *, request=None) -> dict[str, Any]:
         'canonical_path': artist_path(slug),
         'og_image': image,
         'json_ld': build_artist_json_ld(artist, request=request, upcoming_events=upcoming),
+        'breadcrumb_json_ld': build_breadcrumb_json_ld(
+            [('דף הבית', '/'), (artist_display_name(artist), artist_path(slug))]
+        ),
         'crawler_html': (
             '<article class="seo-crawler-snapshot">'
             f'<h1>כרטיסים ל{_xml_attr(artist_display_name(artist))}</h1>'
@@ -675,6 +743,29 @@ def _how_to_sell_crawler_html(page: dict[str, Any]) -> str:
     )
 
 
+def _sell_new_crawler_html(page: dict[str, Any]) -> str:
+    steps = ''.join(
+        f'<li><strong>{_xml_attr(item.get("name") or "")}</strong> {_xml_attr(item.get("text") or "")}</li>'
+        for item in page.get('steps') or []
+    )
+    faqs = ''.join(
+        '<section>'
+        f'<h2>{_xml_attr(item.get("question") or "")}</h2>'
+        f'<p>{_xml_attr(item.get("answer") or "")}</p>'
+        '</section>'
+        for item in page.get('faqs') or []
+    )
+    return (
+        '<article class="seo-crawler-snapshot">'
+        '<h1>מכירת כרטיס ב-TradeTix</h1>'
+        '<p>0% עמלה למוכרים, אימות טלפון חובה, והכסף נשמר בנאמנות SafePay עד לאחר ההופעה.</p>'
+        '<section><h2>איך למכור כרטיס ב-3 צעדים</h2>'
+        f'<ol>{steps}</ol></section>'
+        f'{faqs}'
+        '</article>'
+    )
+
+
 def _faq_crawler_html(page: dict[str, Any]) -> str:
     parts = [
         '<article class="seo-crawler-snapshot">',
@@ -729,6 +820,28 @@ def _how_it_works_json_ld(page: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+_STATIC_CRUMB_NAMES = {
+    '/how-it-works': 'איך זה עובד',
+    '/how-to-sell': 'איך למכור כרטיס',
+    '/faq': 'שאלות ותשובות',
+    '/about': 'אודות',
+    '/contact': 'צור קשר',
+    '/terms': 'תקנון',
+    '/privacy': 'פרטיות',
+    '/refunds': 'החזרים',
+    '/buyer-guarantee': 'הגנת הקונה',
+    '/accessibility': 'נגישות',
+    '/sell/new': 'מכירת כרטיס',
+}
+
+
+def _page_breadcrumbs(route: str, name: str | None = None) -> dict[str, Any]:
+    if route == '/':
+        return build_breadcrumb_json_ld([('דף הבית', '/')])
+    label = name or _STATIC_CRUMB_NAMES.get(route) or route
+    return build_breadcrumb_json_ld([('דף הבית', '/'), (label, route)])
+
+
 def get_static_page_seo(path: str) -> dict[str, Any] | None:
     """Title/description/JSON-LD/crawler HTML for marketing routes (no JS required)."""
     route = path if str(path).startswith('/') else f'/{path}'
@@ -738,12 +851,15 @@ def get_static_page_seo(path: str) -> dict[str, Any] | None:
     og_image = f'{origin}/og-share.png'
     if route == '/how-it-works':
         page = _load_content_json('how-it-works.json')
+        sell_faq = _load_content_json('how-to-sell.json')
         return {
             'seo_title': page.get('h1') or DEFAULT_SITE_TITLE,
             'seo_description': page.get('description') or DEFAULT_SITE_DESCRIPTION,
             'canonical_url': f'{origin}/how-it-works',
             'og_image': og_image,
             'json_ld': _how_it_works_json_ld(page),
+            'extra_json_ld': [_how_to_sell_faq_json_ld(sell_faq)],
+            'breadcrumb_json_ld': _page_breadcrumbs(route),
             'crawler_html': _how_it_works_crawler_html(page),
         }
     if route == '/how-to-sell':
@@ -754,6 +870,7 @@ def get_static_page_seo(path: str) -> dict[str, Any] | None:
             'canonical_url': f'{origin}/how-to-sell',
             'og_image': og_image,
             'json_ld': _how_to_sell_faq_json_ld(page),
+            'breadcrumb_json_ld': _page_breadcrumbs(route),
             'crawler_html': _how_to_sell_crawler_html(page),
         }
     if route == '/faq':
@@ -775,6 +892,7 @@ def get_static_page_seo(path: str) -> dict[str, Any] | None:
                     for item in page.get('items') or []
                 ],
             },
+            'breadcrumb_json_ld': _page_breadcrumbs(route),
             'crawler_html': _faq_crawler_html(page),
         }
     if route == '/':
@@ -791,16 +909,63 @@ def get_static_page_seo(path: str) -> dict[str, Any] | None:
                 'description': DEFAULT_SITE_DESCRIPTION,
                 'inLanguage': 'he-IL',
             },
+            'breadcrumb_json_ld': _page_breadcrumbs(route),
             'crawler_html': (
                 '<article class="seo-crawler-snapshot">'
                 f'<h1>{_xml_attr(DEFAULT_SITE_TITLE)}</h1>'
                 f'<p>{_xml_attr(DEFAULT_SITE_DESCRIPTION)}</p>'
                 '<p>TradeTix היא זירת מסחר בטוחה לכרטיסים יד שנייה בישראל. '
                 'קנייה ומכירה עם תשלום מאובטח והגנה על הכסף.</p>'
+                '<ol><li>חיפוש</li><li>אימות</li><li>כניסה</li></ol>'
+                '</article>'
+            ),
+        }
+    if route == '/sell/new':
+        page = _load_content_json('how-to-sell.json')
+        meta = _static_page_meta().get(route) or {}
+        return {
+            'seo_title': meta.get('title') or 'מכירת כרטיס להופעה ב-0% עמלה | TradeTix',
+            'seo_description': meta.get('description') or page.get('description') or DEFAULT_SITE_DESCRIPTION,
+            'canonical_url': f'{origin}/sell/new',
+            'og_image': og_image,
+            'json_ld': _how_to_sell_faq_json_ld(page),
+            'breadcrumb_json_ld': _page_breadcrumbs(route),
+            'crawler_html': _sell_new_crawler_html(page),
+        }
+    meta = _static_page_meta().get(route)
+    if meta:
+        title = meta.get('title') or DEFAULT_SITE_TITLE
+        description = meta.get('description') or DEFAULT_SITE_DESCRIPTION
+        crumb_name = _STATIC_CRUMB_NAMES.get(route) or title
+        return {
+            'seo_title': title,
+            'seo_description': description,
+            'canonical_url': f'{origin}{route}',
+            'og_image': og_image,
+            'json_ld': {
+                '@context': 'https://schema.org',
+                '@type': 'WebPage',
+                'name': title,
+                'url': f'{origin}{route}',
+                'description': description,
+                'inLanguage': 'he-IL',
+            },
+            'breadcrumb_json_ld': _page_breadcrumbs(route, crumb_name),
+            'crawler_html': (
+                '<article class="seo-crawler-snapshot">'
+                f'<h1>{_xml_attr(title)}</h1>'
+                f'<p>{_xml_attr(description)}</p>'
                 '</article>'
             ),
         }
     return None
+
+
+def _static_page_meta() -> dict[str, Any]:
+    try:
+        return _load_content_json('static-page-meta.json')
+    except OSError:
+        return {}
 
 
 def inject_seo_into_html(html: str, seo: dict[str, Any]) -> str:
@@ -814,8 +979,16 @@ def inject_seo_into_html(html: str, seo: dict[str, Any]) -> str:
     og_image = str(seo.get('og_image') or '')
     json_ld = seo.get('json_ld') or {}
     crawler_html = str(seo.get('crawler_html') or '').strip()
-    # Prevent </script> breakouts in JSON-LD
-    ld_text = json.dumps(json_ld, ensure_ascii=False).replace('<', '\\u003c')
+    scripts = [_json_ld_script_tag(json_ld, 'tradetix-jsonld')] if json_ld else []
+    breadcrumb_ld = seo.get('breadcrumb_json_ld')
+    if breadcrumb_ld:
+        scripts.append(_json_ld_script_tag(breadcrumb_ld, 'tradetix-breadcrumb-jsonld'))
+    extra = seo.get('extra_json_ld') or []
+    if isinstance(extra, dict):
+        extra = [extra]
+    for index, node in enumerate(extra):
+        if node:
+            scripts.append(_json_ld_script_tag(node, f'tradetix-extra-jsonld-{index}'))
 
     html = re.sub(r'<title>[^<]*</title>', f'<title>{title}</title>', html, count=1, flags=re.I)
     if not re.search(r'<title>', html, flags=re.I):
@@ -837,7 +1010,7 @@ def inject_seo_into_html(html: str, seo: dict[str, Any]) -> str:
     <meta name="twitter:title" content="{_xml_attr(title)}" />
     <meta name="twitter:description" content="{_xml_attr(description)}" />
     <meta name="twitter:image" content="{_xml_attr(og_image)}" />
-    <script type="application/ld+json" id="tradetix-jsonld">{ld_text}</script>
+    {''.join(scripts)}
     '''
 
     html = re.sub(
@@ -863,6 +1036,11 @@ def inject_seo_into_html(html: str, seo: dict[str, Any]) -> str:
         if '<div id="root">' in html:
             html = html.replace('<div id="root"></div>', f'<div id="root"></div>{noscript}', 1)
     return html
+
+
+def _json_ld_script_tag(data: Any, script_id: str) -> str:
+    ld_text = json.dumps(data or {}, ensure_ascii=False).replace('<', '\\u003c')
+    return f'<script type="application/ld+json" id="{script_id}">{ld_text}</script>'
 
 
 def _xml_attr(value: str) -> str:

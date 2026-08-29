@@ -1,10 +1,19 @@
 import { Link } from 'react-router-dom';
+import PageSeo from '../components/PageSeo';
+import { getStaticPageMeta, staticPageBreadcrumbs } from '../content/staticPageMeta';
 import './Terms.css';
 
 const PrivacyPage = () => {
+  const meta = getStaticPageMeta('/privacy');
   return (
     <div className="terms-container">
-      <div className="terms-card">
+      <PageSeo
+        title={meta.title}
+        description={meta.description}
+        path="/privacy"
+        breadcrumbs={staticPageBreadcrumbs('/privacy')}
+      />
+      <article className="terms-card">
         <h1 className="terms-title">מדיניות פרטיות</h1>
         <p style={{ textAlign: 'center', color: '#6b7280', marginBottom: '2rem' }}>
           עודכן לאחרונה: יולי 2026 · בהתאם לחוק הגנת הפרטיות, התשמ&quot;א–1981 (לרבות תיקון 13)
@@ -101,7 +110,7 @@ const PrivacyPage = () => {
             <Link to="/about">אודות</Link> · <Link to="/accessibility">הצהרת נגישות</Link>.
           </p>
         </section>
-      </div>
+      </article>
     </div>
   );
 };

@@ -19,6 +19,10 @@ import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import { toastError } from '../utils/toast';
 import { Analytics } from '../utils/analytics';
 import { eventHref } from '../utils/eventSeo';
+import PageSeo from '../components/PageSeo';
+import { buildTicketOfferJsonLd } from '../utils/eventJsonLdClient';
+import { crumbs } from '../utils/breadcrumbSeo';
+import { DEFAULT_SITE_TITLE } from '../utils/siteSeo';
 import './TicketSelectionPage.css';
 
 const TicketSelectionPage = () => {
@@ -150,7 +154,7 @@ const TicketSelectionPage = () => {
       <div className="ticket-selection-container">
         <div className="empty-state">
           <p>כרטיס לא נמצא</p>
-          <button onClick={() => navigate(-1)} className="back-button">
+          <button type="button" onClick={() => navigate(-1)} className="back-button" aria-label="חזרה לעמוד הקודם">
             חזרה
           </button>
         </div>
@@ -167,13 +171,28 @@ const TicketSelectionPage = () => {
   const selCur = resolveTicketCurrency(ticket);
   const selSym = currencySymbol(selCur);
 
+  const ticketPath = `/ticket/${ticketId}`;
+  const ticketCrumbs = crumbs(
+    returnToEventPath ? { name: ticket.event_name, path: returnToEventPath } : null,
+    { name: ticket.event_name, path: ticketPath },
+  );
+  const ticketJsonLd = buildTicketOfferJsonLd(ticket, ticketPath);
+
   return (
-    <div className="ticket-selection-container">
+    <article className="ticket-selection-container">
+      <PageSeo
+        title={`כרטיסים ל${ticket.event_name} | ${DEFAULT_SITE_TITLE}`}
+        description={`קנו כרטיס ל${ticket.event_name}${ticket.venue ? ` ב${ticket.venue}` : ''}. מחיר זמין ותשלום מאובטח ב-TradeTix.`}
+        path={ticketPath}
+        jsonLd={ticketJsonLd}
+        breadcrumbs={ticketCrumbs}
+        robots="noindex, follow"
+      />
       <div className="ticket-selection-content">
         {/* Left Side - Ticket Details */}
-        <div className="ticket-details-section">
+        <section className="ticket-details-section">
           <div className="breadcrumb">
-            <button onClick={() => navigate(-1)} className="breadcrumb-link">
+            <button type="button" onClick={() => navigate(-1)} className="breadcrumb-link" aria-label="חזרה לעמוד הקודם">
               ← חזרה
             </button>
             {returnToEventPath ? (
@@ -228,9 +247,11 @@ const TicketSelectionPage = () => {
             <h2 className="section-title">כמה כרטיסים תרצה?</h2>
             <div className="quantity-controls">
               <button
+                type="button"
                 className="quantity-button"
                 onClick={() => handleQuantityChange(quantity - 1)}
                 disabled={quantity <= 1}
+                aria-label="הפחתת כמות כרטיסים"
               >
                 −
               </button>
@@ -247,9 +268,11 @@ const TicketSelectionPage = () => {
                 inputMode="numeric"
               />
               <button
+                type="button"
                 className="quantity-button"
                 onClick={() => handleQuantityChange(quantity + 1)}
                 disabled={quantity >= maxQuantity}
+                aria-label="הוספת כמות כרטיסים"
               >
                 +
               </button>
@@ -318,17 +341,19 @@ const TicketSelectionPage = () => {
 
           {/* Continue to Checkout Button */}
           <button
+            type="button"
             onClick={handleContinueToCheckout}
             className="continue-checkout-button"
             disabled={!isValidQuantity}
+            aria-label="המשך לתשלום מאובטח"
           >
             המשך לתשלום
           </button>
           <p className="checkout-cta-hint">מעבר לתשלום מאובטח והצגת סיכום מלא לפני אישור.</p>
-        </div>
+        </section>
 
         {/* Right Side - Venue Map */}
-        <div className="venue-map-section">
+        <aside className="venue-map-section" aria-label="מפת אולם">
           <h2 className="map-title">מפת אולם</h2>
           <div className="venue-map-placeholder">
             <svg width="100" height="100" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -337,7 +362,7 @@ const TicketSelectionPage = () => {
             <p>מפת אולם</p>
             <span className="map-placeholder-text">תמונת מפה תוצג כאן</span>
           </div>
-        </div>
+        </aside>
       </div>
 
       {/* Checkout Modal */}
@@ -361,7 +386,7 @@ const TicketSelectionPage = () => {
           onClose={handleCloseCheckout}
         />
       )}
-    </div>
+    </article>
   );
 };
 

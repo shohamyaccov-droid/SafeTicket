@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 import { Helmet } from 'react-helmet-async';
 import { PUBLIC_SITE_ORIGIN, toPublicAbsoluteUrl } from '../utils/publicSite';
+import { buildBreadcrumbJsonLd } from '../utils/breadcrumbSeo';
 import JsonLdScript from './JsonLdScript';
 
 export default function PageSeo({
@@ -8,13 +9,16 @@ export default function PageSeo({
   description,
   path = '/',
   jsonLd = null,
+  breadcrumbs = null,
+  robots = 'index, follow',
 }) {
   const canonical = toPublicAbsoluteUrl(path.startsWith('/') ? path : `/${path}`);
+  const crumbId = `breadcrumb-jsonld-${path.replace(/\W+/g, '-')}`;
   return (
     <>
       <Helmet>
         <title>{title}</title>
-        <meta name="robots" content="index, follow" />
+        <meta name="robots" content={robots} />
         <meta name="description" content={description} />
         <link rel="canonical" href={canonical} />
         <meta property="og:site_name" content="TradeTix" />
@@ -29,6 +33,9 @@ export default function PageSeo({
         <meta name="twitter:description" content={description} />
       </Helmet>
       {jsonLd ? <JsonLdScript id={`page-jsonld-${path.replace(/\W+/g, '-')}`} data={jsonLd} /> : null}
+      {Array.isArray(breadcrumbs) && breadcrumbs.length ? (
+        <JsonLdScript id={crumbId} data={buildBreadcrumbJsonLd(breadcrumbs)} />
+      ) : null}
     </>
   );
 }

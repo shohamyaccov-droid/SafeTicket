@@ -651,7 +651,8 @@ a.event-hero-artist:hover {
   border-bottom: 1px solid #e5e7eb;
 }
 
-.venue-map-card-header h2 {
+.venue-map-card-header h2,
+.venue-map-card-header h3 {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;

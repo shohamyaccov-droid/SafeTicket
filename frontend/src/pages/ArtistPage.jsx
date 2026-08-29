@@ -4,6 +4,8 @@ import { MapPin, ChevronLeft } from 'lucide-react';
 import { artistAPI } from '../services/api';
 import WaitlistSignupModal from '../components/WaitlistSignupModal';
 import PageSeo from '../components/PageSeo';
+import BreadcrumbNav from '../components/BreadcrumbNav';
+import { crumbs } from '../utils/breadcrumbSeo';
 import { getFullImageUrl } from '../utils/formatters';
 import { createListFetchAbort } from '../utils/listFetch';
 import EventsPageSkeleton from '../components/skeletons/EventsPageSkeleton';
@@ -152,19 +154,23 @@ const ArtistPage = () => {
   const canonicalPath =
     (artist.canonical_path && String(artist.canonical_path).trim()) || artistHref(artist);
 
+  const artistCrumbs = crumbs({ name: artistName, path: canonicalPath });
+
   return (
-    <div className="artist-events-container">
+    <article className="artist-events-container">
       <PageSeo
         title={pageTitle}
         description={pageDescription}
         path={canonicalPath}
         jsonLd={artist.json_ld || null}
+        breadcrumbs={artistCrumbs}
       />
-      <button type="button" onClick={() => navigate(-1)} className="back-button">
+      <BreadcrumbNav items={artistCrumbs} />
+      <button type="button" onClick={() => navigate(-1)} className="back-button" aria-label="חזרה לעמוד הקודם">
         ← חזרה
       </button>
 
-      <div className="compact-artist-header">
+      <header className="compact-artist-header">
         <img
           src={
             getFullImageUrl(artist.image_url || artist.image) ||
@@ -181,11 +187,16 @@ const ArtistPage = () => {
         />
         <div className="compact-artist-header__text">
           <h1 className="compact-artist-name">{heading}</h1>
-          <button type="button" className="artist-notify-cta" onClick={() => setShowAlertModal(true)}>
+          <button
+            type="button"
+            className="artist-notify-cta"
+            aria-label={`התראת כרטיסים ל${artistName}`}
+            onClick={() => setShowAlertModal(true)}
+          >
             התראת כרטיסים
           </button>
         </div>
-      </div>
+      </header>
 
       <p className="artist-page-intro">{artistIntro(artistName)}</p>
       <Link to="/how-it-works" className="artist-page-sell-cta">
@@ -273,7 +284,7 @@ const ArtistPage = () => {
       {waitlistEvent ? (
         <WaitlistSignupModal event={waitlistEvent} onClose={() => setWaitlistEvent(null)} />
       ) : null}
-    </div>
+    </article>
   );
 };
 

@@ -24,6 +24,9 @@ import TicketUploadWizard from '../components/TicketUploadWizard';
 import OptionalSeatingDisclosure from '../components/OptionalSeatingDisclosure';
 import ListingCreatedSuccessView from './ListingCreatedSuccessView';
 import { clampSellWizardStep } from '../utils/sellWizard';
+import PageSeo from '../components/PageSeo';
+import { HOW_TO_SELL, buildHowToSellFaqJsonLd } from '../content/howToSellContent';
+import { getStaticPageMeta, staticPageBreadcrumbs } from '../content/staticPageMeta';
 import '../components/SellCompletionModal.css';
 import './Sell.css';
 
@@ -1297,8 +1300,17 @@ const Sell = () => {
     scrollWizardTop();
   };
 
+  const sellMeta = getStaticPageMeta('/sell/new');
+
   return (
     <div className="sell-container">
+      <PageSeo
+        title={sellMeta?.title || 'מכירת כרטיס להופעה ב-0% עמלה | TradeTix'}
+        description={sellMeta?.description || HOW_TO_SELL.description}
+        path="/sell/new"
+        jsonLd={buildHowToSellFaqJsonLd(HOW_TO_SELL)}
+        breadcrumbs={staticPageBreadcrumbs('/sell/new')}
+      />
       {loading && (
         <div className="sell-upload-overlay" role="status" aria-live="polite" aria-busy="true">
           <div className="sell-upload-overlay-card">
@@ -1367,21 +1379,33 @@ const Sell = () => {
             </li>
           </ul>
         </aside>
-        <div className="listing-card-header">
+        <header className="listing-card-header">
           <div className="secure-listing-header">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M10 1L3 4V9C3 13.55 6.16 17.74 10 19C13.84 17.74 17 13.55 17 9V4L10 1Z" fill="currentColor"/>
               <path d="M8 9L9 10L12 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <h2>תהליך הצעת כרטיס מאובטח</h2>
+            <h1>תהליך הצעת כרטיס מאובטח</h1>
           </div>
           <p className="listing-subtitle">הצע את הכרטיס שלך בצורה בטוחה ומאובטחת</p>
+          <section className="sell-howto" aria-labelledby="sell-howto-heading">
+            <h2 id="sell-howto-heading">איך למכור כרטיס ב-3 צעדים</h2>
+            <ol className="sell-howto-ol">
+              {HOW_TO_SELL.steps.map((step) => (
+                <li key={step.name}>
+                  <strong>{step.name}</strong>
+                  {' '}
+                  {step.text}
+                </li>
+              ))}
+            </ol>
+          </section>
           {import.meta.env.DEV ? (
             <p className="listing-build-id" dir="ltr" style={{ fontSize: '0.72rem', opacity: 0.75, marginTop: '0.35rem' }}>
               Frontend build: {SELL_PAGE_BUILD_TAG}
             </p>
           ) : null}
-        </div>
+        </header>
         {error && <div className="error-message">{error}</div>}
         {Object.keys(fieldErrors).length > 0 && (
           <div className="error-message sell-validation-summary" role="alert">

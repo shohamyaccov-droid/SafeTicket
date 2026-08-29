@@ -1,13 +1,22 @@
 import { Link } from 'react-router-dom';
+import PageSeo from '../components/PageSeo';
+import { getStaticPageMeta, staticPageBreadcrumbs } from '../content/staticPageMeta';
 import './Terms.css';
 
 /**
  * הגנת הקונה — נוסח משפטי מיושר עם תקנון + מטריצת החזרים.
  */
 const BuyerGuaranteePage = () => {
+  const meta = getStaticPageMeta('/buyer-guarantee');
   return (
     <div className="terms-container">
-      <div className="terms-card">
+      <PageSeo
+        title={meta.title}
+        description={meta.description}
+        path="/buyer-guarantee"
+        breadcrumbs={staticPageBreadcrumbs('/buyer-guarantee')}
+      />
+      <article className="terms-card">
         <h1 className="terms-title">הגנת הקונה — TradeTix</h1>
         <p style={{ textAlign: 'center', color: '#6b7280', marginBottom: '2rem' }}>
           עודכן לאחרונה: יולי 2026 · כפוף ל
@@ -80,7 +89,7 @@ const BuyerGuaranteePage = () => {
             <Link to="/faq">שאלות נפוצות</Link> · <Link to="/contact">צור קשר</Link>.
           </p>
         </section>
-      </div>
+      </article>
     </div>
   );
 };

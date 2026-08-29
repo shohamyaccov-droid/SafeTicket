@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 
 import Sell from './Sell';
 import { artistAPI, eventAPI, ticketAPI } from '../services/api';
@@ -79,9 +80,11 @@ function seedStep2Draft() {
 
 function renderSell() {
   return render(
-    <MemoryRouter>
-      <Sell />
-    </MemoryRouter>,
+    <HelmetProvider>
+      <MemoryRouter>
+        <Sell />
+      </MemoryRouter>
+    </HelmetProvider>,
   );
 }
 
