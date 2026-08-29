@@ -7,7 +7,7 @@ import json
 import logging
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from .models import Order, SellerBonusCampaign, SellerPayout, User
 
@@ -178,7 +178,24 @@ def ensure_seller_payout_for_order(order: Order) -> SellerPayout | None:
             payout_status=SellerPayout.PayoutStatus.PENDING,
         )
         payout.full_clean()
-        payout.save()
+        try:
+            with transaction.atomic():
+                payout.save()
+        except IntegrityError:
+            existing = SellerPayout.objects.select_for_update().filter(order_id=order.pk).first()
+            if existing is None:
+                raise
+            try:
+                from wallets.services import credit_wallet_for_seller_payout
+
+                credit_wallet_for_seller_payout(existing)
+            except Exception:
+                logger.exception(
+                    'Failed to reconcile seller wallet after payout race payout_id=%s order_id=%s',
+                    existing.pk,
+                    order.pk,
+                )
+            return existing
         claim_launch_seller_bonus(payout)
         logger.info(
             'Created SellerPayout id=%s order_id=%s seller_id=%s net=%s bonus=%s fee=%s',

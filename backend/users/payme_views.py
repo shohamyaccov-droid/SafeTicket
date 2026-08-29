@@ -5,9 +5,11 @@ Payme webhook lives at /api/payments/webhook/payme/ (see safeticket.urls).
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from django.conf import settings
+from django.db.utils import OperationalError
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from rest_framework.decorators import api_view, parser_classes, permission_classes
@@ -27,12 +29,14 @@ from services.payme_service import (
 
 from .models import Order, PayMeWebhookLog
 from .payments import (
+    build_payme_webhook_idempotency_key,
     extract_payme_raw_sign_fields,
-    finalize_pending_order_to_paid,
+    finalize_payme_webhook_once,
     log_payme,
     log_payme_dev,
     normalize_payme_webhook_status,
     parse_payme_raw_body_fields,
+    payme_webhook_already_completed,
     verify_payme_webhook_request,
 )
 from .shabbat import shabbat_forbidden_response
@@ -625,22 +629,84 @@ def payme_webhook(request):
         outcome['is_valid'] = True
         outcome['error_message'] = None
 
-        if order.status == 'paid':
+        idem_key = build_payme_webhook_idempotency_key(order, payload)
+        sale_for_key = str(sale_for_confirm or txn_for_confirm or order.payme_transaction_id or '')[:128]
+        for attempt in range(8):
             try:
-                ok, err = finalize_pending_order_to_paid(order_id, source='payme_webhook_idempotent_reconcile')
+                order.payme_status = norm
+                order.save(update_fields=['payme_status', 'updated_at'])
+                break
+            except OperationalError as lock_exc:
+                if 'locked' not in str(lock_exc).lower() or attempt == 7:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
+                order.refresh_from_db()
+
+        if order.status == 'paid' and payme_webhook_already_completed(idem_key):
+            return Response(
+                {
+                    'received': True,
+                    'finalized': True,
+                    'reason': 'already_processed',
+                    'order_status': 'paid',
+                    'idempotency_key': idem_key,
+                }
+            )
+
+        if order.status == 'paid' or (norm == 'success' and order.status == 'pending_payment'):
+            try:
+                last_lock = None
+                ok = err = claim = None
+                for attempt in range(8):
+                    try:
+                        ok, err, claim = finalize_payme_webhook_once(
+                            order_id,
+                            idempotency_key=idem_key,
+                            sale_id=sale_for_key,
+                            source=(
+                                'payme_webhook'
+                                if order.status == 'pending_payment'
+                                else 'payme_webhook_idempotent_reconcile'
+                            ),
+                        )
+                        last_lock = None
+                        break
+                    except OperationalError as lock_exc:
+                        if 'locked' not in str(lock_exc).lower() or attempt == 7:
+                            raise
+                        last_lock = lock_exc
+                        time.sleep(0.05 * (attempt + 1))
+                        order.refresh_from_db()
+                if last_lock is not None:
+                    raise last_lock
             except Exception as fin_exc:
-                logger.exception('PayMe webhook paid reconcile crashed order_id=%s: %s', order_id, fin_exc)
+                logger.exception('PayMe webhook finalize crashed order_id=%s: %s', order_id, fin_exc)
                 return Response(
-                    {'received': True, 'finalized': False, 'reason': 'paid_reconcile_exception'},
+                    {'received': True, 'finalized': False, 'reason': 'finalize_exception'},
                     status=status.HTTP_409_CONFLICT,
                 )
             if not ok:
-                logger.warning('PayMe webhook rejection reason: paid_reconcile_failed:%s order_id=%s', err, order_id)
+                logger.warning('PayMe webhook rejection reason: finalize_failed:%s order_id=%s', err, order_id)
                 return Response(
-                    {'received': True, 'finalized': False, 'reason': err or 'paid_reconcile_failed'},
+                    {'received': True, 'finalized': False, 'reason': err or 'finalize_failed'},
                     status=status.HTTP_409_CONFLICT,
                 )
-            return Response({'received': True, 'finalized': True, 'order_status': 'paid'})
+            order.refresh_from_db()
+            log_payme_dev(
+                'webhook_finalize_success',
+                order_id=order_id,
+                order_status_after=order.status,
+                ticket_status=getattr(order.ticket, 'status', None) if order.ticket_id else None,
+                idempotency_claim=claim,
+            )
+            return Response(
+                {
+                    'received': True,
+                    'finalized': True,
+                    'order_status': order.status,
+                    'idempotency_claim': claim,
+                }
+            )
 
         update_fields = ['payme_status', 'updated_at']
         order.payme_status = norm or payload.get('status') or 'unknown'
@@ -670,42 +736,6 @@ def payme_webhook(request):
             lookup_via=lookup_via,
         )
 
-        if norm == 'success' and order.status == 'pending_payment':
-            try:
-                ok, err = finalize_pending_order_to_paid(order_id, source='payme_webhook')
-            except Exception as fin_exc:
-                logger.exception(
-                    'PayMe webhook finalize crashed order_id=%s: %s payload=%s',
-                    order_id,
-                    fin_exc,
-                    payload,
-                )
-                return Response(
-                    {'received': True, 'finalized': False, 'reason': 'finalize_exception'},
-                    status=status.HTTP_409_CONFLICT,
-                )
-            log_payme_dev(
-                'webhook_finalize',
-                order_id=order_id,
-                finalized=ok,
-                error=err,
-                normalized_status=norm,
-            )
-            if not ok:
-                logger.warning('PayMe webhook rejection reason: finalize_failed:%s order_id=%s', err, order_id)
-                return Response(
-                    {'received': True, 'finalized': False, 'reason': err or 'finalize_failed'},
-                    status=status.HTTP_409_CONFLICT,
-                )
-            order.refresh_from_db()
-            log_payme_dev(
-                'webhook_finalize_success',
-                order_id=order_id,
-                order_status_after=order.status,
-                ticket_status=getattr(order.ticket, 'status', None) if order.ticket_id else None,
-            )
-            return Response({'received': True, 'finalized': True, 'order_status': order.status})
-
         if norm == 'failed':
             return Response({'received': True, 'finalized': False, 'order_status': order.status})
 
@@ -728,6 +758,33 @@ def payme_webhook(request):
                 'normalized_status': norm,
             },
             status=status.HTTP_200_OK,
+        )
+    except OperationalError as exc:
+        if 'locked' not in str(exc).lower():
+            raise
+        logger.warning(
+            'PayMe webhook hit a database write lock order_id=%s; waiting for the winning worker',
+            order_id,
+        )
+        if order_id:
+            for _ in range(20):
+                time.sleep(0.1)
+                locked_order = Order.objects.filter(pk=order_id).first()
+                if locked_order is not None and locked_order.status == 'paid':
+                    outcome['is_valid'] = True
+                    outcome['error_message'] = None
+                    return Response(
+                        {
+                            'received': True,
+                            'finalized': True,
+                            'reason': 'lock_wait_already_paid',
+                            'order_status': 'paid',
+                        }
+                    )
+        outcome['error_message'] = 'db_write_lock'
+        return Response(
+            {'received': True, 'finalized': False, 'reason': 'db_write_lock'},
+            status=status.HTTP_409_CONFLICT,
         )
     except Exception as exc:
         logger.exception(

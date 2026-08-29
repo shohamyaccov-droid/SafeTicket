@@ -1056,23 +1056,9 @@ def _verify_reservations_fresh(reserved_before, user=None, guest_email: str = ''
 
 
 def _finalize_group_sale_ticket_rows(ticket_ids):
-    for tid in ticket_ids or []:
-        t = Ticket.objects.select_for_update().get(pk=tid)
-        t.status = 'sold'
-        t.available_quantity = 0
-        t.reserved_at = None
-        t.reserved_by = None
-        t.reservation_email = None
-        t.save(
-            update_fields=[
-                'status',
-                'available_quantity',
-                'reserved_at',
-                'reserved_by',
-                'reservation_email',
-                'updated_at',
-            ]
-        )
+    from users.payments import lock_and_mark_tickets_sold
+
+    lock_and_mark_tickets_sold(ticket_ids)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -2482,7 +2468,7 @@ def confirm_order_payment(request, order_id):
                 tix = list(
                     Ticket.objects.select_for_update()
                     .filter(pk__in=(order.ticket_ids or []))
-                    .order_by('id')
+                    .order_by('pk')
                 )
                 if len(tix) != len(order.ticket_ids or []):
                     raise ValueError('ticket_mismatch')

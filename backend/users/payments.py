@@ -12,12 +12,14 @@ import json
 import logging
 import threading
 import hashlib
+import time
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 import requests
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.db.utils import OperationalError
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -977,6 +979,50 @@ def _tickets_claimed_by_other_paid_order(order) -> int | None:
     return None
 
 
+def lock_and_mark_tickets_sold(ticket_ids) -> list:
+    """
+    Row-lock ticket rows in pk order and mark them sold.
+
+    Must run inside ``transaction.atomic()``. Locking in sorted pk order avoids
+    deadlocks when two checkouts touch overlapping listings.
+    """
+    from users.models import Ticket
+
+    ids: list[int] = []
+    for tid in ticket_ids or []:
+        try:
+            ids.append(int(tid))
+        except (TypeError, ValueError):
+            continue
+    ids = sorted(set(ids))
+    if not ids:
+        return []
+
+    locked = list(Ticket.objects.select_for_update().filter(pk__in=ids).order_by('pk'))
+    found = {t.pk for t in locked}
+    missing = [i for i in ids if i not in found]
+    if missing:
+        raise Ticket.DoesNotExist(f'tickets missing for sale: {missing}')
+
+    for t in locked:
+        t.status = 'sold'
+        t.available_quantity = 0
+        t.reserved_at = None
+        t.reserved_by = None
+        t.reservation_email = None
+        t.save(
+            update_fields=[
+                'status',
+                'available_quantity',
+                'reserved_at',
+                'reserved_by',
+                'reservation_email',
+                'updated_at',
+            ]
+        )
+    return locked
+
+
 def _fulfill_paid_order_ticket_rows(order) -> None:
     """Ensure paid/completed orders leave fully purchased ticket rows unavailable."""
     from users.models import Ticket
@@ -1003,26 +1049,160 @@ def _fulfill_paid_order_ticket_rows(order) -> None:
     ticket_ids = list(order.ticket_ids or [])
     if not ticket_ids and order.ticket_id:
         ticket_ids = [order.ticket_id]
-
     if ticket_ids:
-        for tid in ticket_ids:
-            t = Ticket.objects.select_for_update().get(pk=tid)
-            t.status = 'sold'
-            t.available_quantity = 0
-            t.reserved_at = None
-            t.reserved_by = None
-            t.reservation_email = None
-            t.save(
-                update_fields=[
-                    'status',
-                    'available_quantity',
-                    'reserved_at',
-                    'reserved_by',
-                    'reservation_email',
-                    'updated_at',
-                ]
-            )
+        lock_and_mark_tickets_sold(ticket_ids)
+
+
+def build_payme_webhook_idempotency_key(order, payload: dict[str, Any] | None = None) -> str:
+    """Stable key for a PayMe success notify: order + sale/transaction id."""
+    stored = str(getattr(order, 'payme_transaction_id', None) or '').strip()
+    refs: list[str] = []
+    payload = payload or {}
+    for key in (
+        'payme_sale_id',
+        'sale_id',
+        'payme_transaction_id',
+        'transaction_id',
+        'transactionId',
+        'payme_sale_code',
+    ):
+        value = payload.get(key)
+        if value not in (None, ''):
+            refs.append(str(value).strip())
+    ident = stored
+    if stored and stored in refs:
+        ident = stored
+    elif refs:
+        ident = refs[0]
+    if not ident:
+        ident = f'order-{getattr(order, "pk", "unknown")}'
+    return f'payme:{int(order.pk)}:{ident}:success'
+
+
+def payme_webhook_already_completed(idempotency_key: str) -> bool:
+    from users.models import PayMeWebhookIdempotency
+
+    return PayMeWebhookIdempotency.objects.filter(
+        idempotency_key=idempotency_key,
+        status=PayMeWebhookIdempotency.STATUS_COMPLETED,
+    ).exists()
+
+
+def _mark_payme_idempotency_completed(row) -> None:
+    from users.models import PayMeWebhookIdempotency
+
+    if row is None:
         return
+    row.status = PayMeWebhookIdempotency.STATUS_COMPLETED
+    row.completed_at = timezone.now()
+    row.save(update_fields=['status', 'completed_at'])
+
+
+def claim_payme_webhook_idempotency(*, key: str, order, sale_id: str = ''):
+    """
+    Insert-or-lock the unique webhook key.
+
+    Returns ``('claimed', row)`` for the first worker, ``('duplicate', row)`` when
+    fulfillment already finished, or ``('in_flight', row)`` while another worker
+    still holds the claim.
+    """
+    from users.models import PayMeWebhookIdempotency
+
+    try:
+        with transaction.atomic():
+            row = PayMeWebhookIdempotency.objects.create(
+                idempotency_key=key,
+                order=order,
+                payme_sale_id=(sale_id or '')[:128],
+                status=PayMeWebhookIdempotency.STATUS_PROCESSING,
+            )
+            return 'claimed', row
+    except IntegrityError:
+        pass
+
+    with transaction.atomic():
+        row = (
+            PayMeWebhookIdempotency.objects.select_for_update()
+            .filter(idempotency_key=key)
+            .first()
+        )
+    if row is None:
+        return 'missing', None
+    if row.status == PayMeWebhookIdempotency.STATUS_COMPLETED:
+        return 'duplicate', row
+    return 'in_flight', row
+
+
+def _retry_on_sqlite_lock(fn, *, attempts: int = 8, delay: float = 0.05):
+    """SQLite serializes writers; brief retries keep concurrent IPN retries safe."""
+    last: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            return fn()
+        except OperationalError as exc:
+            last = exc
+            if 'locked' not in str(exc).lower():
+                raise
+            time.sleep(delay * (attempt + 1))
+    raise last
+
+
+def finalize_payme_webhook_once(
+    order_id: int,
+    *,
+    idempotency_key: str,
+    sale_id: str = '',
+    source: str = 'payme_webhook',
+) -> tuple[bool, str | None, str]:
+    """
+    Fulfill a PayMe success notify at most once for ``idempotency_key``.
+
+    Concurrent retries share the unique key: the winner runs inventory + ledger;
+    losers wait (or take the paid reconcile path) so tickets and balances move once.
+    """
+    from users.models import Order, PayMeWebhookIdempotency
+
+    sale_id = (sale_id or '')[:128]
+
+    def _run():
+        order = Order.objects.filter(pk=order_id).first()
+        if not order:
+            return False, 'order_missing', 'missing'
+
+        claim, row = claim_payme_webhook_idempotency(
+            key=idempotency_key,
+            order=order,
+            sale_id=sale_id,
+        )
+
+        if claim == 'duplicate':
+            ok, err = finalize_pending_order_to_paid(order_id, source=f'{source}_replay')
+            return ok, err, 'duplicate'
+
+        if claim == 'in_flight':
+            for _ in range(40):
+                time.sleep(0.05)
+                if row is None:
+                    break
+                row.refresh_from_db()
+                if row.status == PayMeWebhookIdempotency.STATUS_COMPLETED:
+                    ok, err = finalize_pending_order_to_paid(order_id, source=f'{source}_replay')
+                    return ok, err, 'duplicate'
+            ok, err = finalize_pending_order_to_paid(order_id, source=f'{source}_recover')
+            if ok:
+                fresh = PayMeWebhookIdempotency.objects.filter(idempotency_key=idempotency_key).first()
+                _mark_payme_idempotency_completed(fresh or row)
+            return ok, err, 'recovered'
+
+        if claim != 'claimed' or row is None:
+            return False, 'idempotency_claim_failed', claim
+
+        ok, err = finalize_pending_order_to_paid(order_id, source=source)
+        if ok:
+            _mark_payme_idempotency_completed(row)
+        return ok, err, 'claimed'
+
+    return _retry_on_sqlite_lock(_run)
 
 
 # Statuses the normal webhook/client path may finalize from.
@@ -1066,9 +1246,9 @@ def finalize_pending_order_to_paid(
     from datetime import timedelta
 
     try:
+        if not force_from_admin:
+            release_abandoned_carts()
         with transaction.atomic():
-            if not force_from_admin:
-                release_abandoned_carts()
             order = Order.objects.select_for_update().filter(pk=order_id).first()
             if not order:
                 return False, 'order_missing'
@@ -1139,19 +1319,42 @@ def finalize_pending_order_to_paid(
                 tix = list(
                     Ticket.objects.select_for_update()
                     .filter(pk__in=(order.ticket_ids or []))
-                    .order_by('id')
+                    .order_by('pk')
                 )
                 if len(tix) != len(order.ticket_ids or []):
                     raise ValueError('ticket_mismatch')
                 user_obj = order.user if order.user_id else None
                 ge = (order.guest_email or '').strip()
                 _verify_reservations_fresh(tix, user=user_obj, guest_email=ge)
-                _finalize_group_sale_ticket_rows(order.ticket_ids)
+                lock_and_mark_tickets_sold(order.ticket_ids)
 
             _finalize_offers_after_sale(
                 ticket_ids=list(order.ticket_ids or []),
                 winning_offer=negotiated_offer,
             )
+            claimed = Order.objects.filter(pk=order.pk, status__in=tuple(allowed)).update(
+                status='paid',
+                payment_confirm_token=None,
+                updated_at=timezone.now(),
+            )
+            if claimed != 1:
+                order.refresh_from_db()
+                if order.status == 'paid':
+                    _fulfill_paid_order_ticket_rows(order)
+                    try:
+                        from users.payout_ledger import ensure_seller_payout_for_order
+
+                        ensure_seller_payout_for_order(order)
+                    except Exception as payout_exc:
+                        logger.warning(
+                            'finalize_pending_order_to_paid CAS loser payout reconcile failed order_id=%s: %s',
+                            order_id,
+                            payout_exc,
+                        )
+                    return True, None
+                return False, 'order_not_pending'
+
+            order.refresh_from_db()
             order.status = 'paid'
             order.payment_confirm_token = None
             update_fields = ['status', 'payment_confirm_token', 'updated_at']

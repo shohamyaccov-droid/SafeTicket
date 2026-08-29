@@ -1802,3 +1802,39 @@ class PayMeWebhookLog(models.Model):
     def __str__(self):
         status = 'valid' if self.is_valid else (self.error_message or 'invalid')
         return f'PayMeWebhookLog#{self.pk} {status}'
+
+
+class PayMeWebhookIdempotency(models.Model):
+    """
+    Unique processing claim for a PayMe success notify.
+
+    The same sale/order success payload can arrive many times (retries, lag).
+    Only the first claim is allowed to fulfill inventory and credit ledgers.
+    """
+
+    STATUS_PROCESSING = 'processing'
+    STATUS_COMPLETED = 'completed'
+    STATUS_CHOICES = (
+        (STATUS_PROCESSING, 'Processing'),
+        (STATUS_COMPLETED, 'Completed'),
+    )
+
+    idempotency_key = models.CharField(max_length=191, unique=True, db_index=True)
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='payme_idempotency_rows',
+    )
+    payme_sale_id = models.CharField(max_length=128, blank=True, default='')
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PROCESSING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['order', 'status']),
+        ]
+
+    def __str__(self):
+        return f'PayMeWebhookIdempotency {self.idempotency_key} {self.status}'

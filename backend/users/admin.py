@@ -24,6 +24,7 @@ from .models import (
     GlobalFeeSettings,
     Offer,
     Order,
+    PayMeWebhookIdempotency,
     PayMeWebhookLog,
     SellerBonusCampaign,
     SellerPayout,
@@ -1244,6 +1245,22 @@ class PayMeWebhookLogAdmin(admin.ModelAdmin):
             else:
                 level = messages.WARNING
             self.message_user(request, result.get('summary') or f'Log #{log.pk}: no result', level)
+
+
+@admin.register(PayMeWebhookIdempotency)
+class PayMeWebhookIdempotencyAdmin(admin.ModelAdmin):
+    list_display = ['id', 'idempotency_key', 'order', 'status', 'created_at', 'completed_at']
+    list_filter = ['status', 'created_at']
+    search_fields = ['idempotency_key', 'payme_sale_id']
+    readonly_fields = [
+        'idempotency_key',
+        'order',
+        'payme_sale_id',
+        'status',
+        'created_at',
+        'completed_at',
+    ]
+    ordering = ['-created_at']
 
 
 # ── Analytics Admin ────────────────────────────────────────────────────────────
