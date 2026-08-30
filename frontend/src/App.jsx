@@ -20,6 +20,7 @@ import SellFormSkeleton from './components/skeletons/SellFormSkeleton';
 import { toastError } from './utils/toast';
 import { Analytics } from './utils/analytics';
 import { trackGa4Pageview } from './utils/ga4';
+import { readPaymePendingOrder, shouldRescuePaymeReturn } from './utils/checkoutGuest';
 import { ensureMetaPixel, trackMetaPageView } from './utils/metaPixel';
 import { prefetchCriticalRoutesOnIdle, prefetchSellPage } from './utils/routePrefetch';
 import { loadPricingSettings } from './services/pricingSettings';
@@ -107,6 +108,23 @@ function SellMarketingRedirect() {
     prefetchSellPage();
   }, []);
   return <Navigate to={`/sell/new${location.search}${location.hash}`} replace />;
+}
+
+/** Resume PayMe success when the PSP returns to `/` instead of the success URL. */
+function PaymeReturnRescue() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const rescuedRef = useRef(false);
+
+  useEffect(() => {
+    if (rescuedRef.current) return;
+    const pending = readPaymePendingOrder();
+    if (!shouldRescuePaymeReturn(location.pathname, document.referrer, pending)) return;
+    rescuedRef.current = true;
+    navigate(`/checkout/payme/success?order_id=${encodeURIComponent(String(pending.id))}`, { replace: true });
+  }, [location.pathname, navigate]);
+
+  return null;
 }
 
 /** Backend funnel analytics + GA4/Meta pageviews on every React Router navigation. */
@@ -233,6 +251,7 @@ function App() {
       <Router>
         <AuthModalProvider>
         <ScrollToTop />
+        <PaymeReturnRescue />
         <PageTracker />
         <SessionExpiredRedirector />
         <AppChrome>

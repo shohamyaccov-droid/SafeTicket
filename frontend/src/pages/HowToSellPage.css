@@ -97,6 +97,10 @@
   text-align: center;
 }
 
+.how-to-sell__inline-cta--hero {
+  margin: 1.25rem 0 0;
+}
+
 .how-to-sell__button {
   display: inline-flex;
   align-items: center;

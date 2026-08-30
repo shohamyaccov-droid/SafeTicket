@@ -61,6 +61,10 @@ describe('ArtistPage', () => {
       screen.getByRole('link', { name: 'יש לך כרטיס מיותר? לחץ כאן כדי למכור אותו בטוח' }),
     ).toHaveAttribute('href', '/how-it-works');
     expect(screen.getByText('בלומפילד')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'כרטיסים זמינים לאייל גולן' })).toHaveAttribute(
+      'href',
+      '/event/eyal-golan-bloomfield',
+    );
     expect(screen.getByText('עומר אדם הוא ללא ספק אחד האמנים המצליחים בישראל.')).toBeInTheDocument();
     expect(artistAPI.getArtist).toHaveBeenCalled();
     expect(artistAPI.getArtistEvents).toHaveBeenCalled();

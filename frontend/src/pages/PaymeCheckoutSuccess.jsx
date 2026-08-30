@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { orderAPI } from '../services/api';
 import { Analytics } from '../utils/analytics';
+import { clearPaymePendingOrder } from '../utils/checkoutGuest';
 import './PaymeCheckoutSuccess.css';
 
 const POLL_MS = 2500;
@@ -71,6 +72,7 @@ export default function PaymeCheckoutSuccess() {
           value: Number.isFinite(paidValue) ? paidValue : 0,
           currency: res.data?.currency || 'ILS',
         });
+        clearPaymePendingOrder();
         try {
           sessionStorage.removeItem('payme_checkout_guest_email');
         } catch {

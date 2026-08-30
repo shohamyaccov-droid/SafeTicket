@@ -13,7 +13,6 @@ import {
 } from '../utils/priceFormat';
 import BuyerListingPrice from '../components/BuyerListingPrice';
 import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
-import { formatBuyerFeePercent } from '../services/pricingSettings';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { formatEventDateTimeWithLocality } from '../utils/eventLocalTime';
 import { toastError } from '../utils/toast';
@@ -31,7 +30,6 @@ const TicketSelectionPage = () => {
   const location = useLocation();
   const { user } = useAuth();
   const buyerFeePercent = useBuyerServiceFeePercent();
-  const buyerFeeLabel = formatBuyerFeePercent(buyerFeePercent);
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
@@ -314,7 +312,7 @@ const TicketSelectionPage = () => {
           {/* Price Summary */}
           <div className="price-summary">
             <div className="price-row price-row--unit">
-              <span className="price-label">מחיר ליחידה (בסיס למוכר):</span>
+              <span className="price-label">מחיר לכרטיס:</span>
               <div className="price-value price-value--block">
                 <BuyerListingPrice ticket={ticket} />
               </div>
@@ -324,12 +322,11 @@ const TicketSelectionPage = () => {
               <span className="price-value">{quantity}</span>
             </div>
             <div className="price-row total-row">
-              <span className="price-label">סה״כ משוער לתשלום:</span>
+              <span className="price-label">סה״כ לתשלום:</span>
               <span className="price-value total-price">
                 {selSym}{formatAmountForCurrency(calculateEstimatedTotalWithFee(), selCur)}
               </span>
             </div>
-            <p className="price-summary-note">הסכום כולל דמי שירות ותפעול ({buyerFeeLabel}%) — יופיע בפירוט מלא בקופה לפני התשלום.</p>
           </div>
 
           {/* Validation Message */}

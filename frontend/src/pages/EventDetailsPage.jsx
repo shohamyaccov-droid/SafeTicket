@@ -52,8 +52,6 @@ import { toastError } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
 import { formatEventDateTimeWithLocality, formatEventLocation } from '../utils/eventLocalTime';
 import { Helmet } from 'react-helmet-async';
-import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
-import { formatBuyerFeePercent } from '../services/pricingSettings';
 import EventJsonLd from '../components/EventJsonLd';
 import PageSeo from '../components/PageSeo';
 import BreadcrumbNav from '../components/BreadcrumbNav';
@@ -104,8 +102,6 @@ const EventDetailsPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { openLogin } = useAuthModal();
-  const buyerFeePercent = useBuyerServiceFeePercent();
-  const buyerFeeLabel = formatBuyerFeePercent(buyerFeePercent);
   const [event, setEvent] = useState(null);
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2049,9 +2045,6 @@ const EventDetailsPage = () => {
                       </p>
                     ) : null}
                     <p className="current-price">מחיר נוכחי: {offerModalSym}{getTicketPrice(selectedOfferTicket)}</p>
-                    <p className="offer-fee-clarification" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem', lineHeight: 1.5 }}>
-                      ההצעה היא לפני דמי שירות ותפעול ({buyerFeeLabel}% יתווספו בקופה).
-                    </p>
                   </div>
                 </div>
 

@@ -1,10 +1,14 @@
-import { currencySymbol, formatAmountForCurrency, resolveTicketCurrency } from '../utils/priceFormat';
+import {
+  currencySymbol,
+  buyerAllInFromTicket,
+} from '../utils/priceFormat';
+import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import './EventMobileBuyBar.css';
 
 /* eslint-disable react/prop-types -- project does not use PropTypes consistently */
 
 /**
- * Mobile-only sticky checkout bar: lowest visible listing price + קנה עכשיו.
+ * Mobile-only sticky checkout bar: all-in listing price + קנה עכשיו.
  * Hidden on desktop via CSS. Parent should unmount when checkout/offer is open.
  */
 export default function EventMobileBuyBar({
@@ -13,10 +17,9 @@ export default function EventMobileBuyBar({
   busy = false,
   onBuy,
 }) {
+  const feePercent = useBuyerServiceFeePercent();
   if (!ticket) return null;
-  const cur = resolveTicketCurrency(ticket);
-  const sym = currencySymbol(cur);
-  const priceLabel = formatAmountForCurrency(ticket.asking_price || ticket.original_price, cur);
+  const { formattedTotal, currency } = buyerAllInFromTicket(ticket, feePercent);
   const remaining = Number(remainingCount);
   const showScarcity = Number.isFinite(remaining) && remaining > 0 && remaining <= 3;
   const scarcityLabel =
@@ -25,12 +28,12 @@ export default function EventMobileBuyBar({
   return (
     <div className="event-mobile-buy-bar" dir="rtl" role="region" aria-label="רכישה מהירה">
       <div className="event-mobile-buy-bar__price">
-        <span className="event-mobile-buy-bar__from">כרטיסים מ-{sym}{priceLabel}</span>
+        <span className="event-mobile-buy-bar__from">
+          {currencySymbol(currency)}{formattedTotal}
+        </span>
         {showScarcity ? (
           <span className="event-mobile-buy-bar__scarcity">{scarcityLabel}</span>
-        ) : (
-          <span className="event-mobile-buy-bar__hint">לכרטיס, לפני דמי שירות</span>
-        )}
+        ) : null}
       </div>
       <button
         type="button"

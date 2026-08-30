@@ -94,6 +94,19 @@ export function getTicketPrice(ticket) {
 }
 
 /**
+ * Buyer-facing listing total (face value + service fee). Same math as CheckoutModal.
+ */
+export function buyerAllInFromTicket(ticket, serviceFeePercent = BUYER_SERVICE_FEE_PERCENT) {
+  const cur = resolveTicketCurrency(ticket);
+  const charge = buyerChargeFromBase(getTicketBaseNumeric(ticket), serviceFeePercent);
+  return {
+    ...charge,
+    currency: cur,
+    formattedTotal: formatAmountForCurrency(charge.totalAmount, cur),
+  };
+}
+
+/**
  * Negotiation / offer row from API (amount + currency).
  * @param {Record<string, unknown>|null|undefined} offer
  * @param {string} [fallbackCurrency='ILS']

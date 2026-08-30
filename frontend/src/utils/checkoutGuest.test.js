@@ -1,5 +1,18 @@
-import { describe, expect, it } from 'vitest';
-import { guestCanReserveCart, guestHasCheckoutEmail, isGuestEmailRequiredError } from './checkoutGuest';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  clearPaymePendingOrder,
+  guestCanReserveCart,
+  guestHasCheckoutEmail,
+  isGuestEmailRequiredError,
+  readPaymePendingOrder,
+  shouldRescuePaymeReturn,
+  stashPaymePendingOrder,
+} from './checkoutGuest';
+
+afterEach(() => {
+  clearPaymePendingOrder();
+});
+
 
 describe('checkoutGuest', () => {
   it('treats logged-in buyers as ready without an email field', () => {
@@ -26,4 +39,14 @@ describe('checkoutGuest', () => {
     ).toBe(true);
     expect(isGuestEmailRequiredError({ response: { data: { error: 'held_by_other' } } })).toBe(false);
   });
+
+  it('rescues a PayMe return that landed on home within 45 minutes', () => {
+    stashPaymePendingOrder(42);
+    const pending = readPaymePendingOrder();
+    expect(pending?.id).toBe(42);
+    expect(shouldRescuePaymeReturn('/', 'https://live.payme.io/done', pending)).toBe(true);
+    expect(shouldRescuePaymeReturn('/checkout/payme/success', 'https://live.payme.io/done', pending)).toBe(false);
+    expect(shouldRescuePaymeReturn('/event/itay-levi-2026-09-01', '', pending)).toBe(false);
+  });
 });
+

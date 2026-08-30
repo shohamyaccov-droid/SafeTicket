@@ -89,6 +89,33 @@
   box-shadow: 0 4px 14px rgba(234, 88, 12, 0.28);
 }
 
+.artist-buy-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 1rem;
+  min-height: 44px;
+  border-radius: 8px;
+  background: #0045af;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.92rem;
+  text-decoration: none;
+}
+
+.artist-buy-cta:hover {
+  background: #003894;
+  color: #fff;
+  text-decoration: none;
+}
+
+.artist-notify-cta--secondary {
+  background: #fff;
+  color: #c2410c;
+  border: 1px solid #fdba74;
+  box-shadow: none;
+}
+
 .artist-notify-cta:hover {
   filter: brightness(1.05);
 }

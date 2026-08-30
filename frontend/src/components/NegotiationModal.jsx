@@ -327,7 +327,7 @@ const NegotiationModal = ({
                       {/* PRIVACY: Only show fee preview to BUYER (isSeller=false) */}
                       {!isSeller && parseFloat(counterAmount) > 0 && (
                         <span className="counter-total-preview">
-                          סה"כ לתשלום כולל עמלה ({serviceFeePercent}%): {curSym}{formatAmountForCurrency(buyerChargeFromBase(parseFloat(counterAmount), serviceFeePercent).totalAmount, listingCurrency)}
+                          סה״כ לתשלום: {curSym}{formatAmountForCurrency(buyerChargeFromBase(parseFloat(counterAmount), serviceFeePercent).totalAmount, listingCurrency)}
                         </span>
                       )}
                       <button

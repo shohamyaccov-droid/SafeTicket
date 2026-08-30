@@ -42,6 +42,11 @@ const HowToSellPage = () => {
       <header className="how-to-sell__header">
         <h1 id="how-to-sell-h1">{HOW_TO_SELL.h1}</h1>
         <p className="how-to-sell__intro">{HOW_TO_SELL.intro}</p>
+        <p className="how-to-sell__inline-cta how-to-sell__inline-cta--hero">
+          <Link className="how-to-sell__button" to={HOW_TO_SELL.cta_path}>
+            {HOW_TO_SELL.cta_label}
+          </Link>
+        </p>
       </header>
 
       <section className="how-to-sell__steps" aria-labelledby="how-to-sell-steps">

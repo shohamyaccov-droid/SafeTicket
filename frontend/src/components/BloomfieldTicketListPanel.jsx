@@ -7,11 +7,11 @@ import {
   formatAmountForCurrency,
   buyerChargeFromBase,
 } from '../utils/priceFormat';
+
 import { listingAvailabilityLabel, listingQuantityOptions, normalizeListingSplitType } from '../utils/listingQuantity';
 import TakenBuyButton from './TakenBuyButton';
 import { isListingGroupTaken } from '../utils/ticketAvailability';
 import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
-import { formatBuyerFeePercent } from '../services/pricingSettings';
 
 const ZONE_HE = {
   north: 'טריבונה צפון',
@@ -96,7 +96,6 @@ export default function BloomfieldTicketListPanel({
   totalListingsBeforeQuantityFilter = 0,
 }) {
   const buyerFeePercent = useBuyerServiceFeePercent();
-  const feePercentLabel = formatBuyerFeePercent(buyerFeePercent);
 
   return (
     <div className="flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm" dir="rtl">
@@ -174,11 +173,8 @@ export default function BloomfieldTicketListPanel({
             const cur = resolveTicketCurrency(firstTicket);
             const sym = currencySymbol(cur);
             const baseNum = getTicketBaseNumeric(firstTicket);
-            const priceStr = formatAmountForCurrency(baseNum, cur);
-            const feeNum =
-              baseNum > 0
-                ? buyerChargeFromBase(baseNum, buyerFeePercent).serviceFee
-                : 0;
+            const allIn = buyerChargeFromBase(baseNum, buyerFeePercent).totalAmount;
+            const priceStr = formatAmountForCurrency(allIn, cur);
             const qty = group.available_count || 1;
             const qtyLabel = listingAvailabilityLabel(splitType, qty);
 
@@ -223,7 +219,7 @@ export default function BloomfieldTicketListPanel({
                 {/* ── HORIZONTAL CARD ROW (inline styles guarantee layout) ── */}
                 <div style={ROW_STYLE}>
 
-                  {/* LEFT: Price + service fee */}
+                  {/* LEFT: All-in price */}
                   <div style={PRICE_COL_STYLE}>
                     <span
                       style={{
@@ -269,19 +265,6 @@ export default function BloomfieldTicketListPanel({
                         לכרטיס
                       </span>
                     </span>
-                    {feeNum > 0 && (
-                      <span
-                        style={{
-                          fontSize: '0.7rem',
-                          color: '#6b7280',
-                          marginTop: 4,
-                          whiteSpace: 'nowrap',
-                          direction: 'rtl',
-                        }}
-                      >
-                        + {feePercentLabel}% דמי שירות ותפעול
-                      </span>
-                    )}
                   </div>
 
                   {/* RIGHT: Section title + badges */}

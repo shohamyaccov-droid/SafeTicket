@@ -37,7 +37,7 @@ import SafePayTrustLine from './SafePayTrustLine';
 import { buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
 import { isGuestContactComplete, validateGuestContact as sharedValidateGuestContact } from '../utils/contactValidation';
 import { isCheckoutAuthSessionFailure } from '../utils/checkoutAuth';
-import { guestCanReserveCart, isGuestEmailRequiredError } from '../utils/checkoutGuest';
+import { guestCanReserveCart, isGuestEmailRequiredError, stashPaymePendingOrder } from '../utils/checkoutGuest';
 import { getOrCreateCartToken, holdTimerLabel } from '../utils/cartToken';
 import { useAuth } from '../context/AuthContext';
 import { useAuthModal } from '../context/AuthModalContext';
@@ -942,6 +942,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         const origin = window.location.origin.replace(/\/+$/, '');
         const successUrl = `${origin}/checkout/payme/success?order_id=${encodeURIComponent(String(pendingId))}`;
         const failureUrl = `${origin}/checkout/payme/failure?order_id=${encodeURIComponent(String(pendingId))}`;
+        stashPaymePendingOrder(pendingId);
         const initPayload = {
           order_id: pendingId,
           success_url: successUrl,

@@ -54,5 +54,7 @@ describe('BloomfieldTicketListPanel buy CTA', () => {
     expect(screen.queryByText('כמות')).not.toBeInTheDocument();
     await userEvent.click(buy);
     expect(onBuy).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/₪\s*96\.30/)).toBeInTheDocument();
+    expect(screen.queryByText(/דמי שירות/)).not.toBeInTheDocument();
   });
 });

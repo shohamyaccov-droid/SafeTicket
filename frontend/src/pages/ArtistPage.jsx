@@ -114,6 +114,12 @@ const ArtistPage = () => {
     [upcomingEvents]
   );
 
+  const featuredBuyEvent = useMemo(() => {
+    const inStock = upcomingEvents.filter((event) => eventTicketCount(event) > 0);
+    if (!inStock.length) return null;
+    return inStock.find((event) => event.id === mostSupplyEventId) || inStock[0];
+  }, [upcomingEvents, mostSupplyEventId]);
+
   const openEvent = useCallback(
     (eventOrId) => {
       if (eventOrId && typeof eventOrId === 'object') {
@@ -187,9 +193,18 @@ const ArtistPage = () => {
         />
         <div className="compact-artist-header__text">
           <h1 className="compact-artist-name">{heading}</h1>
+          {featuredBuyEvent ? (
+            <Link
+              className="artist-buy-cta"
+              to={eventHref(featuredBuyEvent)}
+              aria-label={`כרטיסים זמינים ל${artistName}`}
+            >
+              כרטיסים זמינים · קנה עכשיו
+            </Link>
+          ) : null}
           <button
             type="button"
-            className="artist-notify-cta"
+            className={featuredBuyEvent ? 'artist-notify-cta artist-notify-cta--secondary' : 'artist-notify-cta'}
             aria-label={`התראת כרטיסים ל${artistName}`}
             onClick={() => setShowAlertModal(true)}
           >
