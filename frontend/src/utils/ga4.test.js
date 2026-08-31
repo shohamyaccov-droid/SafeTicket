@@ -42,21 +42,28 @@ describe('Meta pixel conversion helpers', () => {
     } catch {
       /* ignore */
     }
+    window.history.replaceState({}, '', '/');
   });
 
-  it('fires Lead and Purchase via fbq when available', async () => {
+  it('fires Lead and InitiateCheckout; Purchase only on PayMe success route', async () => {
     const fbq = vi.fn();
     window.fbq = fbq;
     const {
       trackMetaLead,
       trackMetaPurchase,
       trackMetaInitiateCheckout,
+      isMetaPurchasePath,
       _resetMetaPixelForTests,
     } = await import('./metaPixel.js');
     _resetMetaPixelForTests();
 
+    expect(isMetaPurchasePath('/events/1')).toBe(false);
+    expect(isMetaPurchasePath('/checkout/payme/success')).toBe(true);
+    expect(isMetaPurchasePath('/checkout/payme/success/')).toBe(true);
+
     trackMetaLead({ contentName: 'ticket_listing', value: 20, eventID: 'test-lead-1' });
     trackMetaLead({ contentName: 'should_not_fire' });
+    window.history.replaceState({}, '', '/events/42');
     trackMetaPurchase({ orderId: 42, value: 250, currency: 'ILS' });
     trackMetaInitiateCheckout({ ticketId: 7, value: 250 });
 
@@ -69,19 +76,23 @@ describe('Meta pixel conversion helpers', () => {
     expect(fbq.mock.calls.some((call) => call[1] === 'Lead' && call[2]?.content_name === 'should_not_fire')).toBe(
       false,
     );
-    expect(fbq).toHaveBeenCalledWith(
-      'track',
-      'Purchase',
-      expect.objectContaining({ value: 250, currency: 'ILS' }),
-      expect.objectContaining({ eventID: 'purchase_42' }),
-    );
+    expect(fbq.mock.calls.some((call) => call[1] === 'Purchase')).toBe(false);
     expect(fbq).toHaveBeenCalledWith(
       'track',
       'InitiateCheckout',
       expect.objectContaining({ content_ids: ['7'] }),
     );
 
-    // Dedup purchase
+    fbq.mockClear();
+    window.history.replaceState({}, '', '/checkout/payme/success?order_id=42');
+    trackMetaPurchase({ orderId: 42, value: 250, currency: 'ILS' });
+    expect(fbq).toHaveBeenCalledWith(
+      'track',
+      'Purchase',
+      expect.objectContaining({ value: 250, currency: 'ILS' }),
+      expect.objectContaining({ eventID: 'purchase_42' }),
+    );
+
     fbq.mockClear();
     trackMetaPurchase({ orderId: 42, value: 250 });
     expect(fbq).not.toHaveBeenCalled();

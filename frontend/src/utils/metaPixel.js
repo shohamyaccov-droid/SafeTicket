@@ -2,9 +2,12 @@
  * Meta (Facebook) Pixel helpers.
  * Base snippet lives in index.html; this module re-inits if the SPA boots
  * without fbq (e.g. cached HTML without the pixel) and tracks SPA PageViews
- * plus conversion events (Lead / Purchase / InitiateCheckout / ViewContent).
+ * plus conversion events (Lead / InitiateCheckout / ViewContent).
+ * Standard Purchase fires only on `/checkout/payme/success`.
  */
 export const META_PIXEL_ID = '1267663240931005';
+/** Meta standard Purchase may fire only on this PayMe return route. */
+export const META_PURCHASE_PATH = '/checkout/payme/success';
 
 let ensured = false;
 
@@ -113,11 +116,24 @@ export function trackMetaLead(opts = {}) {
 }
 
 /**
- * Buyer completed payment (PayMe success / in-app confirm).
+ * True only on the PayMe success route (trailing slash ignored).
+ * @param {string} [pathname]
+ */
+export function isMetaPurchasePath(pathname) {
+  const raw =
+    pathname ?? (typeof window !== 'undefined' ? window.location?.pathname : '');
+  if (!raw) return false;
+  const p = String(raw).split('?')[0].replace(/\/+$/, '') || '/';
+  return p === META_PURCHASE_PATH;
+}
+
+/**
+ * Buyer completed payment. Fires Meta Purchase ONLY on `/checkout/payme/success`.
  * @param {{ orderId: string|number, value?: number, currency?: string }} opts
  */
 export function trackMetaPurchase(opts = {}) {
   try {
+    if (!isMetaPurchasePath()) return;
     if (!ensureMetaPixel()) return;
     const orderId = opts.orderId != null ? String(opts.orderId) : '';
     if (!orderId) return;

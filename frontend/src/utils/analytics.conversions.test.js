@@ -18,7 +18,7 @@ import {
   _resetAnalyticsConversionGuardsForTests,
 } from './analytics';
 import { trackGa4Event } from './ga4';
-import { trackMetaInitiateCheckout, trackMetaLead } from './metaPixel';
+import { trackMetaInitiateCheckout, trackMetaLead, trackMetaPurchase } from './metaPixel';
 
 describe('listing create helpers', () => {
   it('accepts HTTP 2xx and mocked responses that only include data', () => {
@@ -42,6 +42,7 @@ describe('conversion event guards', () => {
     vi.mocked(trackGa4Event).mockClear();
     vi.mocked(trackMetaLead).mockClear();
     vi.mocked(trackMetaInitiateCheckout).mockClear();
+    vi.mocked(trackMetaPurchase).mockClear();
     vi.stubGlobal('navigator', { sendBeacon: vi.fn(() => true) });
   });
 
@@ -108,5 +109,14 @@ describe('conversion event guards', () => {
       expect.objectContaining({ source: 'single_file' }),
     );
     expect(trackMetaLead).not.toHaveBeenCalled();
+  });
+
+  it('does not fire Meta Purchase from checkoutComplete (PayMe success page only)', () => {
+    Analytics.checkoutComplete(99, { value: 180, currency: 'ILS' });
+    expect(trackMetaPurchase).not.toHaveBeenCalled();
+    expect(trackGa4Event).toHaveBeenCalledWith(
+      'purchase',
+      expect.objectContaining({ transaction_id: '99', value: 180, currency: 'ILS' }),
+    );
   });
 });

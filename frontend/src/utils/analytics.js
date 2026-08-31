@@ -2,7 +2,8 @@
  * Lightweight analytics tracker.
  *
  * 1) Backend funnel POST (fire-and-forget)
- * 2) Meta Pixel conversion events (Lead / Purchase / …)
+ * 2) Meta Pixel conversion events (Lead / InitiateCheckout / ViewContent).
+ *    Purchase is fired only from PaymeCheckoutSuccess on `/checkout/payme/success`.
  * 3) GA4 + dataLayer custom events (generate_lead / purchase / …)
  *
  * Never blocks the UI — all errors are swallowed.
@@ -13,7 +14,6 @@ import { trackGa4Event } from './ga4';
 import {
   trackMetaInitiateCheckout,
   trackMetaLead,
-  trackMetaPurchase,
   trackMetaViewContent,
 } from './metaPixel';
 
@@ -200,6 +200,8 @@ export const Analytics = {
   /**
    * Successful payment (in-app confirm or PayMe return).
    * Deduped per order id so polling cannot double-count.
+   * Meta Pixel Purchase is NOT fired here — only PaymeCheckoutSuccess may call
+   * trackMetaPurchase, and only on `/checkout/payme/success`.
    */
   checkoutComplete: (orderId, extra = {}) => {
     if (orderId == null) return;
@@ -209,11 +211,6 @@ export const Analytics = {
       ...extra,
     });
     const value = extra.value != null ? Number(extra.value) : undefined;
-    trackMetaPurchase({
-      orderId,
-      value,
-      currency: extra.currency || 'ILS',
-    });
     trackGa4Event('purchase', {
       transaction_id: String(orderId),
       currency: extra.currency || 'ILS',

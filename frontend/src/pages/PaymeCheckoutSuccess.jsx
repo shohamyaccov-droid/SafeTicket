@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { orderAPI } from '../services/api';
 import { Analytics } from '../utils/analytics';
 import { clearPaymePendingOrder } from '../utils/checkoutGuest';
+import { trackMetaPurchase } from '../utils/metaPixel';
 import './PaymeCheckoutSuccess.css';
 
 const POLL_MS = 2500;
@@ -69,6 +70,11 @@ export default function PaymeCheckoutSuccess() {
           res.data?.total_paid_by_buyer ?? res.data?.total_amount ?? 0,
         );
         Analytics.checkoutComplete(orderId, {
+          value: Number.isFinite(paidValue) ? paidValue : 0,
+          currency: res.data?.currency || 'ILS',
+        });
+        trackMetaPurchase({
+          orderId,
           value: Number.isFinite(paidValue) ? paidValue : 0,
           currency: res.data?.currency || 'ILS',
         });

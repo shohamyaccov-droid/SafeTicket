@@ -21,6 +21,7 @@ import { toastError } from './utils/toast';
 import { Analytics } from './utils/analytics';
 import { trackGa4Pageview } from './utils/ga4';
 import { readPaymePendingOrder, shouldRescuePaymeReturn } from './utils/checkoutGuest';
+import { ensureGoogleAdsTag } from './utils/googleAdsConversions';
 import { ensureMetaPixel, trackMetaPageView } from './utils/metaPixel';
 import { prefetchCriticalRoutesOnIdle, prefetchSellPage } from './utils/routePrefetch';
 import { loadPricingSettings } from './services/pricingSettings';
@@ -133,6 +134,7 @@ function PageTracker() {
   const isInitialMetaPageView = useRef(true);
 
   useEffect(() => {
+    ensureGoogleAdsTag();
     ensureMetaPixel();
     Analytics.pageView(location.pathname);
     trackGa4Pageview(location.pathname, location.search);

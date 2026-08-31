@@ -1,6 +1,9 @@
 import { describe, expect, it, afterEach, vi } from 'vitest';
 import {
+  GOOGLE_ADS_AW_ID,
   GOOGLE_ADS_SELLER_LISTING_SEND_TO,
+  _resetGoogleAdsTagForTests,
+  ensureGoogleAdsTag,
   trackGoogleAdsConversion,
 } from './googleAdsConversions';
 
@@ -30,5 +33,31 @@ describe('trackGoogleAdsConversion', () => {
       throw new Error('gtag down');
     };
     expect(trackGoogleAdsConversion()).toBe(false);
+  });
+});
+
+describe('ensureGoogleAdsTag', () => {
+  afterEach(() => {
+    delete window.gtag;
+    _resetGoogleAdsTagForTests();
+    document.querySelectorAll('script[src*="googletagmanager.com/gtag/js"]').forEach((el) => el.remove());
+  });
+
+  it('keeps an existing gtag without injecting a second snippet', () => {
+    const gtag = vi.fn();
+    window.gtag = gtag;
+    expect(ensureGoogleAdsTag()).toBe(true);
+    expect(gtag).not.toHaveBeenCalled();
+    expect(document.querySelector(`script[src*="id=${GOOGLE_ADS_AW_ID}"]`)).toBeNull();
+  });
+
+  it('injects gtag/js and configs AW-18350905085 when missing', () => {
+    delete window.gtag;
+    expect(ensureGoogleAdsTag()).toBe(true);
+    expect(typeof window.gtag).toBe('function');
+    const script = document.querySelector(`script[src="https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ADS_AW_ID}"]`);
+    expect(script).toBeTruthy();
+    expect(script.async).toBe(true);
+    expect(window.dataLayer?.length).toBeGreaterThanOrEqual(2);
   });
 });
