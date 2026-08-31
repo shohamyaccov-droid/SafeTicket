@@ -86,6 +86,8 @@ class BuyerOrderDownloadTimelineTests(TestCase):
         res = self.client.get(f'/api/users/tickets/{self.ticket.pk}/download_pdf/')
         self.assertEqual(res.status_code, 200)
         self.assertGreater(len(res.content), 0)
+        self.assertTrue(res['Content-Type'].startswith('application/pdf'))
+        self.assertIn('attachment', res['Content-Disposition'])
 
     def test_ticket_details_include_section_row_seat_when_fk_null(self):
         self.ticket.custom_section_text = 'שער 7'

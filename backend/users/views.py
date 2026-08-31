@@ -30,7 +30,7 @@ from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.views.decorators.http import require_GET
 from django.db.models import F, Q, Count, Sum, Exists, OuterRef, Value, Prefetch, DecimalField
 from django.db.models.functions import Coalesce
@@ -724,6 +724,43 @@ def _download_ticket_pdf_bytes(ticket):
         return fetch_ticket_file_field_bytes(ticket.pdf_file, validate_magic=True)
     except CloudinarySecureFetchError as exc:
         raise PdfFetchError(exc.errors or [('secure_fetch', str(exc))]) from exc
+
+
+def _plain_download_error(message: str, status_code: int) -> HttpResponse:
+    """Never return a DRF Response here — browsers would render the Browsable API HTML."""
+    return HttpResponse(
+        message,
+        status=status_code,
+        content_type='text/plain; charset=utf-8',
+    )
+
+
+def _ticket_file_download_response(content: bytes, ticket) -> HttpResponse:
+    """Raw file download for receipt-email / dashboard links (not JSON, not DRF HTML)."""
+    sample = bytes(content or b'')[:12]
+    if sample.startswith(b'%PDF'):
+        content_type = 'application/pdf'
+        ext = '.pdf'
+    elif sample.startswith(b'\xff\xd8\xff'):
+        content_type = 'image/jpeg'
+        ext = '.jpg'
+    elif len(sample) >= 8 and sample.startswith(b'\x89PNG\r\n\x1a\n'):
+        content_type = 'image/png'
+        ext = '.png'
+    else:
+        import mimetypes
+        import os
+
+        stored_name = getattr(getattr(ticket, 'pdf_file', None), 'name', '') or ''
+        guessed, _ = mimetypes.guess_type(stored_name)
+        content_type = guessed or 'application/octet-stream'
+        ext = os.path.splitext(stored_name)[1] or '.bin'
+    filename = f'ticket_{ticket.pk}{ext}'
+    response = HttpResponse(bytes(content or b''), content_type=content_type)
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Content-Length'] = str(len(bytes(content or b'')))
+    return response
 
 
 def _download_ticket_receipt_bytes(ticket):
@@ -3263,6 +3300,9 @@ class TicketViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         from django.db.models import Q
+        if getattr(self, 'action', None) in ('download_pdf', 'download_receipt'):
+            # Receipt-email downloads must see sold / paid_out / reserved rows.
+            return Ticket.objects.all()
         # Lazy cart abandonment cleanup
         release_abandoned_carts()
         now = timezone.now()
@@ -3292,6 +3332,16 @@ class TicketViewSet(viewsets.ModelViewSet):
             queryset = queryset | user_tickets
         
         return queryset.distinct().order_by('-created_at')
+
+    def get_object(self):
+        if getattr(self, 'action', None) in ('download_pdf', 'download_receipt'):
+            lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+            lookup_value = self.kwargs.get(lookup_url_kwarg)
+            obj = Ticket.objects.filter(pk=lookup_value).first()
+            if obj is None:
+                raise Http404
+            return obj
+        return super().get_object()
 
     def get_throttles(self):
         if getattr(self, 'action', None) in ('list', 'retrieve'):
@@ -3651,7 +3701,11 @@ class TicketViewSet(viewsets.ModelViewSet):
         serializer = TicketSerializer(ticket, context={'request': request})
         return Response(serializer.data)
     
-    @action(detail=True, methods=['get'])
+    @action(
+        detail=True,
+        methods=['get'],
+        permission_classes=[AllowAny],
+    )
     def download_pdf(self, request, pk=None):
         """
         Download PDF/image ticket file.
@@ -3661,8 +3715,13 @@ class TicketViewSet(viewsets.ModelViewSet):
         - Authenticated buyer: paid/completed Order where user owns the order OR account email matches guest_email on order.
         - Anonymous: valid signed `dl` query param issued for this ticket+order (e.g. receipt email).
         Weak `?email=` alone is not accepted.
+
+        Always returns a raw file (HttpResponse attachment) or plain-text error — never the DRF Browsable API HTML.
+        Ticket lookup ignores catalog status filters (sold / paid_out / reserved still download).
         """
-        ticket = get_object_or_404(Ticket, pk=pk)
+        ticket = Ticket.objects.filter(pk=pk).first()
+        if ticket is None:
+            return _plain_download_error('Ticket not found.', status.HTTP_404_NOT_FOUND)
 
         has_access = False
         if request.user.is_authenticated and user_can_access_ticket_pdf(request.user, ticket):
@@ -3680,20 +3739,15 @@ class TicketViewSet(viewsets.ModelViewSet):
                         has_access = True
 
         if not has_access:
-            return Response(
-                {'error': 'You do not have permission to download this ticket.'},
-                status=status.HTTP_403_FORBIDDEN  # Strict 403 - IDOR prevention
+            return _plain_download_error(
+                'You do not have permission to download this ticket.',
+                status.HTTP_403_FORBIDDEN,
             )
-        
-        if not ticket.pdf_file:
-            return Response(
-                {'error': 'PDF file not found.'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        try:
-            import os
 
+        if not ticket.pdf_file:
+            return _plain_download_error('PDF file not found.', status.HTTP_404_NOT_FOUND)
+
+        try:
             if getattr(settings, 'USE_CLOUDINARY', False):
                 content = _download_ticket_pdf_bytes(ticket)
             else:
@@ -3702,57 +3756,13 @@ class TicketViewSet(viewsets.ModelViewSet):
                     content = ticket.pdf_file.read()
                 finally:
                     ticket.pdf_file.close()
-
-            filename = os.path.basename(ticket.pdf_file.name)
-
-            safe_filename = f"ticket_{ticket.id}_{filename}" if filename else f"ticket_{ticket.id}.pdf"
-            # ASCII-only filename for Content-Disposition (avoid Latin-1 encoding errors)
-            safe_ascii = ''.join(c if ord(c) < 128 and c not in '"\\' else '_' for c in safe_filename) or f'ticket_{ticket.id}.pdf'
-
-            import mimetypes
-
-            from django.http import HttpResponse
-
-            guessed, _ = mimetypes.guess_type(safe_ascii)
-            ct = guessed
-            if not ct:
-                sample = (content or b'')[:12]
-                if sample.startswith(b'%PDF'):
-                    ct = 'application/pdf'
-                elif sample.startswith(b'\xff\xd8\xff'):
-                    ct = 'image/jpeg'
-                elif len(sample) >= 8 and sample.startswith(b'\x89PNG\r\n\x1a\n'):
-                    ct = 'image/png'
-                else:
-                    ct = 'application/octet-stream'
-            _root, _ext = os.path.splitext(safe_ascii)
-            if not _ext:
-                if ct == 'application/pdf':
-                    safe_ascii = f'{safe_ascii}.pdf'
-                elif ct == 'image/jpeg':
-                    safe_ascii = f'{safe_ascii}.jpg'
-                elif ct == 'image/png':
-                    safe_ascii = f'{safe_ascii}.png'
-                elif ct == 'image/webp':
-                    safe_ascii = f'{safe_ascii}.webp'
-                elif ct == 'image/gif':
-                    safe_ascii = f'{safe_ascii}.gif'
-            response = HttpResponse(content, content_type=ct)
-            response['Content-Disposition'] = f'attachment; filename="{safe_ascii}"'
-            return response
-        except PdfFetchError as e:
+            return _ticket_file_download_response(content, ticket)
+        except PdfFetchError:
             logger.exception('download_pdf Cloudinary fetch failed for ticket %s', ticket.pk)
-            body = {'error': 'Could not retrieve PDF file.'}
-            if settings.DEBUG and e.errors:
-                body['details'] = e.errors[-25:]
-            return Response(body, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        except Exception as e:
+            return _plain_download_error('Could not retrieve PDF file.', status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
             logger.exception('download_pdf failed for ticket %s', ticket.pk)
-            err_msg = str(e) if settings.DEBUG else 'Could not retrieve PDF file.'
-            return Response(
-                {'error': err_msg},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return _plain_download_error('Could not retrieve PDF file.', status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['get'])
     def download_receipt(self, request, pk=None):
