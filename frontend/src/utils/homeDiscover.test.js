@@ -3,7 +3,9 @@ import { eventHref } from './eventSeo';
 import {
   filterLastMinuteEvents,
   filterHighDemandEvents,
+  filterSeasonSportsEvents,
   applyHotEventPlaceholder,
+  applySportEventPlaceholder,
   groupEventsByPerformer,
   HOME_DISCOVER_ROW_ORDER,
   LAST_MINUTE_WINDOW_DAYS,
@@ -19,6 +21,12 @@ describe('performerNavigateTarget', () => {
     );
     expect(HOME_DISCOVER_ROW_ORDER.indexOf('last-minute')).toBeLessThan(
       HOME_DISCOVER_ROW_ORDER.indexOf('recommended'),
+    );
+    expect(HOME_DISCOVER_ROW_ORDER.indexOf('music')).toBeLessThan(
+      HOME_DISCOVER_ROW_ORDER.indexOf('sports-season'),
+    );
+    expect(HOME_DISCOVER_ROW_ORDER.indexOf('sports-season')).toBeLessThan(
+      HOME_DISCOVER_ROW_ORDER.indexOf('standup'),
     );
   });
   it('routes a single upcoming event with tickets straight to EventDetailsPage', () => {
@@ -88,6 +96,47 @@ describe('filterHighDemandEvents', () => {
     const ev = applyHotEventPlaceholder({
       id: 9,
       artist_name: 'שרית חדד',
+      high_demand: true,
+    });
+    expect(ev.image_url).toMatch(/^https:\/\/images\.unsplash\.com\//);
+  });
+});
+
+describe('filterSeasonSportsEvents', () => {
+  it('keeps only hot football and basketball events, soonest first', () => {
+    const football = {
+      id: 1,
+      date: '2026-09-14T20:30:00',
+      category: 'football',
+      high_demand: true,
+    };
+    const basketball = {
+      id: 2,
+      date: '2026-11-12T21:05:00',
+      category: 'basketball',
+      is_hot: true,
+    };
+    const concert = {
+      id: 3,
+      date: '2026-09-16T21:00:00',
+      category: 'concert',
+      high_demand: true,
+    };
+    const coldFootball = {
+      id: 4,
+      date: '2026-10-01T20:30:00',
+      category: 'football',
+      high_demand: false,
+    };
+    expect(filterSeasonSportsEvents([basketball, concert, coldFootball, football]).map((ev) => ev.id)).toEqual([
+      1, 2,
+    ]);
+  });
+
+  it('applies a stadium placeholder when the catalog has none', () => {
+    const ev = applySportEventPlaceholder({
+      id: 9,
+      category: 'football',
       high_demand: true,
     });
     expect(ev.image_url).toMatch(/^https:\/\/images\.unsplash\.com\//);

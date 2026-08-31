@@ -269,15 +269,19 @@ class Event(models.Model):
     CATEGORY_CHOICES = [
         ('concert', 'הופעות'),
         ('sport', 'ספורט'),
+        ('football', 'כדורגל'),
+        ('basketball', 'כדורסל'),
         ('theater', 'תיאטרון'),
         ('festival', 'פסטיבלים'),
         ('standup', 'סטנדאפ'),
     ]
+    # Legacy listings used category='sport'; new matches use football/basketball.
+    SPORT_CATEGORY_VALUES = ('sport', 'football', 'basketball')
     category = models.CharField(
         max_length=50,
         choices=CATEGORY_CHOICES,
         default='concert',
-        help_text="Event category"
+        help_text="Event category (concert, football, basketball, sport, …)"
     )
     
     STATUS_CHOICES = [
@@ -402,7 +406,7 @@ class Event(models.Model):
 
     def __str__(self):
         # For sports events with teams, show team matchup
-        if self.category == 'sport':
+        if self.category in self.SPORT_CATEGORY_VALUES:
             if self.home_team and self.away_team:
                 tournament_str = f" - {self.tournament}" if self.tournament else ""
                 return f"{self.home_team} vs {self.away_team}{tournament_str}"

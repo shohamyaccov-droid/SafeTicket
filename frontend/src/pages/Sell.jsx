@@ -551,7 +551,11 @@ const Sell = () => {
   // Helper function to get event display name (handles sports events)
   const getEventDisplayName = (event) => {
     // For sports events with teams, show team matchup
-    if ((event.category === 'sport' || event.category === 'ספורט') && event.home_team && event.away_team) {
+    if (
+      ['sport', 'football', 'basketball', 'ספורט'].includes(String(event.category || '').toLowerCase()) &&
+      event.home_team &&
+      event.away_team
+    ) {
       const tournamentStr = event.tournament ? ` - ${event.tournament}` : '';
       return `${event.home_team} vs ${event.away_team}${tournamentStr}`;
     }
@@ -568,7 +572,7 @@ const Sell = () => {
     return events.filter((event) => {
       const cat = (event.category || '').toLowerCase();
       if (selectedCategory === 'sport') {
-        return cat === 'sport' || cat === 'משחקי ספורט' || cat === 'ספורט';
+        return ['sport', 'football', 'basketball', 'משחקי ספורט', 'ספורט'].includes(cat);
       }
       if (selectedCategory === 'theater') {
         return cat === 'theater' || cat === 'הצגות תיאטרון' || cat === 'הצגה';

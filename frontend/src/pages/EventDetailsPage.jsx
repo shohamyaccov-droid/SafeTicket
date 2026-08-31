@@ -1342,7 +1342,8 @@ const EventDetailsPage = () => {
                 <p className="event-hero-artist">{artistDisplayName}</p>
               )
             ) : null}
-            {event.category === 'sport' && (event.home_team || event.away_team) ? (
+            {['sport', 'football', 'basketball'].includes(String(event.category || '').toLowerCase()) &&
+            (event.home_team || event.away_team) ? (
               <p className="event-hero-matchup">
                 {event.home_team || '—'} <span className="event-hero-vs">נגד</span> {event.away_team || '—'}
                 {event.tournament ? <span className="event-hero-tournament"> · {event.tournament}</span> : null}

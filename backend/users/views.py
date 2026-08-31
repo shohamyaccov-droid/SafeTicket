@@ -4244,6 +4244,12 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
         if search:
             queryset = queryset.filter(name__icontains=search)
 
+        category_raw = qp.get('category')
+        if category_raw:
+            cats = [c.strip().lower() for c in str(category_raw).split(',') if c.strip()]
+            if cats:
+                queryset = queryset.filter(category__in=cats)
+
         if self.action == 'list':
             last_minute_raw = str(qp.get('last_minute', '')).lower()
             if last_minute_raw in ('1', 'true', 'yes', 'on'):
@@ -4254,7 +4260,7 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
                     .filter(_active_tickets_total__gt=0)
                     .order_by('date', 'name')
                 )
-            high_demand_raw = str(qp.get('high_demand', '')).lower()
+            high_demand_raw = str(qp.get('high_demand', '') or qp.get('is_hot', '')).lower()
             if high_demand_raw in ('1', 'true', 'yes', 'on'):
                 # Homepage sold-out / high-demand row — no ticket-stock requirement.
                 queryset = queryset.filter(high_demand=True).order_by('date', 'name')

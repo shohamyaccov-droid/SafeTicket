@@ -18,7 +18,9 @@ import {
   sortPerformersByDemand,
   performerNavigateTarget,
   applyHotEventPlaceholder,
+  applySportEventPlaceholder,
   filterHighDemandEvents,
+  filterSeasonSportsEvents,
 } from '../utils/homeDiscover';
 import { formatEventLocation } from '../utils/eventLocalTime';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
@@ -47,6 +49,7 @@ const Home = () => {
   const [events, setEvents] = useState([]);
   const [lastMinuteEvents, setLastMinuteEvents] = useState([]);
   const [hotDemandEvents, setHotDemandEvents] = useState([]);
+  const [seasonSportsEvents, setSeasonSportsEvents] = useState([]);
   const [artists, setArtists] = useState([]);
   const [recommendedArtists, setRecommendedArtists] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -78,10 +81,21 @@ const Home = () => {
       setLoadError(null);
       setLoading(true);
       try {
-        const [eventsResponse, lastMinuteResponse, hotDemandResponse, artistsResponse, recommendedArtistsResponse] = await Promise.all([
+        const [
+          eventsResponse,
+          lastMinuteResponse,
+          hotDemandResponse,
+          seasonSportsResponse,
+          artistsResponse,
+          recommendedArtistsResponse,
+        ] = await Promise.all([
           eventAPI.getEvents({ signal }),
           eventAPI.getEvents({ signal, params: { last_minute: '1' } }),
           eventAPI.getEvents({ signal, params: { high_demand: '1' } }),
+          eventAPI.getEvents({
+            signal,
+            params: { high_demand: '1', category: 'football,basketball' },
+          }),
           artistAPI.getArtists({ signal }),
           artistAPI.getArtists({ signal, params: { recommended: '1' } }),
         ]);
@@ -115,6 +129,15 @@ const Home = () => {
           }
         }
         setHotDemandEvents(hotDemandData);
+        let seasonSportsData = [];
+        if (seasonSportsResponse.data) {
+          if (Array.isArray(seasonSportsResponse.data)) {
+            seasonSportsData = seasonSportsResponse.data;
+          } else if (seasonSportsResponse.data.results && Array.isArray(seasonSportsResponse.data.results)) {
+            seasonSportsData = seasonSportsResponse.data.results;
+          }
+        }
+        setSeasonSportsEvents(seasonSportsData);
         const artistsPayload = artistsResponse?.data;
         const artistsData = Array.isArray(artistsPayload)
           ? artistsPayload
@@ -142,6 +165,7 @@ const Home = () => {
         setEvents([]);
         setLastMinuteEvents([]);
         setHotDemandEvents([]);
+        setSeasonSportsEvents([]);
         setArtists([]);
         setRecommendedArtists([]);
         if (!aborted) {
@@ -260,7 +284,11 @@ const Home = () => {
   const hotDemandDisplayEvents = useMemo(() => {
     const fromApi = Array.isArray(hotDemandEvents) ? hotDemandEvents : [];
     const merged = fromApi.length ? fromApi : filterHighDemandEvents(inventoryEvents);
-    const withImages = merged.map(applyHotEventPlaceholder);
+    const concertsOnly = merged.filter((event) => {
+      const cat = String(event?.category || '').toLowerCase();
+      return !['football', 'basketball', 'sport'].includes(cat);
+    });
+    const withImages = concertsOnly.map(applyHotEventPlaceholder);
     if (!searchQuery.trim()) return withImages;
     const q = searchQuery.toLowerCase().trim();
     return withImages.filter((event) => {
@@ -272,6 +300,31 @@ const Home = () => {
       return eventName.includes(q) || artistName.includes(q) || city.includes(q) || venue.includes(q);
     });
   }, [hotDemandEvents, inventoryEvents, searchQuery]);
+
+  const seasonSportsDisplayEvents = useMemo(() => {
+    const fromApi = Array.isArray(seasonSportsEvents) ? seasonSportsEvents : [];
+    const merged = fromApi.length ? fromApi : filterSeasonSportsEvents(inventoryEvents);
+    const withImages = filterSeasonSportsEvents(merged).map(applySportEventPlaceholder);
+    if (!searchQuery.trim()) return withImages;
+    const q = searchQuery.toLowerCase().trim();
+    return withImages.filter((event) => {
+      const eventName = event.name?.toLowerCase() || '';
+      const artistName =
+        event.artist_detail?.name?.toLowerCase() || event.artist_name?.toLowerCase() || '';
+      const home = event.home_team?.toLowerCase() || '';
+      const away = event.away_team?.toLowerCase() || '';
+      const city = event.city?.toLowerCase() || '';
+      const venue = event.venue?.toLowerCase() || '';
+      return (
+        eventName.includes(q) ||
+        artistName.includes(q) ||
+        home.includes(q) ||
+        away.includes(q) ||
+        city.includes(q) ||
+        venue.includes(q)
+      );
+    });
+  }, [seasonSportsEvents, inventoryEvents, searchQuery]);
 
   const recommendedArtistIds = useMemo(
     () =>
@@ -602,7 +655,10 @@ const Home = () => {
       </section>
 
       <section ref={resultsRef} className="home-layout" aria-label="אירועים ואמנים">
-        {inventoryEvents.length === 0 && allPerformers.length === 0 && hotDemandDisplayEvents.length === 0 ? (
+        {inventoryEvents.length === 0 &&
+        allPerformers.length === 0 &&
+        hotDemandDisplayEvents.length === 0 &&
+        seasonSportsDisplayEvents.length === 0 ? (
           <div className="home-empty-wrap home-layout__rows">
             <EmptyState
               icon="🎫"
@@ -633,6 +689,12 @@ const Home = () => {
               performers={recommendedPerformers}
             />
             <CarouselSection slug="music" title="הופעות" kind="performer" performers={musicPerformers} />
+            <CarouselSection
+              slug="sports-season"
+              title="משחקי העונה - כדורגל וכדורסל"
+              kind="event"
+              events={seasonSportsDisplayEvents}
+            />
             <CarouselSection slug="standup" title="סטנדאפ" kind="performer" performers={standupPerformers} />
             <CarouselSection slug="sports" title="כדורגל וספורט" kind="performer" performers={sportsPerformers} />
           </div>

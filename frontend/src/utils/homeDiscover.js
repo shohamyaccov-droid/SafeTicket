@@ -13,9 +13,21 @@ export const HOME_DISCOVER_ROW_ORDER = [
   'last-minute',
   'recommended',
   'music',
+  'sports-season',
   'standup',
   'sports',
 ];
+
+/** Stadium / arena Unsplash placeholders for the sports season homepage row. */
+export const SPORT_EVENT_PLACEHOLDERS = {
+  football:
+    'https://images.unsplash.com/photo-1522778119026-d647f0596c23?auto=format&fit=crop&w=800&h=450&q=80',
+  basketball:
+    'https://images.unsplash.com/photo-1504450758481-7338eba7524a?auto=format&fit=crop&w=800&h=450&q=80',
+};
+
+export const SPORT_EVENT_CATEGORIES = ['sport', 'football', 'basketball'];
+export const SEASON_SPORTS_CATEGORIES = ['football', 'basketball'];
 
 /** Concert-style Unsplash placeholders when the catalog has no artist/event image. */
 export const HOT_EVENT_PLACEHOLDERS = {
@@ -54,12 +66,40 @@ export function filterHighDemandEvents(list) {
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 
+/** Attach a stadium/arena placeholder when the sports event has no image. */
+export function applySportEventPlaceholder(ev) {
+  if (!ev) return ev;
+  if (ev.image_url || ev.artist_detail?.image_url) return ev;
+  const cat = eventCategoryKey(ev);
+  return {
+    ...ev,
+    image_url: SPORT_EVENT_PLACEHOLDERS[cat] || SPORT_EVENT_PLACEHOLDERS.football,
+  };
+}
+
+export function isSportEventCategory(ev) {
+  return SPORT_EVENT_CATEGORIES.includes(eventCategoryKey(ev));
+}
+
+export function isSeasonSportsEvent(ev) {
+  const cat = eventCategoryKey(ev);
+  const hot = Boolean(ev?.high_demand || ev?.is_hot);
+  return hot && SEASON_SPORTS_CATEGORIES.includes(cat);
+}
+
+/** Upcoming high-demand football/basketball matches, chronological. */
+export function filterSeasonSportsEvents(list) {
+  return [...(list || [])]
+    .filter((ev) => isSeasonSportsEvent(ev) && ev?.date)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
 /** @param {object} ev */
 export function eventCategoryKey(ev) {
   const raw = ev?.category;
   if (raw == null || raw === '') return '';
   const s = String(raw).toLowerCase().trim();
-  if (['concert', 'festival', 'sport', 'theater', 'standup'].includes(s)) return s;
+  if (['concert', 'festival', 'sport', 'football', 'basketball', 'theater', 'standup'].includes(s)) return s;
   return s;
 }
 
@@ -69,7 +109,7 @@ export function performerKey(ev) {
   if (id != null && id !== '') return `artist:${id}`;
   const name = String(ev?.artist_detail?.name ?? ev?.artist_name ?? '').trim();
   if (name) return `name:${name}`;
-  const sport = eventCategoryKey(ev) === 'sport';
+  const sport = isSportEventCategory(ev);
   if (sport && ev?.home_team && ev?.away_team) {
     return `match:${ev.home_team}\u0000${ev.away_team}`;
   }
@@ -82,7 +122,7 @@ export function performerKey(ev) {
 export function performerDisplayName(ev) {
   const fromArtist = ev?.artist_detail?.name || ev?.artist_name;
   if (fromArtist) return String(fromArtist).trim();
-  if (eventCategoryKey(ev) === 'sport' && ev?.home_team && ev?.away_team) {
+  if (isSportEventCategory(ev) && ev?.home_team && ev?.away_team) {
     const t = ev.tournament ? ` · ${ev.tournament}` : '';
     return `${ev.home_team} נגד ${ev.away_team}${t}`;
   }
@@ -99,7 +139,7 @@ export function performerCategory(ev) {
   const artistCategory = ev?.artist_detail?.category;
   if (artistCategory) return String(artistCategory).trim();
   const eventCategory = eventCategoryKey(ev);
-  if (eventCategory === 'sport') return 'sports';
+  if (eventCategory === 'sport' || eventCategory === 'football' || eventCategory === 'basketball') return 'sports';
   if (eventCategory === 'standup') return 'standup';
   if (eventCategory === 'theater') return 'theater';
   return 'music';

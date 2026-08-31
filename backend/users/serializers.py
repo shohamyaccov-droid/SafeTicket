@@ -747,6 +747,7 @@ class EventSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializer):
     currency = serializers.SerializerMethodField()
     currency_symbol = serializers.SerializerMethodField()
     high_demand = serializers.SerializerMethodField()
+    is_hot = serializers.SerializerMethodField()
     artist = ArtistSerializer(read_only=True)
     artist_id = serializers.PrimaryKeyRelatedField(queryset=Artist.objects.all(), source='artist', write_only=True, required=False, allow_null=True)
     venue_detail = VenueDetailSerializer(source='venue_place', read_only=True)
@@ -763,7 +764,7 @@ class EventSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializer):
             'id', 'slug', 'artist', 'artist_id', 'name', 'date', 'ends_at', 'venue', 'venue_detail', 'city', 'country',
             'currency', 'currency_symbol',
             'image', 'image_url',
-            'tickets_count', 'view_count', 'category', 'home_team', 'away_team', 'tournament', 'high_demand',
+            'tickets_count', 'view_count', 'category', 'home_team', 'away_team', 'tournament', 'high_demand', 'is_hot',
             'seo_title', 'seo_description', 'canonical_url', 'canonical_path', 'og_image', 'json_ld',
             'created_at', 'updated_at',
         )
@@ -803,6 +804,9 @@ class EventSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializer):
     def get_high_demand(self, obj):
         return safe_event_high_demand_bool(obj)
 
+    def get_is_hot(self, obj):
+        return safe_event_high_demand_bool(obj)
+
     def get_seo_title(self, obj):
         return self._seo(obj)['seo_title']
 
@@ -829,6 +833,7 @@ class EventListSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializ
     currency = serializers.SerializerMethodField()
     currency_symbol = serializers.SerializerMethodField()
     high_demand = serializers.SerializerMethodField()
+    is_hot = serializers.SerializerMethodField()
     artist_name = serializers.CharField(source='artist.name', read_only=True)
     artist_detail = ArtistCardSerializer(source='artist', read_only=True)
     venue_detail = VenueDetailSerializer(source='venue_place', read_only=True)
@@ -842,7 +847,7 @@ class EventListSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializ
             'currency', 'currency_symbol',
             'image_url',
             'tickets_count',
-            'category', 'home_team', 'away_team', 'tournament', 'high_demand',
+            'category', 'home_team', 'away_team', 'tournament', 'high_demand', 'is_hot',
             'seo_title', 'canonical_path',
         )
         read_only_fields = fields
@@ -864,6 +869,9 @@ class EventListSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializ
         return total or 0
 
     def get_high_demand(self, obj):
+        return safe_event_high_demand_bool(obj)
+
+    def get_is_hot(self, obj):
         return safe_event_high_demand_bool(obj)
 
     def get_seo_title(self, obj):
