@@ -17,9 +17,7 @@ import {
   groupEventsByPerformer,
   sortPerformersByDemand,
   performerNavigateTarget,
-  applyHotEventPlaceholder,
   applySportEventPlaceholder,
-  filterHighDemandEvents,
   filterSeasonSportsEvents,
 } from '../utils/homeDiscover';
 import { formatEventLocation } from '../utils/eventLocalTime';
@@ -48,7 +46,6 @@ const Home = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [events, setEvents] = useState([]);
   const [lastMinuteEvents, setLastMinuteEvents] = useState([]);
-  const [hotDemandEvents, setHotDemandEvents] = useState([]);
   const [seasonSportsEvents, setSeasonSportsEvents] = useState([]);
   const [artists, setArtists] = useState([]);
   const [recommendedArtists, setRecommendedArtists] = useState([]);
@@ -84,14 +81,12 @@ const Home = () => {
         const [
           eventsResponse,
           lastMinuteResponse,
-          hotDemandResponse,
           seasonSportsResponse,
           artistsResponse,
           recommendedArtistsResponse,
         ] = await Promise.all([
           eventAPI.getEvents({ signal }),
           eventAPI.getEvents({ signal, params: { last_minute: '1' } }),
-          eventAPI.getEvents({ signal, params: { high_demand: '1' } }),
           eventAPI.getEvents({
             signal,
             params: { high_demand: '1', category: 'football,basketball' },
@@ -120,15 +115,6 @@ const Home = () => {
           }
         }
         setLastMinuteEvents(lastMinuteData);
-        let hotDemandData = [];
-        if (hotDemandResponse.data) {
-          if (Array.isArray(hotDemandResponse.data)) {
-            hotDemandData = hotDemandResponse.data;
-          } else if (hotDemandResponse.data.results && Array.isArray(hotDemandResponse.data.results)) {
-            hotDemandData = hotDemandResponse.data.results;
-          }
-        }
-        setHotDemandEvents(hotDemandData);
         let seasonSportsData = [];
         if (seasonSportsResponse.data) {
           if (Array.isArray(seasonSportsResponse.data)) {
@@ -164,7 +150,6 @@ const Home = () => {
         setLoadError(aborted ? 'timeout' : 'error');
         setEvents([]);
         setLastMinuteEvents([]);
-        setHotDemandEvents([]);
         setSeasonSportsEvents([]);
         setArtists([]);
         setRecommendedArtists([]);
@@ -280,26 +265,6 @@ const Home = () => {
       return eventName.includes(q) || artistName.includes(q) || city.includes(q) || venue.includes(q);
     });
   }, [lastMinuteEvents, searchQuery]);
-
-  const hotDemandDisplayEvents = useMemo(() => {
-    const fromApi = Array.isArray(hotDemandEvents) ? hotDemandEvents : [];
-    const merged = fromApi.length ? fromApi : filterHighDemandEvents(inventoryEvents);
-    const concertsOnly = merged.filter((event) => {
-      const cat = String(event?.category || '').toLowerCase();
-      return !['football', 'basketball', 'sport'].includes(cat);
-    });
-    const withImages = concertsOnly.map(applyHotEventPlaceholder);
-    if (!searchQuery.trim()) return withImages;
-    const q = searchQuery.toLowerCase().trim();
-    return withImages.filter((event) => {
-      const eventName = event.name?.toLowerCase() || '';
-      const artistName =
-        event.artist_detail?.name?.toLowerCase() || event.artist_name?.toLowerCase() || '';
-      const city = event.city?.toLowerCase() || '';
-      const venue = event.venue?.toLowerCase() || '';
-      return eventName.includes(q) || artistName.includes(q) || city.includes(q) || venue.includes(q);
-    });
-  }, [hotDemandEvents, inventoryEvents, searchQuery]);
 
   const seasonSportsDisplayEvents = useMemo(() => {
     const fromApi = Array.isArray(seasonSportsEvents) ? seasonSportsEvents : [];
@@ -657,7 +622,6 @@ const Home = () => {
       <section ref={resultsRef} className="home-layout" aria-label="אירועים ואמנים">
         {inventoryEvents.length === 0 &&
         allPerformers.length === 0 &&
-        hotDemandDisplayEvents.length === 0 &&
         seasonSportsDisplayEvents.length === 0 ? (
           <div className="home-empty-wrap home-layout__rows">
             <EmptyState
@@ -670,12 +634,6 @@ const Home = () => {
           </div>
         ) : (
           <div className="home-viagogo-rows viagogo-home-discover home-layout__rows">
-            <CarouselSection
-              slug="hot-soldout"
-              title="הופעות סולד-אאוט מבוקשות"
-              kind="event"
-              events={hotDemandDisplayEvents}
-            />
             <CarouselSection
               slug="last-minute"
               title="כרטיסים של הדקה ה-90"

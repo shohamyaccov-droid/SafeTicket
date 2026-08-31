@@ -7,9 +7,8 @@ import { eventTicketCount } from './artistEventSupply';
 /** Homepage last-minute row: upcoming events within this many days. */
 export const LAST_MINUTE_WINDOW_DAYS = 14;
 
-/** Homepage row order: editorial hot/sold-out first, then last-minute, then recommended. */
+/** Homepage row order: last-minute, then recommended, then category rows. */
 export const HOME_DISCOVER_ROW_ORDER = [
-  'hot-soldout',
   'last-minute',
   'recommended',
   'music',

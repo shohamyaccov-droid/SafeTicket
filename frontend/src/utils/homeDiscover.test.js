@@ -13,12 +13,10 @@ import {
 } from './homeDiscover';
 
 describe('performerNavigateTarget', () => {
-  it('puts sold-out demand shows above last-minute on the homepage', () => {
-    expect(HOME_DISCOVER_ROW_ORDER[0]).toBe('hot-soldout');
+  it('puts last-minute first, with sports season directly below concerts', () => {
+    expect(HOME_DISCOVER_ROW_ORDER[0]).toBe('last-minute');
     expect(LAST_MINUTE_WINDOW_DAYS).toBe(14);
-    expect(HOME_DISCOVER_ROW_ORDER.indexOf('hot-soldout')).toBeLessThan(
-      HOME_DISCOVER_ROW_ORDER.indexOf('last-minute'),
-    );
+    expect(HOME_DISCOVER_ROW_ORDER).not.toContain('hot-soldout');
     expect(HOME_DISCOVER_ROW_ORDER.indexOf('last-minute')).toBeLessThan(
       HOME_DISCOVER_ROW_ORDER.indexOf('recommended'),
     );
