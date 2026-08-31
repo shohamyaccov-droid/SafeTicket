@@ -7,8 +7,52 @@ import { eventTicketCount } from './artistEventSupply';
 /** Homepage last-minute row: upcoming events within this many days. */
 export const LAST_MINUTE_WINDOW_DAYS = 14;
 
-/** Homepage row order: last-minute buyers first, then recommended artists. */
-export const HOME_DISCOVER_ROW_ORDER = ['last-minute', 'recommended', 'music', 'standup', 'sports'];
+/** Homepage row order: editorial hot/sold-out first, then last-minute, then recommended. */
+export const HOME_DISCOVER_ROW_ORDER = [
+  'hot-soldout',
+  'last-minute',
+  'recommended',
+  'music',
+  'standup',
+  'sports',
+];
+
+/** Concert-style Unsplash placeholders when the catalog has no artist/event image. */
+export const HOT_EVENT_PLACEHOLDERS = {
+  _default:
+    'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=800&h=450&q=80',
+  'חנן בן ארי':
+    'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&h=450&q=80',
+  'ישי ריבו':
+    'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=800&h=450&q=80',
+  טונה: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=800&h=450&q=80',
+  פסטיגל:
+    'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&h=450&q=80',
+  'הדג נחש':
+    'https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&w=800&h=450&q=80',
+  'נועם בתן':
+    'https://images.unsplash.com/photo-1429962714451-bb934ecdc4ec?auto=format&fit=crop&w=800&h=450&q=80',
+  'אגם בוחבוט':
+    'https://images.unsplash.com/photo-1459749411177-04aa5009cb27?auto=format&fit=crop&w=800&h=450&q=80',
+  'שרית חדד':
+    'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=800&h=450&q=80',
+  NEXT: 'https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&w=800&h=450&q=80',
+};
+
+/** Attach a placeholder image_url when the event/artist has none. */
+export function applyHotEventPlaceholder(ev) {
+  if (!ev) return ev;
+  if (ev.image_url || ev.artist_detail?.image_url) return ev;
+  const name = String(ev.artist_detail?.name || ev.artist_name || '').trim();
+  return { ...ev, image_url: HOT_EVENT_PLACEHOLDERS[name] || HOT_EVENT_PLACEHOLDERS._default };
+}
+
+/** Upcoming high-demand events, chronological. */
+export function filterHighDemandEvents(list) {
+  return [...(list || [])]
+    .filter((ev) => Boolean(ev?.high_demand) && ev?.date)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+}
 
 /** @param {object} ev */
 export function eventCategoryKey(ev) {

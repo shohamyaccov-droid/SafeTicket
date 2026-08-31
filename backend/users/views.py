@@ -4254,6 +4254,10 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
                     .filter(_active_tickets_total__gt=0)
                     .order_by('date', 'name')
                 )
+            high_demand_raw = str(qp.get('high_demand', '')).lower()
+            if high_demand_raw in ('1', 'true', 'yes', 'on'):
+                # Homepage sold-out / high-demand row — no ticket-stock requirement.
+                queryset = queryset.filter(high_demand=True).order_by('date', 'name')
 
         return queryset
     

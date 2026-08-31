@@ -17,6 +17,8 @@ import {
   groupEventsByPerformer,
   sortPerformersByDemand,
   performerNavigateTarget,
+  applyHotEventPlaceholder,
+  filterHighDemandEvents,
 } from '../utils/homeDiscover';
 import { formatEventLocation } from '../utils/eventLocalTime';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
@@ -44,6 +46,7 @@ const Home = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [events, setEvents] = useState([]);
   const [lastMinuteEvents, setLastMinuteEvents] = useState([]);
+  const [hotDemandEvents, setHotDemandEvents] = useState([]);
   const [artists, setArtists] = useState([]);
   const [recommendedArtists, setRecommendedArtists] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -75,9 +78,10 @@ const Home = () => {
       setLoadError(null);
       setLoading(true);
       try {
-        const [eventsResponse, lastMinuteResponse, artistsResponse, recommendedArtistsResponse] = await Promise.all([
+        const [eventsResponse, lastMinuteResponse, hotDemandResponse, artistsResponse, recommendedArtistsResponse] = await Promise.all([
           eventAPI.getEvents({ signal }),
           eventAPI.getEvents({ signal, params: { last_minute: '1' } }),
+          eventAPI.getEvents({ signal, params: { high_demand: '1' } }),
           artistAPI.getArtists({ signal }),
           artistAPI.getArtists({ signal, params: { recommended: '1' } }),
         ]);
@@ -102,6 +106,15 @@ const Home = () => {
           }
         }
         setLastMinuteEvents(lastMinuteData);
+        let hotDemandData = [];
+        if (hotDemandResponse.data) {
+          if (Array.isArray(hotDemandResponse.data)) {
+            hotDemandData = hotDemandResponse.data;
+          } else if (hotDemandResponse.data.results && Array.isArray(hotDemandResponse.data.results)) {
+            hotDemandData = hotDemandResponse.data.results;
+          }
+        }
+        setHotDemandEvents(hotDemandData);
         const artistsPayload = artistsResponse?.data;
         const artistsData = Array.isArray(artistsPayload)
           ? artistsPayload
@@ -128,6 +141,7 @@ const Home = () => {
         setLoadError(aborted ? 'timeout' : 'error');
         setEvents([]);
         setLastMinuteEvents([]);
+        setHotDemandEvents([]);
         setArtists([]);
         setRecommendedArtists([]);
         if (!aborted) {
@@ -242,6 +256,22 @@ const Home = () => {
       return eventName.includes(q) || artistName.includes(q) || city.includes(q) || venue.includes(q);
     });
   }, [lastMinuteEvents, searchQuery]);
+
+  const hotDemandDisplayEvents = useMemo(() => {
+    const fromApi = Array.isArray(hotDemandEvents) ? hotDemandEvents : [];
+    const merged = fromApi.length ? fromApi : filterHighDemandEvents(inventoryEvents);
+    const withImages = merged.map(applyHotEventPlaceholder);
+    if (!searchQuery.trim()) return withImages;
+    const q = searchQuery.toLowerCase().trim();
+    return withImages.filter((event) => {
+      const eventName = event.name?.toLowerCase() || '';
+      const artistName =
+        event.artist_detail?.name?.toLowerCase() || event.artist_name?.toLowerCase() || '';
+      const city = event.city?.toLowerCase() || '';
+      const venue = event.venue?.toLowerCase() || '';
+      return eventName.includes(q) || artistName.includes(q) || city.includes(q) || venue.includes(q);
+    });
+  }, [hotDemandEvents, inventoryEvents, searchQuery]);
 
   const recommendedArtistIds = useMemo(
     () =>
@@ -572,7 +602,7 @@ const Home = () => {
       </section>
 
       <section ref={resultsRef} className="home-layout" aria-label="אירועים ואמנים">
-        {inventoryEvents.length === 0 && allPerformers.length === 0 ? (
+        {inventoryEvents.length === 0 && allPerformers.length === 0 && hotDemandDisplayEvents.length === 0 ? (
           <div className="home-empty-wrap home-layout__rows">
             <EmptyState
               icon="🎫"
@@ -584,6 +614,12 @@ const Home = () => {
           </div>
         ) : (
           <div className="home-viagogo-rows viagogo-home-discover home-layout__rows">
+            <CarouselSection
+              slug="hot-soldout"
+              title="הופעות סולד-אאוט מבוקשות"
+              kind="event"
+              events={hotDemandDisplayEvents}
+            />
             <CarouselSection
               slug="last-minute"
               title="כרטיסים של הדקה ה-90"
