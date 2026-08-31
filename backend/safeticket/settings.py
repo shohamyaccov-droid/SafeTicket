@@ -574,10 +574,36 @@ else:
 JWT_ACCESS_COOKIE_NAME = 'access_token'
 JWT_REFRESH_COOKIE_NAME = 'refresh_token'
 
-# Email — customer-facing mail is sent through Resend's HTTPS API, not SMTP.
-# While the Resend domain is unverified, users.utils.emails hardcodes the sender to TradeTix <onboarding@resend.dev>.
+# Email — Resend HTTPS API (preferred when RESEND_API_KEY is set) or Django SMTP.
+# Gmail: EMAIL_HOST=smtp.gmail.com, EMAIL_PORT=587, EMAIL_USE_TLS=true,
+# EMAIL_HOST_USER=your@gmail.com, EMAIL_HOST_PASSWORD=<16-char App Password, not the account password>.
 RESEND_API_KEY = (os.environ.get('RESEND_API_KEY') or '').strip()
-DEFAULT_FROM_EMAIL = 'TradeTix <onboarding@resend.dev>'
+EMAIL_BACKEND = (os.environ.get('EMAIL_BACKEND') or '').strip() or (
+    'django.core.mail.backends.locmem.EmailBackend'
+    if TESTING
+    else 'django.core.mail.backends.smtp.EmailBackend'
+)
+EMAIL_HOST = (os.environ.get('EMAIL_HOST') or '').strip()
+try:
+    EMAIL_PORT = int((os.environ.get('EMAIL_PORT') or '587').strip() or '587')
+except ValueError:
+    EMAIL_PORT = 587
+EMAIL_USE_TLS = (os.environ.get('EMAIL_USE_TLS') or 'true').strip().lower() in ('1', 'true', 'yes')
+EMAIL_USE_SSL = (os.environ.get('EMAIL_USE_SSL') or 'false').strip().lower() in ('1', 'true', 'yes')
+EMAIL_HOST_USER = (os.environ.get('EMAIL_HOST_USER') or '').strip()
+EMAIL_HOST_PASSWORD = (os.environ.get('EMAIL_HOST_PASSWORD') or '').strip()
+try:
+    EMAIL_TIMEOUT = int((os.environ.get('EMAIL_TIMEOUT') or '20').strip() or '20')
+except ValueError:
+    EMAIL_TIMEOUT = 20
+_default_from = (os.environ.get('DEFAULT_FROM_EMAIL') or '').strip()
+if _default_from:
+    DEFAULT_FROM_EMAIL = _default_from
+elif EMAIL_HOST_USER:
+    DEFAULT_FROM_EMAIL = f'TradeTix <{EMAIL_HOST_USER}>'
+else:
+    # While the Resend domain is unverified, Resend only delivers from this sandbox sender.
+    DEFAULT_FROM_EMAIL = 'TradeTix <onboarding@resend.dev>'
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 # GA4 Data API — numeric Property ID from Analytics Admin → Property settings.

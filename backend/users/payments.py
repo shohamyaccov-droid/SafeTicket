@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import logging
-import threading
 import hashlib
 import time
 from decimal import Decimal, ROUND_HALF_UP
@@ -1232,8 +1231,6 @@ def finalize_pending_order_to_paid(
     stuck orders, skips reservation-expiry checks, and re-claims released inventory so the
     buyer gets the same paid order + sold tickets + payout ledger as a successful webhook.
     """
-    from django.db import close_old_connections
-
     from users.models import Order, Ticket
     from users.views import (
         RESERVATION_TIMEOUT_MINUTES,
@@ -1392,42 +1389,31 @@ def finalize_pending_order_to_paid(
         logger.exception('finalize_pending_order_to_paid order_id=%s', order_id)
         return False, 'internal_error'
 
-    recipient = ''
     try:
-        ord_row = Order.objects.filter(pk=order_id).first()
-        if ord_row:
-            recipient = (ord_row.user.email if ord_row.user_id else ord_row.guest_email) or ''
+        from users.utils.emails import dispatch_paid_order_receipt_email
+
+        dispatch_paid_order_receipt_email(order_id, source=source)
     except Exception:
-        recipient = ''
-
-    order_pk = order_id
-    recipient_copy = recipient
-
-    def _send_order_receipt_background():
-        close_old_connections()
-        try:
-            from users.models import Order as O2
-            from users.utils.emails import send_receipt_with_pdf
-
-            ord_row = O2.objects.filter(pk=order_pk).first()
-            if ord_row and recipient_copy:
-                send_receipt_with_pdf(recipient_copy, ord_row)
-        except Exception:
-            logger.exception('payme finalize: receipt email failed')
-        finally:
-            close_old_connections()
-
-    if recipient_copy:
-        transaction.on_commit(lambda: threading.Thread(target=_send_order_receipt_background, daemon=True).start())
+        logger.error(
+            'payme finalize: receipt email dispatch crashed order_id=%s source=%s',
+            order_id,
+            source,
+            exc_info=True,
+        )
 
     try:
         from users.notifications import notify_seller_ticket_sold_escrow
 
-        ord_row = Order.objects.filter(pk=order_pk).first()
+        ord_row = Order.objects.filter(pk=order_id).first()
         if ord_row:
             notify_seller_ticket_sold_escrow(ord_row)
     except Exception:
-        logger.exception('payme finalize: seller notification failed')
+        logger.error(
+            'payme finalize: seller notification failed order_id=%s source=%s',
+            order_id,
+            source,
+            exc_info=True,
+        )
 
     logger.info('Order %s finalized to paid via %s', order_id, source)
     return True, None

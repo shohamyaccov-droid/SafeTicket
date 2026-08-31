@@ -8,6 +8,7 @@ import os
 from urllib.parse import quote
 
 from django.conf import settings
+from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 import resend
 
@@ -61,6 +62,124 @@ def _resend_attachment_payloads(attachments: list[tuple[str, bytes, str]] | None
     return payloads
 
 
+def _resend_api_key() -> str:
+    return (os.environ.get('RESEND_API_KEY') or getattr(settings, 'RESEND_API_KEY', '') or '').strip()
+
+
+def _smtp_configured() -> bool:
+    host = (getattr(settings, 'EMAIL_HOST', '') or '').strip()
+    user = (getattr(settings, 'EMAIL_HOST_USER', '') or '').strip()
+    return bool(host and user)
+
+
+def buyer_deliverable_email(order) -> str:
+    """Real buyer inbox: registered user email, else guest email. Skip cart-token placeholders."""
+    from users.cart_identity import is_cart_token_email
+
+    registered = ''
+    if getattr(order, 'user_id', None):
+        registered = (getattr(getattr(order, 'user', None), 'email', None) or '').strip()
+    guest = (getattr(order, 'guest_email', None) or '').strip()
+    for candidate in (registered, guest):
+        if candidate and '@' in candidate and not is_cart_token_email(candidate):
+            return candidate
+    return ''
+
+
+def dispatch_paid_order_receipt_email(order_or_id, *, source: str = '') -> bool:
+    """
+    Send the buyer ticket/receipt email. Never raises — webhook/finalize must stay 200
+    even if SMTP, Resend, or PDF attachment generation fails.
+    """
+    order_id = getattr(order_or_id, 'pk', order_or_id)
+    try:
+        order = order_or_id
+        if not hasattr(order, 'ticket_ids'):
+            from users.models import Order
+
+            order = (
+                Order.objects.select_related('user', 'ticket', 'ticket__event', 'ticket__seller')
+                .filter(pk=order_id)
+                .first()
+            )
+        if not order:
+            logger.error(
+                'dispatch_paid_order_receipt_email: order missing order_id=%s source=%s',
+                order_id,
+                source,
+            )
+            return False
+        recipient = buyer_deliverable_email(order)
+        if not recipient:
+            logger.error(
+                'dispatch_paid_order_receipt_email: no deliverable buyer email order_id=%s source=%s',
+                order.pk,
+                source,
+            )
+            return False
+        send_receipt_with_pdf(recipient, order)
+        logger.info(
+            'dispatch_paid_order_receipt_email: sent order_id=%s source=%s recipient=%s',
+            order.pk,
+            source,
+            recipient,
+        )
+        return True
+    except Exception:
+        logger.error(
+            'dispatch_paid_order_receipt_email failed order_id=%s source=%s',
+            order_id,
+            source,
+            exc_info=True,
+        )
+        return False
+
+
+def _send_django_email(
+    *,
+    subject: str,
+    to_email: str,
+    html_body: str,
+    text_body: str = '',
+    attachments: list[tuple[str, bytes, str]] | None = None,
+    template_basename: str = '',
+    fail_silently: bool = False,
+) -> int:
+    from_email = (getattr(settings, 'DEFAULT_FROM_EMAIL', '') or '').strip() or RESEND_FROM_EMAIL
+    message = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body or html_body,
+        from_email=from_email,
+        to=[to_email],
+    )
+    if html_body:
+        message.attach_alternative(html_body, 'text/html')
+    for filename, content, mimetype in attachments or []:
+        raw = content.encode('utf-8') if isinstance(content, str) else bytes(content or b'')
+        message.attach(filename, raw, mimetype or 'application/pdf')
+    try:
+        sent = message.send(fail_silently=False)
+        logger.info(
+            'send_django_email: sent template=%s recipient=%s backend=%s',
+            template_basename,
+            to_email,
+            getattr(settings, 'EMAIL_BACKEND', ''),
+        )
+        return int(sent or 0)
+    except Exception as exc:
+        logger.error(
+            'send_django_email: SMTP failed template=%s recipient=%s subject=%s error=%s',
+            template_basename,
+            to_email,
+            subject,
+            (str(exc) or repr(exc))[:500],
+            exc_info=True,
+        )
+        if fail_silently:
+            return 0
+        raise
+
+
 def send_resend_email(
     *,
     subject: str,
@@ -76,7 +195,7 @@ def send_resend_email(
         logger.warning('send_resend_email: empty recipient for template=%s', template_basename)
         return 0
 
-    api_key = (os.environ.get('RESEND_API_KEY') or '').strip()
+    api_key = _resend_api_key()
     if not api_key:
         msg = 'RESEND_API_KEY is not configured'
         logger.error('send_resend_email: %s template=%s recipient=%s', msg, template_basename, recipient)
@@ -130,15 +249,41 @@ def send_branded_email(
         return 0
 
     text_body, html_body = build_branded_email(template_basename, context or {})
-    return send_resend_email(
-        subject=subject,
-        to_email=recipient,
-        html_body=html_body,
-        text_body=text_body,
-        attachments=attachments,
-        template_basename=template_basename,
-        fail_silently=fail_silently,
+    kwargs = {
+        'subject': subject,
+        'to_email': recipient,
+        'html_body': html_body,
+        'text_body': text_body,
+        'attachments': attachments,
+        'template_basename': template_basename,
+        'fail_silently': fail_silently,
+    }
+    if _resend_api_key():
+        smtp_ok = _smtp_configured()
+        sent = send_resend_email(**{**kwargs, 'fail_silently': True if smtp_ok else fail_silently})
+        if sent:
+            return sent
+        if smtp_ok:
+            logger.error(
+                'send_branded_email: Resend failed, falling back to SMTP template=%s recipient=%s',
+                template_basename,
+                recipient,
+            )
+            return _send_django_email(**kwargs)
+        if fail_silently:
+            return 0
+        raise RuntimeError('Resend send failed')
+    if _smtp_configured() or getattr(settings, 'TESTING', False):
+        return _send_django_email(**kwargs)
+    logger.error(
+        'send_branded_email: no email transport (set RESEND_API_KEY or EMAIL_HOST + EMAIL_HOST_USER) '
+        'template=%s recipient=%s',
+        template_basename,
+        recipient,
     )
+    if fail_silently:
+        return 0
+    raise RuntimeError('No email transport configured')
 
 
 def _collect_pdf_files_from_order(order):
@@ -306,7 +451,13 @@ def send_receipt_with_pdf(recipient_email, order, pdf_files=None):
         )
         logger.info(f'Receipt with PDF sent to {recipient_email} (order {getattr(order, "id", "?")})')
     except Exception as e:
-        logger.exception(f'Failed to send receipt to {recipient_email}: {e}')
+        logger.error(
+            'Failed to send receipt to %s (order %s): %s',
+            recipient_email,
+            getattr(order, 'id', '?'),
+            e,
+            exc_info=True,
+        )
         raise
 
 

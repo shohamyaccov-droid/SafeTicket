@@ -36,13 +36,11 @@ from django.db.models import F, Q, Count, Sum, Exists, OuterRef, Value, Prefetch
 from django.db.models.functions import Coalesce
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
-from django.conf import settings as dj_settings
 from django.core.files.base import ContentFile
 import io
 import logging
 from collections import defaultdict
 import secrets
-import threading
 import traceback
 import uuid
 from pypdf import PdfReader, PdfWriter
@@ -2510,38 +2508,27 @@ def confirm_order_payment(request, order_id):
             status=status.HTTP_403_FORBIDDEN,
         )
 
-    recipient = (order.user.email if order.user_id else order.guest_email) or ''
-    order_pk = order.pk
-    recipient_copy = recipient
+    try:
+        from .utils.emails import dispatch_paid_order_receipt_email
 
-    def _send_order_receipt_background():
-        from django.db import close_old_connections
-
-        close_old_connections()
-        try:
-            from .models import Order
-            from .utils.emails import send_receipt_with_pdf
-
-            ord_row = Order.objects.filter(pk=order_pk).first()
-            if ord_row and recipient_copy:
-                send_receipt_with_pdf(recipient_copy, ord_row)
-        except Exception:
-            logger.exception('confirm_order_payment: receipt email failed (background)')
-        finally:
-            close_old_connections()
-
-    def _start_receipt_email_thread():
-        threading.Thread(target=_send_order_receipt_background, daemon=True).start()
-
-    if recipient_copy:
-        transaction.on_commit(_start_receipt_email_thread)
+        dispatch_paid_order_receipt_email(order.pk, source='confirm_order_payment')
+    except Exception:
+        logger.error(
+            'confirm_order_payment: receipt email dispatch crashed order_id=%s',
+            order.pk,
+            exc_info=True,
+        )
 
     try:
         from .notifications import notify_seller_ticket_sold_escrow
 
         notify_seller_ticket_sold_escrow(order)
     except Exception:
-        logger.exception('confirm_order_payment: seller escrow notification failed')
+        logger.error(
+            'confirm_order_payment: seller escrow notification failed order_id=%s',
+            order.pk,
+            exc_info=True,
+        )
 
     order.refresh_from_db()
     return Response(OrderSerializer(order, context={'request': request}).data)

@@ -9,11 +9,10 @@ import logging
 from decimal import Decimal
 
 from django.conf import settings
-from django.template.loader import render_to_string
 from django.utils import timezone as django_timezone
 
 from .currency import currency_symbol, iso4217_for_ticket_listing, money_amount_for_api
-from .utils.emails import send_resend_email
+from .utils.emails import send_branded_email
 
 logger = logging.getLogger(__name__)
 
@@ -70,14 +69,11 @@ def _send_notification(
     if ctx.get('dashboard_url') and not ctx.get('cta_url'):
         ctx['cta_url'] = ctx['dashboard_url']
     try:
-        text_body = render_to_string(f'emails/{template_basename}.txt', ctx)
-        html_body = render_to_string(f'emails/{template_basename}.html', ctx)
-        send_resend_email(
+        send_branded_email(
             subject=subject,
             to_email=to_email.strip(),
-            html_body=html_body,
-            text_body=text_body.strip(),
             template_basename=template_basename,
+            context=ctx,
             fail_silently=True,
         )
     except Exception as exc:

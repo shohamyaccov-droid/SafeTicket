@@ -1,13 +1,10 @@
 """
-Launch QA: international listing (no receipt), offer idempotency, fast confirm-payment (receipt in background).
+Launch QA: international listing (no receipt), offer idempotency, confirm-payment even if email fails.
 
 Run: cd backend && python manage.py test test_international_launch_e2e -v 2
-
-Note: receipt timing test uses TransactionTestCase so a worker thread can open its own DB connection (SQLite-safe).
 """
 from __future__ import annotations
 
-import time
 from decimal import Decimal
 from io import BytesIO
 from unittest.mock import patch
@@ -221,8 +218,8 @@ class InternationalLaunchE2ETest(TestCase):
         self.assertEqual(Order.objects.filter(user=self.buyer, ticket_id=tid).count(), 1)
 
 
-class InternationalLaunchReceiptAsyncE2E(TransactionTestCase):
-    """Real DB commits so background receipt thread can query SQLite without 'database is locked'."""
+class InternationalLaunchReceiptE2E(TransactionTestCase):
+    """Paid confirm still succeeds if ticket-email SMTP/PDF generation raises."""
 
     def setUp(self):
         self.client = APIClient()
@@ -253,7 +250,7 @@ class InternationalLaunchReceiptAsyncE2E(TransactionTestCase):
             role='buyer',
         )
 
-    def test_confirm_payment_returns_quickly_while_receipt_email_slow(self):
+    def test_confirm_payment_succeeds_when_receipt_email_raises(self):
         pdf = SimpleUploadedFile('tix3.pdf', _pdf_bytes(), content_type='application/pdf')
         self.client.force_authenticate(self.seller)
         r_list = self.client.post(
@@ -291,19 +288,16 @@ class InternationalLaunchReceiptAsyncE2E(TransactionTestCase):
         tok = r_ord.json().get('payment_confirm_token')
         self.assertTrue(tok)
 
-        def slow_receipt(*args, **kwargs):
-            time.sleep(1.5)
+        def boom_receipt(*args, **kwargs):
+            raise RuntimeError('smtp down')
 
-        with patch('users.utils.emails.send_receipt_with_pdf', side_effect=slow_receipt):
-            t0 = time.perf_counter()
+        with patch('users.utils.emails.send_receipt_with_pdf', side_effect=boom_receipt):
             r_pay = self.client.post(
                 f'/api/users/orders/{order_id}/confirm-payment/',
                 {'mock_payment_ack': True, 'payment_confirm_token': tok},
                 format='json',
             )
-            elapsed = time.perf_counter() - t0
 
         self.assertEqual(r_pay.status_code, 200, r_pay.content)
-        self.assertLess(elapsed, 1.0, f'confirm-payment took {elapsed:.2f}s; receipt should be async')
         order = Order.objects.get(pk=order_id)
         self.assertEqual(order.status, 'paid')
