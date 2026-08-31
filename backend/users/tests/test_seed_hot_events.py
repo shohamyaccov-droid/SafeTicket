@@ -16,7 +16,7 @@ TZ_IL = ZoneInfo('Asia/Jerusalem')
 
 class SeedHotEventsTests(TestCase):
     def test_seed_creates_verified_high_demand_shows(self):
-        call_command('seed_hot_events')
+        call_command('seed_hot_events', skip_images=True)
 
         ribo = Event.objects.get(artist__name='ישי ריבו', date=datetime(2026, 9, 16, 21, 0, tzinfo=TZ_IL))
         self.assertEqual(ribo.name, 'ישי ריבו - מופע סימפוני')
@@ -78,10 +78,20 @@ class SeedHotEventsTests(TestCase):
         )
 
     def test_seed_is_idempotent(self):
-        call_command('seed_hot_events')
-        call_command('seed_hot_events')
+        call_command('seed_hot_events', skip_images=True)
+        call_command('seed_hot_events', skip_images=True)
         self.assertEqual(Event.objects.filter(high_demand=True, artist__name='שרית חדד').count(), 3)
         self.assertEqual(Artist.objects.filter(name='ישי ריבו').count(), 1)
+
+    def test_every_seeded_artist_has_a_wikimedia_image_url(self):
+        from users.management.commands.seed_hot_events import ARTIST_IMAGE_URLS, SHOWS
+
+        seeded = {spec.artist_name for spec in SHOWS}
+        self.assertEqual(set(ARTIST_IMAGE_URLS), seeded)
+        for name, url in ARTIST_IMAGE_URLS.items():
+            self.assertTrue(url.startswith('https://'), name)
+            self.assertNotIn('unsplash', url.lower(), name)
+            self.assertTrue('wikimedia.org' in url or 'wikipedia.org' in url, name)
 
 
 class HighDemandEventsApiTests(APITestCase):

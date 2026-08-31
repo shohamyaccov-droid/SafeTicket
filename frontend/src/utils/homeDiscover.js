@@ -17,37 +17,43 @@ export const HOME_DISCOVER_ROW_ORDER = [
   'sports',
 ];
 
-/** Stadium / arena Unsplash placeholders for the sports season homepage row. */
+const commonsFile = (filename) =>
+  `https://commons.wikimedia.org/wiki/Special:FilePath/${filename}?width=1200`;
+
+/** Official club crests (Hebrew Wikipedia infobox) for the sports season homepage row. */
+export const SPORT_TEAM_PLACEHOLDERS = {
+  'מכבי חיפה':
+    'https://upload.wikimedia.org/wikipedia/he/1/1e/%D7%A1%D7%9E%D7%9C_%D7%9E%D7%9B%D7%91%D7%99_%D7%97%D7%99%D7%A4%D7%94_2023.png',
+  'מכבי תל אביב': 'https://upload.wikimedia.org/wikipedia/he/4/45/Maccabi_Tel_Aviv_FC.png',
+  'בית"ר ירושלים': 'https://upload.wikimedia.org/wikipedia/he/3/31/BeitarJerusalemCrestStar2020.png',
+  'הפועל באר שבע': 'https://upload.wikimedia.org/wikipedia/he/e/eb/LogoOfHBS.png',
+  'הפועל תל אביב': 'https://upload.wikimedia.org/wikipedia/he/5/52/Hapoel_Tel_Aviv_Logo.png',
+  'הפועל ירושלים':
+    'https://upload.wikimedia.org/wikipedia/he/7/78/HapoelJerusalemFootballClubLogo2021.png',
+};
+
+/** Category fallbacks when the home/away team is not in SPORT_TEAM_PLACEHOLDERS. */
 export const SPORT_EVENT_PLACEHOLDERS = {
-  football:
-    'https://images.unsplash.com/photo-1522778119026-d647f0596c23?auto=format&fit=crop&w=800&h=450&q=80',
-  basketball:
-    'https://images.unsplash.com/photo-1504450758481-7338eba7524a?auto=format&fit=crop&w=800&h=450&q=80',
+  football: commonsFile('Ramat_Gan_Stadium_10.jpg'),
+  basketball: commonsFile('Ramat_Gan_Stadium_10.jpg'),
 };
 
 export const SPORT_EVENT_CATEGORIES = ['sport', 'football', 'basketball'];
 export const SEASON_SPORTS_CATEGORIES = ['football', 'basketball'];
 
-/** Concert-style Unsplash placeholders when the catalog has no artist/event image. */
+/** Real artist photos (Wikimedia) when the catalog has no artist/event image. */
 export const HOT_EVENT_PLACEHOLDERS = {
-  _default:
-    'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=800&h=450&q=80',
-  'חנן בן ארי':
-    'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&h=450&q=80',
-  'ישי ריבו':
-    'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=800&h=450&q=80',
-  טונה: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=800&h=450&q=80',
+  _default: commonsFile('Ramat_Gan_Stadium_10.jpg'),
+  'חנן בן ארי': commonsFile('%D7%97%D7%A0%D7%9F_%D7%91%D7%9F_%D7%90%D7%A8%D7%99.jpg'),
+  'ישי ריבו': commonsFile('Yishai_Rivo6960.JPG'),
+  טונה: commonsFile('%D7%90%D7%99%D7%AA%D7%99_%D7%96%D7%91%D7%95%D7%9C%D7%95%D7%9F_%D7%98%D7%95%D7%A0%D7%94.jpg'),
   פסטיגל:
-    'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&h=450&q=80',
-  'הדג נחש':
-    'https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&w=800&h=450&q=80',
-  'נועם בתן':
-    'https://images.unsplash.com/photo-1429962714451-bb934ecdc4ec?auto=format&fit=crop&w=800&h=450&q=80',
-  'אגם בוחבוט':
-    'https://images.unsplash.com/photo-1459749411177-04aa5009cb27?auto=format&fit=crop&w=800&h=450&q=80',
-  'שרית חדד':
-    'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=800&h=450&q=80',
-  NEXT: 'https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&w=800&h=450&q=80',
+    'https://upload.wikimedia.org/wikipedia/he/4/42/%D7%9E%D7%99%D7%99_%D7%A4%D7%A1%D7%98%D7%99%D7%92%D7%9C.jpg',
+  'הדג נחש': 'https://upload.wikimedia.org/wikipedia/he/f/fa/HaDagNahash.jpg',
+  'נועם בתן': commonsFile('Noam_Bettan_2.jpg'),
+  'אגם בוחבוט': commonsFile('Agam_Buhbut_by_Pini_Siluk_%28cropped%29.jpg'),
+  'שרית חדד': commonsFile('Sarit_Hadad.jpg'),
+  NEXT: commonsFile('Ramat_Gan_Stadium_10.jpg'),
 };
 
 /** Attach a placeholder image_url when the event/artist has none. */
@@ -65,10 +71,15 @@ export function filterHighDemandEvents(list) {
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 
-/** Attach a stadium/arena placeholder when the sports event has no image. */
+/** Attach a club-crest placeholder when the sports event has no image. */
 export function applySportEventPlaceholder(ev) {
   if (!ev) return ev;
   if (ev.image_url || ev.artist_detail?.image_url) return ev;
+  const teamName = String(
+    ev.artist_detail?.name || ev.artist_name || ev.home_team || '',
+  ).trim();
+  const teamUrl = SPORT_TEAM_PLACEHOLDERS[teamName];
+  if (teamUrl) return { ...ev, image_url: teamUrl };
   const cat = eventCategoryKey(ev);
   return {
     ...ev,

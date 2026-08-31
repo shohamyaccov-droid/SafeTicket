@@ -96,7 +96,8 @@ describe('filterHighDemandEvents', () => {
       artist_name: 'שרית חדד',
       high_demand: true,
     });
-    expect(ev.image_url).toMatch(/^https:\/\/images\.unsplash\.com\//);
+    expect(ev.image_url).toMatch(/^https:\/\/commons\.wikimedia\.org\//);
+    expect(ev.image_url).toContain('Sarit_Hadad');
   });
 });
 
@@ -131,12 +132,14 @@ describe('filterSeasonSportsEvents', () => {
     ]);
   });
 
-  it('applies a stadium placeholder when the catalog has none', () => {
+  it('applies a club-crest placeholder when the catalog has none', () => {
     const ev = applySportEventPlaceholder({
       id: 9,
       category: 'football',
       high_demand: true,
+      artist_name: 'מכבי חיפה',
     });
-    expect(ev.image_url).toMatch(/^https:\/\/images\.unsplash\.com\//);
+    expect(ev.image_url).toMatch(/^https:\/\/upload\.wikimedia\.org\//);
+    expect(ev.image_url).toContain('%D7%9E%D7%9B%D7%91%D7%99_%D7%97%D7%99%D7%A4%D7%94');
   });
 });

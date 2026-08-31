@@ -34,7 +34,7 @@ SEEDED_TEAMS = (
 
 class SeedSportsTests(TestCase):
     def test_seed_creates_high_demand_football_and_basketball(self):
-        call_command('seed_sports')
+        call_command('seed_sports', skip_images=True)
 
         derby = Event.objects.get(
             artist__name=TEAM_MACCABI_TA,
@@ -95,13 +95,22 @@ class SeedSportsTests(TestCase):
         )
 
     def test_seed_is_idempotent(self):
-        call_command('seed_sports')
-        call_command('seed_sports')
+        call_command('seed_sports', skip_images=True)
+        call_command('seed_sports', skip_images=True)
         self.assertEqual(Event.objects.filter(high_demand=True, category='football').count(), 12)
         self.assertEqual(Event.objects.filter(high_demand=True, category='basketball').count(), 12)
         self.assertEqual(Artist.objects.filter(name=TEAM_MACCABI_TA).count(), 1)
         self.assertEqual(Artist.objects.filter(name=TEAM_BEITAR).count(), 1)
         self.assertEqual(Artist.objects.filter(name=TEAM_HAPOEL_JLM).count(), 1)
+
+    def test_every_seeded_team_has_a_wikimedia_crest_url(self):
+        from users.management.commands.seed_sports import TEAM_IMAGE_URLS, TEAM_NAMES
+
+        self.assertEqual(set(TEAM_IMAGE_URLS), set(TEAM_NAMES))
+        for name, url in TEAM_IMAGE_URLS.items():
+            self.assertTrue(url.startswith('https://'), name)
+            self.assertNotIn('unsplash', url.lower(), name)
+            self.assertTrue('wikimedia.org' in url or 'wikipedia.org' in url, name)
 
 
 class SportsEventsApiTests(APITestCase):

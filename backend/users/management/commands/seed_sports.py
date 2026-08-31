@@ -12,10 +12,14 @@ so GET /users/events/ still returns them.
 
 Euroleague *away* games are omitted (no Israeli-stadium inventory).
 
+Downloads official club crests onto Artist.image / cover_image and Event.image.
+On production, pass --force-images so leftover Unsplash files are replaced.
+
 Usage:
   cd backend
   python manage.py seed_sports
   python manage.py seed_sports --dry-run
+  python manage.py seed_sports --force-images
 """
 
 from __future__ import annotations
@@ -27,6 +31,7 @@ from zoneinfo import ZoneInfo
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from users.management.commands.seed_hot_events import apply_catalog_images
 from users.models import Artist, Event, Venue
 
 TZ_IL = ZoneInfo('Asia/Jerusalem')
@@ -38,6 +43,21 @@ TEAM_BEITAR = 'בית"ר ירושלים'
 TEAM_HAPOEL_BS = 'הפועל באר שבע'
 TEAM_HAPOEL_TA = 'הפועל תל אביב'
 TEAM_HAPOEL_JLM = 'הפועל ירושלים'
+
+# Official club crests from Hebrew Wikipedia infoboxes (HEAD-checked 31 Aug 2026).
+TEAM_IMAGE_URLS: dict[str, str] = {
+    TEAM_MACCABI_HAIFA: (
+        'https://upload.wikimedia.org/wikipedia/he/1/1e/'
+        '%D7%A1%D7%9E%D7%9C_%D7%9E%D7%9B%D7%91%D7%99_%D7%97%D7%99%D7%A4%D7%94_2023.png'
+    ),
+    TEAM_MACCABI_TA: 'https://upload.wikimedia.org/wikipedia/he/4/45/Maccabi_Tel_Aviv_FC.png',
+    TEAM_BEITAR: 'https://upload.wikimedia.org/wikipedia/he/3/31/BeitarJerusalemCrestStar2020.png',
+    TEAM_HAPOEL_BS: 'https://upload.wikimedia.org/wikipedia/he/e/eb/LogoOfHBS.png',
+    TEAM_HAPOEL_TA: 'https://upload.wikimedia.org/wikipedia/he/5/52/Hapoel_Tel_Aviv_Logo.png',
+    TEAM_HAPOEL_JLM: (
+        'https://upload.wikimedia.org/wikipedia/he/7/78/HapoelJerusalemFootballClubLogo2021.png'
+    ),
+}
 
 VENUE_BLOOMFIELD = 'אצטדיון בלומפילד'
 VENUE_SAMMY = 'סמי עופר'
@@ -283,9 +303,21 @@ class Command(BaseCommand):
             action='store_true',
             help='Print planned rows without writing to the database.',
         )
+        parser.add_argument(
+            '--skip-images',
+            action='store_true',
+            help='Do not download club crests (used by unit tests).',
+        )
+        parser.add_argument(
+            '--force-images',
+            action='store_true',
+            help='Re-download and replace existing club crests.',
+        )
 
     def handle(self, *args, **options):
         dry_run = options['dry_run']
+        skip_images = options['skip_images']
+        force_images = options['force_images']
         if dry_run:
             self.stdout.write(self.style.WARNING('DRY RUN — no database changes.'))
             for spec in MATCHES:
@@ -301,6 +333,7 @@ class Command(BaseCommand):
         updated = 0
         artist_cache: dict[str, Artist] = {}
         venue_cache: dict[tuple[str, str], Venue] = {}
+        seeded_events: list[Event] = []
 
         with transaction.atomic():
             for team_name in TEAM_NAMES:
@@ -358,6 +391,25 @@ class Command(BaseCommand):
                     self.stdout.write(
                         self.style.NOTICE(f'Updated: {ev.name} @ {when.date()} (id={ev.pk})')
                     )
+                seeded_events.append(ev)
+
+        if not skip_images:
+            events_by_artist: dict[int, list[Event]] = {}
+            for ev in seeded_events:
+                events_by_artist.setdefault(ev.artist_id, []).append(ev)
+            for name, artist in artist_cache.items():
+                url = TEAM_IMAGE_URLS.get(name)
+                if not url:
+                    continue
+                saved = apply_catalog_images(
+                    self,
+                    artist,
+                    url,
+                    events_by_artist.get(artist.pk, []),
+                    force=force_images,
+                )
+                if saved:
+                    self.stdout.write(self.style.SUCCESS(f'  images: {name} ({saved} files)'))
 
         self.stdout.write(
             self.style.SUCCESS(
