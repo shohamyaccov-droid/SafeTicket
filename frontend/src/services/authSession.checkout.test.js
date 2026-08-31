@@ -30,6 +30,14 @@ describe('isCheckoutAuthSessionFailure', () => {
   it('ignores network errors without status', () => {
     expect(isCheckoutAuthSessionFailure(new Error('network'))).toBe(false);
   });
+
+  it('does not treat request timeout as session failure', () => {
+    expect(isCheckoutAuthSessionFailure({ code: 'ECONNABORTED', message: 'timeout' })).toBe(false);
+  });
+
+  it('does not treat 504 Gateway Timeout as session failure', () => {
+    expect(isCheckoutAuthSessionFailure({ response: { status: 504 } })).toBe(false);
+  });
 });
 
 describe('Authorization strip policy (Safari vs guest)', () => {
@@ -115,5 +123,91 @@ describe('refreshAccessToken single-flight (mobile concurrent 401s)', () => {
     const refreshPosts = postSpy.mock.calls.filter(([url]) => String(url).includes('token/refresh'));
     expect(refreshPosts.length).toBe(1);
     expect(apiMod.getEffectiveBearerAccess()).toBe('access-B');
+  });
+});
+
+describe('session expired interceptor vs payment verification', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('skips logout for timeout, 504, and order status polls', async () => {
+    const apiMod = await import('./api.js');
+    expect(
+      apiMod.shouldSkipSessionExpiredLogout(
+        { code: 'ECONNABORTED' },
+        { url: '/users/dashboard/' },
+      ),
+    ).toBe(true);
+    expect(
+      apiMod.shouldSkipSessionExpiredLogout(
+        { response: { status: 504 } },
+        { url: '/users/dashboard/' },
+      ),
+    ).toBe(true);
+    expect(
+      apiMod.shouldSkipSessionExpiredLogout(
+        { response: { status: 401 } },
+        { url: '/users/orders/42/status/' },
+      ),
+    ).toBe(true);
+    expect(
+      apiMod.shouldSkipSessionExpiredLogout(
+        { response: { status: 401 } },
+        { url: '/users/orders/42/receipt/', skipSessionExpired: true },
+      ),
+    ).toBe(true);
+    expect(
+      apiMod.shouldSkipSessionExpiredLogout(
+        { response: { status: 401 } },
+        { url: '/users/dashboard/' },
+      ),
+    ).toBe(false);
+  });
+
+  it('does not emit session-expired when payment status times out', async () => {
+    const apiMod = await import('./api.js');
+    apiMod.__resetAuthSessionStateForTests();
+    let count = 0;
+    const handler = () => {
+      count += 1;
+    };
+    window.addEventListener(apiMod.SESSION_EXPIRED_EVENT, handler);
+    apiMod.default.defaults.adapter = async (config) => {
+      const err = new Error('timeout of 8000ms exceeded');
+      err.code = 'ECONNABORTED';
+      err.config = config;
+      throw err;
+    };
+    await expect(apiMod.orderAPI.getPaymentStatus(42)).rejects.toMatchObject({
+      code: 'ECONNABORTED',
+    });
+    window.removeEventListener(apiMod.SESSION_EXPIRED_EVENT, handler);
+    expect(count).toBe(0);
+  });
+
+  it('does not emit session-expired when payment status returns 504 then 401 after failed refresh', async () => {
+    const apiMod = await import('./api.js');
+    apiMod.__resetAuthSessionStateForTests();
+    apiMod.setBearerFallback('old-access', 'refresh-token-1');
+    let count = 0;
+    const handler = () => {
+      count += 1;
+    };
+    window.addEventListener(apiMod.SESSION_EXPIRED_EVENT, handler);
+    apiMod.default.defaults.adapter = async (config) => {
+      const err = new Error('Unauthorized');
+      err.response = { status: String(config.url || '').includes('token/refresh') ? 401 : 401, data: {} };
+      err.config = config;
+      throw err;
+    };
+    await expect(apiMod.orderAPI.getPaymentStatus(42)).rejects.toBeTruthy();
+    window.removeEventListener(apiMod.SESSION_EXPIRED_EVENT, handler);
+    expect(count).toBe(0);
   });
 });

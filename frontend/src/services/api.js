@@ -209,6 +209,31 @@ export function shouldStripAuthorization(url = '', skipAuth = false) {
   return Boolean(skipAuth) || isPublicGuestEndpoint(url);
 }
 
+export function isTransientNetworkOrGatewayError(error) {
+  const status = error?.response?.status;
+  const code = error?.code;
+  return (
+    code === 'ECONNABORTED' ||
+    code === 'ERR_NETWORK' ||
+    code === 'ERR_CANCELED' ||
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  );
+}
+
+export function isPaymentVerificationUrl(url = '') {
+  return /\/orders\/\d+\/(receipt|status)\/?/.test(String(url || ''));
+}
+
+/** Timeouts / 504s / PayMe status polls must never purge a valid session. */
+export function shouldSkipSessionExpiredLogout(error, originalRequest) {
+  if (originalRequest?.skipSessionExpired) return true;
+  if (isTransientNetworkOrGatewayError(error)) return true;
+  if (isPaymentVerificationUrl(originalRequest?.url)) return true;
+  return false;
+}
+
 function stripAuthorizationHeader(config) {
   if (!config?.headers) return;
   const h = config.headers;
@@ -431,6 +456,16 @@ api.interceptors.response.use(
     const isGetProfile = originalRequest.url?.includes('/profile/');
     const isPublicGuestRequest = originalRequest.skipAuth || isPublicGuestEndpoint(originalRequest.url);
 
+    // Payment verification polls / explicit skip: never refresh-or-logout.
+    // A timeout or 401 here is "webhook still catching up", not a dead session.
+    if (
+      originalRequest.skipSessionExpired ||
+      isPaymentVerificationUrl(originalRequest.url) ||
+      isTransientNetworkOrGatewayError(error)
+    ) {
+      return Promise.reject(error);
+    }
+
     if (is401 && noRetryYet && !isAuthEndpoint && !isPublicGuestRequest) {
       originalRequest._retry = true;
       try {
@@ -438,7 +473,11 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         // getProfile 401 = not logged in; let AuthContext handle it (set user null)
-        if (isGetProfile) {
+        if (
+          isGetProfile ||
+          shouldSkipSessionExpiredLogout(error, originalRequest) ||
+          isTransientNetworkOrGatewayError(refreshError)
+        ) {
           return Promise.reject(error);
         }
         clearBearerFallback();
@@ -587,6 +626,14 @@ export const orderAPI = {
     api.get(`/users/orders/${orderId}/receipt/`, {
       params: guestEmail ? { email: guestEmail } : {},
       skipAuth: Boolean(guestEmail),
+      skipSessionExpired: true,
+    }),
+  getPaymentStatus: (orderId, guestEmail) =>
+    api.get(`/users/orders/${orderId}/status/`, {
+      params: guestEmail ? { email: guestEmail } : {},
+      skipAuth: Boolean(guestEmail),
+      skipSessionExpired: true,
+      timeout: 8000,
     }),
   validateCoupon: async (data) => {
     await ensureCsrfToken();

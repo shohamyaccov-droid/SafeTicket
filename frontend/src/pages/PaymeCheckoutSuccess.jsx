@@ -9,15 +9,32 @@ import { trackMetaPurchase } from '../utils/metaPixel';
 import './PaymeCheckoutSuccess.css';
 
 const POLL_MS = 2500;
-const TIMEOUT_MS = 40000;
+const TIMEOUT_MS = 10000;
 const DASHBOARD_REDIRECT_MS = 3000;
+
+const SAFE_SUCCESS_COPY =
+  'התשלום התקבל בהצלחה! אנחנו מפיקים את הכרטיס והוא יישלח אליך למייל בדקות הקרובות.';
+
+function isTransientStatusPollError(err) {
+  const status = err?.response?.status;
+  const code = err?.code;
+  return (
+    code === 'ECONNABORTED' ||
+    code === 'ERR_NETWORK' ||
+    code === 'ERR_CANCELED' ||
+    status === 401 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  );
+}
 
 export default function PaymeCheckoutSuccess() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const orderIdRaw = searchParams.get('order_id');
   const { user, loading: authLoading } = useAuth();
-  const [phase, setPhase] = useState('processing'); // processing | success | timeout | invalid
+  const [phase, setPhase] = useState('processing'); // processing | success | safe_success | invalid
   const [orderStatus, setOrderStatus] = useState(null);
   const [paymeStatus, setPaymeStatus] = useState(null);
   const [lastCheckedAt, setLastCheckedAt] = useState(null);
@@ -27,17 +44,21 @@ export default function PaymeCheckoutSuccess() {
   const timeoutTimerRef = useRef(null);
   const redirectTimerRef = useRef(null);
   const completedRef = useRef(false);
+  const userRef = useRef(user);
+  const authLoadingRef = useRef(authLoading);
+  userRef.current = user;
+  authLoadingRef.current = authLoading;
 
   const orderId = orderIdRaw ? parseInt(orderIdRaw, 10) : NaN;
   const isValidOrderId = Number.isFinite(orderId) && orderId > 0;
 
-  const guestEmail = (() => {
+  const readGuestEmail = useCallback(() => {
     try {
       return sessionStorage.getItem('payme_checkout_guest_email');
     } catch {
       return null;
     }
-  })();
+  }, []);
 
   const clearTimer = useCallback((ref) => {
     if (ref.current != null) {
@@ -52,58 +73,66 @@ export default function PaymeCheckoutSuccess() {
     clearTimer(redirectTimerRef);
   }, [clearTimer]);
 
+  const markPaidSuccess = useCallback((data) => {
+    completedRef.current = true;
+    setPhase('success');
+    clearAllTimers();
+    const paidValue = Number(data?.total_paid_by_buyer ?? data?.total_amount ?? 0);
+    Analytics.checkoutComplete(orderId, {
+      value: Number.isFinite(paidValue) ? paidValue : 0,
+      currency: data?.currency || 'ILS',
+    });
+    trackMetaPurchase({
+      orderId,
+      value: Number.isFinite(paidValue) ? paidValue : 0,
+      currency: data?.currency || 'ILS',
+    });
+    setAdsPurchase({
+      value: Number.isFinite(paidValue) ? paidValue : 0,
+      transactionId: String(orderId),
+      currency: data?.currency || 'ILS',
+    });
+    clearPaymePendingOrder();
+    try {
+      sessionStorage.removeItem('payme_checkout_guest_email');
+    } catch {
+      /* ignore */
+    }
+  }, [clearAllTimers, orderId]);
+
   const checkStatusOnce = useCallback(async () => {
     if (!isValidOrderId) {
       setPhase('invalid');
       return false;
     }
+    if (authLoadingRef.current) {
+      return false;
+    }
     setCheckError('');
+    const guestEmail = userRef.current ? undefined : readGuestEmail() || undefined;
     try {
-      const res = await orderAPI.getReceipt(orderId, user ? undefined : guestEmail || undefined);
+      const res = await orderAPI.getPaymentStatus(orderId, guestEmail);
       const s = res.data?.status;
       setOrderStatus(s);
       setPaymeStatus(res.data?.payme_status ?? null);
       setLastCheckedAt(new Date());
       if (s === 'paid' || s === 'completed') {
-        completedRef.current = true;
-        setPhase('success');
-        clearAllTimers();
-        const paidValue = Number(
-          res.data?.total_paid_by_buyer ?? res.data?.total_amount ?? 0,
-        );
-        Analytics.checkoutComplete(orderId, {
-          value: Number.isFinite(paidValue) ? paidValue : 0,
-          currency: res.data?.currency || 'ILS',
-        });
-        trackMetaPurchase({
-          orderId,
-          value: Number.isFinite(paidValue) ? paidValue : 0,
-          currency: res.data?.currency || 'ILS',
-        });
-        setAdsPurchase({
-          value: Number.isFinite(paidValue) ? paidValue : 0,
-          transactionId: String(orderId),
-          currency: res.data?.currency || 'ILS',
-        });
-        clearPaymePendingOrder();
-        try {
-          sessionStorage.removeItem('payme_checkout_guest_email');
-        } catch {
-          /* ignore */
-        }
+        markPaidSuccess(res.data);
         return true;
       }
       return false;
     } catch (err) {
       setLastCheckedAt(new Date());
-      setCheckError(
-        err?.response?.status === 404
-          ? 'לא מצאנו את ההזמנה כרגע. אם קיבלתם אישור חיוב, פנו לתמיכה עם מספר ההזמנה.'
-          : 'לא הצלחנו לבדוק את סטטוס ההזמנה כרגע. נסו שוב בעוד רגע.',
-      );
+      if (!isTransientStatusPollError(err)) {
+        setCheckError(
+          err?.response?.status === 404
+            ? 'לא מצאנו את ההזמנה כרגע. אם קיבלתם אישור חיוב, פנו לתמיכה עם מספר ההזמנה.'
+            : 'לא הצלחנו לבדוק את סטטוס ההזמנה כרגע. נסו שוב בעוד רגע.',
+        );
+      }
       return false;
     }
-  }, [clearAllTimers, guestEmail, isValidOrderId, orderId, user]);
+  }, [isValidOrderId, markPaidSuccess, orderId, readGuestEmail]);
 
   useEffect(() => {
     if (!isValidOrderId) {
@@ -129,7 +158,9 @@ export default function PaymeCheckoutSuccess() {
     timeoutTimerRef.current = window.setTimeout(() => {
       if (completedRef.current || cancelled) return;
       clearTimer(pollTimerRef);
-      setPhase('timeout');
+      completedRef.current = true;
+      setPhase('safe_success');
+      clearPaymePendingOrder();
     }, TIMEOUT_MS);
 
     void poll();
@@ -218,15 +249,17 @@ export default function PaymeCheckoutSuccess() {
           </>
         )}
 
-        {phase === 'timeout' && (
+        {phase === 'safe_success' && (
           <>
-            <div className="payme-pending-icon" aria-hidden>⌛</div>
-            <h1>התשלום בבדיקה</h1>
-            <p className="payme-return-message">
-              התשלום נמצא בבדיקה מול חברת האשראי. זה לוקח מעט יותר זמן מהרגיל.
-              אין צורך להמתין פה – ברגע שהעסקה תאושר, נשלח לך את הכרטיסים והקבלה ישירות למייל.
+            <div className="payme-success-icon" aria-hidden>✓</div>
+            <h1>התשלום התקבל בהצלחה!</h1>
+            <p className="payme-return-message">{SAFE_SUCCESS_COPY}</p>
+            <p className="payme-return-subtext">
+              אין צורך להישאר בעמוד הזה. אם המייל לא מגיע תוך כמה דקות, בדקו בספאם או פנו לתמיכה עם מספר ההזמנה.
             </p>
-            <Link to="/" className="payme-return-button">חזרה לדף הבית</Link>
+            <Link to={isLoggedIn ? '/dashboard' : '/'} className="payme-return-button">
+              {isLoggedIn ? 'לאזור האישי' : 'חזרה לדף הבית'}
+            </Link>
           </>
         )}
 
@@ -235,7 +268,7 @@ export default function PaymeCheckoutSuccess() {
             מספר הזמנה: <strong>{orderIdRaw}</strong>
           </p>
         )}
-        {(lastStatusText || checkError) && phase !== 'success' && (
+        {(lastStatusText || checkError) && phase === 'processing' && (
           <p className="payme-last-status">
             {lastStatusText || 'סטטוס הזמנה טרם זמין'}
             {checkError ? ` · ${checkError}` : ''}

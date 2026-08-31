@@ -141,6 +141,50 @@ def dispatch_paid_order_receipt_email(order_or_id, *, source: str = '') -> bool:
     return ok
 
 
+def queue_paid_order_receipt_email(order_or_id, *, source: str = '') -> None:
+    """Send the paid-order receipt after the current request/transaction commits.
+
+    PayMe webhooks must return 200 quickly. SMTP/Resend/PDF generation is slow and
+    used to block the Gunicorn worker, which made the buyer's status poll time out.
+    Tests keep the send synchronous so assertions stay deterministic.
+    """
+    import threading
+
+    from django.db import close_old_connections, transaction
+
+    order_id = getattr(order_or_id, 'pk', None) or getattr(order_or_id, 'id', None) or order_or_id
+
+    if getattr(settings, 'TESTING', False):
+        dispatch_paid_order_receipt_email(order_or_id, source=source)
+        return
+
+    def _run():
+        close_old_connections()
+        try:
+            dispatch_paid_order_receipt_email(order_id, source=source)
+        except Exception:
+            logger.error(
+                'queued paid receipt email crashed order_id=%s source=%s',
+                order_id,
+                source,
+                exc_info=True,
+            )
+        finally:
+            close_old_connections()
+
+    def _start():
+        threading.Thread(
+            target=_run,
+            name=f'tradetix-paid-receipt-{order_id}',
+            daemon=False,
+        ).start()
+
+    if transaction.get_connection().in_atomic_block:
+        transaction.on_commit(_start)
+    else:
+        _start()
+
+
 def _send_django_email(
     *,
     subject: str,

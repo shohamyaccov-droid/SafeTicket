@@ -1660,6 +1660,58 @@ def order_receipt(request, order_id):
     return Response(receipt_data, status=status.HTTP_200_OK)
 
 
+def _buyer_order_for_payment_status(request, order_id):
+    """Lightweight IDOR-safe lookup for PayMe return-page polling. Never sends email."""
+    qs = Order.objects.filter(id=order_id).only(
+        'id',
+        'status',
+        'payme_status',
+        'user_id',
+        'guest_email',
+        'total_amount',
+        'total_paid_by_buyer',
+        'currency',
+    )
+    if request.user.is_authenticated:
+        owned = qs.filter(user=request.user).first()
+        if owned:
+            return owned
+    guest_email = (request.query_params.get('email') or '').strip()
+    if not guest_email:
+        return None
+    return qs.filter(
+        guest_email__iexact=guest_email,
+        status__in=['paid', 'completed', 'pending_payment'],
+    ).first()
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def order_payment_status(request, order_id):
+    """
+    Tiny paid/pending check for the checkout success page.
+    Does not generate receipts or dispatch email — the PayMe webhook owns fulfillment.
+    Returns 404 (never 401) when the caller cannot see the order, so the SPA
+    interceptor cannot treat a poll miss as session expiry.
+    """
+    order = _buyer_order_for_payment_status(request, order_id)
+    if not order:
+        return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+    return Response(
+        {
+            'order_id': order.id,
+            'status': order.status,
+            'payme_status': getattr(order, 'payme_status', None),
+            'total_amount': str(order.total_amount) if order.total_amount is not None else None,
+            'total_paid_by_buyer': (
+                str(order.total_paid_by_buyer) if order.total_paid_by_buyer is not None else None
+            ),
+            'currency': (order.currency or 'ILS').strip().upper(),
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
 def _pending_payment_blocks_price_edit(ticket: Ticket) -> bool:
     """True if any awaiting-payment order still holds this listing (row or group)."""
     candidate_ids = {ticket.id}
@@ -2509,9 +2561,9 @@ def confirm_order_payment(request, order_id):
         )
 
     try:
-        from .utils.emails import dispatch_paid_order_receipt_email
+        from .utils.emails import queue_paid_order_receipt_email
 
-        dispatch_paid_order_receipt_email(order.pk, source='confirm_order_payment')
+        queue_paid_order_receipt_email(order.pk, source='confirm_order_payment')
     except Exception:
         logger.error(
             'confirm_order_payment: receipt email dispatch crashed order_id=%s',

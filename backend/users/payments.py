@@ -1390,9 +1390,9 @@ def finalize_pending_order_to_paid(
         return False, 'internal_error'
 
     try:
-        from users.utils.emails import dispatch_paid_order_receipt_email
+        from users.utils.emails import queue_paid_order_receipt_email
 
-        dispatch_paid_order_receipt_email(order_id, source=source)
+        queue_paid_order_receipt_email(order_id, source=source)
     except Exception:
         logger.error(
             'payme finalize: receipt email dispatch crashed order_id=%s source=%s',

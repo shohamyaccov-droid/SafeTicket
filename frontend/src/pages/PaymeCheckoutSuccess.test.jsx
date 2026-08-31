@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 import PaymeCheckoutSuccess from './PaymeCheckoutSuccess';
@@ -11,7 +11,7 @@ vi.mock('../context/AuthContext', () => ({
 }));
 
 vi.mock('../services/api', () => ({
-  orderAPI: { getReceipt: vi.fn() },
+  orderAPI: { getReceipt: vi.fn(), getPaymentStatus: vi.fn() },
 }));
 
 vi.mock('../utils/analytics', () => ({
@@ -42,16 +42,18 @@ function renderSuccess(search = '?order_id=42') {
 
 describe('PaymeCheckoutSuccess Google Ads Purchase', () => {
   beforeEach(() => {
+    vi.mocked(orderAPI.getPaymentStatus).mockReset();
     vi.mocked(orderAPI.getReceipt).mockReset();
     vi.mocked(trackGoogleAdsPurchase).mockClear();
   });
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
   it('does not fire Purchase while PayMe is still processing', async () => {
-    vi.mocked(orderAPI.getReceipt).mockResolvedValue({
+    vi.mocked(orderAPI.getPaymentStatus).mockResolvedValue({
       data: { status: 'pending_payment', payme_status: 'pending' },
     });
     renderSuccess();
@@ -60,7 +62,7 @@ describe('PaymeCheckoutSuccess Google Ads Purchase', () => {
   });
 
   it('fires Purchase once with paid amount and order id after PayMe confirms', async () => {
-    vi.mocked(orderAPI.getReceipt).mockResolvedValue({
+    vi.mocked(orderAPI.getPaymentStatus).mockResolvedValue({
       data: {
         status: 'paid',
         total_paid_by_buyer: 187.5,
@@ -83,5 +85,45 @@ describe('PaymeCheckoutSuccess Google Ads Purchase', () => {
     renderSuccess('');
     expect(await screen.findByRole('heading', { name: 'קישור לא תקין' })).toBeInTheDocument();
     expect(trackGoogleAdsPurchase).not.toHaveBeenCalled();
+  });
+
+  it('stops polling after 10s and shows safe success without throwing', async () => {
+    vi.useFakeTimers();
+    vi.mocked(orderAPI.getPaymentStatus).mockResolvedValue({
+      data: { status: 'pending_payment', payme_status: 'pending' },
+    });
+    renderSuccess();
+    expect(screen.getByRole('heading', { name: 'מעבדים את התשלום...' })).toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+    expect(
+      screen.getByText(
+        'התשלום התקבל בהצלחה! אנחנו מפיקים את הכרטיס והוא יישלח אליך למייל בדקות הקרובות.',
+      ),
+    ).toBeInTheDocument();
+    expect(trackGoogleAdsPurchase).not.toHaveBeenCalled();
+  });
+
+  it('treats a hung status poll as safe success instead of logging out', async () => {
+    vi.useFakeTimers();
+    vi.mocked(orderAPI.getPaymentStatus).mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          const err = new Error('timeout of 8000ms exceeded');
+          err.code = 'ECONNABORTED';
+          window.setTimeout(() => reject(err), 8000);
+        }),
+    );
+    renderSuccess();
+    expect(screen.getByRole('heading', { name: 'מעבדים את התשלום...' })).toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+    expect(
+      screen.getByText(
+        'התשלום התקבל בהצלחה! אנחנו מפיקים את הכרטיס והוא יישלח אליך למייל בדקות הקרובות.',
+      ),
+    ).toBeInTheDocument();
   });
 });
