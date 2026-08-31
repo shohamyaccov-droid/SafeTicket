@@ -5,6 +5,7 @@ import {
   _resetGoogleAdsTagForTests,
   ensureGoogleAdsTag,
   trackGoogleAdsConversion,
+  trackGoogleAdsPurchase,
 } from './googleAdsConversions';
 
 describe('trackGoogleAdsConversion', () => {
@@ -59,5 +60,51 @@ describe('ensureGoogleAdsTag', () => {
     expect(script).toBeTruthy();
     expect(script.async).toBe(true);
     expect(window.dataLayer?.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('trackGoogleAdsPurchase', () => {
+  const sendTo = 'AW-18350905085/TestPurchaseLabel';
+
+  afterEach(() => {
+    delete window.gtag;
+    try {
+      sessionStorage.clear();
+    } catch {
+      /* ignore */
+    }
+  });
+
+  it('no-ops without gtag, send_to, or transaction_id', () => {
+    delete window.gtag;
+    expect(trackGoogleAdsPurchase({ sendTo, transactionId: '9', value: 10 })).toBe(false);
+
+    window.gtag = vi.fn();
+    expect(trackGoogleAdsPurchase({ transactionId: '9', value: 10 })).toBe(false);
+    expect(trackGoogleAdsPurchase({ sendTo, value: 10 })).toBe(false);
+    expect(window.gtag).not.toHaveBeenCalled();
+  });
+
+  it('fires conversion with ILS value and transaction_id, then dedupes refreshes', () => {
+    const gtag = vi.fn();
+    window.gtag = gtag;
+    expect(
+      trackGoogleAdsPurchase({
+        sendTo,
+        value: 187.5,
+        transactionId: 42,
+        currency: 'ILS',
+      }),
+    ).toBe(true);
+    expect(gtag).toHaveBeenCalledTimes(1);
+    expect(gtag).toHaveBeenCalledWith('event', 'conversion', {
+      send_to: sendTo,
+      value: 187.5,
+      currency: 'ILS',
+      transaction_id: '42',
+    });
+
+    expect(trackGoogleAdsPurchase({ sendTo, value: 187.5, transactionId: 42 })).toBe(false);
+    expect(gtag).toHaveBeenCalledTimes(1);
   });
 });

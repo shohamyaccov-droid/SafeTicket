@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { orderAPI } from '../services/api';
 import { Analytics } from '../utils/analytics';
 import { clearPaymePendingOrder } from '../utils/checkoutGuest';
+import { trackGoogleAdsPurchase } from '../utils/googleAdsConversions';
 import { trackMetaPurchase } from '../utils/metaPixel';
 import './PaymeCheckoutSuccess.css';
 
@@ -21,6 +22,7 @@ export default function PaymeCheckoutSuccess() {
   const [paymeStatus, setPaymeStatus] = useState(null);
   const [lastCheckedAt, setLastCheckedAt] = useState(null);
   const [checkError, setCheckError] = useState('');
+  const [adsPurchase, setAdsPurchase] = useState(null);
   const pollTimerRef = useRef(null);
   const timeoutTimerRef = useRef(null);
   const redirectTimerRef = useRef(null);
@@ -78,6 +80,11 @@ export default function PaymeCheckoutSuccess() {
           value: Number.isFinite(paidValue) ? paidValue : 0,
           currency: res.data?.currency || 'ILS',
         });
+        setAdsPurchase({
+          value: Number.isFinite(paidValue) ? paidValue : 0,
+          transactionId: String(orderId),
+          currency: res.data?.currency || 'ILS',
+        });
         clearPaymePendingOrder();
         try {
           sessionStorage.removeItem('payme_checkout_guest_email');
@@ -132,6 +139,15 @@ export default function PaymeCheckoutSuccess() {
       clearAllTimers();
     };
   }, [checkStatusOnce, clearAllTimers, clearTimer, isValidOrderId]);
+
+  useEffect(() => {
+    if (!adsPurchase) return;
+    trackGoogleAdsPurchase({
+      value: adsPurchase.value,
+      transactionId: adsPurchase.transactionId,
+      currency: adsPurchase.currency || 'ILS',
+    });
+  }, [adsPurchase]);
 
   useEffect(() => {
     if (phase !== 'success' || authLoading || !user) {
