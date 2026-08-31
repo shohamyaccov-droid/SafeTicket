@@ -95,6 +95,19 @@ class PaidOrderReceiptEmailTests(TestCase):
         self.assertIn('buyer-receipt@example.test', mail.outbox[0].to)
         self.assertIn('הקבלה והכרטיסים', mail.outbox[0].subject)
 
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_pdf_attach_failure_still_sends_receipt(self):
+        self.order.status = 'paid'
+        self.order.save(update_fields=['status'])
+        with patch.dict('os.environ', {'RESEND_API_KEY': ''}, clear=False):
+            with patch(
+                'users.secure_ticket_storage.fetch_ticket_file_field_bytes',
+                side_effect=RuntimeError('Cloudinary 401'),
+            ):
+                ok = dispatch_paid_order_receipt_email(self.order, source='test')
+        self.assertTrue(ok)
+        self.assertEqual(len(mail.outbox), 1)
+
 
 def _attach_messages(request):
     setattr(request, 'session', {})
@@ -161,7 +174,7 @@ class ResendTicketEmailAdminActionTests(TestCase):
             self.admin.resend_ticket_email(request, Order.objects.filter(pk=self.order.pk))
         mock_send.assert_called_once()
         texts = [str(m) for m in request._messages]
-        self.assertTrue(any('Email sent successfully' in t for t in texts), texts)
+        self.assertTrue(any(t == 'Email sent successfully!' for t in texts), texts)
 
     def test_resend_shows_smtp_error_in_admin(self):
         request = self.factory.post('/admin/users/order/')
@@ -173,7 +186,7 @@ class ResendTicketEmailAdminActionTests(TestCase):
         ):
             self.admin.resend_ticket_email(request, Order.objects.filter(pk=self.order.pk))
         texts = [str(m) for m in request._messages]
-        self.assertTrue(any('SMTP AUTH failed' in t for t in texts), texts)
+        self.assertTrue(any(t == 'Failed to send: SMTP AUTH failed' for t in texts), texts)
 
     def test_resend_rejects_unpaid_order(self):
         self.order.status = 'pending_payment'
@@ -185,4 +198,4 @@ class ResendTicketEmailAdminActionTests(TestCase):
             self.admin.resend_ticket_email(request, Order.objects.filter(pk=self.order.pk))
         mock_send.assert_not_called()
         texts = [str(m) for m in request._messages]
-        self.assertTrue(any('pending_payment' in t for t in texts), texts)
+        self.assertTrue(any(t.startswith('Failed to send:') and 'pending_payment' in t for t in texts), texts)

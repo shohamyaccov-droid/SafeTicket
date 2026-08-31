@@ -90,18 +90,17 @@ def send_paid_order_receipt(order_or_id, *, source: str = '') -> tuple[bool, str
     """
     Same synchronous ticket/receipt send as the PayMe webhook and send_order_receipt.
     Returns (ok, message) and never raises — callers show `message` in admin/CLI.
+    Reloads the order from DB so admin/webhook instances are not missing relations.
     """
-    order_id = getattr(order_or_id, 'pk', order_or_id)
+    order_id = getattr(order_or_id, 'pk', None) or getattr(order_or_id, 'id', None) or order_or_id
     try:
-        order = order_or_id
-        if not hasattr(order, 'ticket_ids'):
-            from users.models import Order
+        from users.models import Order
 
-            order = (
-                Order.objects.select_related('user', 'ticket', 'ticket__event', 'ticket__seller')
-                .filter(pk=order_id)
-                .first()
-            )
+        order = (
+            Order.objects.select_related('user', 'ticket', 'ticket__event', 'ticket__seller')
+            .filter(pk=order_id)
+            .first()
+        )
         if not order:
             msg = f'Order #{order_id} not found.'
             logger.error('send_paid_order_receipt: %s source=%s', msg, source)
@@ -308,25 +307,34 @@ def send_branded_email(
         'template_basename': template_basename,
         'fail_silently': fail_silently,
     }
-    if _resend_api_key():
-        smtp_ok = _smtp_configured()
-        sent = send_resend_email(**{**kwargs, 'fail_silently': True if smtp_ok else fail_silently})
-        if sent:
-            return sent
-        if smtp_ok:
-            logger.error(
-                'send_branded_email: Resend failed, falling back to SMTP template=%s recipient=%s',
-                template_basename,
-                recipient,
-            )
-            return _send_django_email(**kwargs)
-        if fail_silently:
-            return 0
-        raise RuntimeError('Resend send failed')
-    if _smtp_configured() or getattr(settings, 'TESTING', False):
+    smtp_ok = _smtp_configured()
+    resend_ok = bool(_resend_api_key())
+    # Prefer Django SMTP when EMAIL_HOST is configured (Gmail App Password is the
+    # proven production path). Resend sandbox (onboarding@resend.dev) often reports
+    # success while never delivering to the buyer.
+    if smtp_ok:
+        try:
+            sent = _send_django_email(**kwargs)
+            if sent:
+                return sent
+        except Exception:
+            if resend_ok:
+                logger.error(
+                    'send_branded_email: SMTP failed, falling back to Resend template=%s recipient=%s',
+                    template_basename,
+                    recipient,
+                    exc_info=True,
+                )
+                return send_resend_email(**kwargs)
+            if fail_silently:
+                return 0
+            raise
+    if resend_ok:
+        return send_resend_email(**kwargs)
+    if getattr(settings, 'TESTING', False):
         return _send_django_email(**kwargs)
     logger.error(
-        'send_branded_email: no email transport (set RESEND_API_KEY or EMAIL_HOST + EMAIL_HOST_USER) '
+        'send_branded_email: no email transport (set EMAIL_HOST + EMAIL_HOST_USER or RESEND_API_KEY) '
         'template=%s recipient=%s',
         template_basename,
         recipient,
@@ -338,26 +346,37 @@ def send_branded_email(
 
 def _collect_pdf_files_from_order(order):
     """
-    Collect PDF file contents from tickets in an order.
-    Returns list of (filename, bytes) tuples for send_receipt_with_pdf.
+    Collect ticket file bytes for the receipt email.
+    Uses the same Cloudinary-authenticated fetch as download_pdf — FieldFile.open()
+    fails/hangs on private assets and used to abort or stall the whole send.
+    A missing PDF must not block the email; signed download links still go out.
     """
+    from users.secure_ticket_storage import fetch_ticket_file_field_bytes
+
     from ..models import Ticket
 
-    ticket_ids = getattr(order, 'ticket_ids', None) or []
-    if not ticket_ids and order.ticket_id:
-        ticket_ids = [order.ticket_id]
+    ticket_ids = _order_ticket_ids(order)
     pdf_files = []
     for tid in ticket_ids:
         try:
-            t = Ticket.objects.get(id=tid)
-            if t.pdf_file:
-                t.pdf_file.open('rb')
-                content = t.pdf_file.read()
-                t.pdf_file.close()
-                filename = t.pdf_file.name.split('/')[-1] if '/' in t.pdf_file.name else t.pdf_file.name or f'ticket_{tid}.pdf'
-                pdf_files.append((filename, content))
+            ticket = Ticket.objects.filter(pk=tid).first()
+            if not ticket or not ticket.pdf_file:
+                continue
+            content = fetch_ticket_file_field_bytes(ticket.pdf_file, validate_magic=False)
+            if not content:
+                continue
+            head = bytes(content)[:8]
+            if head.startswith(b'%PDF'):
+                filename = f'ticket_{tid}.pdf'
+            elif head.startswith(b'\xff\xd8\xff'):
+                filename = f'ticket_{tid}.jpg'
+            elif len(head) >= 8 and head.startswith(b'\x89PNG\r\n\x1a\n'):
+                filename = f'ticket_{tid}.png'
+            else:
+                filename = f'ticket_{tid}.bin'
+            pdf_files.append((filename, bytes(content)))
         except Exception as e:
-            logger.warning(f'Could not attach PDF for ticket {tid}: {e}')
+            logger.warning('Could not attach PDF for ticket %s: %s', tid, e)
     return pdf_files
 
 
@@ -492,13 +511,17 @@ def send_receipt_with_pdf(recipient_email, order, pdf_files=None):
                     item.read(),
                     'application/pdf',
                 ))
-        send_branded_email(
+        sent = send_branded_email(
             subject=subject,
             to_email=recipient_email,
             template_basename='purchase_receipt',
             context=context,
             attachments=attachments,
         )
+        if not sent:
+            raise RuntimeError(
+                f'Email provider accepted 0 messages for {recipient_email} (order {getattr(order, "id", "?")}).'
+            )
         logger.info(f'Receipt with PDF sent to {recipient_email} (order {getattr(order, "id", "?")})')
     except Exception as e:
         logger.error(
