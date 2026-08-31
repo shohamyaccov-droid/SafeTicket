@@ -8,7 +8,7 @@ from __future__ import annotations
 from django.core.management.base import BaseCommand, CommandError
 
 from users.models import Order
-from users.utils.emails import buyer_deliverable_email, dispatch_paid_order_receipt_email
+from users.utils.emails import send_paid_order_receipt
 
 
 class Command(BaseCommand):
@@ -24,14 +24,8 @@ class Command(BaseCommand):
             raise CommandError(f'Order #{order_id} not found.')
         if order.status not in ('paid', 'completed'):
             raise CommandError(f'Order #{order_id} status={order.status!r} (expected paid/completed).')
-        recipient = buyer_deliverable_email(order)
-        if not recipient:
-            raise CommandError(f'Order #{order_id} has no deliverable buyer email.')
-        self.stdout.write(f'Sending receipt for order #{order_id} to {recipient}...')
-        ok = dispatch_paid_order_receipt_email(order, source='send_order_receipt')
+        self.stdout.write(f'Sending receipt for order #{order_id}...')
+        ok, message = send_paid_order_receipt(order, source='send_order_receipt')
         if not ok:
-            raise CommandError(
-                'Receipt send failed. Check Render logs for dispatch_paid_order_receipt_email, '
-                'RESEND_API_KEY, and EMAIL_HOST / EMAIL_HOST_USER / EMAIL_HOST_PASSWORD.'
-            )
-        self.stdout.write(self.style.SUCCESS(f'Sent ticket email for order #{order_id} to {recipient}.'))
+            raise CommandError(message)
+        self.stdout.write(self.style.SUCCESS(message))

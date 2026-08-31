@@ -610,7 +610,7 @@ class OrderAdmin(admin.ModelAdmin):
         'payme_transaction_id',
     ]
     readonly_fields = ['created_at', 'updated_at', 'payment_confirm_token']
-    actions = ['finalize_stuck_payme_orders', 'reconcile_paid_order_inventory']
+    actions = ['resend_ticket_email', 'finalize_stuck_payme_orders', 'reconcile_paid_order_inventory']
     list_per_page = 50
     show_full_result_count = True
     ordering = ['-id']
@@ -649,6 +649,32 @@ class OrderAdmin(admin.ModelAdmin):
             obj.pk,
             err,
         )
+
+    @admin.action(description='Resend Ticket Email')
+    def resend_ticket_email(self, request, queryset):
+        """Send the same paid-order ticket/receipt email as send_order_receipt / the PayMe webhook."""
+        from users.utils.emails import send_paid_order_receipt
+
+        orders = list(queryset.select_related('user').order_by('id')[: self._FINALIZE_MAX_ORDERS])
+        if queryset.count() > self._FINALIZE_MAX_ORDERS:
+            self.message_user(
+                request,
+                f'Only the first {self._FINALIZE_MAX_ORDERS} selected orders were processed.',
+                level=messages.WARNING,
+            )
+        if not orders:
+            self.message_user(request, 'No orders selected.', level=messages.WARNING)
+            return
+        for order in orders:
+            ok, message = send_paid_order_receipt(
+                order,
+                source=f'admin_resend_ticket_email:user={getattr(request.user, "pk", None)}',
+            )
+            self.message_user(
+                request,
+                message,
+                level=messages.SUCCESS if ok else messages.ERROR,
+            )
 
     @admin.action(description='Reconcile paid orders (sold tickets + seller payout)')
     def reconcile_paid_order_inventory(self, request, queryset):

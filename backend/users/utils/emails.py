@@ -86,10 +86,10 @@ def buyer_deliverable_email(order) -> str:
     return ''
 
 
-def dispatch_paid_order_receipt_email(order_or_id, *, source: str = '') -> bool:
+def send_paid_order_receipt(order_or_id, *, source: str = '') -> tuple[bool, str]:
     """
-    Send the buyer ticket/receipt email. Never raises — webhook/finalize must stay 200
-    even if SMTP, Resend, or PDF attachment generation fails.
+    Same synchronous ticket/receipt send as the PayMe webhook and send_order_receipt.
+    Returns (ok, message) and never raises — callers show `message` in admin/CLI.
     """
     order_id = getattr(order_or_id, 'pk', order_or_id)
     try:
@@ -103,36 +103,42 @@ def dispatch_paid_order_receipt_email(order_or_id, *, source: str = '') -> bool:
                 .first()
             )
         if not order:
-            logger.error(
-                'dispatch_paid_order_receipt_email: order missing order_id=%s source=%s',
-                order_id,
-                source,
-            )
-            return False
+            msg = f'Order #{order_id} not found.'
+            logger.error('send_paid_order_receipt: %s source=%s', msg, source)
+            return False, msg
+        if getattr(order, 'status', None) not in ('paid', 'completed'):
+            msg = f'Order #{order.pk} status={order.status!r} (expected paid/completed).'
+            logger.error('send_paid_order_receipt: %s source=%s', msg, source)
+            return False, msg
         recipient = buyer_deliverable_email(order)
         if not recipient:
-            logger.error(
-                'dispatch_paid_order_receipt_email: no deliverable buyer email order_id=%s source=%s',
-                order.pk,
-                source,
-            )
-            return False
+            msg = f'Order #{order.pk} has no deliverable buyer email.'
+            logger.error('send_paid_order_receipt: %s source=%s', msg, source)
+            return False, msg
         send_receipt_with_pdf(recipient, order)
         logger.info(
-            'dispatch_paid_order_receipt_email: sent order_id=%s source=%s recipient=%s',
+            'send_paid_order_receipt: sent order_id=%s source=%s recipient=%s',
             order.pk,
             source,
             recipient,
         )
-        return True
-    except Exception:
+        return True, f'Email sent successfully to {recipient} (order #{order.pk}).'
+    except Exception as exc:
+        msg = f'Order #{order_id}: {exc}'
         logger.error(
-            'dispatch_paid_order_receipt_email failed order_id=%s source=%s',
+            'send_paid_order_receipt failed order_id=%s source=%s error=%s',
             order_id,
             source,
+            (str(exc) or repr(exc))[:500],
             exc_info=True,
         )
-        return False
+        return False, msg
+
+
+def dispatch_paid_order_receipt_email(order_or_id, *, source: str = '') -> bool:
+    """Webhook-safe wrapper: send receipt, never raise."""
+    ok, _message = send_paid_order_receipt(order_or_id, source=source)
+    return ok
 
 
 def _send_django_email(
