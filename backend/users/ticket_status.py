@@ -67,6 +67,25 @@ def listing_group_id_value(ticket) -> str | None:
     return gid_s or None
 
 
+def aware_datetime(dt):
+    """Normalize naive datetimes so lock comparisons never mix tz-aware/naive."""
+    if dt is None:
+        return None
+    if timezone.is_naive(dt):
+        return timezone.make_aware(dt, timezone.get_current_timezone())
+    return dt
+
+
+def listing_lock_is_live(ticket, *, now=None) -> bool:
+    """True only while the listing is reserved AND locked_until is still in the future."""
+    if getattr(ticket, 'status', None) != 'reserved':
+        return False
+    until = getattr(ticket, 'locked_until', None)
+    if until is None:
+        return False
+    return aware_datetime(until) > aware_datetime(now or timezone.now())
+
+
 def cart_hold_expires_at(now=None):
     return (now or timezone.now()) + timedelta(minutes=CART_HOLD_MINUTES)
 
@@ -103,18 +122,18 @@ def cart_locked_until(ticket):
         return None
     until = getattr(ticket, 'locked_until', None)
     if until is not None:
-        return until
+        return aware_datetime(until)
     reserved_at = getattr(ticket, 'reserved_at', None)
     if reserved_at is None:
         return None
-    return reserved_at + timedelta(minutes=CART_HOLD_MINUTES)
+    return aware_datetime(reserved_at) + timedelta(minutes=CART_HOLD_MINUTES)
 
 
 def ticket_is_cart_locked(ticket, *, now=None) -> bool:
     until = cart_locked_until(ticket)
     if until is None:
         return False
-    return until > (now or timezone.now())
+    return until > aware_datetime(now or timezone.now())
 
 
 def expired_cart_reservation_q(now=None):

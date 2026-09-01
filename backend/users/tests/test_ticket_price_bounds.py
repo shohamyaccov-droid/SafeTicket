@@ -10,7 +10,7 @@ from django.utils import timezone
 from pypdf import PdfWriter
 from rest_framework.test import APIClient
 
-from users.models import Artist, Event, Ticket
+from users.models import Artist, Event, Order, Ticket
 
 User = get_user_model()
 
@@ -280,6 +280,91 @@ class SingleSellPriceIntegrityTests(TestCase):
         self.assertEqual(res.data.get('error'), HE_PRICE_EDIT_LOCKED)
         live.refresh_from_db()
         self.assertEqual(live.asking_price, Decimal('249'))
+
+    def test_update_price_allowed_when_locked_until_expired(self):
+        ticket = Ticket.objects.create(
+            seller=self.seller,
+            event=self.event,
+            original_price=Decimal('249'),
+            asking_price=Decimal('249'),
+            status='reserved',
+            verification_status='מאומת',
+            pdf_file='tickets/pdfs/upd-expired.pdf',
+            available_quantity=1,
+            reserved_at=timezone.now() - timedelta(minutes=30),
+            locked_until=timezone.now() - timedelta(minutes=1),
+        )
+        res = self.client.patch(
+            f'/api/users/tickets/{ticket.id}/update-price/',
+            {'listing_price': '220'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, 200, getattr(res, 'data', res.content))
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'active')
+        self.assertIsNone(ticket.locked_until)
+        self.assertEqual(ticket.original_price, Decimal('220'))
+        self.assertEqual(ticket.asking_price, Decimal('220'))
+
+    def test_update_price_allowed_when_reserved_without_locked_until(self):
+        ticket = Ticket.objects.create(
+            seller=self.seller,
+            event=self.event,
+            original_price=Decimal('249'),
+            asking_price=Decimal('249'),
+            status='reserved',
+            verification_status='מאומת',
+            pdf_file='tickets/pdfs/upd-stale.pdf',
+            available_quantity=1,
+            reserved_at=timezone.now() - timedelta(seconds=30),
+            locked_until=None,
+        )
+        res = self.client.patch(
+            f'/api/users/tickets/{ticket.id}/update-price/',
+            {'listing_price': '220'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, 200, getattr(res, 'data', res.content))
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'active')
+        self.assertIsNone(ticket.locked_until)
+        self.assertEqual(ticket.asking_price, Decimal('220'))
+
+    def test_update_price_not_blocked_by_stale_pending_payment_order(self):
+        ticket = Ticket.objects.create(
+            seller=self.seller,
+            event=self.event,
+            original_price=Decimal('249'),
+            asking_price=Decimal('249'),
+            status='active',
+            verification_status='מאומת',
+            pdf_file='tickets/pdfs/upd-pp.pdf',
+            available_quantity=1,
+        )
+        buyer = User.objects.create_user(
+            username='price_buyer',
+            email='price_buyer@example.test',
+            password='SafePass123!',
+            role='buyer',
+        )
+        Order.objects.create(
+            user=buyer,
+            ticket=ticket,
+            quantity=1,
+            total_amount=Decimal('249.00'),
+            status='pending_payment',
+            ticket_ids=[ticket.id],
+            event_name=self.event.name,
+        )
+        res = self.client.patch(
+            f'/api/users/tickets/{ticket.id}/update-price/',
+            {'listing_price': '220'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, 200, getattr(res, 'data', res.content))
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.asking_price, Decimal('220'))
+        self.assertEqual(ticket.status, 'active')
 
     def test_quantity_two_does_not_replace_price_with_two(self):
         """Guard against qty/price field mix-ups (e.g. typed 10 with quantity 2 → saved 2)."""

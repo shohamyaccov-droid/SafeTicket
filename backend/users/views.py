@@ -443,6 +443,7 @@ from users.ticket_status import (
     expired_cart_reservation_q,
     extend_payment_hold_for_ticket_ids,
     listing_group_id_value,
+    listing_lock_is_live,
     marketplace_listing_status_q,
     stamp_cart_hold,
     stamp_payment_hold,
@@ -2065,23 +2066,6 @@ def order_tickets_download(request, order_id):
     return _zip_ticket_files_response(order, files)
 
 
-def _pending_payment_blocks_price_edit(ticket: Ticket) -> bool:
-    """True if any awaiting-payment order still holds this listing (row or group)."""
-    candidate_ids = {ticket.id}
-    if ticket.listing_group_id:
-        candidate_ids = set(
-            Ticket.objects.filter(
-                listing_group_id=ticket.listing_group_id,
-                seller_id=ticket.seller_id,
-            ).values_list('id', flat=True)
-        )
-    for order in Order.objects.filter(status='pending_payment').iterator():
-        for tid in candidate_ids:
-            if order.covers_ticket(tid):
-                return True
-    return False
-
-
 def _tickets_for_listing_price_edit(ticket: Ticket):
     if ticket.listing_group_id:
         return list(
@@ -2091,6 +2075,33 @@ def _tickets_for_listing_price_edit(ticket: Ticket):
             ).order_by('id')
         )
     return [ticket]
+
+
+def _release_expired_price_edit_lock(ticket, *, now=None) -> bool:
+    """
+    Return True if this row still has a live checkout lock (locked_until in the future).
+    Expired or stale reserved/locked_until rows are released so the seller can edit price.
+    """
+    now = now or timezone.now()
+    if listing_lock_is_live(ticket, now=now):
+        return True
+    needs_clear = ticket.status == 'reserved' or getattr(ticket, 'locked_until', None) is not None
+    if not needs_clear:
+        return False
+    if ticket.status == 'reserved':
+        ticket.status = 'active'
+    clear_cart_hold_fields(ticket)
+    ticket.save(
+        update_fields=[
+            'status',
+            'reserved_at',
+            'locked_until',
+            'reserved_by',
+            'reservation_email',
+            'updated_at',
+        ]
+    )
+    return False
 
 
 def _price_from_listing_update_payload(data):
@@ -2126,23 +2137,20 @@ def update_ticket_price(request, ticket_id):
             )
 
         rows = _tickets_for_listing_price_edit(ticket)
+        now = timezone.now()
+        live_lock = False
         for row in rows:
-            _sync_expired_cart_reservation(row)
+            if _release_expired_price_edit_lock(row, now=now):
+                live_lock = True
         ticket.refresh_from_db()
-        rows = _tickets_for_listing_price_edit(ticket)
 
-        if any(ticket_is_cart_locked(row) for row in rows) or _pending_payment_blocks_price_edit(ticket):
+        if live_lock:
             return Response(
                 {'error': HE_PRICE_EDIT_LOCKED, 'code': 'listing_locked'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if ticket.status != 'active':
-            if ticket.status == 'reserved':
-                return Response(
-                    {'error': HE_PRICE_EDIT_LOCKED, 'code': 'listing_locked'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
             return Response(
                 {'error': 'ניתן לעדכן מחיר רק למודעות פעילות.'},
                 status=status.HTTP_400_BAD_REQUEST
