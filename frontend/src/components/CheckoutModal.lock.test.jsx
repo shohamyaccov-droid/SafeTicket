@@ -222,5 +222,24 @@ describe('CheckoutModal coupon field', () => {
     fireEvent.click(overlay);
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(ticketAPI.releaseReservationKeepalive).toHaveBeenCalled();
+  });
+});
+
+describe('CheckoutModal cart unlock', () => {
+  it('releases the hold when the X button is clicked', async () => {
+    const { onClose } = renderCheckout();
+    await screen.findByRole('button', { name: 'המשך לתשלום' });
+    await userEvent.click(screen.getByRole('button', { name: 'סגירה' }));
+    await waitFor(() => expect(ticketAPI.releaseReservationKeepalive).toHaveBeenCalled());
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('releases the hold when ביטול is clicked', async () => {
+    const { onClose } = renderCheckout();
+    await screen.findByRole('button', { name: 'ביטול' });
+    await userEvent.click(screen.getByRole('button', { name: 'ביטול' }));
+    await waitFor(() => expect(ticketAPI.releaseReservationKeepalive).toHaveBeenCalled());
+    expect(onClose).toHaveBeenCalled();
   });
 });

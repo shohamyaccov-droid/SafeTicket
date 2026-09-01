@@ -2563,13 +2563,22 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             <p className="checkout-hold-timer-line" role="status" aria-live="polite">
               {holdTimerLabel(timeRemaining)}
             </p>
-            <button
-              type="button"
-              onClick={handleInfoSubmit}
-              disabled={infoSubmitDisabled}
-              aria-busy={loading || infoStepBusy}
-              className="checkout-button"
-            >
+            <div className="button-group checkout-buttons-row modal-actions">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="back-button checkout-row-btn modal-action-secondary"
+                disabled={loading || infoStepBusy}
+              >
+                ביטול
+              </button>
+              <button
+                type="button"
+                onClick={handleInfoSubmit}
+                disabled={infoSubmitDisabled}
+                aria-busy={loading || infoStepBusy}
+                className="checkout-button checkout-row-btn modal-action-primary"
+              >
               {loading || infoStepBusy ? (
                 <>
                   מעביר ל-PayMe… <span className="button-spinner" aria-hidden />
@@ -2582,6 +2591,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 'המשך לתשלום'
               )}
             </button>
+            </div>
           </div>
         ) : (
           <div className="guest-checkout">
@@ -2668,12 +2678,21 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               <p className="checkout-hold-timer-line" role="status" aria-live="polite">
                 {holdTimerLabel(timeRemaining)}
               </p>
-              <button
-                type="submit"
-                disabled={infoSubmitDisabled}
-                aria-busy={loading || infoStepBusy}
-                className="checkout-button"
-              >
+              <div className="button-group checkout-buttons-row modal-actions">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="back-button checkout-row-btn modal-action-secondary"
+                  disabled={loading || infoStepBusy}
+                >
+                  ביטול
+                </button>
+                <button
+                  type="submit"
+                  disabled={infoSubmitDisabled}
+                  aria-busy={loading || infoStepBusy}
+                  className="checkout-button checkout-row-btn modal-action-primary"
+                >
                 {loading || infoStepBusy ? (
                   <>
                     מעביר ל-PayMe… <span className="button-spinner" aria-hidden />
@@ -2686,6 +2705,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   'המשך לתשלום'
                 )}
               </button>
+              </div>
             </form>
           </div>
         )}

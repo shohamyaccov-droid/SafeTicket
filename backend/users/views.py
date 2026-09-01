@@ -48,6 +48,7 @@ from pypdf import PdfReader, PdfWriter
 from .cart_identity import (
     anonymous_reservation_email_q,
     anonymous_reservation_matches,
+    cart_token_email,
     stored_anonymous_reservation_email,
 )
 
@@ -121,6 +122,13 @@ def _listing_group_id_for_offer(negotiated_offer) -> str | None:
     return gid_s or None
 
 
+def _reservation_email_for_lock(*, user=None, guest_email: str = '', cart_token: str = '') -> str | None:
+    """Persist cart-token identity even for logged-in buyers so tab-close sendBeacon can unlock."""
+    if user is not None and getattr(user, 'is_authenticated', False):
+        return cart_token_email(cart_token) or None
+    return stored_anonymous_reservation_email(guest_email=guest_email, cart_token=cart_token) or None
+
+
 def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, guest_email: str = '', cart_token: str = ''):
     """
     Lock `quantity` seats in a listing group for the 10-minute cart window.
@@ -128,7 +136,9 @@ def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, gu
     Returns (reserved_tickets, expires_at).
     """
     guest_email = (guest_email or '').strip().lower()
-    stored_email = stored_anonymous_reservation_email(guest_email=guest_email, cart_token=cart_token)
+    stored_email = _reservation_email_for_lock(
+        user=user, guest_email=guest_email, cart_token=cart_token
+    )
     needed = max(1, int(quantity or 1))
     now = timezone.now()
     expires_at = now + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
@@ -167,10 +177,9 @@ def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, gu
         t.reserved_at = now
         if user is not None and getattr(user, 'is_authenticated', False):
             t.reserved_by = user
-            t.reservation_email = None
         else:
             t.reserved_by = None
-            t.reservation_email = stored_email or None
+        t.reservation_email = stored_email
         t.save(
             update_fields=['reserved_at', 'reserved_by', 'reservation_email', 'updated_at']
         )
@@ -193,10 +202,9 @@ def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, gu
         t.reserved_at = now
         if user is not None and getattr(user, 'is_authenticated', False):
             t.reserved_by = user
-            t.reservation_email = None
         else:
             t.reserved_by = None
-            t.reservation_email = stored_email or None
+        t.reservation_email = stored_email
         t.save(
             update_fields=[
                 'status',
@@ -481,12 +489,14 @@ def _order_pending_checkout_response(order, request):
 
 # Cart abandonment timeout (minutes)
 from users.ticket_status import (
+    CART_HOLD_MINUTES,
     HE_TICKET_TAKEN,
     TICKET_STATUS_TAKEN,
     assert_ticket_not_taken,
+    marketplace_listing_status_q,
 )
 
-RESERVATION_TIMEOUT_MINUTES = 10
+RESERVATION_TIMEOUT_MINUTES = CART_HOLD_MINUTES
 HE_TICKET_HELD_BY_OTHER = 'הכרטיס כבר נתפס על ידי משתמש אחר. ניתן לנסות שוב בעוד כמה דקות.'
 HE_TICKET_NOT_AVAILABLE = 'הכרטיס אינו זמין יותר. אנא בחרו כרטיס אחר.'
 HE_RESERVATION_RELEASE_FORBIDDEN = 'אין הרשאה לשחרר את השמירה על הכרטיס.'
@@ -3445,7 +3455,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         return TicketSerializer
 
     def get_permissions(self):
-        if self.action in ('reserve', 'release_reservation'):
+        if self.action in ('reserve', 'release_reservation', 'unlock'):
             return [AllowAny()]
         return super().get_permissions()
     
@@ -3464,11 +3474,7 @@ class TicketViewSet(viewsets.ModelViewSet):
             Q(event__isnull=True, event_date__isnull=True)
         )
         queryset = ticket_queryset_defer_event_rollout_columns(
-            Ticket.objects.filter(
-                Q(status='active')
-                | Q(status=TICKET_STATUS_TAKEN)
-                | Q(status__in=('sold', 'pending_payout'))
-            )
+            Ticket.objects.filter(marketplace_listing_status_q())
             .filter(upcoming_filter)
             .select_related(*TICKET_CATALOG_SELECT_RELATED)
         )
@@ -4007,7 +4013,8 @@ class TicketViewSet(viewsets.ModelViewSet):
         # Anonymous carts need an email or a cart_token so the same device can
         # reclaim or release the lock (critical on mobile without cookie auth).
         # Missing tickets still 404 first so clients get a stable not-found signal.
-        stored_email = stored_anonymous_reservation_email(
+        stored_email = _reservation_email_for_lock(
+            user=request.user if request.user.is_authenticated else None,
             guest_email=guest_email,
             cart_token=cart_token,
         )
@@ -4130,16 +4137,12 @@ class TicketViewSet(viewsets.ModelViewSet):
                                 ticket.reserved_at = timezone.now()
                                 if request.user.is_authenticated:
                                     ticket.reserved_by = request.user
-                                    ticket.reservation_email = None
-                                    ticket.save(
-                                        update_fields=['reserved_at', 'reserved_by', 'reservation_email', 'updated_at']
-                                    )
                                 else:
                                     ticket.reserved_by = None
-                                    ticket.reservation_email = stored_email or ticket.reservation_email
-                                    ticket.save(
-                                        update_fields=['reserved_at', 'reserved_by', 'reservation_email', 'updated_at']
-                                    )
+                                ticket.reservation_email = stored_email or ticket.reservation_email
+                                ticket.save(
+                                    update_fields=['reserved_at', 'reserved_by', 'reservation_email', 'updated_at']
+                                )
                                 expires_at = ticket.reserved_at + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
                                 return Response(
                                     {
@@ -4186,7 +4189,6 @@ class TicketViewSet(viewsets.ModelViewSet):
                 ticket.reserved_at = now
                 if request.user.is_authenticated:
                     ticket.reserved_by = request.user
-                    ticket.reservation_email = None
                     logger.info(
                         'Ticket %s reserved by user %s at %s',
                         ticket.id,
@@ -4195,13 +4197,13 @@ class TicketViewSet(viewsets.ModelViewSet):
                     )
                 else:
                     ticket.reserved_by = None
-                    ticket.reservation_email = stored_email or None
                     logger.info(
                         'Ticket %s reserved by guest identity %s at %s',
                         ticket.id,
                         stored_email or '(empty)',
                         ticket.reserved_at,
                     )
+                ticket.reservation_email = stored_email
                 ticket.save(update_fields=['status', 'reserved_at', 'reserved_by', 'reservation_email', 'updated_at'])
 
                 return Response(
@@ -4312,7 +4314,12 @@ class TicketViewSet(viewsets.ModelViewSet):
                 )
         except Ticket.DoesNotExist:
             return Response({'error': HE_TICKET_NOT_AVAILABLE}, status=status.HTTP_404_NOT_FOUND)
-    
+
+    @action(detail=True, methods=['post'], url_path='unlock')
+    def unlock(self, request, pk=None):
+        """Alias for release_reservation — immediate cart unlock on modal/tab close."""
+        return self.release_reservation(request, pk=pk)
+
     def destroy(self, request, *args, **kwargs):
         """
         Only allow sellers to delete their own tickets
@@ -4523,13 +4530,15 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
         )
         # Lazy cart abandonment cleanup
         release_abandoned_carts()
-        # Public marketplace: active + permanently taken + sold (grayed as is_taken)
+        # Public marketplace: buyable, in-cart hold, permanently taken, or sold.
         from django.db.models import Q
 
         tickets = ticket_queryset_defer_event_rollout_columns(
             Ticket.objects.filter(event=event)
+            .filter(marketplace_listing_status_q())
             .filter(
-                Q(status='active', available_quantity__gt=0)
+                Q(available_quantity__gt=0)
+                | Q(status='reserved')
                 | Q(status=TICKET_STATUS_TAKEN)
                 | Q(status__in=('sold', 'pending_payout'))
             )

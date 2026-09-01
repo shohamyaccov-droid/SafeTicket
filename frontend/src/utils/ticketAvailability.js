@@ -3,6 +3,8 @@
  * `taken` = permanent lock (נתפס); distinct from temporary cart `reserved`.
  */
 
+import { isListingGroupCartLocked } from './ticketLock';
+
 export const TICKET_STATUS_TAKEN = 'taken';
 
 export function isTicketTaken(ticket) {
@@ -27,13 +29,14 @@ export function isListingGroupTaken(group) {
   return tickets.every((t) => isTicketTaken(t));
 }
 
-/** Keep marketplace rows that are buyable, permanently taken, or sold (נתפס UI). */
+/** Keep marketplace rows that are buyable, in a cart hold, permanently taken, or sold. */
 export function filterMarketplaceTickets(raw) {
   const list = Array.isArray(raw) ? raw : [];
   return list.filter((t) => {
     if (!t) return false;
     if (isTicketTaken(t) || t.is_taken === true) return true;
     if (t.status === 'sold' || t.status === 'pending_payout') return true;
+    if (t.status === 'reserved' || t.is_locked === true) return true;
     return Number(t.available_quantity) > 0;
   });
 }
@@ -68,6 +71,7 @@ export function isCurrentUserOwnListing(user, ticket, group) {
 export function isListingUnavailableForBuyer(group, user) {
   if (!group) return true;
   if (isListingGroupTaken(group)) return true;
+  if (isListingGroupCartLocked(group)) return true;
   const first = Array.isArray(group.tickets) ? group.tickets[0] : null;
   return isCurrentUserOwnListing(user, first, group);
 }

@@ -1023,6 +1023,21 @@ a.event-hero-artist:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
+.ticket-cart-lock-countdown {
+  margin: 0;
+  max-width: 12rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #b45309;
+  text-align: center;
+}
+
+.viagogo-ticket-row.unavailable .ticket-cart-lock-countdown {
+  filter: none;
+  color: #92400e;
+}
+
 .viagogo-ticket-row.active {
   border: 2px solid #0284c7 !important;
   background: #e0f2fe !important;

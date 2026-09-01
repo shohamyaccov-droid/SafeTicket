@@ -22,6 +22,8 @@ import PageSeo from '../components/PageSeo';
 import { buildTicketOfferJsonLd } from '../utils/eventJsonLdClient';
 import { crumbs } from '../utils/breadcrumbSeo';
 import { DEFAULT_SITE_TITLE } from '../utils/siteSeo';
+import { isTicketCartLocked } from '../utils/ticketLock';
+import TicketLockCountdown from '../components/TicketLockCountdown';
 import './TicketSelectionPage.css';
 
 const TicketSelectionPage = () => {
@@ -93,6 +95,10 @@ const TicketSelectionPage = () => {
       const maxQty = ticket?.available_quantity ?? ticket?.quantity ?? 1;
       if (!ticket) {
         toastError('כרטיס לא זמין');
+        return;
+      }
+      if (isTicketCartLocked(ticket)) {
+        toastError('מישהו בתהליך קנייה. נסו שוב בעוד רגע.');
         return;
       }
       if (quantity > 0 && quantity <= maxQty) {
@@ -168,6 +174,7 @@ const TicketSelectionPage = () => {
   const isValidQuantity = quantity > 0 && quantity <= maxQuantity;
   const selCur = resolveTicketCurrency(ticket);
   const selSym = currencySymbol(selCur);
+  const cartLocked = isTicketCartLocked(ticket);
 
   const ticketPath = `/ticket/${ticketId}`;
   const ticketCrumbs = crumbs(
@@ -337,16 +344,29 @@ const TicketSelectionPage = () => {
           )}
 
           {/* Continue to Checkout Button */}
-          <button
-            type="button"
-            onClick={handleContinueToCheckout}
-            className="continue-checkout-button"
-            disabled={!isValidQuantity}
-            aria-label="המשך לתשלום מאובטח"
-          >
-            המשך לתשלום
-          </button>
-          <p className="checkout-cta-hint">מעבר לתשלום מאובטח והצגת סיכום מלא לפני אישור.</p>
+          {cartLocked ? (
+            <TicketLockCountdown
+              lockedUntil={ticket.locked_until}
+              onExpire={() => {
+                void fetchTicketById().then((found) => {
+                  if (found) setTicket(found);
+                });
+              }}
+            />
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={handleContinueToCheckout}
+                className="continue-checkout-button"
+                disabled={!isValidQuantity}
+                aria-label="המשך לתשלום מאובטח"
+              >
+                המשך לתשלום
+              </button>
+              <p className="checkout-cta-hint">מעבר לתשלום מאובטח והצגת סיכום מלא לפני אישור.</p>
+            </>
+          )}
         </section>
 
         {/* Right Side - Venue Map */}

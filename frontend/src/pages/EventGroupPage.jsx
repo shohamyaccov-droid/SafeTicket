@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ticketAPI } from '../services/api';
-import { currencySymbol, formatAmountForCurrency, getTicketPrice, resolveTicketCurrency } from '../utils/priceFormat';
+import { currencySymbol, formatListingAmountForCurrency, getTicketPrice, resolveTicketCurrency } from '../utils/priceFormat';
 import BuyerListingPrice from '../components/BuyerListingPrice';
 import { translateSectionDisplay } from '../utils/venueMaps';
 import { createListFetchAbort } from '../utils/listFetch';
@@ -12,6 +12,9 @@ import { formatEventLocalTimeLine } from '../utils/eventLocalTime';
 import PageSeo from '../components/PageSeo';
 import { crumbs } from '../utils/breadcrumbSeo';
 import { DEFAULT_SITE_TITLE } from '../utils/siteSeo';
+import { isTicketTaken } from '../utils/ticketAvailability';
+import { isTicketCartLocked } from '../utils/ticketLock';
+import TicketLockCountdown from '../components/TicketLockCountdown';
 import './EventGroupPage.css';
 
 const EventGroupPage = () => {
@@ -99,6 +102,7 @@ const EventGroupPage = () => {
   }, [eventName, retryKey]);
 
   const handleBuy = (ticket) => {
+    if (isTicketCartLocked(ticket) || isTicketTaken(ticket)) return;
     Analytics.checkoutStart(ticket?.id, {
       value: ticket ? getTicketPrice(ticket) : undefined,
       currency: resolveTicketCurrency(ticket) || 'ILS',
@@ -272,8 +276,13 @@ const EventGroupPage = () => {
                   {/* Expanded Tickets List */}
                   {isExpanded && (
                     <div className="tickets-sub-list">
-                      {eventGroup.tickets.map((ticket, ticketIndex) => (
-                        <div key={ticket.id || ticketIndex} className="ticket-item">
+                      {eventGroup.tickets.map((ticket, ticketIndex) => {
+                        const cartLocked = isTicketCartLocked(ticket);
+                        return (
+                        <div
+                          key={ticket.id || ticketIndex}
+                          className={`ticket-item${cartLocked ? ' ticket-item--cart-locked' : ''}`}
+                        >
                           <div className="ticket-details">
                             <div className="ticket-detail-row ticket-detail-row--price">
                               <span className="ticket-label">מחיר מוכר (לפני עמלה):</span>
@@ -315,7 +324,7 @@ const EventGroupPage = () => {
                                     return (
                                       <>
                                         {currencySymbol(fc)}
-                                        {formatAmountForCurrency(ticket.original_price, fc)}
+                                        {formatListingAmountForCurrency(ticket.original_price, fc)}
                                       </>
                                     );
                                   })()}
@@ -329,14 +338,24 @@ const EventGroupPage = () => {
                               </div>
                             ) : null}
                           </div>
-                          <button 
-                            onClick={() => handleBuy(ticket)} 
-                            className="buy-ticket-button"
-                          >
-                            קנה עכשיו
-                          </button>
+                          {cartLocked ? (
+                            <TicketLockCountdown
+                              lockedUntil={ticket.locked_until}
+                              onExpire={() => setRetryKey((k) => k + 1)}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleBuy(ticket)}
+                              className="buy-ticket-button"
+                              disabled={isTicketTaken(ticket)}
+                            >
+                              {isTicketTaken(ticket) ? 'נתפס' : 'קנה עכשיו'}
+                            </button>
+                          )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

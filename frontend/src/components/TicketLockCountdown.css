@@ -1,0 +1,27 @@
+.ticket-cart-lock-countdown {
+  margin: 0;
+  max-width: 12rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #b45309;
+  text-align: center;
+}
+
+.ticket-row-cart-locked .ticket-cart-lock-countdown,
+.viagogo-ticket-row.unavailable .ticket-cart-lock-countdown,
+.ticket-item--cart-locked .ticket-cart-lock-countdown {
+  filter: none;
+  color: #92400e;
+}
+
+.ticket-item--cart-locked {
+  opacity: 0.62;
+  filter: grayscale(0.15);
+  pointer-events: auto;
+}
+
+.ticket-item--cart-locked:hover {
+  box-shadow: none;
+  border-color: var(--border-color, #e5e7eb);
+}

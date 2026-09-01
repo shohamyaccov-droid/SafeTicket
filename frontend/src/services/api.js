@@ -493,6 +493,7 @@ api.interceptors.response.use(
       reqMethod === 'post' &&
       (/\/tickets\/\d+\/reserve\//.test(urlPath) ||
         /\/tickets\/\d+\/release_reservation\//.test(urlPath) ||
+        /\/tickets\/\d+\/unlock\//.test(urlPath) ||
         urlPath.includes('/payments/simulate/') ||
         urlPath.includes('/orders/guest/') ||
         urlPath.includes('/orders/'));
@@ -844,14 +845,14 @@ export const ticketAPI = {
     if (token) data.cart_token = token;
     const asGuest = Boolean(guestEmail || token) && !getEffectiveBearerAccess();
     return api.post(
-      `/users/tickets/${id}/release_reservation/`,
+      `/users/tickets/${id}/unlock/`,
       data,
       asGuest ? { skipAuth: true } : undefined,
     );
   },
   /**
    * Best-effort release that survives tab close / navigation (axios is often aborted).
-   * Uses fetch keepalive + optional sendBeacon; includes CSRF and Bearer when available.
+   * sendBeacon first (pagehide/beforeunload), then fetch keepalive with CSRF/Bearer.
    */
   releaseReservationKeepalive: (id, email = null, cartToken = null) => {
     if (id == null || id === '') return false;
@@ -862,7 +863,8 @@ export const ticketAPI = {
     if (token) payload.cart_token = token;
     const body = JSON.stringify(payload);
     const base = String(API_URL || '').replace(/\/+$/, '');
-    const url = `${base}/users/tickets/${id}/release_reservation/`;
+    const unlockPath = `/users/tickets/${id}/unlock/`;
+    const url = `${base}${unlockPath}`;
     const headers = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
@@ -873,6 +875,15 @@ export const ticketAPI = {
     if (!asGuest) {
       const bearer = getEffectiveBearerAccess();
       if (bearer) headers.Authorization = `Bearer ${bearer}`;
+    }
+    let beaconOk = false;
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+        const blob = new Blob([body], { type: 'application/json' });
+        beaconOk = Boolean(navigator.sendBeacon(url, blob));
+      }
+    } catch {
+      beaconOk = false;
     }
     try {
       void fetch(url, {
@@ -885,17 +896,11 @@ export const ticketAPI = {
       }).catch(() => {});
       return true;
     } catch {
-      try {
-        if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
-          const blob = new Blob([body], { type: 'application/json' });
-          return navigator.sendBeacon(url, blob);
-        }
-      } catch {
-        /* ignore */
-      }
-      return false;
+      return beaconOk;
     }
   },
+  unlockTicket: (id, email = null, cartToken = null) =>
+    ticketAPI.releaseReservation(id, email, cartToken),
 };
 
 export const eventAPI = {

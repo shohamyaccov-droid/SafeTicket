@@ -28,6 +28,15 @@ describe('ticketAvailability', () => {
     expect(rows.map((t) => t.id)).toEqual([1, 2, 3]);
   });
 
+  it('keeps reserved cart-hold tickets in the marketplace list', () => {
+    const rows = filterMarketplaceTickets([
+      { id: 1, status: 'active', available_quantity: 1 },
+      { id: 2, status: 'reserved', is_locked: true, available_quantity: 1 },
+      { id: 3, status: 'inactive', available_quantity: 0 },
+    ]);
+    expect(rows.map((t) => t.id)).toEqual([1, 2]);
+  });
+
   it('marks a listing group as taken when every seat is taken', () => {
     const group = {
       available_count: 0,

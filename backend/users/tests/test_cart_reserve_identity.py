@@ -222,3 +222,68 @@ class CartReserveIdentityTests(TestCase):
         self.assertEqual(ticket.status, 'active')
         self.assertIsNone(ticket.reserved_at)
         self.assertIsNone(ticket.reserved_by_id)
+
+    def test_event_tickets_include_reserved_lock_fields(self):
+        ticket = self._ticket()
+        token = 'e' * 32
+        lock = self.client.post(
+            f'/api/users/tickets/{ticket.id}/reserve/',
+            {'cart_token': token, 'quantity': 1},
+            format='json',
+        )
+        self.assertEqual(lock.status_code, 200, lock.data)
+        listing = self.client.get(f'/api/users/events/{self.event.pk}/tickets/')
+        self.assertEqual(listing.status_code, 200, listing.data)
+        rows = listing.data if isinstance(listing.data, list) else listing.data.get('results') or listing.data
+        row = next((t for t in rows if t['id'] == ticket.id), None)
+        self.assertIsNotNone(row)
+        self.assertTrue(row.get('is_locked'))
+        self.assertTrue(row.get('locked_until'))
+        self.assertEqual(row.get('status'), 'reserved')
+
+    def test_unlock_alias_releases_hold(self):
+        ticket = self._ticket()
+        token = 'f' * 32
+        lock = self.client.post(
+            f'/api/users/tickets/{ticket.id}/reserve/',
+            {'cart_token': token, 'quantity': 1},
+            format='json',
+        )
+        self.assertEqual(lock.status_code, 200, lock.data)
+        unlock = self.client.post(
+            f'/api/users/tickets/{ticket.id}/unlock/',
+            {'cart_token': token},
+            format='json',
+        )
+        self.assertEqual(unlock.status_code, 200, unlock.data)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'active')
+        self.assertIsNone(ticket.reserved_at)
+        self.assertIsNone(ticket.reservation_email)
+
+    def test_authenticated_reserve_can_unlock_anonymously_with_cart_token(self):
+        """Tab-close sendBeacon has no Bearer — cart_token must still release the hold."""
+        ticket = self._ticket()
+        token = 'aa' * 16
+        self.client.force_authenticate(self.buyer)
+        lock = self.client.post(
+            f'/api/users/tickets/{ticket.id}/reserve/',
+            {'quantity': 1, 'cart_token': token},
+            format='json',
+        )
+        self.assertEqual(lock.status_code, 200, lock.data)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'reserved')
+        self.assertTrue((ticket.reservation_email or '').endswith('@cart.tradetix.invalid'))
+
+        self.client.force_authenticate(None)
+        unlock = self.client.post(
+            f'/api/users/tickets/{ticket.id}/unlock/',
+            {'cart_token': token},
+            format='json',
+        )
+        self.assertEqual(unlock.status_code, 200, unlock.data)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'active')
+        self.assertIsNone(ticket.reserved_by_id)
+        self.assertIsNone(ticket.reservation_email)

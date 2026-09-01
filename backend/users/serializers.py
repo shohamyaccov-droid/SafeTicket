@@ -914,6 +914,14 @@ class GuestCheckoutSerializer(serializers.Serializer):
         return value
 
 
+def _ticket_lock_fields(obj):
+    from users.ticket_status import cart_locked_until, ticket_is_cart_locked
+
+    locked = ticket_is_cart_locked(obj)
+    until = cart_locked_until(obj) if locked else None
+    return locked, (until.isoformat() if until is not None else None)
+
+
 class TicketSerializer(serializers.ModelSerializer):
     seller_username = serializers.CharField(source='seller.username', read_only=True)
     seller_is_verified = serializers.BooleanField(source='seller.is_verified_seller', read_only=True)
@@ -971,6 +979,8 @@ class TicketSerializer(serializers.ModelSerializer):
     allow_negotiation = serializers.BooleanField(required=False, default=True)
     verification_status = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='ממתין לאישור', read_only=True)
     has_pdf_file = serializers.SerializerMethodField()
+    is_locked = serializers.SerializerMethodField()
+    locked_until = serializers.SerializerMethodField()
     currency = serializers.SerializerMethodField()
     
     class Meta:
@@ -982,13 +992,14 @@ class TicketSerializer(serializers.ModelSerializer):
             'row_number', 'seat_number', 'listing_group_id',
             'original_price', 'listing_price', 'asking_price', 'currency', 'delivery_method',
             'is_together', 'available_quantity', 'pdf_file', 'pdf_file_url', 'receipt_file', 'receipt_file_url',
-            'has_pdf_file', 'status',
+            'has_pdf_file', 'status', 'is_locked', 'locked_until',
             'ticket_type', 'split_type', 'is_obstructed_view', 'allow_negotiation', 'verification_status',
             'reserved_at', 'reserved_by', 'reservation_email', 'created_at', 'updated_at'
         )
         read_only_fields = (
             'id', 'seller', 'status', 'created_at', 'updated_at', 'asking_price', 'currency',
-            'reserved_at', 'reserved_by', 'reservation_email', 'event_name', 'event_date', 'venue',
+            'reserved_at', 'reserved_by', 'reservation_email', 'is_locked', 'locked_until',
+            'event_name', 'event_date', 'venue',
             'section',
         )
         extra_kwargs = {
@@ -1012,6 +1023,14 @@ class TicketSerializer(serializers.ModelSerializer):
     
     def get_has_pdf_file(self, obj):
         return bool(obj.pdf_file)
+
+    def get_is_locked(self, obj):
+        locked, _until = _ticket_lock_fields(obj)
+        return locked
+
+    def get_locked_until(self, obj):
+        _locked, until = _ticket_lock_fields(obj)
+        return until
     
     def get_currency(self, obj):
         return iso4217_for_ticket_listing(obj)
@@ -1233,6 +1252,8 @@ class TicketListSerializer(serializers.ModelSerializer):
     split_type = serializers.CharField(required=False, allow_blank=True, allow_null=True, read_only=True)
     has_pdf_file = serializers.SerializerMethodField()
     is_reserved_slot = serializers.SerializerMethodField()
+    is_locked = serializers.SerializerMethodField()
+    locked_until = serializers.SerializerMethodField()
     is_taken = serializers.SerializerMethodField()
     currency = serializers.SerializerMethodField()
     # Event data
@@ -1252,7 +1273,7 @@ class TicketListSerializer(serializers.ModelSerializer):
             'row_number', 'seat_number', 'listing_group_id',
             'original_price', 'asking_price', 'currency', 'delivery_method',
             'is_together', 'available_quantity', 'split_type', 'allow_negotiation', 'status', 'has_pdf_file',
-            'is_reserved_slot', 'is_taken', 'created_at'
+            'is_reserved_slot', 'is_locked', 'locked_until', 'is_taken', 'created_at'
         )
         read_only_fields = fields
 
@@ -1261,6 +1282,14 @@ class TicketListSerializer(serializers.ModelSerializer):
 
     def get_is_reserved_slot(self, obj):
         return obj.status == 'reserved'
+
+    def get_is_locked(self, obj):
+        locked, _until = _ticket_lock_fields(obj)
+        return locked
+
+    def get_locked_until(self, obj):
+        _locked, until = _ticket_lock_fields(obj)
+        return until
 
     def get_is_taken(self, obj):
         from users.ticket_status import ticket_is_taken_flag

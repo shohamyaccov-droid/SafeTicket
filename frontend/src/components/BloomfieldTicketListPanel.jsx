@@ -4,13 +4,15 @@ import {
   getTicketBaseNumeric,
   resolveTicketCurrency,
   currencySymbol,
-  formatAmountForCurrency,
+  formatListingAmountForCurrency,
   buyerChargeFromBase,
 } from '../utils/priceFormat';
 
 import { listingAvailabilityLabel, listingQuantityOptions, normalizeListingSplitType } from '../utils/listingQuantity';
 import TakenBuyButton from './TakenBuyButton';
+import TicketLockCountdown from './TicketLockCountdown';
 import { isListingGroupTaken } from '../utils/ticketAvailability';
+import { isListingGroupCartLocked } from '../utils/ticketLock';
 import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 
 const ZONE_HE = {
@@ -94,6 +96,7 @@ export default function BloomfieldTicketListPanel({
   isSellerFn,
   onRequestLogin,
   totalListingsBeforeQuantityFilter = 0,
+  onLockExpire,
 }) {
   const buyerFeePercent = useBuyerServiceFeePercent();
 
@@ -163,7 +166,8 @@ export default function BloomfieldTicketListPanel({
               buyingStableId != null && String(buyingStableId) === String(stableId);
             const sellerOwns = isSellerFn(user, firstTicket, group);
             const isTakenListing = isListingGroupTaken(group);
-            const isUnavailableListing = sellerOwns || isTakenListing;
+            const isCartLockedListing = isListingGroupCartLocked(group);
+            const isUnavailableListing = sellerOwns || isTakenListing || isCartLockedListing;
             const splitType = normalizeListingSplitType(
               firstTicket?.split_type || group.split_type || ''
             );
@@ -174,7 +178,7 @@ export default function BloomfieldTicketListPanel({
             const sym = currencySymbol(cur);
             const baseNum = getTicketBaseNumeric(firstTicket);
             const allIn = buyerChargeFromBase(baseNum, buyerFeePercent).totalAmount;
-            const priceStr = formatAmountForCurrency(allIn, cur);
+            const priceStr = formatListingAmountForCurrency(allIn, cur);
             const qty = group.available_count || 1;
             const qtyLabel = listingAvailabilityLabel(splitType, qty);
 
@@ -213,8 +217,8 @@ export default function BloomfieldTicketListPanel({
                     : isExpanded
                       ? 'border-slate-300'
                       : 'border-slate-200'
-                }`}
-                style={{ cursor: 'pointer' }}
+                }${isUnavailableListing ? ' ticket-row-cart-locked' : ''}`}
+                style={{ cursor: 'pointer', ...(isCartLockedListing ? { opacity: 0.62 } : {}) }}
               >
                 {/* ── HORIZONTAL CARD ROW (inline styles guarantee layout) ── */}
                 <div style={ROW_STYLE}>
@@ -293,6 +297,11 @@ export default function BloomfieldTicketListPanel({
                       <TakenBuyButton label="הכרטיס שלך" variant="own" />
                     ) : isTakenListing ? (
                       <TakenBuyButton label="נתפס" variant="taken" />
+                    ) : isCartLockedListing ? (
+                      <TicketLockCountdown
+                        lockedUntil={group.locked_until}
+                        onExpire={onLockExpire}
+                      />
                     ) : (
                       <button
                         type="button"

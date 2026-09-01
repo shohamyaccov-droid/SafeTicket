@@ -74,8 +74,14 @@ import {
   pickCheapestBuyableGroup,
   sortListingGroupsForBuyer,
 } from '../utils/ticketAvailability';
+import {
+  isListingGroupCartLocked,
+  isTicketCartLocked,
+  listingGroupCartLockedUntilMs,
+} from '../utils/ticketLock';
 import { buildSectionMapStatus } from '../utils/mapSectionStatus';
 import TakenBuyButton from '../components/TakenBuyButton';
+import TicketLockCountdown from '../components/TicketLockCountdown';
 import EventMobileBuyBar from '../components/EventMobileBuyBar';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { createListFetchAbort } from '../utils/listFetch';
@@ -184,16 +190,24 @@ const EventDetailsPage = () => {
       }
       
       groups[groupKey].tickets.push(ticket);
-      // Count only active seats for purchase; reserved/taken must not inflate availability.
-      if (ticket.status === 'active') {
+      // Count only seats that another buyer can still purchase.
+      if (
+        ticket.status === 'active'
+        || (ticket.status === 'reserved' && !isTicketCartLocked(ticket))
+      ) {
         groups[groupKey].available_count += 1;
       }
     });
 
-    const grouped = Object.values(groups).map((g) => ({
-      ...g,
-      is_taken: isListingGroupTaken(g),
-    }));
+    const grouped = Object.values(groups).map((g) => {
+      const lockMs = listingGroupCartLockedUntilMs(g);
+      return {
+        ...g,
+        is_taken: isListingGroupTaken(g),
+        is_cart_locked: isListingGroupCartLocked(g),
+        locked_until: lockMs != null ? new Date(lockMs).toISOString() : null,
+      };
+    });
 
     return grouped;
   };
@@ -1741,6 +1755,7 @@ const EventDetailsPage = () => {
                     user={user}
                     isSellerFn={isCurrentUserSellerOfTicket}
                     totalListingsBeforeQuantityFilter={ticketGroups.length}
+                    onLockExpire={() => { void fetchTicketsRef.current(); }}
                   />
                 ) : (
                 <div className="tickets-grid">
@@ -1799,8 +1814,9 @@ const EventDetailsPage = () => {
               );
               const allowsNegotiation = firstTicket?.allow_negotiation !== false;
               const isTakenListing = isListingGroupTaken(group);
+              const isCartLockedListing = isListingGroupCartLocked(group);
               const isUnavailableListing =
-                isOwnListing || isTakenListing || isListingUnavailableForBuyer(group, user);
+                isOwnListing || isTakenListing || isCartLockedListing || isListingUnavailableForBuyer(group, user);
 
               // Handle click to toggle expansion and update map
               const handleTicketClick = (e) => {
@@ -1879,6 +1895,11 @@ const EventDetailsPage = () => {
                         <TakenBuyButton label="הכרטיס שלך" variant="own" />
                       ) : isTakenListing ? (
                         <TakenBuyButton label="נתפס" variant="taken" />
+                      ) : isCartLockedListing ? (
+                        <TicketLockCountdown
+                          lockedUntil={group.locked_until}
+                          onExpire={() => { void fetchTicketsRef.current(); }}
+                        />
                       ) : (
                         <button
                           type="button"
@@ -1899,6 +1920,8 @@ const EventDetailsPage = () => {
                   </div>
                   {isTakenListing ? (
                     <span className="micro-trust-text micro-trust-text--row">כרטיס זה כבר אינו זמין לרכישה</span>
+                  ) : isCartLockedListing ? (
+                    <span className="micro-trust-text micro-trust-text--row">הכרטיס שמור זמנית לקונה אחר</span>
                   ) : null}
 
                   {/* Quantity + offer — expand the row; buy CTA is always on the collapsed row */}
