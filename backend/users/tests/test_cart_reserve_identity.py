@@ -287,3 +287,67 @@ class CartReserveIdentityTests(TestCase):
         self.assertEqual(ticket.status, 'active')
         self.assertIsNone(ticket.reserved_by_id)
         self.assertIsNone(ticket.reservation_email)
+
+    def test_partially_sold_listing_group_can_reserve_remaining_seats(self):
+        group_id = str(uuid4())
+        sold_a = self._ticket(listing_group_id=group_id, status='sold', available_quantity=0)
+        sold_b = self._ticket(listing_group_id=group_id, status='sold', available_quantity=0)
+        live_a = self._ticket(listing_group_id=group_id)
+        live_b = self._ticket(listing_group_id=group_id)
+        self.client.force_authenticate(self.buyer)
+        lock = self.client.post(
+            f'/api/users/tickets/{sold_a.id}/reserve/',
+            {'listing_group_id': group_id, 'quantity': 2},
+            format='json',
+        )
+        self.assertEqual(lock.status_code, 200, lock.data)
+        self.assertEqual(lock.data.get('quantity'), 2)
+        live_a.refresh_from_db()
+        live_b.refresh_from_db()
+        sold_a.refresh_from_db()
+        sold_b.refresh_from_db()
+        self.assertEqual(live_a.status, 'reserved')
+        self.assertEqual(live_b.status, 'reserved')
+        self.assertEqual(sold_a.status, 'sold')
+        self.assertEqual(sold_b.status, 'sold')
+        self.assertFalse(sold_a.reserved_by_id)
+
+        listing = self.client.get(f'/api/users/events/{self.event.pk}/tickets/')
+        rows = listing.data if isinstance(listing.data, list) else listing.data
+        sold_row = next(t for t in rows if t['id'] == sold_a.id)
+        live_row = next(t for t in rows if t['id'] == live_a.id)
+        self.assertFalse(sold_row.get('is_locked'))
+        self.assertTrue(live_row.get('is_locked'))
+
+    def test_partially_sold_group_reserve_without_listing_group_id_uses_siblings(self):
+        group_id = str(uuid4())
+        sold = self._ticket(listing_group_id=group_id, status='sold', available_quantity=0)
+        live = self._ticket(listing_group_id=group_id)
+        self.client.force_authenticate(self.buyer)
+        lock = self.client.post(
+            f'/api/users/tickets/{sold.id}/reserve/',
+            {'quantity': 1},
+            format='json',
+        )
+        self.assertEqual(lock.status_code, 200, lock.data)
+        live.refresh_from_db()
+        sold.refresh_from_db()
+        self.assertEqual(live.status, 'reserved')
+        self.assertEqual(sold.status, 'sold')
+
+    def test_cannot_reserve_more_than_remaining_after_partial_sale(self):
+        group_id = str(uuid4())
+        self._ticket(listing_group_id=group_id, status='sold', available_quantity=0)
+        self._ticket(listing_group_id=group_id, status='sold', available_quantity=0)
+        live = self._ticket(listing_group_id=group_id)
+        self._ticket(listing_group_id=group_id)
+        self.client.force_authenticate(self.buyer)
+        blocked = self.client.post(
+            f'/api/users/tickets/{live.id}/reserve/',
+            {'listing_group_id': group_id, 'quantity': 3},
+            format='json',
+        )
+        self.assertEqual(blocked.status_code, 400, blocked.data)
+        self.assertEqual(blocked.data.get('code'), 'insufficient_inventory')
+        live.refresh_from_db()
+        self.assertEqual(live.status, 'active')

@@ -71,6 +71,8 @@ import {
   isCurrentUserOwnListing,
   isListingGroupTaken,
   isListingUnavailableForBuyer,
+  isTicketTaken,
+  pickBuyableListingTicket,
   pickCheapestBuyableGroup,
   sortListingGroupsForBuyer,
 } from '../utils/ticketAvailability';
@@ -201,8 +203,15 @@ const EventDetailsPage = () => {
 
     const grouped = Object.values(groups).map((g) => {
       const lockMs = listingGroupCartLockedUntilMs(g);
+      const buyableFirst = [];
+      const rest = [];
+      for (const t of g.tickets) {
+        if (t && t.status === 'active' && !isTicketTaken(t)) buyableFirst.push(t);
+        else rest.push(t);
+      }
       return {
         ...g,
+        tickets: [...buyableFirst, ...rest],
         is_taken: isListingGroupTaken(g),
         is_cart_locked: isListingGroupCartLocked(g),
         locked_until: lockMs != null ? new Date(lockMs).toISOString() : null,
@@ -2014,7 +2023,7 @@ const EventDetailsPage = () => {
 
       {showCheckout && selectedTicketGroup && (
         <CheckoutModal
-          ticket={selectedTicketGroup.tickets[0]}
+          ticket={pickBuyableListingTicket(selectedTicketGroup) || selectedTicketGroup.tickets[0]}
           ticketGroup={selectedTicketGroup}
           user={user}
           quantity={quantity}

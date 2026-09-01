@@ -21,6 +21,19 @@ export function isTicketTaken(ticket) {
  * A listing group is "taken" when every ticket in it is permanently taken/sold,
  * or when the group was flagged `is_taken` with no purchasable seats.
  */
+export function pickBuyableListingTicket(group) {
+  const tickets = Array.isArray(group?.tickets) ? group.tickets : group ? [group] : [];
+  const active = tickets.find(
+    (t) =>
+      t &&
+      t.status === 'active' &&
+      !isTicketTaken(t) &&
+      (t.available_quantity == null || Number(t.available_quantity) > 0),
+  );
+  if (active) return active;
+  return tickets.find((t) => t && t.status === 'reserved' && !isTicketTaken(t)) || null;
+}
+
 export function isListingGroupTaken(group) {
   if (!group) return false;
   if (group.is_taken === true && !(group.available_count > 0)) return true;

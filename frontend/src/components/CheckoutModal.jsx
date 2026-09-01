@@ -39,6 +39,7 @@ import { isGuestContactComplete, validateGuestContact as sharedValidateGuestCont
 import { isCheckoutAuthSessionFailure } from '../utils/checkoutAuth';
 import { guestCanReserveCart, isGuestEmailRequiredError, stashPaymePendingOrder } from '../utils/checkoutGuest';
 import { getOrCreateCartToken, holdTimerLabel } from '../utils/cartToken';
+import { pickBuyableListingTicket } from '../utils/ticketAvailability';
 import { useAuth } from '../context/AuthContext';
 import { useAuthModal } from '../context/AuthModalContext';
 import './CheckoutModal.css';
@@ -380,8 +381,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   useEffect(() => {
     guestEmailRef.current = (guestForm.email || '').trim();
   }, [guestForm.email]);
-  const ticketIdRef = useRef(ticket?.id);
-  ticketIdRef.current = ticket?.id;
+  const checkoutTicket = pickBuyableListingTicket(ticketGroup) || ticket;
+  const ticketIdRef = useRef(checkoutTicket?.id);
+  ticketIdRef.current = checkoutTicket?.id;
   const userRef = useRef(user);
   userRef.current = user;
   const skipCartReserveRef = useRef(false);
@@ -409,7 +411,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       : null;
   const checkoutTicketIdRef = useRef(null);
   useEffect(() => {
-    const tid = ticket?.id;
+    const tid = checkoutTicket?.id || ticket?.id;
     if (tid == null) return;
     const tidChanged = checkoutTicketIdRef.current !== tid;
     if (tidChanged) {
@@ -420,7 +422,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       setTimeRemaining(CART_RESERVE_SECONDS);
       setReservationActive(false);
     }
-  }, [ticket?.id]);
+  }, [ticket?.id, checkoutTicket?.id]);
   
   // Get available quantity - if locked quantity exists, use that; otherwise use ticket/group quantity
   const seatAvail = parseInt(
@@ -891,7 +893,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
       if (!mockBypass && !usePayme) {
         const paymentData = {
-          ticket_id: ticket.id,
+          ticket_id: checkoutTicket?.id || ticket.id,
           amount: finalTotal,
           quantity: quantity,
           timestamp: Date.now(),
@@ -920,7 +922,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       const listing_group_id = ticketGroup?.listing_group_id || ticket?.listing_group_id;
       
       // Ensure all values are properly defined and formatted
-      const ticketId = ticket?.id;
+      const ticketId = checkoutTicket?.id || ticket?.id;
       const eventName = ticket?.event_name || ticket?.event?.name || 'אירוע';
       
       // Ensure quantity is a valid integer (mobile <select> may yield strings)
@@ -1378,7 +1380,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   // Lock inventory as soon as checkout opens (first "המשך לתשלום" on the event page).
   // Negotiated offers already hold inventory from accept; skip cart /reserve.
   useEffect(() => {
-    const tid = ticket?.id;
+    const tid = checkoutTicket?.id || ticket?.id;
     if (!tid) return undefined;
 
     if (step !== 'info' && step !== 'payment' && !skipCartReserveForNegotiatedOffer) {
@@ -1412,7 +1414,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         }
 
         // Only hard-block terminal states — reserve API handles active/reserved ownership.
-        if (ticket.status && !['active', 'reserved'].includes(String(ticket.status))) {
+        const reserveTarget = pickBuyableListingTicket(ticketGroup) || ticket;
+        if (reserveTarget?.status && !['active', 'reserved'].includes(String(reserveTarget.status))) {
           setError('הכרטיס אינו זמין כרגע. אנא נסה כרטיס אחר.');
           setTimeout(() => {
             handleClose();
@@ -1532,7 +1535,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         void fireReleaseHold();
       }
     };
-  }, [ticket?.id, ticket?.listing_group_id, ticketGroup?.listing_group_id, user, skipCartReserveForNegotiatedOffer, acceptedOffer?.id, lockedQuantity, quantity, isNegotiatedPrice, step]);
+  }, [ticket?.id, checkoutTicket?.id, ticket?.listing_group_id, ticketGroup?.listing_group_id, user, skipCartReserveForNegotiatedOffer, acceptedOffer?.id, lockedQuantity, quantity, isNegotiatedPrice, step]);
 
   // True component unmount: unlock only if payment is not in flight.
   useEffect(() => {

@@ -47,6 +47,23 @@ def assert_ticket_not_taken(ticket) -> Response | None:
     return None
 
 
+def ticket_has_lockable_inventory(ticket) -> bool:
+    """True when this row still has remaining seats that can enter a cart hold."""
+    if getattr(ticket, 'status', None) != 'active':
+        return False
+    return int(getattr(ticket, 'available_quantity', 0) or 0) > 0
+
+
+def listing_group_id_value(ticket) -> str | None:
+    if ticket is None:
+        return None
+    gid = getattr(ticket, 'listing_group_id', None)
+    if gid is None:
+        return None
+    gid_s = str(gid).strip()
+    return gid_s or None
+
+
 def cart_locked_until(ticket):
     """Naive expiry instant for an in-progress cart hold, or None."""
     if getattr(ticket, 'status', None) != 'reserved':

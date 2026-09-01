@@ -185,14 +185,16 @@ def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, gu
         )
 
     still_needed = max(0, needed - len(already))
-    active_rows = [t for t in group_rows if t.status == 'active']
-    if len(active_rows) < still_needed:
+    # Sold / taken / empty rows stay in the group but must not consume the lock quota.
+    active_rows = [t for t in group_rows if ticket_has_lockable_inventory(t)]
+    remaining = len(already) + len(active_rows)
+    if remaining < needed:
         foreign_holds = [
             t
             for t in group_rows
             if t.status == 'reserved' and not _belongs_to_buyer(t)
         ]
-        if foreign_holds and len(active_rows) + len(already) < needed:
+        if foreign_holds:
             raise ValueError('held_by_other')
         raise ValueError('insufficient_inventory')
 
@@ -493,7 +495,9 @@ from users.ticket_status import (
     HE_TICKET_TAKEN,
     TICKET_STATUS_TAKEN,
     assert_ticket_not_taken,
+    listing_group_id_value,
     marketplace_listing_status_q,
+    ticket_has_lockable_inventory,
 )
 
 RESERVATION_TIMEOUT_MINUTES = CART_HOLD_MINUTES
@@ -4010,6 +4014,12 @@ class TicketViewSet(viewsets.ModelViewSet):
             quantity = 1
         quantity = max(1, min(10, quantity))
 
+        # Sold siblings are valid checkout anchors. If the client omitted listing_group_id
+        # (or sent a sold ticket pk), still lock remaining active seats in that listing.
+        if not listing_group_id:
+            anchor = Ticket.objects.filter(pk=pk).first()
+            listing_group_id = listing_group_id_value(anchor)
+
         # Anonymous carts need an email or a cart_token so the same device can
         # reclaim or release the lock (critical on mobile without cookie auth).
         # Missing tickets still 404 first so clients get a stable not-found signal.
@@ -4173,7 +4183,8 @@ class TicketViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-                if quantity > (ticket.available_quantity or 1):
+                remaining_qty = max(0, int(ticket.available_quantity or 0))
+                if quantity > remaining_qty:
                     return Response(
                         {
                             'error': (

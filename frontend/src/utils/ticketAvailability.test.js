@@ -6,6 +6,7 @@ import {
   isTicketTaken,
   listingGroupUnitPrice,
   pickCheapestBuyableGroup,
+  pickBuyableListingTicket,
   sortListingGroupsForBuyer,
 } from './ticketAvailability';
 
@@ -126,5 +127,19 @@ describe('ticketAvailability', () => {
     expect(pickCheapestBuyableGroup(groups, user)?.id).toBe('cheap');
     expect(listingGroupUnitPrice(groups[3])).toBe(40);
     expect(pickCheapestBuyableGroup([], user)).toBeNull();
+  });
+
+  it('picks an active remaining seat when earlier seats in the listing were sold', () => {
+    const group = {
+      available_count: 2,
+      tickets: [
+        { id: 1, status: 'sold', available_quantity: 0 },
+        { id: 2, status: 'sold', available_quantity: 0 },
+        { id: 3, status: 'active', available_quantity: 1 },
+        { id: 4, status: 'active', available_quantity: 1 },
+      ],
+    };
+    expect(isListingGroupTaken(group)).toBe(false);
+    expect(pickBuyableListingTicket(group)?.id).toBe(3);
   });
 });
