@@ -148,6 +148,47 @@ def _release_reserved_ticket_ids(ticket_ids) -> int:
     return released
 
 
+def ticket_ids_for_pending_order(order: Order) -> list[int]:
+    ids = []
+    seen = set()
+    for raw in list(getattr(order, 'ticket_ids', None) or []):
+        try:
+            tid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if tid not in seen:
+            seen.add(tid)
+            ids.append(tid)
+    extra = getattr(order, 'ticket_id', None)
+    if extra:
+        tid = int(extra)
+        if tid not in seen:
+            ids.append(tid)
+    return ids
+
+
+def release_pending_payment_inventory(order: Order) -> tuple[int, int]:
+    """Restore held quantity and flip reserved rows back to active. Caller holds the row lock."""
+    restored = _restore_held_ticket(order)
+    released = _release_reserved_ticket_ids(ticket_ids_for_pending_order(order))
+    return restored, released
+
+
+def mark_pending_payment_cancelled(order: Order, *, clear_confirm_token: bool = True) -> None:
+    """Mark a locked pending_payment order cancelled and drop the PayMe confirm token."""
+    order.status = 'cancelled'
+    update_fields = ['status', 'held_ticket', 'held_quantity', 'updated_at']
+    if clear_confirm_token:
+        order.payment_confirm_token = None
+        update_fields.append('payment_confirm_token')
+    order.held_ticket = None
+    order.held_quantity = 0
+    order.save(update_fields=update_fields)
+    from users.coupons import release_coupon_redemption
+
+    release_coupon_redemption(order)
+
+
 def cancel_abandoned_pending_payment_orders(
     *,
     older_than_minutes: int | None = None,
@@ -216,25 +257,10 @@ def cancel_abandoned_pending_payment_orders(
                 released_tickets += len(order.ticket_ids or [])
                 continue
 
-            restored_quantity += _restore_held_ticket(order)
-            released_tickets += _release_reserved_ticket_ids(order.ticket_ids or [])
-
-            order.status = 'cancelled'
-            order.payment_confirm_token = None
-            order.held_ticket = None
-            order.held_quantity = 0
-            order.save(
-                update_fields=[
-                    'status',
-                    'payment_confirm_token',
-                    'held_ticket',
-                    'held_quantity',
-                    'updated_at',
-                ]
-            )
-            from users.coupons import release_coupon_redemption
-
-            release_coupon_redemption(order)
+            restored, released = release_pending_payment_inventory(order)
+            restored_quantity += restored
+            released_tickets += released
+            mark_pending_payment_cancelled(order)
             cancelled += 1
             logger.info('Cancelled abandoned pending_payment order %s and released held inventory', order.id)
 

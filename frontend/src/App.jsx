@@ -53,6 +53,7 @@ const BuyerGuaranteePage = lazy(() => import('./pages/BuyerGuaranteePage'));
 const AccessibilityPage = lazy(() => import('./pages/AccessibilityPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const PaymeCheckoutSuccess = lazy(() => import('./pages/PaymeCheckoutSuccess'));
+const PaymeCheckoutCancel = lazy(() => import('./pages/PaymeCheckoutCancel'));
 const PaymeCheckoutFailure = lazy(() => import('./pages/PaymeCheckoutFailure'));
 
 const ANNOUNCEMENT_CACHE_KEY = 'tradetix_announcement_banner_v1';
@@ -326,7 +327,8 @@ function App() {
               <Route path="/buyer-guarantee" element={routeElement(<BuyerGuaranteePage />)} />
               <Route path="/accessibility" element={routeElement(<AccessibilityPage />)} />
               <Route path="/checkout/payme/success" element={routeElement(<PaymeCheckoutSuccess />, <RouteSpinner label="טוען תוצאת תשלום..." />)} />
-              <Route path="/checkout/payme/failure" element={routeElement(<PaymeCheckoutFailure />, <RouteSpinner label="טוען תוצאת תשלום..." />)} />
+              <Route path="/checkout/cancel" element={routeElement(<PaymeCheckoutCancel />, <RouteSpinner label="משחררים כרטיס..." />)} />
+              <Route path="/checkout/payme/failure" element={routeElement(<PaymeCheckoutFailure />, <RouteSpinner label="משחררים כרטיס..." />)} />
               <Route path="*" element={routeElement(<NotFoundPage />)} />
           </Routes>
         </AppChrome>

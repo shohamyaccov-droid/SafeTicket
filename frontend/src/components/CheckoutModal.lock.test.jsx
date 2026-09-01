@@ -5,6 +5,28 @@ import { MemoryRouter } from 'react-router-dom';
 
 import CheckoutModal from './CheckoutModal';
 import { orderAPI, paymentAPI, ticketAPI } from '../services/api';
+import {
+  openBlankPaymeTab,
+  openPaymeCheckoutTab,
+  shouldUsePaymeCheckout,
+} from '../utils/paymeCheckout';
+
+const navigateMock = vi.fn();
+
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, useNavigate: () => navigateMock };
+});
+
+vi.mock('../utils/paymeCheckout', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    shouldUsePaymeCheckout: vi.fn(() => false),
+    openBlankPaymeTab: vi.fn(() => null),
+    openPaymeCheckoutTab: vi.fn(() => null),
+  };
+});
 
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({ refreshProfile: vi.fn() }),
@@ -47,6 +69,9 @@ vi.mock('../services/api', () => ({
     guestCheckout: vi.fn(),
     confirmPayment: vi.fn(),
     validateCoupon: vi.fn(),
+    getPaymentStatus: vi.fn(),
+    cancelPendingPayment: vi.fn(),
+    cancelPendingPaymentKeepalive: vi.fn(),
   },
   paymentAPI: {
     getShabbatStatus: vi.fn(),
@@ -58,6 +83,7 @@ vi.mock('../services/api', () => ({
     reserveTicket: vi.fn(),
     releaseReservation: vi.fn(),
     releaseReservationKeepalive: vi.fn(),
+    unlockTicket: vi.fn(),
     downloadPDF: vi.fn(),
   },
   ensureCsrfToken: vi.fn().mockResolvedValue(undefined),
@@ -109,9 +135,21 @@ async function acceptTermsAndFindPayButton() {
 beforeEach(() => {
   ticketAPI.reserveTicket.mockResolvedValue({ data: { success: true } });
   ticketAPI.releaseReservation.mockResolvedValue({ data: { success: true } });
+  ticketAPI.unlockTicket.mockResolvedValue({ data: { success: true } });
   paymentAPI.getShabbatStatus.mockResolvedValue({ data: { is_shabbat: false } });
   paymentAPI.mockPaymentSuccess.mockResolvedValue({ data: { finalized: true } });
-  orderAPI.createOrder.mockResolvedValue({ data: { id: 77 } });
+  paymentAPI.paymeInitCheckout.mockResolvedValue({
+    data: { redirect_url: 'https://payme.test/hosted' },
+  });
+  orderAPI.createOrder.mockResolvedValue({ data: { id: 77, payment_confirm_token: 'tok-1' } });
+  orderAPI.getPaymentStatus.mockResolvedValue({ data: { status: 'pending_payment' } });
+  orderAPI.cancelPendingPayment.mockResolvedValue({
+    data: { success: true, ticket_ids: [42], status: 'cancelled' },
+  });
+  shouldUsePaymeCheckout.mockReturnValue(false);
+  openBlankPaymeTab.mockReturnValue(null);
+  openPaymeCheckoutTab.mockReturnValue(null);
+  navigateMock.mockReset();
 });
 
 afterEach(() => {
@@ -265,5 +303,49 @@ describe('CheckoutModal cart unlock', () => {
     await userEvent.click(screen.getByRole('button', { name: 'ביטול' }));
     await waitFor(() => expect(ticketAPI.releaseReservationKeepalive).toHaveBeenCalled());
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe('CheckoutModal PayMe waiting room', () => {
+  beforeEach(() => {
+    shouldUsePaymeCheckout.mockReturnValue(true);
+    openBlankPaymeTab.mockReturnValue(null);
+    openPaymeCheckoutTab.mockReturnValue({ closed: false, close: vi.fn() });
+  });
+
+  async function startPaymeWait() {
+    const view = renderCheckout();
+    const payBtn = await acceptTermsAndFindPayButton();
+    fireEvent.click(payBtn);
+    expect(await screen.findByRole('heading', { name: 'ממתינים לתשלום' })).toBeInTheDocument();
+    return view;
+  }
+
+  it('opens PayMe in a new tab and keeps a waiting screen with cancel', async () => {
+    await startPaymeWait();
+    expect(openPaymeCheckoutTab).toHaveBeenCalledWith('https://payme.test/hosted');
+    expect(screen.getByRole('button', { name: 'ביטול ושחרור כרטיס' })).toBeInTheDocument();
+    const init = paymentAPI.paymeInitCheckout.mock.calls[0][0];
+    expect(init.failure_url).toContain('/checkout/cancel');
+    expect(init.failure_url).toContain('order_id=77');
+    expect(init.failure_url).toContain('token=tok-1');
+  });
+
+  it('unlocks immediately when ביטול ושחרור כרטיס is clicked', async () => {
+    const { onClose } = await startPaymeWait();
+    await userEvent.click(screen.getByRole('button', { name: 'ביטול ושחרור כרטיס' }));
+    await waitFor(() => expect(orderAPI.cancelPendingPayment).toHaveBeenCalled());
+    expect(ticketAPI.releaseReservationKeepalive).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('redirects the current window to success when polling sees paid', async () => {
+    orderAPI.getPaymentStatus.mockResolvedValue({ data: { status: 'paid' } });
+    renderCheckout();
+    const payBtn = await acceptTermsAndFindPayButton();
+    fireEvent.click(payBtn);
+    await waitFor(() =>
+      expect(navigateMock).toHaveBeenCalledWith('/checkout/payme/success?order_id=77'),
+    );
   });
 });

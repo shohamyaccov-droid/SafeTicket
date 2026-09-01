@@ -159,6 +159,12 @@ describe('session expired interceptor vs payment verification', () => {
     expect(
       apiMod.shouldSkipSessionExpiredLogout(
         { response: { status: 401 } },
+        { url: '/users/orders/42/cancel-payment/' },
+      ),
+    ).toBe(true);
+    expect(
+      apiMod.shouldSkipSessionExpiredLogout(
+        { response: { status: 401 } },
         { url: '/users/orders/42/receipt/', skipSessionExpired: true },
       ),
     ).toBe(true);

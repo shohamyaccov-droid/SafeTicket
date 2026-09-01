@@ -37,9 +37,19 @@ import SafePayTrustLine from './SafePayTrustLine';
 import { buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
 import { isGuestContactComplete, validateGuestContact as sharedValidateGuestContact } from '../utils/contactValidation';
 import { isCheckoutAuthSessionFailure } from '../utils/checkoutAuth';
-import { guestCanReserveCart, isGuestEmailRequiredError, stashPaymePendingOrder } from '../utils/checkoutGuest';
+import { guestCanReserveCart, isGuestEmailRequiredError, stashPaymePendingOrder, clearPaymePendingOrder } from '../utils/checkoutGuest';
 import { getOrCreateCartToken, holdTimerLabel } from '../utils/cartToken';
 import { pickBuyableListingTicket } from '../utils/ticketAvailability';
+import {
+  closePaymeTab,
+  isCancelledOrderStatus,
+  isPaidOrderStatus,
+  navigatePaymeTab,
+  openBlankPaymeTab,
+  openPaymeCheckoutTab,
+  PAYME_WAIT_POLL_MS,
+  shouldUsePaymeCheckout,
+} from '../utils/paymeCheckout';
 import { useAuth } from '../context/AuthContext';
 import { useAuthModal } from '../context/AuthModalContext';
 import './CheckoutModal.css';
@@ -365,13 +375,26 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
    * which previously unlocked inventory mid-payment.
    */
   const isProcessingPaymentRef = useRef(false);
+  /** True after PayMe opens in a new tab — X/cancel must unlock; the 10m timer stays paused. */
+  const awaitingPaymeRef = useRef(false);
+  const [awaitingPayme, setAwaitingPayme] = useState(false);
+  const [pendingPaymeOrderId, setPendingPaymeOrderId] = useState(null);
+  const [paymeSaleUrl, setPaymeSaleUrl] = useState('');
+  const pendingPaymeOrderIdRef = useRef(null);
+  const paymeConfirmTokenRef = useRef('');
+  const paymeTabRef = useRef(null);
+  const paymePollTimerRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   /** True while Close/X is releasing the hold — in-flight reserve must unlock when it lands. */
   const checkoutClosingRef = useRef(false);
   /** Synchronous snapshot so success UI never waits on PDF download or lost React state */
   const successSnapshotRef = useRef(null);
   const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
   /** Production builds always use PayMe. Local Vite DEV may opt in via VITE_USE_PAYME. */
-  const usePayme = import.meta.env.PROD ? true : import.meta.env.VITE_USE_PAYME === 'true';
+  const usePayme = shouldUsePaymeCheckout();
   /** Mock/simulate checkout UI — Vite DEV only (never hostname-based; prod builds must not expose this). */
   const isLocalDev = import.meta.env.DEV === true;
   const stepRef = useRef(step);
@@ -689,7 +712,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         source: 'continue_to_payment',
       });
 
-      await executeCheckout(Boolean(isLocalDev && !usePayme));
+      const paymeTab = usePayme ? openBlankPaymeTab() : null;
+      await executeCheckout(Boolean(isLocalDev && !usePayme), paymeTab);
     } finally {
       infoStepBusyRef.current = false;
       setInfoStepBusy(false);
@@ -781,7 +805,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     }
   };
 
-  const executeCheckout = async (mockBypass = false) => {
+  const executeCheckout = async (mockBypass = false, paymeTab = null) => {
     if (checkoutSucceeded || transactionCompleteRef.current) {
       return;
     }
@@ -794,7 +818,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     setLoading(true);
     setPaymentPhase('idle');
 
-    let paymeRedirectStarted = false;
+    let paymeHandoffStarted = false;
 
     try {
     const legalMsg = validateLegalAcceptance(legalAccepted);
@@ -1034,7 +1058,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         await ensureCsrfToken();
         const origin = window.location.origin.replace(/\/+$/, '');
         const successUrl = `${origin}/checkout/payme/success?order_id=${encodeURIComponent(String(pendingId))}`;
-        const failureUrl = `${origin}/checkout/payme/failure?order_id=${encodeURIComponent(String(pendingId))}`;
+        const cancelParams = new URLSearchParams({ order_id: String(pendingId) });
+        const pendingTok = pendingOrder?.payment_confirm_token;
+        if (pendingTok) cancelParams.set('token', String(pendingTok));
+        const failureUrl = `${origin}/checkout/cancel?${cancelParams.toString()}`;
         stashPaymePendingOrder(pendingId);
         const initPayload = {
           order_id: pendingId,
@@ -1088,10 +1115,24 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             paymeRes.data?.error || 'Payme לא החזיר כתובת תשלום — בדקו הגדרות PAYME_* בשרת',
           );
         }
-        // Keep isProcessingPaymentRef=true through navigation so pagehide/unmount
-        // cannot release the cart hold while the buyer pays on PayMe / Apple Pay.
-        paymeRedirectStarted = true;
-        window.location.assign(redirectUrl);
+        const orderTok = pendingOrder?.payment_confirm_token;
+        paymeConfirmTokenRef.current = orderTok ? String(orderTok) : '';
+        pendingPaymeOrderIdRef.current = pendingId;
+        setPendingPaymeOrderId(pendingId);
+        setPaymeSaleUrl(redirectUrl);
+
+        let tab = paymeTab && !paymeTab.closed ? paymeTab : null;
+        if (tab) {
+          if (!navigatePaymeTab(tab, redirectUrl)) {
+            tab = openPaymeCheckoutTab(redirectUrl);
+          }
+        } else {
+          tab = openPaymeCheckoutTab(redirectUrl);
+        }
+        paymeTabRef.current = tab;
+        awaitingPaymeRef.current = true;
+        setAwaitingPayme(true);
+        paymeHandoffStarted = true;
         return;
       }
 
@@ -1254,8 +1295,13 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
         onErrorToParent({ message: 'הכרטיס נמכר ברגע זה. ריעננו את הרשימה – נסה כרטיס אחר.', type: 'error' });
       }
     } finally {
-      if (paymeRedirectStarted) {
-        // Stay visually and logically locked through PayMe navigation.
+      if (!paymeHandoffStarted) {
+        closePaymeTab(paymeTab);
+      }
+      if (paymeHandoffStarted) {
+        paymentSubmittingRef.current = false;
+        setLoading(false);
+        setPaymentPhase('awaiting_payme');
         return;
       }
       isProcessingPaymentRef.current = false;
@@ -1275,7 +1321,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       quantity,
       source: 'continue_to_payment',
     });
-    await executeCheckout(false);
+    const paymeTab = usePayme ? openBlankPaymeTab() : null;
+    await executeCheckout(false, paymeTab);
   };
 
   const handleMockPayment = async (e) => {
@@ -1359,8 +1406,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const fireReleaseHold = ({ keepalive = false } = {}) => {
     const tid = ticketIdRef.current;
     if (!tid || skipCartReserveRef.current || transactionCompleteRef.current) return null;
-    // Never unlock while PayMe / Apple Pay is in flight (sheet blur, redirect, remount).
-    if (isProcessingPaymentRef.current || paymentSubmittingRef.current) return null;
+    // Never unlock while create-order / PayMe init is in flight — waiting-room cancel clears this first.
+    if (!awaitingPaymeRef.current && (isProcessingPaymentRef.current || paymentSubmittingRef.current)) return null;
     const email = guestCheckoutEmail();
     const cartToken = sessionCartToken();
     reservationRef.current = false;
@@ -1373,6 +1420,120 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       ticketAPI.releaseReservationKeepalive(tid, email, cartToken);
     });
   };
+
+  const stopPaymeWaitPolling = () => {
+    if (paymePollTimerRef.current != null) {
+      window.clearTimeout(paymePollTimerRef.current);
+      paymePollTimerRef.current = null;
+    }
+  };
+
+  const goToPaymeSuccess = (orderId) => {
+    transactionCompleteRef.current = true;
+    reservationRef.current = false;
+    awaitingPaymeRef.current = false;
+    isProcessingPaymentRef.current = false;
+    paymentSubmittingRef.current = false;
+    stopPaymeWaitPolling();
+    setAwaitingPayme(false);
+    clearPaymePendingOrder();
+    navigateRef.current(`/checkout/payme/success?order_id=${encodeURIComponent(String(orderId))}`);
+    onCloseRef.current?.();
+  };
+
+  const cancelPaymeWaitAndUnlock = async ({ keepalive = false } = {}) => {
+    stopPaymeWaitPolling();
+    awaitingPaymeRef.current = false;
+    setAwaitingPayme(false);
+    closePaymeTab(paymeTabRef.current);
+    paymeTabRef.current = null;
+    const orderId = pendingPaymeOrderIdRef.current;
+    const confirmToken = paymeConfirmTokenRef.current;
+    const email = guestCheckoutEmail();
+    const cartToken = sessionCartToken();
+    isProcessingPaymentRef.current = false;
+    paymentSubmittingRef.current = false;
+    if (orderId) {
+      const payload = {
+        guestEmail: email,
+        paymentConfirmToken: confirmToken,
+        cartToken,
+      };
+      if (keepalive) {
+        orderAPI.cancelPendingPaymentKeepalive(orderId, payload);
+      } else {
+        try {
+          const res = await orderAPI.cancelPendingPayment(orderId, payload);
+          const ticketIds = Array.isArray(res?.data?.ticket_ids) ? res.data.ticket_ids : [];
+          await Promise.allSettled(
+            ticketIds
+              .filter((tid) => Number(tid) !== Number(ticketIdRef.current))
+              .map((tid) => ticketAPI.unlockTicket(tid, email, cartToken)),
+          );
+        } catch (err) {
+          if (err?.response?.status === 409 && isPaidOrderStatus(err?.response?.data?.status)) {
+            goToPaymeSuccess(orderId);
+            return { paid: true };
+          }
+          orderAPI.cancelPendingPaymentKeepalive(orderId, payload);
+        }
+      }
+    }
+    fireReleaseHold({ keepalive: true });
+    if (!keepalive) {
+      try {
+        await fireReleaseHold();
+      } catch {
+        /* best-effort */
+      }
+    }
+    pendingPaymeOrderIdRef.current = null;
+    paymeConfirmTokenRef.current = '';
+    setPendingPaymeOrderId(null);
+    setPaymeSaleUrl('');
+    return { paid: false };
+  };
+
+  useEffect(() => {
+    if (!awaitingPayme || pendingPaymeOrderId == null) return undefined;
+    let cancelled = false;
+    const orderId = pendingPaymeOrderId;
+
+    const poll = async () => {
+      if (cancelled || transactionCompleteRef.current || !awaitingPaymeRef.current) return;
+      try {
+        const guestEmail = userRef.current ? undefined : guestEmailRef.current || undefined;
+        const res = await orderAPI.getPaymentStatus(orderId, guestEmail);
+        const s = res.data?.status;
+        if (cancelled || !awaitingPaymeRef.current) return;
+        if (isPaidOrderStatus(s)) {
+          goToPaymeSuccess(orderId);
+          return;
+        }
+        if (isCancelledOrderStatus(s)) {
+          awaitingPaymeRef.current = false;
+          isProcessingPaymentRef.current = false;
+          paymentSubmittingRef.current = false;
+          stopPaymeWaitPolling();
+          setAwaitingPayme(false);
+          fireReleaseHold({ keepalive: true });
+          toastSuccess('הכרטיס שוחרר. אחרים יכולים לרכוש אותו עכשיו.');
+          onCloseRef.current?.();
+          return;
+        }
+      } catch {
+        /* keep polling through transient errors */
+      }
+      if (cancelled || !awaitingPaymeRef.current) return;
+      paymePollTimerRef.current = window.setTimeout(poll, PAYME_WAIT_POLL_MS);
+    };
+
+    void poll();
+    return () => {
+      cancelled = true;
+      stopPaymeWaitPolling();
+    };
+  }, [awaitingPayme, pendingPaymeOrderId]);
 
   // Lock inventory as soon as checkout opens (first "המשך לתשלום" on the event page).
   // Negotiated offers already hold inventory from accept; skip cart /reserve.
@@ -1538,6 +1699,23 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   useEffect(() => {
     return () => {
       if (transactionCompleteRef.current || skipCartReserveRef.current) return;
+      if (awaitingPaymeRef.current) {
+        const orderId = pendingPaymeOrderIdRef.current;
+        const email = userRef.current ? null : guestEmailRef.current || null;
+        const token = cartTokenRef.current;
+        if (orderId) {
+          orderAPI.cancelPendingPaymentKeepalive(orderId, {
+            guestEmail: email,
+            paymentConfirmToken: paymeConfirmTokenRef.current,
+            cartToken: token,
+          });
+        }
+        const tid = ticketIdRef.current;
+        if (tid) ticketAPI.releaseReservationKeepalive(tid, email, token);
+        awaitingPaymeRef.current = false;
+        reservationRef.current = false;
+        return;
+      }
       if (isProcessingPaymentRef.current || paymentSubmittingRef.current) return;
       if (!reservationRef.current && !reserveInFlightRef.current && !checkoutClosingRef.current) return;
       const tid = ticketIdRef.current;
@@ -1550,10 +1728,27 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   }, []);
 
   // Tab close / browser back / BFCache: axios may be cancelled; keepalive fetch survives.
-  // Apple Pay sheet / PayMe redirect must NOT unlock — guarded by isProcessingPaymentRef.
+  // PayMe in a new tab: leaving this window should release immediately (no ghost lock).
   useEffect(() => {
     const releaseOnLeave = () => {
       if (transactionCompleteRef.current || skipCartReserveRef.current) return;
+      if (awaitingPaymeRef.current) {
+        const orderId = pendingPaymeOrderIdRef.current;
+        const email = userRef.current ? null : guestEmailRef.current || null;
+        const token = cartTokenRef.current;
+        if (orderId) {
+          orderAPI.cancelPendingPaymentKeepalive(orderId, {
+            guestEmail: email,
+            paymentConfirmToken: paymeConfirmTokenRef.current,
+            cartToken: token,
+          });
+        }
+        const tid = ticketIdRef.current;
+        if (tid) ticketAPI.releaseReservationKeepalive(tid, email, token);
+        awaitingPaymeRef.current = false;
+        reservationRef.current = false;
+        return;
+      }
       if (isProcessingPaymentRef.current || paymentSubmittingRef.current) return;
       if (!reservationRef.current && !reserveInFlightRef.current) return;
       const tid = ticketIdRef.current;
@@ -1690,8 +1885,16 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     !legalAccepted;
 
   const handleClose = async () => {
+    if (awaitingPaymeRef.current) {
+      checkoutClosingRef.current = true;
+      const result = await cancelPaymeWaitAndUnlock();
+      if (result?.paid) return;
+      toastSuccess('הכרטיס שוחרר. אחרים יכולים לרכוש אותו עכשיו.');
+      onClose();
+      return;
+    }
     if (isProcessingPaymentRef.current || paymentSubmittingRef.current) {
-      // Do not unlock or dismiss while PayMe / Apple Pay is processing.
+      // Do not unlock or dismiss while create-order / PayMe init is still in flight.
       return;
     }
     checkoutClosingRef.current = true;
@@ -1755,6 +1958,54 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       />
     </>
   );
+
+  if (awaitingPayme) {
+    return renderWithShabbatModal(portalCheckoutRoot(
+      <div
+        className="modal-overlay checkout-modal-overlay"
+        onPointerDown={handleOverlayPointerDown}
+        onMouseDown={handleOverlayPointerDown}
+        onClick={handleOverlayClick}
+      >
+        <div
+          className="modal-content checkout-modal-shell payme-waiting-panel"
+          onPointerDown={stopCheckoutModalEvent}
+          onMouseDown={stopCheckoutModalEvent}
+          onClick={stopCheckoutModalEvent}
+        >
+          <button type="button" className="close-button" onClick={handleClose} aria-label="סגירה">×</button>
+          <p className="checkout-modal-brand">TradeTix</p>
+          <div className="payme-waiting-spinner" role="status" aria-label="ממתינים לתשלום" />
+          <h2>ממתינים לתשלום</h2>
+          <p className="payme-waiting-copy">
+            פתחנו את PayMe בחלון חדש. השלימו את התשלום שם — העמוד הזה יתעדכן אוטומטית כשהתשלום יאושר.
+          </p>
+          {pendingPaymeOrderId ? (
+            <p className="payme-waiting-order">מספר הזמנה: #{pendingPaymeOrderId}</p>
+          ) : null}
+          {paymeSaleUrl ? (
+            <button
+              type="button"
+              className="checkout-button payme-waiting-reopen"
+              onClick={() => {
+                const tab = openPaymeCheckoutTab(paymeSaleUrl);
+                if (tab) paymeTabRef.current = tab;
+              }}
+            >
+              פתחו שוב את חלון התשלום
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="payme-waiting-cancel"
+            onClick={handleClose}
+          >
+            ביטול ושחרור כרטיס
+          </button>
+        </div>
+      </div>
+    ));
+  }
 
   if (checkoutSucceeded || step === 'success') {
     const snap = successSnapshotRef.current;

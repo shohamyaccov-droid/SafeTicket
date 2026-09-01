@@ -223,7 +223,7 @@ export function isTransientNetworkOrGatewayError(error) {
 }
 
 export function isPaymentVerificationUrl(url = '') {
-  return /\/orders\/\d+\/(receipt|status|tickets\/download)\/?/.test(String(url || ''));
+  return /\/orders\/\d+\/(receipt|status|tickets\/download|cancel-payment)\/?/.test(String(url || ''));
 }
 
 /** Timeouts / 504s / PayMe status polls must never purge a valid session. */
@@ -636,6 +636,75 @@ export const orderAPI = {
       skipSessionExpired: true,
       timeout: 8000,
     }),
+  cancelPendingPayment: async (orderId, { guestEmail, paymentConfirmToken, cartToken } = {}) => {
+    await ensureCsrfToken();
+    const data = {};
+    const email = guestEmail != null && String(guestEmail).trim() ? String(guestEmail).trim() : '';
+    const token = paymentConfirmToken != null && String(paymentConfirmToken).trim()
+      ? String(paymentConfirmToken).trim()
+      : '';
+    const cart = cartToken != null && String(cartToken).trim() ? String(cartToken).trim() : '';
+    if (email) data.guest_email = email;
+    if (token) data.payment_confirm_token = token;
+    if (cart) data.cart_token = cart;
+    const asGuest = Boolean(email || token || cart) && !getEffectiveBearerAccess();
+    return api.post(
+      `/users/orders/${orderId}/cancel-payment/`,
+      data,
+      {
+        skipAuth: asGuest,
+        skipSessionExpired: true,
+      },
+    );
+  },
+  cancelPendingPaymentKeepalive: (orderId, { guestEmail, paymentConfirmToken, cartToken } = {}) => {
+    if (orderId == null || orderId === '') return false;
+    const email = guestEmail != null && String(guestEmail).trim() ? String(guestEmail).trim() : '';
+    const token = paymentConfirmToken != null && String(paymentConfirmToken).trim()
+      ? String(paymentConfirmToken).trim()
+      : '';
+    const cart = cartToken != null && String(cartToken).trim() ? String(cartToken).trim() : '';
+    const payload = {};
+    if (email) payload.guest_email = email;
+    if (token) payload.payment_confirm_token = token;
+    if (cart) payload.cart_token = cart;
+    const body = JSON.stringify(payload);
+    const base = String(API_URL || '').replace(/\/+$/, '');
+    const url = `${base}/users/orders/${orderId}/cancel-payment/`;
+    const headers = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    const csrf = getCsrfTokenForRequest();
+    if (csrf) headers['X-CSRFToken'] = csrf;
+    const asGuest = Boolean(email || token || cart) && !getEffectiveBearerAccess();
+    if (!asGuest) {
+      const bearer = getEffectiveBearerAccess();
+      if (bearer) headers.Authorization = `Bearer ${bearer}`;
+    }
+    let beaconOk = false;
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+        const blob = new Blob([body], { type: 'application/json' });
+        beaconOk = Boolean(navigator.sendBeacon(url, blob));
+      }
+    } catch {
+      beaconOk = false;
+    }
+    try {
+      void fetch(url, {
+        method: 'POST',
+        headers,
+        body,
+        credentials: 'include',
+        keepalive: true,
+        mode: 'cors',
+      }).catch(() => {});
+      return true;
+    } catch {
+      return beaconOk;
+    }
+  },
   downloadTickets: (orderId, { guestEmail, downloadToken } = {}) =>
     api.get(`/users/orders/${orderId}/tickets/download/`, {
       params: {

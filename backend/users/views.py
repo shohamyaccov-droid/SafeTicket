@@ -1744,7 +1744,7 @@ def _buyer_order_for_payment_status(request, order_id):
         return None
     return qs.filter(
         guest_email__iexact=guest_email,
-        status__in=['paid', 'completed', 'pending_payment'],
+        status__in=['paid', 'completed', 'pending_payment', 'cancelled'],
     ).first()
 
 
@@ -1870,6 +1870,140 @@ def order_payment_status(request, order_id):
         payload['download_token'] = build_order_download_token(order.id)
         payload['ticket_count'] = len(_ticket_ids_for_order(order))
     return Response(payload, status=status.HTTP_200_OK)
+
+
+def _pending_confirm_tokens_match(stored: str, provided: str) -> bool:
+    a = (stored or '').strip()
+    b = (provided or '').strip()
+    if not a or not b or len(a) != len(b):
+        return False
+    return secrets.compare_digest(a, b)
+
+
+def _buyer_may_cancel_pending_order(request, order) -> bool:
+    """Owner, matching guest email, or the one-time payment_confirm_token from checkout."""
+    if request.user.is_authenticated:
+        if order.user_id and order.user_id == request.user.id:
+            return True
+        email = (getattr(request.user, 'email', None) or '').strip()
+        if email and (order.guest_email or '').strip() and email.lower() == order.guest_email.strip().lower():
+            return True
+    body = request.data if hasattr(request, 'data') else {}
+    provided_token = str(
+        (body.get('payment_confirm_token') if isinstance(body, dict) else None)
+        or request.query_params.get('token')
+        or request.query_params.get('payment_confirm_token')
+        or ''
+    )
+    if _pending_confirm_tokens_match(getattr(order, 'payment_confirm_token', None) or '', provided_token):
+        return True
+    guest_email = str(
+        (body.get('guest_email') if isinstance(body, dict) else None)
+        or request.query_params.get('email')
+        or ''
+    ).strip()
+    order_email = (order.guest_email or '').strip()
+    if guest_email and order_email and guest_email.lower() == order_email.lower():
+        return True
+    return False
+
+
+@csrf_required
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([CheckoutMutationScopedThrottle])
+def cancel_pending_payment(request, order_id):
+    """
+    Buyer/guest abort after opening PayMe: cancel pending_payment and release inventory now.
+    Never 401 — unknown callers get 404 so the SPA interceptor cannot treat this as logout.
+    If the order is already paid, 409 so the client can send the buyer to success instead of unlocking.
+    """
+    from users.order_cleanup import (
+        mark_pending_payment_cancelled,
+        release_pending_payment_inventory,
+        ticket_ids_for_pending_order,
+    )
+
+    order = Order.objects.filter(pk=order_id).first()
+    if not order or not _buyer_may_cancel_pending_order(request, order):
+        return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if order.status in ('paid', 'completed'):
+        return Response(
+            {
+                'error': 'Order is already paid.',
+                'status': order.status,
+                'order_id': order.id,
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    if order.status == 'cancelled':
+        return Response(
+            {
+                'success': True,
+                'released': True,
+                'already_cancelled': True,
+                'status': 'cancelled',
+                'order_id': order.id,
+                'ticket_ids': ticket_ids_for_pending_order(order),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    if order.status != 'pending_payment':
+        return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    with transaction.atomic():
+        order = Order.objects.select_for_update().filter(pk=order_id).first()
+        if not order or not _buyer_may_cancel_pending_order(request, order):
+            return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+        if order.status in ('paid', 'completed'):
+            return Response(
+                {
+                    'error': 'Order is already paid.',
+                    'status': order.status,
+                    'order_id': order.id,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        if order.status == 'cancelled':
+            return Response(
+                {
+                    'success': True,
+                    'released': True,
+                    'already_cancelled': True,
+                    'status': 'cancelled',
+                    'order_id': order.id,
+                    'ticket_ids': ticket_ids_for_pending_order(order),
+                },
+                status=status.HTTP_200_OK,
+            )
+        if order.status != 'pending_payment':
+            return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        ticket_ids = ticket_ids_for_pending_order(order)
+        restored, released = release_pending_payment_inventory(order)
+        mark_pending_payment_cancelled(order, clear_confirm_token=False)
+
+    logger.info(
+        'Buyer cancelled pending_payment order %s restored=%s released=%s',
+        order_id,
+        restored,
+        released,
+    )
+    return Response(
+        {
+            'success': True,
+            'released': True,
+            'status': 'cancelled',
+            'order_id': order.id,
+            'ticket_ids': ticket_ids,
+            'restored_quantity': restored,
+            'released_tickets': released,
+        },
+        status=status.HTTP_200_OK,
+    )
 
 
 @api_view(['GET'])

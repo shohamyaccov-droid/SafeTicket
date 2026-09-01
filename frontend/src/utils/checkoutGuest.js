@@ -43,6 +43,7 @@ export function shouldRescuePaymeReturn(pathname, referrer, pending) {
   if (!pending) return false;
   const path = String(pathname || '');
   if (path.startsWith('/checkout/payme/')) return false;
+  if (path.startsWith('/checkout/cancel')) return false;
   if (/payme/i.test(String(referrer || ''))) return true;
   return path === '/' || path === '';
 }

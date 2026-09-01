@@ -46,6 +46,7 @@ describe('checkoutGuest', () => {
     expect(pending?.id).toBe(42);
     expect(shouldRescuePaymeReturn('/', 'https://live.payme.io/done', pending)).toBe(true);
     expect(shouldRescuePaymeReturn('/checkout/payme/success', 'https://live.payme.io/done', pending)).toBe(false);
+    expect(shouldRescuePaymeReturn('/checkout/cancel', 'https://live.payme.io/done', pending)).toBe(false);
     expect(shouldRescuePaymeReturn('/event/itay-levi-2026-09-01', '', pending)).toBe(false);
   });
 });
