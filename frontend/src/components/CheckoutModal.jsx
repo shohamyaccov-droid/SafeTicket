@@ -198,6 +198,98 @@ function coerceCheckoutQuantity(value, fallback = 1) {
   return Math.min(10, Math.floor(n));
 }
 
+function stopCheckoutModalEvent(e) {
+  e.stopPropagation();
+}
+
+/**
+ * Isolated coupon field: never bubbles to the overlay dismiss handler, and Enter
+ * applies the coupon instead of submitting the checkout/payment form.
+ */
+function CheckoutCouponField({
+  inputId,
+  couponInput,
+  setCouponInput,
+  appliedCoupon,
+  couponBusy,
+  couponError,
+  onApply,
+  onClear,
+}) {
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    void onApply();
+  };
+
+  const handleInputKeyDown = (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void onApply();
+    }
+  };
+
+  return (
+    <form
+      className="checkout-coupon-box"
+      dir="rtl"
+      noValidate
+      onSubmit={handleSubmit}
+      onMouseDown={stopCheckoutModalEvent}
+      onPointerDown={stopCheckoutModalEvent}
+      onClick={stopCheckoutModalEvent}
+    >
+      <label htmlFor={inputId} className="checkout-coupon-label">
+        יש לך קוד קופון?
+      </label>
+      <div className="checkout-coupon-row">
+        <input
+          id={inputId}
+          type="text"
+          value={couponInput}
+          onChange={(e) => {
+            e.stopPropagation();
+            setCouponInput(e.target.value);
+          }}
+          onKeyDown={handleInputKeyDown}
+          onMouseDown={stopCheckoutModalEvent}
+          onPointerDown={stopCheckoutModalEvent}
+          onClick={stopCheckoutModalEvent}
+          placeholder="הזן קוד קופון"
+          disabled={Boolean(appliedCoupon) || couponBusy}
+          autoComplete="off"
+          dir="ltr"
+        />
+        {appliedCoupon ? (
+          <button type="button" className="checkout-coupon-btn" onClick={onClear}>
+            הסר
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="checkout-coupon-btn"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void onApply();
+            }}
+            disabled={couponBusy}
+          >
+            {couponBusy ? 'בודק…' : 'הפעל'}
+          </button>
+        )}
+      </div>
+      {couponError ? <p className="checkout-coupon-error" role="alert">{couponError}</p> : null}
+      {appliedCoupon ? (
+        <p className="checkout-coupon-ok">
+          הקופון הופעל בהצלחה — המחיר הכולל עודכן.
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
 const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 1, onClose, acceptedOffer = null, splitType: splitTypeOverride = null, onErrorToParent = null, autoStartPayme = false }) => {
   useBodyScrollLock(true);
   useFocusScrollIntoView(true);
@@ -258,6 +350,8 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     platformNetPercent: liveFees.platformNetPercent ?? AFFILIATE_PLATFORM_NET_PERCENT,
   };
   const couponApplyLockRef = useRef(false);
+  /** True only when pointerdown started on the dimmed overlay itself (not modal content). */
+  const overlayDismissFromBackdropRef = useRef(false);
   const timerRef = useRef(null);
   const reservationRef = useRef(false); // Track if reservation was made
   const reserveInFlightRef = useRef(false);
@@ -1628,6 +1722,27 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     onClose();
   };
 
+  const handleOverlayPointerDown = (e) => {
+    overlayDismissFromBackdropRef.current = e.target === e.currentTarget;
+  };
+
+  const handleOverlayClick = (e) => {
+    if (e.target !== e.currentTarget) return;
+    if (!overlayDismissFromBackdropRef.current) return;
+    overlayDismissFromBackdropRef.current = false;
+    void handleClose();
+  };
+
+  const couponFieldProps = {
+    couponInput,
+    setCouponInput,
+    appliedCoupon,
+    couponBusy,
+    couponError,
+    onApply: handleApplyCoupon,
+    onClear: handleClearCoupon,
+  };
+
   // Success screen — must win over payment step if checkoutSucceeded (PDF no longer blocks transition)
   const renderWithShabbatModal = (node) => (
     <>
@@ -1651,8 +1766,18 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     ).toUpperCase();
     const paySym = currencySymbol(payIso);
     return renderWithShabbatModal(portalCheckoutRoot(
-      <div className="success-overlay" onClick={handleClose}>
-        <div className="success-celebration" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="success-overlay"
+        onPointerDown={handleOverlayPointerDown}
+        onMouseDown={handleOverlayPointerDown}
+        onClick={handleOverlayClick}
+      >
+        <div
+          className="success-celebration"
+          onPointerDown={stopCheckoutModalEvent}
+          onMouseDown={stopCheckoutModalEvent}
+          onClick={stopCheckoutModalEvent}
+        >
           <div className="success-celebration-content">
             <div className="success-checkmark-large">
               <svg viewBox="0 0 100 100" className="checkmark-svg">
@@ -1821,8 +1946,18 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   // Payment screen — never after a completed checkout (even if step lags)
   if (step === 'payment' && !checkoutSucceeded) {
     return renderWithShabbatModal(portalCheckoutRoot(
-      <div className="modal-overlay checkout-modal-overlay" onClick={handleClose}>
-        <div className="modal-content checkout-modal-shell checkout-modal-shell--payment" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-overlay checkout-modal-overlay"
+        onPointerDown={handleOverlayPointerDown}
+        onMouseDown={handleOverlayPointerDown}
+        onClick={handleOverlayClick}
+      >
+        <div
+          className="modal-content checkout-modal-shell checkout-modal-shell--payment"
+          onPointerDown={stopCheckoutModalEvent}
+          onMouseDown={stopCheckoutModalEvent}
+          onClick={stopCheckoutModalEvent}
+        >
           <button type="button" className="close-button" onClick={handleClose} aria-label="סגירה">×</button>
           <p className="checkout-modal-brand">TradeTix</p>
           <div className="checkout-stepper" role="list" aria-label="שלבי קופה">
@@ -2039,43 +2174,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               )}
             </div>
 
-            <div className="checkout-coupon-box" dir="rtl">
-              <label htmlFor="checkout-coupon-input" className="checkout-coupon-label">
-                יש לך קוד קופון?
-              </label>
-              <div className="checkout-coupon-row">
-                <input
-                  id="checkout-coupon-input"
-                  type="text"
-                  value={couponInput}
-                  onChange={(e) => setCouponInput(e.target.value)}
-                  placeholder="הזן קוד קופון"
-                  disabled={Boolean(appliedCoupon) || couponBusy}
-                  autoComplete="off"
-                  dir="ltr"
-                />
-                {appliedCoupon ? (
-                  <button type="button" className="checkout-coupon-btn" onClick={handleClearCoupon}>
-                    הסר
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="checkout-coupon-btn"
-                    onClick={handleApplyCoupon}
-                    disabled={couponBusy}
-                  >
-                    {couponBusy ? 'בודק…' : 'הפעל'}
-                  </button>
-                )}
-              </div>
-              {couponError ? <p className="checkout-coupon-error" role="alert">{couponError}</p> : null}
-              {appliedCoupon ? (
-                <p className="checkout-coupon-ok">
-                  הקופון הופעל בהצלחה — המחיר הכולל עודכן.
-                </p>
-              ) : null}
-            </div>
+            <CheckoutCouponField inputId="checkout-coupon-input" {...couponFieldProps} />
           </div>
           
           <form onSubmit={handlePaymentSubmit} className="payment-form">
@@ -2278,8 +2377,18 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
   // Info screen (initial)
   return renderWithShabbatModal(portalCheckoutRoot(
-    <div className="modal-overlay checkout-modal-overlay" onClick={handleClose}>
-      <div className="modal-content checkout-modal-shell checkout-modal-shell--info" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-overlay checkout-modal-overlay"
+        onPointerDown={handleOverlayPointerDown}
+        onMouseDown={handleOverlayPointerDown}
+        onClick={handleOverlayClick}
+      >
+        <div
+          className="modal-content checkout-modal-shell checkout-modal-shell--info"
+          onPointerDown={stopCheckoutModalEvent}
+          onMouseDown={stopCheckoutModalEvent}
+          onClick={stopCheckoutModalEvent}
+        >
         <button type="button" className="close-button" onClick={handleClose} aria-label="סגירה">×</button>
         <p className="checkout-modal-brand">TradeTix</p>
         <div className="checkout-stepper" role="list" aria-label="שלבי קופה">
@@ -2427,43 +2536,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               )}
             </div>
 
-            <div className="checkout-coupon-box" dir="rtl">
-              <label htmlFor="checkout-coupon-input-info" className="checkout-coupon-label">
-                יש לך קוד קופון?
-              </label>
-              <div className="checkout-coupon-row">
-                <input
-                  id="checkout-coupon-input-info"
-                  type="text"
-                  value={couponInput}
-                  onChange={(e) => setCouponInput(e.target.value)}
-                  placeholder="הזן קוד קופון"
-                  disabled={Boolean(appliedCoupon) || couponBusy}
-                  autoComplete="off"
-                  dir="ltr"
-                />
-                {appliedCoupon ? (
-                  <button type="button" className="checkout-coupon-btn" onClick={handleClearCoupon}>
-                    הסר
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="checkout-coupon-btn"
-                    onClick={handleApplyCoupon}
-                    disabled={couponBusy}
-                  >
-                    {couponBusy ? 'בודק…' : 'הפעל'}
-                  </button>
-                )}
-              </div>
-              {couponError ? <p className="checkout-coupon-error" role="alert">{couponError}</p> : null}
-              {appliedCoupon ? (
-                <p className="checkout-coupon-ok">
-                  הקופון הופעל בהצלחה — המחיר הכולל עודכן.
-                </p>
-              ) : null}
-            </div>
+            <CheckoutCouponField inputId="checkout-coupon-input-info" {...couponFieldProps} />
           </div>
 
         {user ? (

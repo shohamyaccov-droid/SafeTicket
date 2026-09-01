@@ -1690,6 +1690,9 @@
 .checkout-coupon-box {
   margin: 0.85rem 0 0.35rem;
   text-align: right;
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
 }
 
 .checkout-coupon-label {

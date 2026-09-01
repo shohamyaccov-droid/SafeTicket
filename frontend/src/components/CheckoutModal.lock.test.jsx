@@ -87,12 +87,13 @@ const buyer = {
   phone_number: '0500000000',
 };
 
-function renderCheckout() {
-  return render(
+function renderCheckout(onClose = vi.fn()) {
+  const view = render(
     <MemoryRouter>
-      <CheckoutModal ticket={ticket} user={buyer} onClose={vi.fn()} />
+      <CheckoutModal ticket={ticket} user={buyer} onClose={onClose} />
     </MemoryRouter>,
   );
+  return { ...view, onClose };
 }
 
 async function acceptTermsAndFindPayButton() {
@@ -162,5 +163,64 @@ describe('CheckoutModal submit lock', () => {
     const unlocked = await screen.findByRole('button', { name: 'המשך לתשלום' });
     await waitFor(() => expect(unlocked).toBeEnabled());
     expect(orderAPI.createOrder).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CheckoutModal coupon field', () => {
+  it('does not close the modal when the coupon input is clicked or typed into', async () => {
+    const { onClose } = renderCheckout();
+    const input = await screen.findByPlaceholderText('הזן קוד קופון');
+
+    await userEvent.click(input);
+    await userEvent.type(input, 'SAVE10');
+
+    expect(input).toHaveValue('SAVE10');
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText('סיכום והמשך לתשלום')).toBeInTheDocument();
+  });
+
+  it('does not close or submit checkout when Enter is pressed in the coupon field', async () => {
+    orderAPI.validateCoupon.mockResolvedValue({
+      data: {
+        code: 'SAVE10',
+        discount_type: 'percentage',
+        total_amount: '100.00',
+      },
+    });
+    const { onClose } = renderCheckout();
+    const input = await screen.findByPlaceholderText('הזן קוד קופון');
+
+    await userEvent.click(input);
+    await userEvent.type(input, 'SAVE10{enter}');
+
+    await waitFor(() => expect(orderAPI.validateCoupon).toHaveBeenCalledTimes(1));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(orderAPI.createOrder).not.toHaveBeenCalled();
+    expect(screen.getByText('סיכום והמשך לתשלום')).toBeInTheDocument();
+  });
+
+  it('does not close when a click completes on the overlay after pointerdown on the coupon input', async () => {
+    const { onClose } = renderCheckout();
+    const input = await screen.findByPlaceholderText('הזן קוד קופון');
+    const overlay = document.querySelector('.checkout-modal-overlay');
+    expect(overlay).toBeTruthy();
+
+    fireEvent.pointerDown(input);
+    fireEvent.click(overlay);
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText('הזן קוד קופון')).toBeInTheDocument();
+  });
+
+  it('still closes when the backdrop itself is clicked', async () => {
+    const { onClose } = renderCheckout();
+    await screen.findByPlaceholderText('הזן קוד קופון');
+    const overlay = document.querySelector('.checkout-modal-overlay');
+    expect(overlay).toBeTruthy();
+
+    fireEvent.pointerDown(overlay);
+    fireEvent.click(overlay);
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 });
