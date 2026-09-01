@@ -41,6 +41,11 @@ import { guestCanReserveCart, isGuestEmailRequiredError, stashPaymePendingOrder,
 import { getOrCreateCartToken, holdTimerLabel } from '../utils/cartToken';
 import { pickBuyableListingTicket } from '../utils/ticketAvailability';
 import {
+  CART_HOLD_SECONDS,
+  PAYMENT_HOLD_SECONDS,
+  remainingSecondsUntil,
+} from '../utils/ticketLock';
+import {
   closePaymeTab,
   isCancelledOrderStatus,
   isPaidOrderStatus,
@@ -55,7 +60,7 @@ import { useAuthModal } from '../context/AuthModalContext';
 import './CheckoutModal.css';
 
 /** Buy Now: server cart hold (see TicketViewSet reserve). Negotiation: post-accept checkout window. */
-const CART_RESERVE_SECONDS = 10 * 60;
+const CART_RESERVE_SECONDS = CART_HOLD_SECONDS;
 const OFFER_CHECKOUT_FALLBACK_SECONDS = 24 * 60 * 60;
 
 function portalCheckoutRoot(node) {
@@ -338,7 +343,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const [timeRemaining, setTimeRemaining] = useState(CART_RESERVE_SECONDS);
   /** Initial budget for progress bar (reservation / offer checkout window). */
   const timerBudgetRef = useRef(CART_RESERVE_SECONDS);
-  /** Buy Now: true only after /reserve succeeds so the 10m clock runs on info + payment. */
+  /** Buy Now: true only after /reserve succeeds so the 2m clock runs on info + payment. */
   const [reservationActive, setReservationActive] = useState(false);
   const [reservationInitializing, setReservationInitializing] = useState(false);
   const [paidAmounts, setPaidAmounts] = useState(null); // Store actual paid amounts: { baseAmount, serviceFee, totalAmount }
@@ -375,9 +380,10 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
    * which previously unlocked inventory mid-payment.
    */
   const isProcessingPaymentRef = useRef(false);
-  /** True after PayMe opens in a new tab — X/cancel must unlock; the 10m timer stays paused. */
+  /** True after PayMe opens in a new tab — X/cancel must unlock; the 10m payment timer keeps ticking. */
   const awaitingPaymeRef = useRef(false);
   const [awaitingPayme, setAwaitingPayme] = useState(false);
+  const holdExpiredRef = useRef(false);
   const [pendingPaymeOrderId, setPendingPaymeOrderId] = useState(null);
   const [paymeSaleUrl, setPaymeSaleUrl] = useState('');
   const pendingPaymeOrderIdRef = useRef(null);
@@ -421,7 +427,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     (acceptedOffer.status === 'accepted' || acceptedOffer.accepted_at != null);
   /**
    * Accepted offers do NOT exclusively lock inventory. Proceed to Payment uses the same
-   * 10-minute cart reservation as buy-now so the listing stays visible until checkout starts.
+   * two-stage cart reservation as buy-now so the listing stays visible until checkout starts.
    */
   const skipCartReserveForNegotiatedOffer = false;
   skipCartReserveRef.current = skipCartReserveForNegotiatedOffer;
@@ -444,6 +450,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       timerBudgetRef.current = CART_RESERVE_SECONDS;
       setTimeRemaining(CART_RESERVE_SECONDS);
       setReservationActive(false);
+      holdExpiredRef.current = false;
     }
   }, [ticket?.id, checkoutTicket?.id]);
   
@@ -1029,6 +1036,13 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
       if (pendingId == null) {
         throw new Error('יצירת ההזמנה נכשלה — לא התקבל מזהה הזמנה');
       }
+
+      const paymentRemaining = remainingSecondsUntil(pendingOrder?.lock_expires_at);
+      const stage2Seconds = paymentRemaining != null && paymentRemaining > 0
+        ? paymentRemaining
+        : PAYMENT_HOLD_SECONDS;
+      timerBudgetRef.current = stage2Seconds;
+      setTimeRemaining(stage2Seconds);
 
       if (mockBypass) {
         setPaymentPhase('confirming_payment');
@@ -1766,7 +1780,30 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     };
   }, []);
 
-  /** Countdown: 10m cart lock ticks after reserve; 24h offer window ticks from open (info + payment). */
+  const expireCheckoutHoldRef = useRef(async () => {});
+  expireCheckoutHoldRef.current = async () => {
+    if (holdExpiredRef.current || transactionCompleteRef.current) return;
+    holdExpiredRef.current = true;
+    const expiredMsg = skipCartReserveRef.current
+      ? 'פג זמן התשלום להצעה. סגרו ונסו שוב או פנו לתמיכה.'
+      : 'פג הזמן. הכרטיסים שוחררו חזרה למלאי. אנא נסה שוב.';
+    try {
+      if (awaitingPaymeRef.current) {
+        const result = await cancelPaymeWaitAndUnlock();
+        if (result?.paid) return;
+      } else if (!skipCartReserveRef.current) {
+        fireReleaseHold({ keepalive: true });
+        await fireReleaseHold();
+      }
+    } catch {
+      /* best-effort release */
+    }
+    setError(expiredMsg);
+    toastError(expiredMsg);
+    onCloseRef.current?.();
+  };
+
+  /** Countdown: 2m details-form lock ticks after reserve; jumps to 10m when PayMe wait starts. */
   useEffect(() => {
     if (checkoutSucceeded || step === 'success') {
       if (timerRef.current) {
@@ -1778,6 +1815,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
     const negotiated = skipCartReserveForNegotiatedOffer;
     const shouldTick =
+      awaitingPayme ||
       (negotiated && (step === 'info' || step === 'payment')) ||
       (!negotiated && (reservationActive || step === 'payment') && (step === 'info' || step === 'payment'));
 
@@ -1791,40 +1829,24 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
 
     timerRef.current = setInterval(() => {
       setTimeRemaining((prev) => {
-        if (paymentSubmittingRef.current || isProcessingPaymentRef.current || transactionCompleteRef.current) {
+        if (transactionCompleteRef.current) {
+          return prev;
+        }
+        const pauseForInFlightPayment =
+          !awaitingPaymeRef.current
+          && (paymentSubmittingRef.current || isProcessingPaymentRef.current);
+        if (pauseForInFlightPayment) {
           return prev;
         }
         if (prev <= 1) {
           clearInterval(timerRef.current);
           timerRef.current = null;
-          if (
-            transactionCompleteRef.current
-            || paymentSubmittingRef.current
-            || isProcessingPaymentRef.current
-          ) {
-            return prev;
+          if (transactionCompleteRef.current || holdExpiredRef.current) {
+            return 0;
           }
-          if (!skipCartReserveForNegotiatedOffer) {
-            const releaseReservation = async () => {
-              try {
-                if (isProcessingPaymentRef.current || paymentSubmittingRef.current) return;
-                const email = user ? null : guestForm.email || null;
-                const token = sessionCartToken();
-                await ticketAPI.releaseReservation(ticket?.id, email, token);
-                reservationRef.current = false;
-                setReservationActive(false);
-              } catch {
-                /* best-effort release */
-              }
-            };
-            void releaseReservation();
-          }
-          const expiredMsg = skipCartReserveForNegotiatedOffer
-            ? 'פג זמן התשלום להצעה. סגרו ונסו שוב או פנו לתמיכה.'
-            : 'פג הזמן. הכרטיסים שוחררו חזרה למלאי. אנא נסה שוב.';
-          setError(expiredMsg);
-          toastError(expiredMsg);
-          setStep('info');
+          window.setTimeout(() => {
+            void expireCheckoutHoldRef.current();
+          }, 0);
           return 0;
         }
         return prev - 1;
@@ -1842,6 +1864,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     reservationActive,
     skipCartReserveForNegotiatedOffer,
     checkoutSucceeded,
+    awaitingPayme,
     ticket?.id,
     user,
     guestForm.email,
@@ -1854,7 +1877,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
     if (h === 0) {
-      return `${m}:${s.toString().padStart(2, '0')}`;
+      return `${String(m).padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     }
     return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
@@ -1980,6 +2003,20 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           <p className="payme-waiting-copy">
             פתחנו את PayMe בחלון חדש. השלימו את התשלום שם — העמוד הזה יתעדכן אוטומטית כשהתשלום יאושר.
           </p>
+          <div className="reservation-notice reservation-timer-top">
+            <div>
+              <span className="checkout-reservation-banner-label">
+                רכישה ישירה: הכרטיס שמור ל-10 דקות · זמן נותר:
+              </span>
+              <span
+                className={`timer-countdown ${
+                  timeRemaining < 60 ? 'timer-warning' : ''
+                } ${timeRemaining === 0 ? 'timer-expired' : ''}`}
+              >
+                {formatTime(timeRemaining)}
+              </span>
+            </div>
+          </div>
           {pendingPaymeOrderId ? (
             <p className="payme-waiting-order">מספר הזמנה: #{pendingPaymeOrderId}</p>
           ) : null}
@@ -2243,7 +2280,9 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               <span className="checkout-reservation-banner-label">
                 {skipCartReserveForNegotiatedOffer
                   ? 'הצעה מאושרת — יש לך עד 24 שעות להשלים את התשלום, או שרוכש אחר יקנה את הכרטיס (המוקדם מביניהם). זמן נותר:'
-                  : 'רכישה ישירה: הכרטיס שמור ל-10 דקות · זמן נותר:'}
+                  : awaitingPayme
+                    ? 'רכישה ישירה: הכרטיס שמור ל-10 דקות · זמן נותר:'
+                    : 'רכישה ישירה: הכרטיס שמור ל-2 דקות · זמן נותר:'}
               </span>
               <span
                 className={`timer-countdown ${

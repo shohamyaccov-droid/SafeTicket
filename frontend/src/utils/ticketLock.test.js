@@ -5,6 +5,7 @@ import {
   isListingGroupCartLocked,
   isTicketCartLocked,
   listingGroupCartLockedUntilMs,
+  remainingSecondsUntil,
 } from './ticketLock';
 
 describe('ticketLock', () => {
@@ -14,6 +15,12 @@ describe('ticketLock', () => {
     expect(formatLockCountdown(125000)).toBe('02:05');
     expect(formatLockCountdown(0)).toBe('00:00');
     expect(cartLockLabel(61000)).toBe('מישהו בתהליך קנייה. משתחרר בעוד 01:01');
+  });
+
+  it('computes remaining seconds until a lock ISO timestamp', () => {
+    expect(remainingSecondsUntil('2026-09-01T12:02:00.000Z', now)).toBe(120);
+    expect(remainingSecondsUntil('2026-09-01T11:59:00.000Z', now)).toBe(0);
+    expect(remainingSecondsUntil(null, now)).toBeNull();
   });
 
   it('treats a future locked_until as a live cart hold', () => {

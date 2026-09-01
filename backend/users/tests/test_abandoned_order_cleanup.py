@@ -222,3 +222,26 @@ class ReleaseAbandonedCartsLockingTests(TestCase):
         self.assertEqual(ticket.status, 'active')
         self.assertIsNone(ticket.reserved_at)
         self.assertIsNone(ticket.reserved_by_id)
+        self.assertIsNone(ticket.locked_until)
+
+    def test_sweeper_keeps_live_payment_hold_after_cart_window(self):
+        until = timezone.now() + timedelta(minutes=10)
+        ticket = Ticket.objects.create(
+            seller=self.seller,
+            event=self.event,
+            original_price=Decimal('100'),
+            asking_price=Decimal('100'),
+            pdf_file='tickets/pdfs/test.pdf',
+            status='reserved',
+            verification_status='מאומת',
+            available_quantity=1,
+            reserved_by=self.buyer,
+            reserved_at=timezone.now() - timedelta(minutes=3),
+            locked_until=until,
+        )
+
+        release_abandoned_carts()
+
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'reserved')
+        self.assertIsNotNone(ticket.locked_until)

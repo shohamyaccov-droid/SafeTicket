@@ -342,7 +342,8 @@ class OfferMechanismE2ETests(TransactionTestCase):
 
         # Backdate reservation past cart TTL — sweeper must release (offer stays accepted)
         Ticket.objects.filter(pk=ticket.pk).update(
-            reserved_at=timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES + 2)
+            reserved_at=timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES + 2),
+            locked_until=timezone.now() - timedelta(seconds=1),
         )
         released = release_abandoned_carts()
         self.assertGreaterEqual(int(released or 0), 1)

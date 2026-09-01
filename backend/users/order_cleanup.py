@@ -112,6 +112,7 @@ def _restore_held_ticket(order: Order) -> int:
     if (ticket.available_quantity or 0) > 0:
         ticket.status = 'active'
     ticket.reserved_at = None
+    ticket.locked_until = None
     ticket.reserved_by = None
     ticket.reservation_email = None
     ticket.save(
@@ -119,6 +120,7 @@ def _restore_held_ticket(order: Order) -> int:
             'available_quantity',
             'status',
             'reserved_at',
+            'locked_until',
             'reserved_by',
             'reservation_email',
             'updated_at',
@@ -141,9 +143,19 @@ def _release_reserved_ticket_ids(ticket_ids) -> int:
             continue
         ticket.status = 'active'
         ticket.reserved_at = None
+        ticket.locked_until = None
         ticket.reserved_by = None
         ticket.reservation_email = None
-        ticket.save(update_fields=['status', 'reserved_at', 'reserved_by', 'reservation_email', 'updated_at'])
+        ticket.save(
+            update_fields=[
+                'status',
+                'reserved_at',
+                'locked_until',
+                'reserved_by',
+                'reservation_email',
+                'updated_at',
+            ]
+        )
         released += 1
     return released
 

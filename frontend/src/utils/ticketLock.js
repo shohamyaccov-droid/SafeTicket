@@ -2,12 +2,24 @@
  * Temporary cart holds (someone is in checkout) vs permanent נתפס.
  */
 
+/** Stage 1: details form after Buy Now. Keep in sync with backend CART_HOLD_MINUTES. */
+export const CART_HOLD_SECONDS = 2 * 60;
+/** Stage 2: after Order exists / PayMe tab. Keep in sync with backend PAYMENT_HOLD_MINUTES. */
+export const PAYMENT_HOLD_SECONDS = 10 * 60;
+
 export function ticketLockUntilMs(ticket) {
   if (!ticket) return null;
   const raw = ticket.locked_until;
   if (raw == null || raw === '') return null;
   const ms = Date.parse(raw);
   return Number.isFinite(ms) ? ms : null;
+}
+
+export function remainingSecondsUntil(iso, nowMs = Date.now()) {
+  if (iso == null || iso === '') return null;
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return null;
+  return Math.max(0, Math.floor((ms - nowMs) / 1000));
 }
 
 export function isTicketCartLocked(ticket, nowMs = Date.now()) {

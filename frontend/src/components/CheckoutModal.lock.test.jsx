@@ -141,7 +141,13 @@ beforeEach(() => {
   paymentAPI.paymeInitCheckout.mockResolvedValue({
     data: { redirect_url: 'https://payme.test/hosted' },
   });
-  orderAPI.createOrder.mockResolvedValue({ data: { id: 77, payment_confirm_token: 'tok-1' } });
+  orderAPI.createOrder.mockResolvedValue({
+    data: {
+      id: 77,
+      payment_confirm_token: 'tok-1',
+      lock_expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    },
+  });
   orderAPI.getPaymentStatus.mockResolvedValue({ data: { status: 'pending_payment' } });
   orderAPI.cancelPendingPayment.mockResolvedValue({
     data: { success: true, ticket_ids: [42], status: 'cancelled' },
@@ -289,6 +295,12 @@ describe('CheckoutModal coupon field', () => {
 });
 
 describe('CheckoutModal cart unlock', () => {
+  it('starts the details-form hold timer at two minutes', async () => {
+    renderCheckout();
+    expect(await screen.findByText(/02:00/)).toBeInTheDocument();
+    expect(screen.getByText(/שמור לך ל-02:00/)).toBeInTheDocument();
+  });
+
   it('releases the hold when the X button is clicked', async () => {
     const { onClose } = renderCheckout();
     await screen.findByRole('button', { name: 'המשך לתשלום' });
@@ -329,6 +341,12 @@ describe('CheckoutModal PayMe waiting room', () => {
     expect(init.failure_url).toContain('/checkout/cancel');
     expect(init.failure_url).toContain('order_id=77');
     expect(init.failure_url).toContain('token=tok-1');
+  });
+
+  it('jumps the waiting-room timer to ten minutes', async () => {
+    await startPaymeWait();
+    expect(screen.getByText(/שמור ל-10 דקות/)).toBeInTheDocument();
+    expect(screen.getByText(/10:00|09:59/)).toBeInTheDocument();
   });
 
   it('unlocks immediately when ביטול ושחרור כרטיס is clicked', async () => {

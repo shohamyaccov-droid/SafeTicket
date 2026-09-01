@@ -10,10 +10,12 @@ from django.utils import timezone
 from rest_framework import status as drf_status
 from rest_framework.response import Response
 
-# Permanent marketplace lock — not the temporary 10-minute cart hold.
+# Permanent marketplace lock — not the temporary cart hold.
 TICKET_STATUS_TAKEN = 'taken'
-# Must stay in sync with views.RESERVATION_TIMEOUT_MINUTES.
-CART_HOLD_MINUTES = 10
+# Stage 1: Buy Now / details form. Must stay in sync with views.RESERVATION_TIMEOUT_MINUTES.
+CART_HOLD_MINUTES = 2
+# Stage 2: pending_payment / PayMe — extended when the Order is created.
+PAYMENT_HOLD_MINUTES = 10
 
 # Marketplace rows that must show as unavailable (נתפס) to buyers.
 TAKEN_LIKE_STATUSES = frozenset({TICKET_STATUS_TAKEN, 'sold', 'pending_payout'})
@@ -64,10 +66,43 @@ def listing_group_id_value(ticket) -> str | None:
     return gid_s or None
 
 
+def cart_hold_expires_at(now=None):
+    return (now or timezone.now()) + timedelta(minutes=CART_HOLD_MINUTES)
+
+
+def payment_hold_expires_at(now=None):
+    return (now or timezone.now()) + timedelta(minutes=PAYMENT_HOLD_MINUTES)
+
+
+def stamp_cart_hold(ticket, *, now=None):
+    """Stage 1 lock: 2 minutes to fill checkout details."""
+    now = now or timezone.now()
+    ticket.reserved_at = now
+    ticket.locked_until = cart_hold_expires_at(now)
+    return ticket.locked_until
+
+
+def stamp_payment_hold(ticket, *, now=None):
+    """Stage 2 lock: 10 minutes to complete PayMe after the Order exists."""
+    now = now or timezone.now()
+    ticket.locked_until = payment_hold_expires_at(now)
+    return ticket.locked_until
+
+
+def clear_cart_hold_fields(ticket):
+    ticket.reserved_at = None
+    ticket.locked_until = None
+    ticket.reserved_by = None
+    ticket.reservation_email = None
+
+
 def cart_locked_until(ticket):
-    """Naive expiry instant for an in-progress cart hold, or None."""
+    """Expiry instant for an in-progress cart hold, or None."""
     if getattr(ticket, 'status', None) != 'reserved':
         return None
+    until = getattr(ticket, 'locked_until', None)
+    if until is not None:
+        return until
     reserved_at = getattr(ticket, 'reserved_at', None)
     if reserved_at is None:
         return None
@@ -79,6 +114,42 @@ def ticket_is_cart_locked(ticket, *, now=None) -> bool:
     if until is None:
         return False
     return until > (now or timezone.now())
+
+
+def expired_cart_reservation_q(now=None):
+    """ORM filter for reserved rows whose two-stage TTL has elapsed."""
+    now = now or timezone.now()
+    cart_cutoff = now - timedelta(minutes=CART_HOLD_MINUTES)
+    return (
+        Q(status='reserved')
+        & (
+            Q(locked_until__isnull=False, locked_until__lte=now)
+            | Q(locked_until__isnull=True, reserved_at__lt=cart_cutoff)
+            | Q(locked_until__isnull=True, reserved_at__isnull=True)
+        )
+    )
+
+
+def extend_payment_hold_for_ticket_ids(ticket_ids, *, now=None):
+    """Bump reserved rows to the 10-minute PayMe hold. Returns the new expiry."""
+    from users.models import Ticket
+
+    now = now or timezone.now()
+    until = payment_hold_expires_at(now)
+    ids = []
+    seen = set()
+    for raw in ticket_ids or []:
+        try:
+            tid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if tid not in seen:
+            seen.add(tid)
+            ids.append(tid)
+    if not ids:
+        return until
+    Ticket.objects.filter(pk__in=ids, status='reserved').update(locked_until=until)
+    return until
 
 
 def marketplace_listing_status_q() -> Q:

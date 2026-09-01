@@ -131,7 +131,7 @@ def _reservation_email_for_lock(*, user=None, guest_email: str = '', cart_token:
 
 def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, guest_email: str = '', cart_token: str = ''):
     """
-    Lock `quantity` seats in a listing group for the 10-minute cart window.
+    Lock `quantity` seats in a listing group for the stage-1 (2-minute) cart window.
     Prefers seats already reserved by this buyer, then active seats.
     Returns (reserved_tickets, expires_at).
     """
@@ -141,7 +141,7 @@ def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, gu
     )
     needed = max(1, int(quantity or 1))
     now = timezone.now()
-    expires_at = now + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
+    expires_at = cart_hold_expires_at(now)
 
     group_rows = list(
         Ticket.objects.select_for_update()
@@ -174,14 +174,14 @@ def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, gu
     already = [t for t in group_rows if _belongs_to_buyer(t)]
     # Refresh TTL on seats already held by this buyer
     for t in already:
-        t.reserved_at = now
+        stamp_cart_hold(t, now=now)
         if user is not None and getattr(user, 'is_authenticated', False):
             t.reserved_by = user
         else:
             t.reserved_by = None
         t.reservation_email = stored_email
         t.save(
-            update_fields=['reserved_at', 'reserved_by', 'reservation_email', 'updated_at']
+            update_fields=['reserved_at', 'locked_until', 'reserved_by', 'reservation_email', 'updated_at']
         )
 
     still_needed = max(0, needed - len(already))
@@ -201,7 +201,7 @@ def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, gu
     newly = []
     for t in active_rows[:still_needed]:
         t.status = 'reserved'
-        t.reserved_at = now
+        stamp_cart_hold(t, now=now)
         if user is not None and getattr(user, 'is_authenticated', False):
             t.reserved_by = user
         else:
@@ -211,6 +211,7 @@ def _reserve_listing_group_quantity(*, listing_group_id, quantity, user=None, gu
             update_fields=[
                 'status',
                 'reserved_at',
+                'locked_until',
                 'reserved_by',
                 'reservation_email',
                 'updated_at',
@@ -429,6 +430,24 @@ from .pricing import (
 )
 from django.utils import timezone
 from datetime import timedelta
+from users.ticket_status import (
+    CART_HOLD_MINUTES,
+    PAYMENT_HOLD_MINUTES,
+    HE_TICKET_TAKEN,
+    TICKET_STATUS_TAKEN,
+    assert_ticket_not_taken,
+    cart_hold_expires_at,
+    cart_locked_until,
+    clear_cart_hold_fields,
+    expired_cart_reservation_q,
+    extend_payment_hold_for_ticket_ids,
+    listing_group_id_value,
+    marketplace_listing_status_q,
+    stamp_cart_hold,
+    stamp_payment_hold,
+    ticket_has_lockable_inventory,
+    ticket_is_cart_locked,
+)
 from django.conf import settings
 import os
 
@@ -482,24 +501,19 @@ def _user_from_access_token_str(access_token_str):
 
 def _order_pending_checkout_response(order, request):
     """JSON for create_order / guest_checkout: include one-time payment_confirm_token while pending."""
+    from users.order_cleanup import ticket_ids_for_pending_order
+
+    lock_until = extend_payment_hold_for_ticket_ids(ticket_ids_for_pending_order(order))
     data = OrderSerializer(order, context={'request': request}).data
     tok = (getattr(order, 'payment_confirm_token', None) or '').strip()
     if order.status == 'pending_payment' and tok:
         data['payment_confirm_token'] = tok
+    if lock_until is not None:
+        data['lock_expires_at'] = lock_until.isoformat()
     return Response(data, status=status.HTTP_201_CREATED)
 
 
-# Cart abandonment timeout (minutes)
-from users.ticket_status import (
-    CART_HOLD_MINUTES,
-    HE_TICKET_TAKEN,
-    TICKET_STATUS_TAKEN,
-    assert_ticket_not_taken,
-    listing_group_id_value,
-    marketplace_listing_status_q,
-    ticket_has_lockable_inventory,
-)
-
+# Stage-1 cart hold (Buy Now / details form). Stage-2 PayMe hold is PAYMENT_HOLD_MINUTES.
 RESERVATION_TIMEOUT_MINUTES = CART_HOLD_MINUTES
 HE_TICKET_HELD_BY_OTHER = 'הכרטיס כבר נתפס על ידי משתמש אחר. ניתן לנסות שוב בעוד כמה דקות.'
 HE_TICKET_NOT_AVAILABLE = 'הכרטיס אינו זמין יותר. אנא בחרו כרטיס אחר.'
@@ -515,7 +529,7 @@ __all_ticket_status_exports = (HE_TICKET_TAKEN, TICKET_STATUS_TAKEN)
 
 def _find_existing_pending_checkout(*, ticket_ids, quantity, user=None, guest_email: str = ''):
     """Idempotency guard for checkout double-clicks before payment confirmation."""
-    cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
+    cutoff = timezone.now() - timedelta(minutes=PAYMENT_HOLD_MINUTES)
     qs = Order.objects.select_for_update().filter(
         status='pending_payment',
         created_at__gte=cutoff,
@@ -615,7 +629,7 @@ def _accepted_offer_hold_protects_ticket(ticket) -> bool:
     """
     Accepted offers are price agreements only — they do not exclusively lock inventory.
 
-    Inventory is reserved solely by the 10-minute cart / Proceed-to-Payment hold, which the
+    Inventory is reserved solely by the two-stage cart / Proceed-to-Payment hold, which the
     standard abandoned-cart sweeper must be allowed to release. Always return False.
     """
     return False
@@ -631,19 +645,17 @@ def _sync_expired_cart_reservation(ticket):
     If reservation TTL passed, release the row so checkout can proceed fairly.
     Mutates and saves ticket when expired.
     """
-    if ticket.status != 'reserved' or not ticket.reserved_at:
+    if ticket.status != 'reserved':
         return
     if _accepted_offer_hold_protects_ticket(ticket):
         return
-    cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
-    if ticket.reserved_at < cutoff:
-        ticket.status = 'active'
-        ticket.reserved_at = None
-        ticket.reserved_by = None
-        ticket.reservation_email = None
-        ticket.save(
-            update_fields=['status', 'reserved_at', 'reserved_by', 'reservation_email']
-        )
+    if ticket_is_cart_locked(ticket):
+        return
+    ticket.status = 'active'
+    clear_cart_hold_fields(ticket)
+    ticket.save(
+        update_fields=['status', 'reserved_at', 'locked_until', 'reserved_by', 'reservation_email', 'updated_at']
+    )
 
 
 def _reservation_blocks_seller_accept_offer(ticket, offer) -> bool:
@@ -651,10 +663,9 @@ def _reservation_blocks_seller_accept_offer(ticket, offer) -> bool:
     True if an active cart reservation should block the seller from accepting this offer.
     Never block when the holder is the same human as offer.buyer (by user pk or guest email).
     """
-    if ticket.status != 'reserved' or not ticket.reserved_at:
+    if ticket.status != 'reserved':
         return False
-    cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
-    if ticket.reserved_at < cutoff:
+    if not ticket_is_cart_locked(ticket):
         return False
     rb = ticket.reserved_by_id
     ob = offer.buyer_id
@@ -889,8 +900,9 @@ def release_abandoned_carts():
     Call lazily at the top of Event/Ticket list endpoints so inventory cleans itself.
 
     Accepted-offer checkout is a price agreement only (24h window to start payment).
-    Inventory is locked solely by the short RESERVATION_TIMEOUT_MINUTES cart hold when
-    a buyer clicks Proceed to Payment — not by offer accept.
+    Inventory is locked by the two-stage cart hold (2 minutes on Buy Now, then 10
+    minutes after the Order is created) when a buyer clicks Proceed to Payment —
+    not by offer accept.
 
     Pending PayMe checkouts use a wider grace window (default 60 minutes) and are not
     cancelled while a payme_transaction_id is present unless PayMe confirmed failure.
@@ -900,13 +912,13 @@ def release_abandoned_carts():
         cancel_abandoned_pending_payment_orders,
     )
 
-    cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
+    now = timezone.now()
     released = 0
     protected_pks = set(_ticket_pks_protected_by_accepted_offer_holds() or [])
 
     # 1. Expired ticket reservations -> back to active (row-locked)
     expired_ids = list(
-        Ticket.objects.filter(status='reserved', reserved_at__lt=cutoff)
+        Ticket.objects.filter(expired_cart_reservation_q(now))
         .exclude(pk__in=protected_pks)
         .order_by('id')
         .values_list('id', flat=True)[:500]
@@ -918,16 +930,15 @@ def release_abandoned_carts():
                 continue
             if ticket.pk in protected_pks:
                 continue
-            if not ticket.reserved_at or ticket.reserved_at >= cutoff:
+            if ticket_is_cart_locked(ticket, now=now):
                 continue
             ticket.status = 'active'
-            ticket.reserved_at = None
-            ticket.reserved_by = None
-            ticket.reservation_email = None
+            clear_cart_hold_fields(ticket)
             ticket.save(
                 update_fields=[
                     'status',
                     'reserved_at',
+                    'locked_until',
                     'reserved_by',
                     'reservation_email',
                     'updated_at',
@@ -936,6 +947,7 @@ def release_abandoned_carts():
             released += 1
 
     # 2. Legacy status='pending' orders older than the short cart timeout
+    cutoff = now - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
     stale_order_ids = list(
         Order.objects.filter(status='pending', created_at__lt=cutoff)
         .order_by('id')
@@ -960,13 +972,12 @@ def release_abandoned_carts():
                 if ticket.status != 'reserved':
                     continue
                 ticket.status = 'active'
-                ticket.reserved_at = None
-                ticket.reserved_by = None
-                ticket.reservation_email = None
+                clear_cart_hold_fields(ticket)
                 ticket.save(
                     update_fields=[
                         'status',
                         'reserved_at',
+                        'locked_until',
                         'reserved_by',
                         'reservation_email',
                         'updated_at',
@@ -995,14 +1006,13 @@ def _restore_order_held_inventory(order):
             t.available_quantity = (t.available_quantity or 0) + int(hq)
             if t.status == 'reserved' and (t.available_quantity or 0) > 0:
                 t.status = 'active'
-            t.reserved_at = None
-            t.reserved_by = None
-            t.reservation_email = None
+            clear_cart_hold_fields(t)
             t.save(
                 update_fields=[
                     'available_quantity',
                     'status',
                     'reserved_at',
+                    'locked_until',
                     'reserved_by',
                     'reservation_email',
                     'updated_at',
@@ -1015,6 +1025,7 @@ def _release_pending_payment_group_reservations(ticket_ids):
         Ticket.objects.filter(pk=tid, status='reserved').update(
             status='active',
             reserved_at=None,
+            locked_until=None,
             reserved_by=None,
             reservation_email=None,
         )
@@ -1036,7 +1047,8 @@ def _reserve_rows_for_pending_checkout(available_tickets, user=None, guest_email
     for t in available_tickets:
         if t.status == 'active':
             t.status = 'reserved'
-            t.reserved_at = now
+            stamp_cart_hold(t, now=now)
+            stamp_payment_hold(t, now=now)
             if user and getattr(user, 'is_authenticated', False):
                 t.reserved_by = user
                 t.reservation_email = None
@@ -1047,6 +1059,7 @@ def _reserve_rows_for_pending_checkout(available_tickets, user=None, guest_email
                 update_fields=[
                     'status',
                     'reserved_at',
+                    'locked_until',
                     'reserved_by',
                     'reservation_email',
                     'updated_at',
@@ -1063,7 +1076,8 @@ def _reserve_rows_for_pending_checkout(available_tickets, user=None, guest_email
                     raise PermissionDenied('Reservation does not belong to this buyer.')
                 t.reserved_by = user
                 t.reservation_email = None
-                t.save(update_fields=['reserved_by', 'reservation_email', 'updated_at'])
+                stamp_payment_hold(t, now=now)
+                t.save(update_fields=['reserved_by', 'reservation_email', 'reserved_at', 'locked_until', 'updated_at'])
             else:
                 if not anonymous_reservation_matches(
                     t.reservation_email,
@@ -1071,26 +1085,28 @@ def _reserve_rows_for_pending_checkout(available_tickets, user=None, guest_email
                     cart_token=cart_token,
                 ):
                     raise PermissionDenied('Reservation does not belong to this guest email.')
+                stamp_payment_hold(t, now=now)
                 if stored_email and (t.reservation_email or '').strip().lower() != stored_email:
                     t.reservation_email = stored_email
-                    t.save(update_fields=['reservation_email', 'updated_at'])
+                    t.save(update_fields=['reservation_email', 'reserved_at', 'locked_until', 'updated_at'])
+                else:
+                    t.save(update_fields=['reserved_at', 'locked_until', 'updated_at'])
         else:
             raise ValueError('ticket_not_available')
 
 
 def _verify_reservations_fresh(reserved_before, user=None, guest_email: str = '', cart_token: str = ''):
-    """Ensure checkout reservations have not expired (RESERVATION_TIMEOUT_MINUTES).
+    """Ensure checkout reservations have not expired (two-stage cart / PayMe TTL).
 
     Accepted-offer holds remain valid until offer.checkout_expires_at.
     """
-    cutoff = timezone.now() - timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
     guest_email = (guest_email or '').strip()
     for t in reserved_before:
         t.refresh_from_db()
         if t.status != 'reserved':
             raise ValueError('ticket_state_changed')
         offer_protected = _accepted_offer_hold_protects_ticket(t)
-        if not offer_protected and (not t.reserved_at or t.reserved_at < cutoff):
+        if not offer_protected and not ticket_is_cart_locked(t):
             raise ValueError('reservation_expired')
         if user and getattr(user, 'is_authenticated', False):
             owned = t.reserved_by_id == user.id or anonymous_reservation_matches(
@@ -2622,12 +2638,13 @@ def create_order(request):
                 else:
                     ticket.available_quantity -= order_quantity
                     held_qty = order_quantity
-                    ticket.reserved_at = timezone.now()
                     ticket.reserved_by = request.user
                     ticket.reservation_email = None
                     if ticket.available_quantity <= 0:
                         ticket.available_quantity = 0
                         ticket.status = 'reserved'
+                        stamp_cart_hold(ticket)
+                        stamp_payment_hold(ticket)
                     else:
                         ticket.status = 'active'
                     ticket.save()
@@ -2831,19 +2848,18 @@ def confirm_order_payment(request, order_id):
             if order.held_ticket_id and order.held_quantity:
                 t = Ticket.objects.select_for_update().get(pk=order.held_ticket_id)
                 if timezone.now() - order.created_at > timedelta(
-                    minutes=RESERVATION_TIMEOUT_MINUTES + 5
+                    minutes=PAYMENT_HOLD_MINUTES + 5
                 ):
                     raise ValueError('checkout_expired')
                 if (t.available_quantity or 0) <= 0:
                     t.status = 'sold'
-                t.reserved_at = None
-                t.reserved_by = None
-                t.reservation_email = None
+                clear_cart_hold_fields(t)
                 t.save(
                     update_fields=[
                         'status',
                         'available_quantity',
                         'reserved_at',
+                        'locked_until',
                         'reserved_by',
                         'reservation_email',
                         'updated_at',
@@ -3454,12 +3470,13 @@ def guest_checkout(request):
                 else:
                     ticket.available_quantity -= order_quantity
                     held_qty = order_quantity
-                    ticket.reserved_at = timezone.now()
                     ticket.reserved_by = None
                     ticket.reservation_email = ge or None
                     if ticket.available_quantity <= 0:
                         ticket.available_quantity = 0
                         ticket.status = 'reserved'
+                        stamp_cart_hold(ticket)
+                        stamp_payment_hold(ticket)
                     else:
                         ticket.status = 'active'
                     ticket.save()
@@ -4266,46 +4283,53 @@ class TicketViewSet(viewsets.ModelViewSet):
                     return taken_resp
 
                 if ticket.status == 'reserved':
-                    if ticket.reserved_at:
-                        expires_at = ticket.reserved_at + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
-                        if timezone.now() < expires_at:
-                            same_auth = (
-                                request.user.is_authenticated and ticket.reserved_by_id == request.user.id
+                    if ticket_is_cart_locked(ticket):
+                        expires_at = cart_locked_until(ticket)
+                        same_auth = (
+                            request.user.is_authenticated and ticket.reserved_by_id == request.user.id
+                        )
+                        same_anonymous = anonymous_reservation_matches(
+                            ticket.reservation_email,
+                            guest_email=guest_email,
+                            cart_token=cart_token,
+                        )
+                        if same_auth or same_anonymous:
+                            stamp_cart_hold(ticket)
+                            if request.user.is_authenticated:
+                                ticket.reserved_by = request.user
+                            else:
+                                ticket.reserved_by = None
+                            ticket.reservation_email = stored_email or ticket.reservation_email
+                            ticket.save(
+                                update_fields=[
+                                    'reserved_at',
+                                    'locked_until',
+                                    'reserved_by',
+                                    'reservation_email',
+                                    'updated_at',
+                                ]
                             )
-                            same_anonymous = anonymous_reservation_matches(
-                                ticket.reservation_email,
-                                guest_email=guest_email,
-                                cart_token=cart_token,
-                            )
-                            if same_auth or same_anonymous:
-                                ticket.reserved_at = timezone.now()
-                                if request.user.is_authenticated:
-                                    ticket.reserved_by = request.user
-                                else:
-                                    ticket.reserved_by = None
-                                ticket.reservation_email = stored_email or ticket.reservation_email
-                                ticket.save(
-                                    update_fields=['reserved_at', 'reserved_by', 'reservation_email', 'updated_at']
-                                )
-                                expires_at = ticket.reserved_at + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)
-                                return Response(
-                                    {
-                                        'success': True,
-                                        'message': 'Ticket reserved successfully',
-                                        'reserved_at': ticket.reserved_at.isoformat(),
-                                        'expires_at': expires_at.isoformat(),
-                                    },
-                                    status=status.HTTP_200_OK,
-                                )
-                            minutes_remaining = max(0, int((expires_at - timezone.now()).total_seconds() / 60))
+                            expires_at = ticket.locked_until
                             return Response(
                                 {
-                                    'error': HE_TICKET_HELD_BY_OTHER,
-                                    'status': 'reserved',
-                                    'minutes_remaining': minutes_remaining,
+                                    'success': True,
+                                    'message': 'Ticket reserved successfully',
+                                    'reserved_at': ticket.reserved_at.isoformat() if ticket.reserved_at else None,
+                                    'expires_at': expires_at.isoformat() if expires_at else None,
                                 },
-                                status=status.HTTP_400_BAD_REQUEST,
+                                status=status.HTTP_200_OK,
                             )
+                        minutes_remaining = max(
+                            0, int((expires_at - timezone.now()).total_seconds() / 60)
+                        ) if expires_at else 0
+                        return Response(
+                            {
+                                'error': HE_TICKET_HELD_BY_OTHER,
+                                'status': 'reserved',
+                                'minutes_remaining': minutes_remaining,
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
                     return Response(
                         {'error': HE_TICKET_HELD_BY_OTHER, 'status': 'reserved'},
                         status=status.HTTP_400_BAD_REQUEST,
@@ -4331,7 +4355,7 @@ class TicketViewSet(viewsets.ModelViewSet):
 
                 now = timezone.now()
                 ticket.status = 'reserved'
-                ticket.reserved_at = now
+                stamp_cart_hold(ticket, now=now)
                 if request.user.is_authenticated:
                     ticket.reserved_by = request.user
                     logger.info(
@@ -4349,14 +4373,23 @@ class TicketViewSet(viewsets.ModelViewSet):
                         ticket.reserved_at,
                     )
                 ticket.reservation_email = stored_email
-                ticket.save(update_fields=['status', 'reserved_at', 'reserved_by', 'reservation_email', 'updated_at'])
+                ticket.save(
+                    update_fields=[
+                        'status',
+                        'reserved_at',
+                        'locked_until',
+                        'reserved_by',
+                        'reservation_email',
+                        'updated_at',
+                    ]
+                )
 
                 return Response(
                     {
                         'success': True,
                         'message': 'Ticket reserved successfully',
-                        'reserved_at': ticket.reserved_at.isoformat(),
-                        'expires_at': (ticket.reserved_at + timedelta(minutes=RESERVATION_TIMEOUT_MINUTES)).isoformat(),
+                        'reserved_at': ticket.reserved_at.isoformat() if ticket.reserved_at else None,
+                        'expires_at': ticket.locked_until.isoformat() if ticket.locked_until else None,
                     },
                     status=status.HTTP_200_OK,
                 )
@@ -4424,13 +4457,12 @@ class TicketViewSet(viewsets.ModelViewSet):
                     else:
                         logger.info('Ticket %s reservation released by guest email %s', t.id, guest_email)
                     t.status = 'active'
-                    t.reserved_at = None
-                    t.reserved_by = None
-                    t.reservation_email = None
+                    clear_cart_hold_fields(t)
                     t.save(
                         update_fields=[
                             'status',
                             'reserved_at',
+                            'locked_until',
                             'reserved_by',
                             'reservation_email',
                             'updated_at',
@@ -5293,14 +5325,13 @@ def admin_cancel_order(request, order_id):
                     ht.available_quantity = (ht.available_quantity or 0) + int(order.held_quantity)
                     if (ht.available_quantity or 0) > 0:
                         ht.status = 'active'
-                    ht.reserved_at = None
-                    ht.reserved_by = None
-                    ht.reservation_email = None
+                    clear_cart_hold_fields(ht)
                     ht.save(
                         update_fields=[
                             'available_quantity',
                             'status',
                             'reserved_at',
+                            'locked_until',
                             'reserved_by',
                             'reservation_email',
                             'updated_at',
@@ -5328,6 +5359,7 @@ def admin_cancel_order(request, order_id):
                         t.status = 'active'
                         t.available_quantity = max(1, int(t.available_quantity or 0) or 1)
                     t.reserved_at = None
+                    t.locked_until = None
                     t.reserved_by = None
                     t.reservation_email = None
                     t.save(
@@ -5335,6 +5367,7 @@ def admin_cancel_order(request, order_id):
                             'status',
                             'available_quantity',
                             'reserved_at',
+                            'locked_until',
                             'reserved_by',
                             'reservation_email',
                             'updated_at',
@@ -5592,9 +5625,7 @@ def admin_reject_ticket(request, ticket_id):
         ).update(status='rejected')
 
         ticket.status = 'rejected'
-        ticket.reserved_at = None
-        ticket.reserved_by = None
-        ticket.reservation_email = None
+        clear_cart_hold_fields(ticket)
         ticket.save()
 
         serializer = TicketSerializer(ticket, context={'request': request})

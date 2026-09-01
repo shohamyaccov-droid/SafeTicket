@@ -406,21 +406,26 @@ class TicketAdmin(admin.ModelAdmin):
     def reservation_info(self, obj):
         """Display reservation information in admin list"""
         try:
-            if getattr(obj, 'status', None) == 'reserved' and obj.reserved_at:
-                time_remaining = (obj.reserved_at + timedelta(minutes=10)) - timezone.now()
-                if time_remaining.total_seconds() > 0:
-                    minutes = int(time_remaining.total_seconds() / 60)
-                    try:
-                        rb = obj.reserved_by
-                        reserved_by = rb.username if rb else (obj.reservation_email or 'Guest')
-                    except ObjectDoesNotExist:
-                        reserved_by = obj.reservation_email or 'Guest'
-                    return format_html(
-                        '<span style="color: orange;">Reserved by {}<br/>{} min remaining</span>',
-                        reserved_by,
-                        minutes,
-                    )
-                return mark_safe('<span style="color: red;">EXPIRED</span>')
+            from users.ticket_status import cart_locked_until, ticket_is_cart_locked
+
+            if getattr(obj, 'status', None) == 'reserved':
+                if ticket_is_cart_locked(obj):
+                    until = cart_locked_until(obj)
+                    time_remaining = until - timezone.now() if until else None
+                    if time_remaining and time_remaining.total_seconds() > 0:
+                        minutes = int(time_remaining.total_seconds() / 60)
+                        try:
+                            rb = obj.reserved_by
+                            reserved_by = rb.username if rb else (obj.reservation_email or 'Guest')
+                        except ObjectDoesNotExist:
+                            reserved_by = obj.reservation_email or 'Guest'
+                        return format_html(
+                            '<span style="color: orange;">Reserved by {}<br/>{} min remaining</span>',
+                            reserved_by,
+                            minutes,
+                        )
+                if obj.reserved_at or obj.locked_until:
+                    return mark_safe('<span style="color: red;">EXPIRED</span>')
             return '-'
         except Exception as exc:
             _admin_log.warning('TicketAdmin.reservation_info failed pk=%s: %s', getattr(obj, 'pk', None), exc)
@@ -436,10 +441,9 @@ class TicketAdmin(admin.ModelAdmin):
         import logging
         logger = logging.getLogger(__name__)
         
-        expired_reservations = Ticket.objects.filter(
-            status='reserved',
-            reserved_at__lt=timezone.now() - timedelta(minutes=10)
-        )
+        from users.ticket_status import expired_cart_reservation_q
+
+        expired_reservations = Ticket.objects.filter(expired_cart_reservation_q())
         
         count = expired_reservations.count()
         
@@ -450,6 +454,7 @@ class TicketAdmin(admin.ModelAdmin):
             expired_reservations.update(
                 status='active',
                 reserved_at=None,
+                locked_until=None,
                 reserved_by=None,
                 reservation_email=None
             )

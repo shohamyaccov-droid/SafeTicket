@@ -1007,6 +1007,7 @@ def lock_and_mark_tickets_sold(ticket_ids) -> list:
         t.status = 'sold'
         t.available_quantity = 0
         t.reserved_at = None
+        t.locked_until = None
         t.reserved_by = None
         t.reservation_email = None
         t.save(
@@ -1014,6 +1015,7 @@ def lock_and_mark_tickets_sold(ticket_ids) -> list:
                 'status',
                 'available_quantity',
                 'reserved_at',
+                'locked_until',
                 'reserved_by',
                 'reservation_email',
                 'updated_at',
@@ -1031,6 +1033,7 @@ def _fulfill_paid_order_ticket_rows(order) -> None:
         if (t.available_quantity or 0) <= 0:
             t.status = 'sold'
         t.reserved_at = None
+        t.locked_until = None
         t.reserved_by = None
         t.reservation_email = None
         t.save(
@@ -1038,6 +1041,7 @@ def _fulfill_paid_order_ticket_rows(order) -> None:
                 'status',
                 'available_quantity',
                 'reserved_at',
+                'locked_until',
                 'reserved_by',
                 'reservation_email',
                 'updated_at',
@@ -1232,8 +1236,8 @@ def finalize_pending_order_to_paid(
     buyer gets the same paid order + sold tickets + payout ledger as a successful webhook.
     """
     from users.models import Order, Ticket
+    from users.ticket_status import PAYMENT_HOLD_MINUTES
     from users.views import (
-        RESERVATION_TIMEOUT_MINUTES,
         _apply_order_pricing_fields,
         _finalize_group_sale_ticket_rows,
         _finalize_offers_after_sale,
@@ -1294,11 +1298,12 @@ def finalize_pending_order_to_paid(
                 ticket_ref = Ticket.objects.filter(pk=ticket_ids[0]).first() or ticket_ref
             elif order.held_ticket_id and order.held_quantity:
                 t = Ticket.objects.select_for_update().get(pk=order.held_ticket_id)
-                if timezone.now() - order.created_at > timedelta(minutes=RESERVATION_TIMEOUT_MINUTES + 5):
+                if timezone.now() - order.created_at > timedelta(minutes=PAYMENT_HOLD_MINUTES + 5):
                     raise ValueError('checkout_expired')
                 if (t.available_quantity or 0) <= 0:
                     t.status = 'sold'
                 t.reserved_at = None
+                t.locked_until = None
                 t.reserved_by = None
                 t.reservation_email = None
                 t.save(
@@ -1306,6 +1311,7 @@ def finalize_pending_order_to_paid(
                         'status',
                         'available_quantity',
                         'reserved_at',
+                        'locked_until',
                         'reserved_by',
                         'reservation_email',
                         'updated_at',

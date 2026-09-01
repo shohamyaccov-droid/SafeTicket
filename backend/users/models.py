@@ -659,6 +659,12 @@ class Ticket(models.Model):
     
     # Reservation fields
     reserved_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp when ticket was reserved")
+    locked_until = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text='When the temporary cart/PayMe hold expires. Stage 1 (Buy Now) is 2 minutes; stage 2 (order created) is 10 minutes.',
+    )
     reserved_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
