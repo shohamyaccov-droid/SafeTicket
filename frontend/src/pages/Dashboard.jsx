@@ -716,13 +716,18 @@ const Dashboard = () => {
   };
 
   const handleSavePrice = async (listingId) => {
+    const amount = Number.parseFloat(String(newPrice ?? '').replace(',', '.'));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toastError('המחיר חייב להיות מספר חיובי.');
+      return;
+    }
     try {
-      await ticketAPI.updateTicketPrice(listingId, parseFloat(newPrice));
+      await ticketAPI.updateTicketPrice(listingId, amount);
       setEditingPrice(null);
       setNewPrice('');
-      fetchDashboardData({ silent: true }); // Refresh data
+      fetchDashboardData({ silent: true });
     } catch (err) {
-      toastError('עדכון המחיר נכשל. אנא נסה שוב.');
+      toastError(apiErrorMessageHe(err, 'עדכון המחיר נכשל. אנא נסה שוב.'));
     }
   };
 
@@ -1704,18 +1709,27 @@ const Dashboard = () => {
                                           type="number"
                                           value={newPrice}
                                           onChange={(e) => setNewPrice(e.target.value)}
+                                          onClick={(e) => e.stopPropagation()}
                                           className="price-input"
                                           min="0"
-                                          step="0.01"
+                                          step="1"
                                         />
                                         <button
-                                          onClick={() => handleSavePrice(listing.id)}
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleSavePrice(listing.id);
+                                          }}
                                           className="save-button"
                                         >
                                           שמור
                                         </button>
                                         <button
-                                          onClick={handleCancelEdit}
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCancelEdit();
+                                          }}
                                           className="cancel-button"
                                         >
                                           ביטול

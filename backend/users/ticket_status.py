@@ -21,6 +21,7 @@ PAYMENT_HOLD_MINUTES = 10
 TAKEN_LIKE_STATUSES = frozenset({TICKET_STATUS_TAKEN, 'sold', 'pending_payout'})
 
 HE_TICKET_TAKEN = 'הכרטיס נתפס ואינו זמין לרכישה.'
+HE_PRICE_EDIT_LOCKED = 'לא ניתן לעדכן מחיר, משתמש אחר נמצא כרגע בתהליך רכישה.'
 
 # Statuses that may proceed through checkout / reserve (when held by the same buyer).
 PURCHASABLE_STATUSES = frozenset({'active', 'reserved'})

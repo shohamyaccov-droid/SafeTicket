@@ -6,6 +6,7 @@ import { HelmetProvider } from 'react-helmet-async';
 
 import Dashboard from './Dashboard';
 import { authAPI, offerAPI, ticketAPI } from '../services/api';
+import { toastError } from '../utils/toast';
 
 vi.mock('../context/AuthContext', () => {
   const user = { id: 1, username: 'buyer' };
@@ -208,5 +209,70 @@ describe('Dashboard buyer order download', () => {
     expect(screen.getByText(/שורה 4/)).toBeInTheDocument();
     expect(screen.getByText('18')).toBeInTheDocument();
     expect(screen.queryByText('לא צוין')).not.toBeInTheDocument();
+  });
+});
+
+describe('Dashboard sales inline price edit', () => {
+  beforeEach(() => {
+    offerAPI.getReceivedOffers.mockResolvedValue({ data: [] });
+    offerAPI.getSentOffers.mockResolvedValue({ data: [] });
+    ticketAPI.updateTicketPrice.mockReset();
+  });
+
+  function renderSalesDashboard() {
+    authAPI.getDashboard.mockResolvedValue({
+      data: {
+        purchases: [],
+        listings: {
+          active: [
+            {
+              id: 42,
+              status: 'active',
+              event_name: 'הופעת מחיר',
+              event_name_display: 'הופעת מחיר',
+              original_price: '249.00',
+              asking_price: '249.00',
+              currency: 'ILS',
+              available_quantity: 1,
+              quantity: 1,
+            },
+          ],
+          sold: [],
+        },
+        summary: { total_purchases: 0, active_listings_count: 1, sold_listings_count: 0 },
+      },
+    });
+    return render(
+      <HelmetProvider>
+        <MemoryRouter initialEntries={['/dashboard?tab=sales']}>
+          <Dashboard />
+        </MemoryRouter>
+      </HelmetProvider>,
+    );
+  }
+
+  it('sends listing_price and original_price and surfaces the backend error', async () => {
+    const user = userEvent.setup();
+    ticketAPI.updateTicketPrice.mockRejectedValue({
+      response: {
+        status: 400,
+        data: { error: 'לא ניתן לעדכן מחיר, משתמש אחר נמצא כרגע בתהליך רכישה.' },
+      },
+    });
+    renderSalesDashboard();
+
+    await user.click(await screen.findByText('הופעת מחיר'));
+    await user.click(await screen.findByRole('button', { name: 'Edit price' }));
+    const input = await screen.findByRole('spinbutton');
+    await user.clear(input);
+    await user.type(input, '220');
+    await user.click(screen.getByRole('button', { name: 'שמור' }));
+
+    await waitFor(() => {
+      expect(ticketAPI.updateTicketPrice).toHaveBeenCalledWith(42, 220);
+    });
+    expect(toastError).toHaveBeenCalledWith(
+      'לא ניתן לעדכן מחיר, משתמש אחר נמצא כרגע בתהליך רכישה.',
+    );
   });
 });

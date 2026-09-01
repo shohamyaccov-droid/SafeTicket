@@ -434,6 +434,7 @@ from users.ticket_status import (
     CART_HOLD_MINUTES,
     PAYMENT_HOLD_MINUTES,
     HE_TICKET_TAKEN,
+    HE_PRICE_EDIT_LOCKED,
     TICKET_STATUS_TAKEN,
     assert_ticket_not_taken,
     cart_hold_expires_at,
@@ -2081,6 +2082,28 @@ def _pending_payment_blocks_price_edit(ticket: Ticket) -> bool:
     return False
 
 
+def _tickets_for_listing_price_edit(ticket: Ticket):
+    if ticket.listing_group_id:
+        return list(
+            Ticket.objects.filter(
+                listing_group_id=ticket.listing_group_id,
+                seller_id=ticket.seller_id,
+            ).order_by('id')
+        )
+    return [ticket]
+
+
+def _price_from_listing_update_payload(data):
+    """Accept listing_price / asking_price / original_price (dashboard + sell payloads)."""
+    if data is None:
+        return None
+    for key in ('listing_price', 'asking_price', 'original_price'):
+        val = data.get(key)
+        if val is not None and val != '':
+            return val
+    return None
+
+
 @csrf_required
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
@@ -2088,92 +2111,93 @@ def update_ticket_price(request, ticket_id):
     """
     Update ticket price (only for active listings owned by the user)
     Bulk update: If ticket belongs to a group (listing_group_id), update ALL tickets in that group
-    Note: In production, you might want to add restrictions on price changes
     """
+    from decimal import Decimal, InvalidOperation
+
+    from users.currency import iso4217_for_country, quantize_money_decimal
+
     try:
-        ticket = Ticket.objects.get(id=ticket_id)
-        
-        # Security check: only ticket owner can update
+        ticket = Ticket.objects.select_related('event').get(id=ticket_id)
+
         if ticket.seller != request.user:
             return Response(
-                {'error': 'Permission denied'},
+                {'error': 'אין הרשאה לעדכן כרטיס זה.'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
-        # Only allow updates to active tickets
-        if ticket.status != 'active':
+
+        rows = _tickets_for_listing_price_edit(ticket)
+        for row in rows:
+            _sync_expired_cart_reservation(row)
+        ticket.refresh_from_db()
+        rows = _tickets_for_listing_price_edit(ticket)
+
+        if any(ticket_is_cart_locked(row) for row in rows) or _pending_payment_blocks_price_edit(ticket):
             return Response(
-                {'error': 'Can only update active listings'},
+                {'error': HE_PRICE_EDIT_LOCKED, 'code': 'listing_locked'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if ticket.status != 'active':
+            if ticket.status == 'reserved':
+                return Response(
+                    {'error': HE_PRICE_EDIT_LOCKED, 'code': 'listing_locked'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return Response(
+                {'error': 'ניתן לעדכן מחיר רק למודעות פעילות.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if _pending_payment_blocks_price_edit(ticket):
+        new_price = _price_from_listing_update_payload(request.data)
+        if new_price is None:
             return Response(
-                {
-                    'error': (
-                        'מחיר לא ניתן לשינוי כרגע — קיימת הזמנה הממתינה לתשלום על רשימה זו. '
-                        'נסה שוב לאחר שהעסקה תושלם או תבוטל.'
-                    )
-                },
-                status=status.HTTP_409_CONFLICT,
+                {'error': 'יש לשלוח מחיר מכירה (listing_price).'},
+                status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Update price
-        new_price = request.data.get('original_price')
-        if new_price is not None and new_price != '':
-            try:
-                from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
-                # Round to 2 decimal places to match model's save() behavior
-                new_price_decimal = Decimal(str(new_price)).quantize(
-                    Decimal('1'), rounding=ROUND_HALF_UP
-                )
-                if new_price_decimal <= 0:
-                    return Response(
-                        {'error': 'המחיר חייב להיות מספר חיובי.'},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-                
-                # Single-price product: always persist the typed amount on BOTH columns.
-                # (save() only clamps asking down when it exceeds face — it does NOT raise
-                # asking when original alone is updated, which previously left stale asks.)
-                if ticket.listing_group_id:
-                    tickets_to_update = Ticket.objects.filter(
-                        listing_group_id=ticket.listing_group_id,
-                        seller=request.user,
-                        status='active'
-                    )
-                    updated_count = tickets_to_update.update(
-                        original_price=new_price_decimal,
-                        asking_price=new_price_decimal,
-                    )
-                    ticket.refresh_from_db()
-                else:
-                    ticket.original_price = new_price_decimal
-                    ticket.asking_price = new_price_decimal
-                    ticket.save()
-                    updated_count = 1
-                
-                # Return the updated ticket data
-                serializer = ProfileListingSerializer(ticket, context={'request': request})
-                response_data = serializer.data
-                # Include count of updated tickets if it's a bulk update
-                if ticket.listing_group_id and updated_count > 1:
-                    response_data['updated_count'] = updated_count
-                
-                return Response(response_data, status=status.HTTP_200_OK)
-            except (ValueError, TypeError, InvalidOperation):
+
+        try:
+            country = 'IL'
+            if ticket.event_id:
+                country = (getattr(ticket.event, 'country', None) or 'IL').strip().upper() or 'IL'
+            cur = iso4217_for_country(country)
+            new_price_decimal = quantize_money_decimal(Decimal(str(new_price).replace(',', '.')), cur)
+            if new_price_decimal <= 0:
                 return Response(
-                    {'error': 'Invalid price format'},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {'error': 'המחיר חייב להיות מספר חיובי.'},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-        
-        return Response(
-            {'error': 'original_price is required'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+
+            if ticket.listing_group_id:
+                tickets_to_update = Ticket.objects.filter(
+                    listing_group_id=ticket.listing_group_id,
+                    seller=request.user,
+                    status='active',
+                )
+                updated_count = tickets_to_update.update(
+                    original_price=new_price_decimal,
+                    asking_price=new_price_decimal,
+                )
+                ticket.refresh_from_db()
+            else:
+                ticket.original_price = new_price_decimal
+                ticket.asking_price = new_price_decimal
+                ticket.save()
+                updated_count = 1
+
+            serializer = ProfileListingSerializer(ticket, context={'request': request})
+            response_data = serializer.data
+            if ticket.listing_group_id and updated_count > 1:
+                response_data['updated_count'] = updated_count
+
+            return Response(response_data, status=status.HTTP_200_OK)
+        except (ValueError, TypeError, InvalidOperation):
+            return Response(
+                {'error': 'פורמט המחיר אינו תקין.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
     except Ticket.DoesNotExist:
         return Response(
-            {'error': 'Ticket not found'},
+            {'error': 'הכרטיס לא נמצא.'},
             status=status.HTTP_404_NOT_FOUND
         )
 

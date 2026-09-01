@@ -193,6 +193,94 @@ class SingleSellPriceIntegrityTests(TestCase):
         self.assertEqual(ticket.original_price, Decimal('10'))
         self.assertEqual(ticket.asking_price, Decimal('10'))
 
+    def test_update_price_accepts_listing_price_payload(self):
+        ticket = Ticket.objects.create(
+            seller=self.seller,
+            event=self.event,
+            original_price=Decimal('249'),
+            asking_price=Decimal('249'),
+            status='active',
+            verification_status='מאומת',
+            pdf_file='tickets/pdfs/upd-list.pdf',
+            available_quantity=1,
+        )
+        res = self.client.patch(
+            f'/api/users/tickets/{ticket.id}/update-price/',
+            {'listing_price': '220', 'original_price': '220'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, 200, getattr(res, 'data', res.content))
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.original_price, Decimal('220'))
+        self.assertEqual(ticket.asking_price, Decimal('220'))
+
+    def test_update_price_blocked_when_ticket_is_cart_locked(self):
+        from users.ticket_status import HE_PRICE_EDIT_LOCKED, stamp_cart_hold
+
+        ticket = Ticket.objects.create(
+            seller=self.seller,
+            event=self.event,
+            original_price=Decimal('249'),
+            asking_price=Decimal('249'),
+            status='active',
+            verification_status='מאומת',
+            pdf_file='tickets/pdfs/upd-lock.pdf',
+            available_quantity=1,
+        )
+        ticket.status = 'reserved'
+        stamp_cart_hold(ticket)
+        ticket.save(update_fields=['status', 'reserved_at', 'locked_until'])
+        res = self.client.patch(
+            f'/api/users/tickets/{ticket.id}/update-price/',
+            {'listing_price': '220'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, 400, getattr(res, 'data', res.content))
+        self.assertEqual(res.data.get('error'), HE_PRICE_EDIT_LOCKED)
+        self.assertEqual(res.data.get('code'), 'listing_locked')
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.asking_price, Decimal('249'))
+
+    def test_update_price_blocked_when_group_sibling_is_locked(self):
+        from uuid import uuid4
+
+        from users.ticket_status import HE_PRICE_EDIT_LOCKED, stamp_cart_hold
+
+        group_id = str(uuid4())
+        live = Ticket.objects.create(
+            seller=self.seller,
+            event=self.event,
+            original_price=Decimal('249'),
+            asking_price=Decimal('249'),
+            status='active',
+            verification_status='מאומת',
+            pdf_file='tickets/pdfs/upd-g1.pdf',
+            available_quantity=1,
+            listing_group_id=group_id,
+        )
+        held = Ticket.objects.create(
+            seller=self.seller,
+            event=self.event,
+            original_price=Decimal('249'),
+            asking_price=Decimal('249'),
+            status='reserved',
+            verification_status='מאומת',
+            pdf_file='tickets/pdfs/upd-g2.pdf',
+            available_quantity=1,
+            listing_group_id=group_id,
+        )
+        stamp_cart_hold(held)
+        held.save(update_fields=['reserved_at', 'locked_until'])
+        res = self.client.patch(
+            f'/api/users/tickets/{live.id}/update-price/',
+            {'original_price': 220},
+            format='json',
+        )
+        self.assertEqual(res.status_code, 400, getattr(res, 'data', res.content))
+        self.assertEqual(res.data.get('error'), HE_PRICE_EDIT_LOCKED)
+        live.refresh_from_db()
+        self.assertEqual(live.asking_price, Decimal('249'))
+
     def test_quantity_two_does_not_replace_price_with_two(self):
         """Guard against qty/price field mix-ups (e.g. typed 10 with quantity 2 → saved 2)."""
         writer = PdfWriter()

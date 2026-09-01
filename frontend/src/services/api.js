@@ -868,7 +868,14 @@ export const ticketAPI = {
           maxContentLength: Infinity,
         }),
   updateTicket: (id, data) => api.put(`/users/tickets/${id}/`, data),
-  updateTicketPrice: (id, price) => api.patch(`/users/tickets/${id}/update-price/`, { original_price: price }),
+  updateTicketPrice: (id, price) => {
+    const amount = Number.parseFloat(String(price ?? '').replace(',', '.'));
+    const serialized = Number.isFinite(amount) ? String(amount) : String(price ?? '');
+    return api.patch(`/users/tickets/${id}/update-price/`, {
+      original_price: serialized,
+      listing_price: serialized,
+    });
+  },
   deleteTicket: (id) => api.delete(`/users/tickets/${id}/`),
   downloadPDF: (id, email = null) => {
     const config = {
