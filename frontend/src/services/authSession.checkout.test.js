@@ -211,3 +211,13 @@ describe('session expired interceptor vs payment verification', () => {
     expect(count).toBe(0);
   });
 });
+
+describe('isPaymentVerificationUrl', () => {
+  it('matches status, receipt, and bulk ticket download URLs', async () => {
+    const { isPaymentVerificationUrl } = await import('./api.js');
+    expect(isPaymentVerificationUrl('/users/orders/42/status/')).toBe(true);
+    expect(isPaymentVerificationUrl('/users/orders/42/receipt/')).toBe(true);
+    expect(isPaymentVerificationUrl('/users/orders/42/tickets/download/')).toBe(true);
+    expect(isPaymentVerificationUrl('/users/tickets/42/download_pdf/')).toBe(false);
+  });
+});

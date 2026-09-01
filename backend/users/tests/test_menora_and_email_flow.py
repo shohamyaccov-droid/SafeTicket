@@ -52,7 +52,7 @@ class MenoraAndEmailFlowTests(TestCase):
         self.assertNotIn('101', names)
 
     @mock.patch.dict('os.environ', {'RESEND_API_KEY': 're_test_key'})
-    @mock.patch('users.utils.emails.resend.Emails.send', return_value={'id': 'email_test'})
+    @mock.patch('users.utils.emails._post_resend_http', return_value={'id': 'email_test'})
     def test_ticket_approval_sends_one_resend_email(self, mock_resend_send):
         ticket = Ticket.objects.create(
             seller=self.seller,
@@ -74,7 +74,7 @@ class MenoraAndEmailFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 200, getattr(response, 'data', response.content))
         mock_resend_send.assert_called_once()
-        payload = mock_resend_send.call_args.args[0]
+        payload = mock_resend_send.call_args.args[1]
         self.assertEqual(payload['from'], 'TradeTix <onboarding@resend.dev>')
         self.assertEqual(payload['to'], [self.seller.email])
         self.assertIn('הכרטיס שלך אושר', payload['subject'])

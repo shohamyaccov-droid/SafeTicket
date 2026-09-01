@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { orderAPI } from '../services/api';
 import { Analytics } from '../utils/analytics';
 import { clearPaymePendingOrder } from '../utils/checkoutGuest';
 import { trackGoogleAdsPurchase } from '../utils/googleAdsConversions';
 import { trackMetaPurchase } from '../utils/metaPixel';
+import { downloadTicketFromAxiosBlob } from '../utils/ticketDownload';
 import './PaymeCheckoutSuccess.css';
 
 const POLL_MS = 2500;
 const TIMEOUT_MS = 10000;
-const DASHBOARD_REDIRECT_MS = 3000;
 
 const SAFE_SUCCESS_COPY =
   'התשלום התקבל בהצלחה! אנחנו מפיקים את הכרטיס והוא יישלח אליך למייל בדקות הקרובות.';
@@ -31,7 +31,6 @@ function isTransientStatusPollError(err) {
 
 export default function PaymeCheckoutSuccess() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const orderIdRaw = searchParams.get('order_id');
   const { user, loading: authLoading } = useAuth();
   const [phase, setPhase] = useState('processing'); // processing | success | safe_success | invalid
@@ -40,12 +39,15 @@ export default function PaymeCheckoutSuccess() {
   const [lastCheckedAt, setLastCheckedAt] = useState(null);
   const [checkError, setCheckError] = useState('');
   const [adsPurchase, setAdsPurchase] = useState(null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
   const pollTimerRef = useRef(null);
   const timeoutTimerRef = useRef(null);
-  const redirectTimerRef = useRef(null);
   const completedRef = useRef(false);
   const userRef = useRef(user);
   const authLoadingRef = useRef(authLoading);
+  const guestEmailRef = useRef(null);
+  const downloadTokenRef = useRef(null);
   userRef.current = user;
   authLoadingRef.current = authLoading;
 
@@ -70,13 +72,15 @@ export default function PaymeCheckoutSuccess() {
   const clearAllTimers = useCallback(() => {
     clearTimer(pollTimerRef);
     clearTimer(timeoutTimerRef);
-    clearTimer(redirectTimerRef);
   }, [clearTimer]);
 
   const markPaidSuccess = useCallback((data) => {
     completedRef.current = true;
     setPhase('success');
     clearAllTimers();
+    if (data?.download_token) {
+      downloadTokenRef.current = data.download_token;
+    }
     const paidValue = Number(data?.total_paid_by_buyer ?? data?.total_amount ?? 0);
     Analytics.checkoutComplete(orderId, {
       value: Number.isFinite(paidValue) ? paidValue : 0,
@@ -93,11 +97,6 @@ export default function PaymeCheckoutSuccess() {
       currency: data?.currency || 'ILS',
     });
     clearPaymePendingOrder();
-    try {
-      sessionStorage.removeItem('payme_checkout_guest_email');
-    } catch {
-      /* ignore */
-    }
   }, [clearAllTimers, orderId]);
 
   const checkStatusOnce = useCallback(async () => {
@@ -110,12 +109,18 @@ export default function PaymeCheckoutSuccess() {
     }
     setCheckError('');
     const guestEmail = userRef.current ? undefined : readGuestEmail() || undefined;
+    if (guestEmail) {
+      guestEmailRef.current = guestEmail;
+    }
     try {
       const res = await orderAPI.getPaymentStatus(orderId, guestEmail);
       const s = res.data?.status;
       setOrderStatus(s);
       setPaymeStatus(res.data?.payme_status ?? null);
       setLastCheckedAt(new Date());
+      if (res.data?.download_token) {
+        downloadTokenRef.current = res.data.download_token;
+      }
       if (s === 'paid' || s === 'completed') {
         markPaidSuccess(res.data);
         return true;
@@ -134,6 +139,26 @@ export default function PaymeCheckoutSuccess() {
     }
   }, [isValidOrderId, markPaidSuccess, orderId, readGuestEmail]);
 
+  const handleDownloadTickets = useCallback(async () => {
+    if (!isValidOrderId || downloading) return;
+    setDownloadError('');
+    setDownloading(true);
+    try {
+      const guestEmail = userRef.current
+        ? undefined
+        : guestEmailRef.current || readGuestEmail() || undefined;
+      const response = await orderAPI.downloadTickets(orderId, {
+        guestEmail,
+        downloadToken: downloadTokenRef.current || undefined,
+      });
+      downloadTicketFromAxiosBlob(response, { ticketId: `order-${orderId}` });
+    } catch {
+      setDownloadError('לא הצלחנו להוריד את הכרטיסים כרגע. נסו שוב או בדקו את המייל.');
+    } finally {
+      setDownloading(false);
+    }
+  }, [downloading, isValidOrderId, orderId, readGuestEmail]);
+
   useEffect(() => {
     if (!isValidOrderId) {
       setPhase('invalid');
@@ -143,6 +168,7 @@ export default function PaymeCheckoutSuccess() {
     let cancelled = false;
     const startedAt = Date.now();
     setPhase('processing');
+    guestEmailRef.current = readGuestEmail();
 
     const poll = async () => {
       if (cancelled || completedRef.current) return;
@@ -169,7 +195,7 @@ export default function PaymeCheckoutSuccess() {
       cancelled = true;
       clearAllTimers();
     };
-  }, [checkStatusOnce, clearAllTimers, clearTimer, isValidOrderId]);
+  }, [checkStatusOnce, clearAllTimers, clearTimer, isValidOrderId, readGuestEmail]);
 
   useEffect(() => {
     if (!adsPurchase) return;
@@ -180,15 +206,25 @@ export default function PaymeCheckoutSuccess() {
     });
   }, [adsPurchase]);
 
-  useEffect(() => {
-    if (phase !== 'success' || authLoading || !user) {
-      return undefined;
-    }
-    redirectTimerRef.current = window.setTimeout(() => {
-      navigate('/dashboard', { replace: true });
-    }, DASHBOARD_REDIRECT_MS);
-    return () => clearTimer(redirectTimerRef);
-  }, [authLoading, clearTimer, navigate, phase, user]);
+  const showDownloadButton = phase === 'success' || phase === 'safe_success';
+  const isLoggedIn = Boolean(user);
+
+  const downloadActions = showDownloadButton ? (
+    <div className="payme-return-actions">
+      <button
+        type="button"
+        className="payme-download-button"
+        onClick={handleDownloadTickets}
+        disabled={downloading}
+      >
+        {downloading ? 'מוריד כרטיסים...' : 'הורד כרטיסים עכשיו'}
+      </button>
+      {downloadError ? <p className="payme-download-error">{downloadError}</p> : null}
+      <Link to={isLoggedIn ? '/dashboard' : '/'} className="payme-return-button payme-return-button--secondary">
+        {isLoggedIn ? 'לאזור האישי' : 'חזרה לדף הבית'}
+      </Link>
+    </div>
+  ) : null;
 
   if (phase === 'invalid') {
     return (
@@ -202,7 +238,6 @@ export default function PaymeCheckoutSuccess() {
     );
   }
 
-  const isLoggedIn = Boolean(user);
   const lastStatusText = [
     orderStatus ? `סטטוס הזמנה: ${orderStatus}` : null,
     paymeStatus ? `PayMe: ${paymeStatus}` : null,
@@ -234,18 +269,12 @@ export default function PaymeCheckoutSuccess() {
               <p className="payme-return-message">
                 התשלום הושלם בהצלחה! בודקים את פרטי החשבון...
               </p>
-            ) : isLoggedIn ? (
-              <p className="payme-return-message">
-                התשלום הושלם בהצלחה! הכרטיס נשלח אליך למייל. מעביר אותך כעת לאזור האישי...
-              </p>
             ) : (
-              <>
-                <p className="payme-return-message">
-                  התשלום הושלם בהצלחה! הכרטיס והקבלה נשלחו לכתובת המייל שהזנת. תודה!
-                </p>
-                <Link to="/" className="payme-return-button">חזרה לדף הבית</Link>
-              </>
+              <p className="payme-return-message">
+                התשלום הושלם בהצלחה! הכרטיסים מוכנים להורדה. שלחנו גם עותק למייל.
+              </p>
             )}
+            {downloadActions}
           </>
         )}
 
@@ -257,9 +286,7 @@ export default function PaymeCheckoutSuccess() {
             <p className="payme-return-subtext">
               אין צורך להישאר בעמוד הזה. אם המייל לא מגיע תוך כמה דקות, בדקו בספאם או פנו לתמיכה עם מספר ההזמנה.
             </p>
-            <Link to={isLoggedIn ? '/dashboard' : '/'} className="payme-return-button">
-              {isLoggedIn ? 'לאזור האישי' : 'חזרה לדף הבית'}
-            </Link>
+            {downloadActions}
           </>
         )}
 

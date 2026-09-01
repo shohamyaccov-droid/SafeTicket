@@ -15,6 +15,11 @@ def build_ticket_download_token(ticket_id: int, order_id: int) -> str:
     return signing.dumps(payload, salt=_DOWNLOAD_SALT)
 
 
+def build_order_download_token(order_id: int) -> str:
+    payload = {'o': int(order_id), 'bulk': 1}
+    return signing.dumps(payload, salt=_DOWNLOAD_SALT)
+
+
 def verify_ticket_download_token(token: str) -> dict | None:
     if not token or not str(token).strip():
         return None
@@ -30,4 +35,23 @@ def verify_ticket_download_token(token: str) -> dict | None:
             return None
         return {'t': int(data['t']), 'o': int(data['o'])}
     except (signing.BadSignature, signing.SignatureExpired, TypeError, ValueError):
+        return None
+
+
+def verify_order_download_token(token: str) -> int | None:
+    """Return order id for a bulk-download token, or None."""
+    if not token or not str(token).strip():
+        return None
+    try:
+        data = signing.loads(
+            str(token).strip(),
+            salt=_DOWNLOAD_SALT,
+            max_age=_MAX_AGE_SECONDS,
+        )
+        if not isinstance(data, dict):
+            return None
+        if int(data.get('bulk') or 0) != 1:
+            return None
+        return int(data['o'])
+    except (signing.BadSignature, signing.SignatureExpired, TypeError, ValueError, KeyError):
         return None

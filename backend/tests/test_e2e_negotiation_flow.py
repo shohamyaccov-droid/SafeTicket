@@ -163,7 +163,7 @@ class NegotiatedOfferPayMeWalletE2ETests(MockPayMeSaleConfirmMixin, TestCase):
     @patch('users.payments.threading.Thread', ImmediateThread)
     @patch('users.payments.transaction.on_commit', side_effect=lambda callback: callback())
     @patch('users.payme_views.generate_payme_sale_for_order')
-    @patch('users.utils.emails.resend.Emails.send', return_value={'id': 'email_negotiation'})
+    @patch('users.utils.emails._post_resend_http', return_value={'id': 'email_negotiation'})
     def test_counter_offer_acceptance_checkout_payme_wallet_and_receipt_math(
         self,
         mock_resend_send,

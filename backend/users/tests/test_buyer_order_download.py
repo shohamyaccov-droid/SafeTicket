@@ -110,3 +110,51 @@ class BuyerOrderDownloadTimelineTests(TestCase):
         self.assertTrue(purchase['pdf_download_url'])
         self.assertIn(str(self.ticket.pk), purchase['pdf_download_url'])
         self.assertEqual(purchase['tickets'][0]['id'], self.ticket.pk)
+
+    def test_buyer_bulk_download_single_ticket_returns_pdf(self):
+        self.client.force_authenticate(user=self.buyer)
+        res = self.client.get(f'/api/users/orders/{self.order.pk}/tickets/download/')
+        self.assertEqual(res.status_code, 200, res.content[:200])
+        self.assertTrue(res['Content-Type'].startswith('application/pdf'))
+        self.assertTrue(res.content.startswith(b'%PDF'))
+        self.assertNotEqual(res.status_code, 401)
+
+    def test_buyer_bulk_download_multiple_tickets_returns_zip(self):
+        second = Ticket.objects.create(
+            seller=self.seller,
+            event=self.event,
+            event_name=self.event.name,
+            event_date=self.event.date,
+            venue=self.event.venue,
+            original_price=Decimal('100.00'),
+            asking_price=Decimal('100.00'),
+            status='sold',
+            available_quantity=0,
+            pdf_file=SimpleUploadedFile('ticket-2.pdf', b'%PDF-1.4 second', content_type='application/pdf'),
+        )
+        self.order.quantity = 2
+        self.order.ticket_ids = [self.ticket.pk, second.pk]
+        self.order.save(update_fields=['quantity', 'ticket_ids'])
+        self.client.force_authenticate(user=self.buyer)
+        res = self.client.get(f'/api/users/orders/{self.order.pk}/tickets/download/')
+        self.assertEqual(res.status_code, 200, res.content[:200])
+        self.assertEqual(res['Content-Type'], 'application/zip')
+        self.assertTrue(res.content.startswith(b'PK'))
+        self.assertIn(f'tradetix-order-{self.order.pk}-tickets.zip', res['Content-Disposition'])
+
+    def test_anonymous_bulk_download_without_token_is_404_not_401(self):
+        res = self.client.get(f'/api/users/orders/{self.order.pk}/tickets/download/')
+        self.assertEqual(res.status_code, 404)
+        self.assertNotEqual(res.status_code, 401)
+        self.assertTrue(res['Content-Type'].startswith('text/plain'))
+
+    def test_signed_order_token_allows_anonymous_bulk_download(self):
+        from users.ticket_download_tokens import build_order_download_token
+
+        token = build_order_download_token(self.order.pk)
+        res = self.client.get(
+            f'/api/users/orders/{self.order.pk}/tickets/download/',
+            {'dl': token},
+        )
+        self.assertEqual(res.status_code, 200, res.content[:200])
+        self.assertTrue(res.content.startswith(b'%PDF'))

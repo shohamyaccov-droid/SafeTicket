@@ -148,7 +148,7 @@ class HybridSeatingListingEmailResilienceTests(TestCase):
         self.assertEqual(t.get_section_display(), 'Terrace 9')
 
     @mock.patch.dict('os.environ', {'RESEND_API_KEY': 're_test_key'})
-    @mock.patch('users.utils.emails.resend.Emails.send', side_effect=OSError('Resend failure'))
+    @mock.patch('users.utils.emails._post_resend_http', side_effect=OSError('Resend failure'))
     def test_ticket_creation_succeeds_when_mailer_raises(self, _mock_send):
         b = _pdf_bytes()
         pdf = SimpleUploadedFile('t.pdf', b, content_type='application/pdf')
@@ -175,7 +175,7 @@ class HybridSeatingListingEmailResilienceTests(TestCase):
         from users.notifications import _send_notification
 
         with mock.patch.dict('os.environ', {'RESEND_API_KEY': 're_test_key'}), mock.patch(
-            'users.utils.emails.resend.Emails.send',
+            'users.utils.emails._post_resend_http',
             side_effect=OSError('Resend failure'),
         ):
             _send_notification(

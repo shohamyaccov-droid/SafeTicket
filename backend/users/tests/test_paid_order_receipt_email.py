@@ -199,3 +199,80 @@ class ResendTicketEmailAdminActionTests(TestCase):
         mock_send.assert_not_called()
         texts = [str(m) for m in request._messages]
         self.assertTrue(any(t.startswith('Failed to send:') and 'pending_payment' in t for t in texts), texts)
+
+
+class ResendHttpTransportTests(TestCase):
+    @override_settings(
+        EMAIL_HOST='smtp.gmail.com',
+        EMAIL_HOST_USER='tradetix@gmail.com',
+        EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend',
+    )
+    def test_resend_key_uses_https_api_not_django_smtp(self):
+        from users.utils.emails import send_branded_email
+
+        with patch.dict('os.environ', {'RESEND_API_KEY': 're_test'}):
+            with patch('users.utils.emails.build_branded_email', return_value=('plain', '<p>hi</p>')):
+                with patch(
+                    'users.utils.emails._send_django_email',
+                    side_effect=OSError(101, 'Network is unreachable'),
+                ) as smtp:
+                    with patch(
+                        'users.utils.emails._post_resend_http',
+                        return_value={'id': 're_1'},
+                    ) as http:
+                        sent = send_branded_email(
+                            subject='Test',
+                            to_email='buyer@example.test',
+                            template_basename='purchase_receipt',
+                        )
+        self.assertEqual(sent, 1)
+        smtp.assert_not_called()
+        http.assert_called_once()
+        api_key, payload = http.call_args.args
+        self.assertEqual(api_key, 're_test')
+        self.assertEqual(payload['to'], ['buyer@example.test'])
+        self.assertEqual(payload['from'], 'TradeTix <onboarding@resend.dev>')
+
+    @override_settings(
+        EMAIL_HOST='smtp.gmail.com',
+        EMAIL_HOST_USER='tradetix@gmail.com',
+        RESEND_API_KEY='',
+    )
+    def test_smtp_unreachable_without_resend_does_not_retry_django_email(self):
+        from users.utils.emails import send_branded_email
+
+        with patch.dict('os.environ', {'RESEND_API_KEY': ''}, clear=False):
+            with patch('users.utils.emails.build_branded_email', return_value=('plain', '<p>hi</p>')):
+                with patch(
+                    'users.utils.emails._send_django_email',
+                    side_effect=OSError(101, 'Network is unreachable'),
+                ) as smtp:
+                    with patch('users.utils.emails._post_resend_http') as http:
+                        with self.assertRaises(OSError):
+                            send_branded_email(
+                                subject='Test',
+                                to_email='buyer@example.test',
+                                template_basename='purchase_receipt',
+                            )
+        self.assertEqual(smtp.call_count, 1)
+        http.assert_not_called()
+
+    def test_post_resend_http_posts_to_resend_api(self):
+        from unittest.mock import MagicMock
+
+        from users.utils.emails import RESEND_API_URL, _post_resend_http
+
+        fake = MagicMock()
+        fake.status_code = 200
+        fake.content = b'{"id":"abc"}'
+        fake.json.return_value = {'id': 'abc'}
+        with patch('requests.post', return_value=fake) as post:
+            result = _post_resend_http(
+                're_key',
+                {'from': 'TradeTix <onboarding@resend.dev>', 'to': ['a@b.test'], 'subject': 's', 'html': '<p>x</p>'},
+            )
+        post.assert_called_once()
+        self.assertEqual(post.call_args.args[0], RESEND_API_URL)
+        self.assertEqual(RESEND_API_URL, 'https://api.resend.com/emails')
+        self.assertEqual(post.call_args.kwargs['headers']['Authorization'], 'Bearer re_key')
+        self.assertEqual(result['id'], 'abc')

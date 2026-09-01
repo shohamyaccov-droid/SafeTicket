@@ -223,7 +223,7 @@ export function isTransientNetworkOrGatewayError(error) {
 }
 
 export function isPaymentVerificationUrl(url = '') {
-  return /\/orders\/\d+\/(receipt|status)\/?/.test(String(url || ''));
+  return /\/orders\/\d+\/(receipt|status|tickets\/download)\/?/.test(String(url || ''));
 }
 
 /** Timeouts / 504s / PayMe status polls must never purge a valid session. */
@@ -634,6 +634,17 @@ export const orderAPI = {
       skipAuth: Boolean(guestEmail),
       skipSessionExpired: true,
       timeout: 8000,
+    }),
+  downloadTickets: (orderId, { guestEmail, downloadToken } = {}) =>
+    api.get(`/users/orders/${orderId}/tickets/download/`, {
+      params: {
+        ...(guestEmail ? { email: guestEmail } : {}),
+        ...(downloadToken ? { dl: downloadToken } : {}),
+      },
+      skipAuth: Boolean(guestEmail || downloadToken),
+      skipSessionExpired: true,
+      responseType: 'blob',
+      timeout: 60000,
     }),
   validateCoupon: async (data) => {
     await ensureCsrfToken();

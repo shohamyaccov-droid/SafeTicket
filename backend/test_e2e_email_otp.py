@@ -98,7 +98,7 @@ class E2EEmailOTPTest(TransactionTestCase):
         self.assertTrue(user.is_email_verified)
 
     @mock.patch.dict('os.environ', {'RESEND_API_KEY': 're_test_key'})
-    @mock.patch('users.utils.emails.resend.Emails.send', return_value={'id': 'email_test'})
+    @mock.patch('users.utils.emails._post_resend_http', return_value={'id': 'email_test'})
     def test_3_pdf_receipt_delivery(self, mock_resend_send):
         """
         Buy-now flow: payment simulate + order; receipt mail with attachment.

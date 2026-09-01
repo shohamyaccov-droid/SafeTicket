@@ -1,17 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 import PaymeCheckoutSuccess from './PaymeCheckoutSuccess';
 import { orderAPI } from '../services/api';
 import { trackGoogleAdsPurchase } from '../utils/googleAdsConversions';
+import { downloadTicketFromAxiosBlob } from '../utils/ticketDownload';
 
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({ user: null, loading: false }),
 }));
 
 vi.mock('../services/api', () => ({
-  orderAPI: { getReceipt: vi.fn(), getPaymentStatus: vi.fn() },
+  orderAPI: { getReceipt: vi.fn(), getPaymentStatus: vi.fn(), downloadTickets: vi.fn() },
 }));
 
 vi.mock('../utils/analytics', () => ({
@@ -30,6 +31,10 @@ vi.mock('../utils/metaPixel', () => ({
   trackMetaPurchase: vi.fn(),
 }));
 
+vi.mock('../utils/ticketDownload', () => ({
+  downloadTicketFromAxiosBlob: vi.fn(),
+}));
+
 function renderSuccess(search = '?order_id=42') {
   return render(
     <MemoryRouter initialEntries={[`/checkout/payme/success${search}`]}>
@@ -44,6 +49,8 @@ describe('PaymeCheckoutSuccess Google Ads Purchase', () => {
   beforeEach(() => {
     vi.mocked(orderAPI.getPaymentStatus).mockReset();
     vi.mocked(orderAPI.getReceipt).mockReset();
+    vi.mocked(orderAPI.downloadTickets).mockReset();
+    vi.mocked(downloadTicketFromAxiosBlob).mockReset();
     vi.mocked(trackGoogleAdsPurchase).mockClear();
   });
 
@@ -125,5 +132,28 @@ describe('PaymeCheckoutSuccess Google Ads Purchase', () => {
         'התשלום התקבל בהצלחה! אנחנו מפיקים את הכרטיס והוא יישלח אליך למייל בדקות הקרובות.',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('shows download tickets button after paid confirmation and fetches the bulk file', async () => {
+    const blobResponse = { data: new Blob(['pdf']), headers: { 'content-type': 'application/pdf' } };
+    vi.mocked(orderAPI.getPaymentStatus).mockResolvedValue({
+      data: {
+        status: 'paid',
+        total_paid_by_buyer: 187.5,
+        currency: 'ILS',
+        download_token: 'signed-dl',
+      },
+    });
+    vi.mocked(orderAPI.downloadTickets).mockResolvedValue(blobResponse);
+    renderSuccess();
+    const button = await screen.findByRole('button', { name: 'הורד כרטיסים עכשיו' });
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(orderAPI.downloadTickets).toHaveBeenCalledWith(42, {
+        guestEmail: undefined,
+        downloadToken: 'signed-dl',
+      });
+    });
+    expect(downloadTicketFromAxiosBlob).toHaveBeenCalledWith(blobResponse, { ticketId: 'order-42' });
   });
 });

@@ -19,6 +19,7 @@ function filenameFromContentDisposition(headers = {}) {
 
 function extensionFromMime(mime) {
   if (mime === 'application/pdf') return '.pdf';
+  if (mime === 'application/zip' || mime === 'application/x-zip-compressed') return '.zip';
   if (mime === 'image/jpeg' || mime === 'image/jpg') return '.jpg';
   if (mime === 'image/png') return '.png';
   if (mime === 'image/webp') return '.webp';

@@ -39,6 +39,7 @@ from django.db import transaction
 from django.core.files.base import ContentFile
 import io
 import logging
+import zipfile
 from collections import defaultdict
 import secrets
 import traceback
@@ -380,7 +381,11 @@ from .serializers import (
     build_listing_primary_order_map,
     user_can_access_ticket_pdf,
 )
-from .ticket_download_tokens import verify_ticket_download_token
+from .ticket_download_tokens import (
+    build_order_download_token,
+    verify_order_download_token,
+    verify_ticket_download_token,
+)
 from .models import (
     AnalyticsEvent,
     Artist,
@@ -1708,11 +1713,18 @@ def _buyer_order_for_payment_status(request, order_id):
         'total_amount',
         'total_paid_by_buyer',
         'currency',
+        'ticket_id',
+        'ticket_ids',
     )
     if request.user.is_authenticated:
         owned = qs.filter(user=request.user).first()
         if owned:
             return owned
+        email = (getattr(request.user, 'email', None) or '').strip()
+        if email:
+            by_email = qs.filter(guest_email__iexact=email).first()
+            if by_email:
+                return by_email
     guest_email = (request.query_params.get('email') or '').strip()
     if not guest_email:
         return None
@@ -1720,6 +1732,102 @@ def _buyer_order_for_payment_status(request, order_id):
         guest_email__iexact=guest_email,
         status__in=['paid', 'completed', 'pending_payment'],
     ).first()
+
+
+def _ticket_ids_for_order(order):
+    ids = []
+    seen = set()
+    for raw in list(getattr(order, 'ticket_ids', None) or []):
+        try:
+            tid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if tid not in seen:
+            seen.add(tid)
+            ids.append(tid)
+    ticket_id = getattr(order, 'ticket_id', None)
+    if ticket_id:
+        tid = int(ticket_id)
+        if tid not in seen:
+            ids.insert(0, tid)
+    return ids
+
+
+def _order_download_authorized(request, order) -> bool:
+    """True when the caller may download tickets for this paid order."""
+    if order.status not in ('paid', 'completed'):
+        return False
+    user = request.user
+    if getattr(user, 'is_authenticated', False):
+        if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+            return True
+        if order.user_id and order.user_id == user.id:
+            return True
+        email = (getattr(user, 'email', None) or '').strip()
+        if email and (order.guest_email or '').strip() and email.lower() == order.guest_email.strip().lower():
+            return True
+    guest_email = (request.query_params.get('email') or '').strip()
+    if guest_email and (order.guest_email or '').strip() and guest_email.lower() == order.guest_email.strip().lower():
+        return True
+    raw_dl = (request.query_params.get('dl') or '').strip()
+    if not raw_dl:
+        return False
+    bulk_oid = verify_order_download_token(raw_dl)
+    if bulk_oid is not None and int(bulk_oid) == int(order.pk):
+        return True
+    payload = verify_ticket_download_token(raw_dl)
+    if payload and int(payload.get('o') or 0) == int(order.pk):
+        return True
+    return False
+
+
+def _ticket_file_bytes_for_download(ticket):
+    if not ticket.pdf_file:
+        return None
+    if getattr(settings, 'USE_CLOUDINARY', False):
+        from users.secure_ticket_storage import fetch_ticket_file_field_bytes
+
+        return fetch_ticket_file_field_bytes(ticket.pdf_file, validate_magic=False)
+    ticket.pdf_file.open('rb')
+    try:
+        return ticket.pdf_file.read()
+    finally:
+        ticket.pdf_file.close()
+
+
+def _ticket_archive_member_name(content: bytes, ticket) -> str:
+    sample = bytes(content or b'')[:12]
+    if sample.startswith(b'%PDF'):
+        ext = '.pdf'
+    elif sample.startswith(b'\xff\xd8\xff'):
+        ext = '.jpg'
+    elif len(sample) >= 8 and sample.startswith(b'\x89PNG\r\n\x1a\n'):
+        ext = '.png'
+    else:
+        import os
+
+        stored_name = getattr(getattr(ticket, 'pdf_file', None), 'name', '') or ''
+        ext = os.path.splitext(stored_name)[1] or '.bin'
+    return f'ticket_{ticket.pk}{ext}'
+
+
+def _zip_ticket_files_response(order, files: list[tuple]) -> HttpResponse:
+    buf = io.BytesIO()
+    used_names = set()
+    with zipfile.ZipFile(buf, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        for ticket, content in files:
+            name = _ticket_archive_member_name(content, ticket)
+            if name in used_names:
+                stem, ext = name.rsplit('.', 1) if '.' in name else (name, 'bin')
+                name = f'{stem}_{ticket.pk}.{ext}'
+            used_names.add(name)
+            zf.writestr(name, bytes(content or b''))
+    payload = buf.getvalue()
+    response = HttpResponse(payload, content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="tradetix-order-{order.pk}-tickets.zip"'
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Content-Length'] = str(len(payload))
+    return response
 
 
 @api_view(['GET'])
@@ -1734,19 +1842,62 @@ def order_payment_status(request, order_id):
     order = _buyer_order_for_payment_status(request, order_id)
     if not order:
         return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
-    return Response(
-        {
-            'order_id': order.id,
-            'status': order.status,
-            'payme_status': getattr(order, 'payme_status', None),
-            'total_amount': str(order.total_amount) if order.total_amount is not None else None,
-            'total_paid_by_buyer': (
-                str(order.total_paid_by_buyer) if order.total_paid_by_buyer is not None else None
-            ),
-            'currency': (order.currency or 'ILS').strip().upper(),
-        },
-        status=status.HTTP_200_OK,
-    )
+    payload = {
+        'order_id': order.id,
+        'status': order.status,
+        'payme_status': getattr(order, 'payme_status', None),
+        'total_amount': str(order.total_amount) if order.total_amount is not None else None,
+        'total_paid_by_buyer': (
+            str(order.total_paid_by_buyer) if order.total_paid_by_buyer is not None else None
+        ),
+        'currency': (order.currency or 'ILS').strip().upper(),
+    }
+    if order.status in ('paid', 'completed'):
+        payload['download_token'] = build_order_download_token(order.id)
+        payload['ticket_count'] = len(_ticket_ids_for_order(order))
+    return Response(payload, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def order_tickets_download(request, order_id):
+    """
+    Download every ticket file for a paid order as one attachment.
+    One file → original PDF/image. Multiple files → ZIP archive.
+    Always a raw HttpResponse (never DRF browsable HTML). Never 401.
+    """
+    order = Order.objects.filter(pk=order_id).first()
+    if order is None or not _order_download_authorized(request, order):
+        return _plain_download_error('Order not found.', status.HTTP_404_NOT_FOUND)
+
+    ticket_ids = _ticket_ids_for_order(order)
+    if not ticket_ids:
+        return _plain_download_error('No tickets on this order.', status.HTTP_404_NOT_FOUND)
+
+    tickets_by_id = {
+        t.pk: t
+        for t in Ticket.objects.filter(pk__in=ticket_ids)
+    }
+    files = []
+    for tid in ticket_ids:
+        ticket = tickets_by_id.get(tid)
+        if ticket is None:
+            continue
+        try:
+            content = _ticket_file_bytes_for_download(ticket)
+        except Exception:
+            logger.exception('order_tickets_download fetch failed for ticket %s', ticket.pk)
+            continue
+        if content:
+            files.append((ticket, bytes(content)))
+
+    if not files:
+        return _plain_download_error('Could not retrieve ticket files.', status.HTTP_404_NOT_FOUND)
+
+    if len(files) == 1:
+        ticket, content = files[0]
+        return _ticket_file_download_response(content, ticket)
+    return _zip_ticket_files_response(order, files)
 
 
 def _pending_payment_blocks_price_edit(ticket: Ticket) -> bool:

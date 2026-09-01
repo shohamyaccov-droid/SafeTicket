@@ -10,11 +10,11 @@ from urllib.parse import quote
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
-import resend
 
 logger = logging.getLogger(__name__)
 
 RESEND_FROM_EMAIL = 'TradeTix <onboarding@resend.dev>'
+RESEND_API_URL = 'https://api.resend.com/emails'
 
 
 def _frontend_origin() -> str:
@@ -63,7 +63,9 @@ def _resend_attachment_payloads(attachments: list[tuple[str, bytes, str]] | None
 
 
 def _resend_api_key() -> str:
-    return (os.environ.get('RESEND_API_KEY') or getattr(settings, 'RESEND_API_KEY', '') or '').strip()
+    if 'RESEND_API_KEY' in os.environ:
+        return (os.environ.get('RESEND_API_KEY') or '').strip()
+    return (getattr(settings, 'RESEND_API_KEY', '') or '').strip()
 
 
 def _smtp_configured() -> bool:
@@ -229,6 +231,30 @@ def _send_django_email(
         raise
 
 
+def _post_resend_http(api_key: str, payload: dict) -> dict:
+    """POST to Resend's HTTPS API. Never uses Django's SMTP backend."""
+    import requests
+
+    response = requests.post(
+        RESEND_API_URL,
+        json=payload,
+        headers={
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+        },
+        timeout=30,
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(
+            f'Resend HTTP {response.status_code}: {(response.text or "")[:400]}'
+        )
+    try:
+        data = response.json() if response.content else {}
+    except Exception:
+        data = {}
+    return data if isinstance(data, dict) else {'id': 'sent'}
+
+
 def send_resend_email(
     *,
     subject: str,
@@ -252,7 +278,6 @@ def send_resend_email(
             return 0
         raise RuntimeError(msg)
 
-    resend.api_key = api_key
     payload = {
         'from': RESEND_FROM_EMAIL,
         'to': [recipient],
@@ -266,12 +291,17 @@ def send_resend_email(
         payload['attachments'] = attachment_payloads
 
     try:
-        resend.Emails.send(payload)
-        logger.info('send_resend_email: sent template=%s recipient=%s', template_basename, recipient)
+        result = _post_resend_http(api_key, payload)
+        logger.info(
+            'send_resend_email: sent template=%s recipient=%s resend_id=%s',
+            template_basename,
+            recipient,
+            (result or {}).get('id'),
+        )
         return 1
     except Exception as exc:
         logger.error(
-            'send_resend_email: Resend API failed template=%s recipient=%s subject=%s error=%s',
+            'send_resend_email: Resend HTTP API failed template=%s recipient=%s subject=%s error=%s',
             template_basename,
             recipient,
             subject,
@@ -309,28 +339,60 @@ def send_branded_email(
     }
     smtp_ok = _smtp_configured()
     resend_ok = bool(_resend_api_key())
-    # Prefer Django SMTP when EMAIL_HOST is configured (Gmail App Password is the
-    # proven production path). Resend sandbox (onboarding@resend.dev) often reports
-    # success while never delivering to the buyer.
+
+    def _send_via_resend_http() -> int:
+        # Named args only — never reuse SMTP kwargs / never call _send_django_email.
+        return send_resend_email(
+            subject=subject,
+            to_email=recipient,
+            html_body=html_body,
+            text_body=text_body,
+            attachments=attachments,
+            template_basename=template_basename,
+            fail_silently=False,
+        )
+
+    # Render blocks outbound SMTP (Errno 101 Network is unreachable). When a
+    # Resend API key is present, send only via HTTPS — do not touch Django SMTP.
+    if resend_ok:
+        try:
+            sent = _send_via_resend_http()
+            if sent:
+                return sent
+        except Exception:
+            logger.error(
+                'send_branded_email: Resend HTTP failed template=%s recipient=%s',
+                template_basename,
+                recipient,
+                exc_info=True,
+            )
+            if fail_silently:
+                return 0
+            raise
+        if fail_silently:
+            return 0
+        raise RuntimeError('Resend send failed')
+
     if smtp_ok:
         try:
             sent = _send_django_email(**kwargs)
             if sent:
                 return sent
         except Exception:
-            if resend_ok:
-                logger.error(
-                    'send_branded_email: SMTP failed, falling back to Resend template=%s recipient=%s',
-                    template_basename,
-                    recipient,
-                    exc_info=True,
-                )
-                return send_resend_email(**kwargs)
+            logger.error(
+                'send_branded_email: SMTP failed and RESEND_API_KEY is not set '
+                'template=%s recipient=%s',
+                template_basename,
+                recipient,
+                exc_info=True,
+            )
             if fail_silently:
                 return 0
             raise
-    if resend_ok:
-        return send_resend_email(**kwargs)
+        if fail_silently:
+            return 0
+        raise RuntimeError('SMTP send returned 0')
+
     if getattr(settings, 'TESTING', False):
         return _send_django_email(**kwargs)
     logger.error(

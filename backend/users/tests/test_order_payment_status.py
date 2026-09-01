@@ -77,7 +77,17 @@ class OrderPaymentStatusTests(TestCase):
         self.assertEqual(res.data['order_id'], self.order.pk)
         self.assertEqual(res.data['status'], 'pending_payment')
         self.assertEqual(res.data['payme_status'], 'pending')
+        self.assertNotIn('download_token', res.data)
         send_mail.assert_not_called()
+
+    def test_paid_status_includes_download_token(self):
+        self.order.status = 'paid'
+        self.order.save(update_fields=['status'])
+        self.client.force_authenticate(self.buyer)
+        res = self.client.get(STATUS_URL.format(self.order.pk))
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.data.get('download_token'))
+        self.assertEqual(res.data.get('ticket_count'), 1)
 
     def test_guest_with_matching_email_can_poll(self):
         with patch('users.utils.emails.send_receipt_with_pdf') as send_pdf:

@@ -218,7 +218,7 @@ class ProductionPurchaseLifecycleStressTests(MockPayMeSaleConfirmMixin, TestCase
     @patch('users.payments.threading.Thread', ImmediateThread)
     @patch('users.payments.transaction.on_commit', side_effect=lambda callback: callback())
     @patch('users.payme_views.generate_payme_sale_for_order')
-    @patch('users.utils.emails.resend.Emails.send', return_value={'id': 'email_stress'})
+    @patch('users.utils.emails._post_resend_http', return_value={'id': 'email_stress'})
     def test_randomized_full_lifecycle_10x_idempotent_webhooks_wallet_receipts_and_fee_math(
         self,
         mock_resend_send,
