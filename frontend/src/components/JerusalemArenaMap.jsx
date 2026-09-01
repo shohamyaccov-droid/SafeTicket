@@ -1,7 +1,7 @@
 /* eslint-disable react/prop-types -- project does not use PropTypes consistently */
 import { useState, useMemo, useCallback } from 'react';
 import { useVenueMapPanZoom } from '../hooks/useVenueMapPanZoom';
-import { getTicketPrice, formatMoney, resolveTicketCurrency } from '../utils/priceFormat';
+import { getTicketPrice, formatListingMoney, resolveTicketCurrency } from '../utils/priceFormat';
 import {
   VIEW_W,
   VIEW_H,
@@ -115,7 +115,7 @@ function layoutPins(rows) {
     const t = rep.firstTicket;
     const raw = parseFloat(getTicketPrice(t));
     const cur = resolveTicketCurrency(t);
-    const priceLabel = formatMoney(Number.isFinite(raw) ? raw : 0, cur);
+    const priceLabel = formatListingMoney(Number.isFinite(raw) ? raw : 0, cur);
     const n = rep.group.available_count ?? 0;
     const isBestPrice =
       Number.isFinite(raw) &&

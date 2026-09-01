@@ -1,7 +1,7 @@
 /* eslint-disable react/prop-types -- project does not use PropTypes consistently */
 import { useMemo, useCallback, useState } from 'react';
 import { useVenueMapPanZoom } from '../hooks/useVenueMapPanZoom';
-import { getTicketPrice, formatMoney, resolveTicketCurrency } from '../utils/priceFormat';
+import { getTicketPrice, formatListingMoney, resolveTicketCurrency } from '../utils/priceFormat';
 import {
   CONCERT_BLOCKS,
   CONCERT_BLOCK_COUNT,
@@ -321,7 +321,7 @@ export default function BloomfieldConcertMap({
               const priceLine = isTaken
                 ? MAP_TAKEN_BUBBLE_LABEL
                 : has && Number.isFinite(raw)
-                  ? formatMoney(raw, cur)
+                  ? formatListingMoney(raw, cur)
                   : '';
               const pts = concertBlockPolygonPoints(b);
               const { cx, cy } = blockCenter(b);

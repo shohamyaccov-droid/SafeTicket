@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useState, useCallback } from 'react';
-import { currencySymbol, formatAmountForCurrency } from '../utils/priceFormat';
+import { currencySymbol, formatListingAmountForCurrency } from '../utils/priceFormat';
 import {
   MAP_FILL_AVAILABLE,
   MAP_FILL_TAKEN,
@@ -323,7 +323,7 @@ const InteractiveMenoraMap = ({
                     >
                       {isTaken
                         ? MAP_TAKEN_BUBBLE_LABEL
-                        : `${currencySymbol(currencyIso)}${formatAmountForCurrency(price, currencyIso)}`}
+                        : `${currencySymbol(currencyIso)}${formatListingAmountForCurrency(price, currencyIso)}`}
                     </text>
                     <polygon
                       points="0,12 -6,18 6,18"

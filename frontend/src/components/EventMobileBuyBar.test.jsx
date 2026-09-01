@@ -16,7 +16,7 @@ describe('EventMobileBuyBar', () => {
         onBuy={onBuy}
       />
     );
-    expect(screen.getByText(/₪\s*160\.50/)).toBeInTheDocument();
+    expect(screen.getByText(/₪\s*161/)).toBeInTheDocument();
     expect(screen.queryByText(/דמי שירות/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'קנה עכשיו' }));
     expect(onBuy).toHaveBeenCalledTimes(1);

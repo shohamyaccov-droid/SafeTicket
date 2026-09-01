@@ -8,6 +8,7 @@ import {
   buyerChargeFromBaseWithAffiliateCoupon,
   buyerChargeFromBaseWithFixedCoupon,
   formatAmountForCurrency,
+  formatListingAmountForCurrency,
   getTicketBaseNumeric,
   iso4217FromCountry,
 } from './priceFormat.js';
@@ -62,5 +63,13 @@ describe('formatAmountForCurrency edge cases', () => {
     expect(getTicketBaseNumeric(null)).toBe(0);
     expect(getTicketBaseNumeric({ asking_price: 'x' })).toBe(0);
     expect(getTicketBaseNumeric({ asking_price: '-5' })).toBe(-5);
+  });
+});
+
+describe('formatListingAmountForCurrency', () => {
+  it('hides decimals on public listings without changing exact checkout math', () => {
+    expect(formatListingAmountForCurrency(266.43, 'ILS')).toBe('266');
+    expect(formatListingAmountForCurrency('160.50', 'ILS')).toBe('161');
+    expect(formatAmountForCurrency(266.43, 'ILS')).toBe('266.43');
   });
 });

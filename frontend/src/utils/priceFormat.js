@@ -68,6 +68,25 @@ export function formatAmountForCurrency(price, iso = 'ILS') {
   return rounded.toFixed(2);
 }
 
+/**
+ * Public listing display only: hide agorot/cents (₪266 not ₪266.43).
+ * Do not use this for checkout, cart, or payment payloads — those keep exact totals.
+ */
+export function formatListingAmountForCurrency(price, iso = 'ILS') {
+  const numPrice = typeof price === 'string' ? parseFloat(price) : Number(price);
+  if (!Number.isFinite(numPrice)) return '0';
+  const locale = String(iso || 'ILS').toUpperCase() === 'ILS' ? 'he-IL' : 'en-US';
+  return new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 0,
+    useGrouping: false,
+  }).format(numPrice);
+}
+
+/** Symbol + listing amount (whole units). */
+export function formatListingMoney(amount, iso = 'ILS') {
+  return `${currencySymbol(iso)}${formatListingAmountForCurrency(amount, iso)}`;
+}
+
 /** Symbol + amount (no separate ISO code — use alongside labels when needed). */
 export function formatMoney(amount, iso = 'ILS') {
   return `${currencySymbol(iso)}${formatAmountForCurrency(amount, iso)}`;
@@ -102,7 +121,7 @@ export function buyerAllInFromTicket(ticket, serviceFeePercent = BUYER_SERVICE_F
   return {
     ...charge,
     currency: cur,
-    formattedTotal: formatAmountForCurrency(charge.totalAmount, cur),
+    formattedTotal: formatListingAmountForCurrency(charge.totalAmount, cur),
   };
 }
 

@@ -3,7 +3,7 @@
  * Sultan's Pool (בריכת הסולטן) seating map.
  * Zone paths are the Figma export (frame 375×288); Hebrew labels match the designed overlay.
  */
-import { currencySymbol, formatAmountForCurrency } from '../utils/priceFormat';
+import { currencySymbol, formatListingAmountForCurrency } from '../utils/priceFormat';
 import { MAP_TAKEN_BUBBLE_LABEL } from '../utils/mapSectionStatus';
 import { normalizeSultansPoolZoneId, SULTANS_POOL_ZONE_LABELS } from '../utils/sultansPoolMap';
 
@@ -228,7 +228,7 @@ export default function SultansPoolMap({
       taken: Boolean(isTaken),
       label: isTaken
         ? MAP_TAKEN_BUBBLE_LABEL
-        : `${currencySymbol(currencyIso)}${formatAmountForCurrency(price, currencyIso)}`,
+        : `${currencySymbol(currencyIso)}${formatListingAmountForCurrency(price, currencyIso)}`,
     };
   };
 
