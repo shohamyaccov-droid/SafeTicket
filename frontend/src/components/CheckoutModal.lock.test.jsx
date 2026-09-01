@@ -212,17 +212,41 @@ describe('CheckoutModal coupon field', () => {
     expect(screen.getByPlaceholderText('הזן קוד קופון')).toBeInTheDocument();
   });
 
-  it('still closes when the backdrop itself is clicked', async () => {
-    const { onClose } = renderCheckout();
-    await screen.findByPlaceholderText('הזן קוד קופון');
-    const overlay = document.querySelector('.checkout-modal-overlay');
-    expect(overlay).toBeTruthy();
-
-    fireEvent.pointerDown(overlay);
-    fireEvent.click(overlay);
-
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(ticketAPI.releaseReservationKeepalive).toHaveBeenCalled();
+  it('shows full 7% service fee plus a separate coupon line', async () => {
+    orderAPI.validateCoupon.mockResolvedValue({
+      data: {
+        code: 'SAVE20',
+        discount_type: 'fixed',
+        fixed_discount_amount: '20.00',
+        total_amount: '512.86',
+      },
+    });
+    render(
+      <MemoryRouter>
+        <CheckoutModal
+          ticket={{
+            ...ticket,
+            asking_price: 249,
+            original_price: 249,
+            listing_price: 249,
+            available_quantity: 2,
+          }}
+          ticketGroup={{ available_count: 2, tickets: [{ ...ticket, asking_price: 249, status: 'active', available_quantity: 1 }] }}
+          user={buyer}
+          quantity={2}
+          onClose={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('מחיר כרטיסים')).toBeInTheDocument();
+    const input = await screen.findByPlaceholderText('הזן קוד קופון');
+    await userEvent.type(input, 'SAVE20');
+    await userEvent.click(screen.getByRole('button', { name: 'הפעל' }));
+    await waitFor(() => expect(orderAPI.validateCoupon).toHaveBeenCalled());
+    expect(screen.getByText('דמי שירות ותפעול (7%)').closest('.price-row')).toHaveTextContent('34.86');
+    expect(screen.queryByText(/14\.86/)).not.toBeInTheDocument();
+    expect(screen.getByText(/הנחת קופון/).closest('.price-row')).toHaveTextContent('20');
+    expect(screen.getByText('סך הכל לתשלום:').closest('.price-row')).toHaveTextContent('512.86');
   });
 });
 

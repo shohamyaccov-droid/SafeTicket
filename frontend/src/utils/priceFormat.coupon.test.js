@@ -34,9 +34,19 @@ describe('buyerChargeFromBase (7% fee)', () => {
 });
 
 describe('buyerChargeFromBaseWithFixedCoupon', () => {
-  it('subtracts a fixed amount from the normal checkout total', () => {
+  it('subtracts a fixed amount from the normal checkout total without shrinking the 7% fee line', () => {
+    const r = buyerChargeFromBaseWithFixedCoupon(498, 20);
+    expect(r.baseAmount).toBe(498);
+    expect(r.serviceFee).toBe(34.86);
+    expect(r.buyerDiscount).toBe(20);
+    expect(r.totalAmount).toBe(512.86);
+    expect(Number((r.baseAmount + r.serviceFee - r.buyerDiscount).toFixed(2))).toBe(r.totalAmount);
+  });
+
+  it('keeps the full 7% service fee when a ₪20 coupon is applied to ₪100', () => {
     const r = buyerChargeFromBaseWithFixedCoupon(100, 20);
     expect(r.baseAmount).toBe(100);
+    expect(r.serviceFee).toBe(7);
     expect(r.buyerDiscount).toBe(20);
     expect(r.totalAmount).toBe(87);
   });

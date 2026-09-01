@@ -530,18 +530,15 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const unitPriceForDisplay = unitDisplayPrice;
   const standardReceiptBaseTotal = listBreakdown?.baseAmount ?? 0;
   const standardReceiptTotalPay = listBreakdown?.totalAmount ?? 0;
-  const standardReceiptFeeTotal = listBreakdown?.serviceFee ?? 0;
-  const feePercentLabel = formatBuyerFeePercent(
-    appliedCoupon
-      ? (appliedCoupon.discount_type === 'fixed'
-        ? feeConfig.serviceFeePercent
-        : feeConfig.feeWithCouponPercent)
-      : feeConfig.serviceFeePercent,
-  );
   const checkoutBaseForCoupon =
     isNegotiatedPrice && negotiatedBaseTotal != null && negotiatedBaseTotal > 0
       ? negotiatedBaseTotal
       : listBaseSubtotalShekels;
+  const grossServiceFee =
+    checkoutBaseForCoupon > 0
+      ? buyerChargeFromBase(checkoutBaseForCoupon, feeConfig.serviceFeePercent).serviceFee
+      : 0;
+  const feePercentLabel = formatBuyerFeePercent(feeConfig.serviceFeePercent);
 
   // Update quantity when initialQuantity prop changes
   useEffect(() => {
@@ -1815,13 +1812,13 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                 ) : resolvedPaid ? (
                   <>
                     <p><strong>מחיר כרטיסים:</strong> {paySym}{formatAmountForCurrency(resolvedPaid.baseAmount, payIso)}</p>
-                    <p><strong>דמי שירות ותפעול ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(resolvedPaid.serviceFee, payIso)}</p>
+                    <p><strong>דמי שירות ותפעול ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(grossServiceFee, payIso)}</p>
                     <p><strong>סה"כ שולם:</strong> {paySym}{formatAmountForCurrency(resolvedPaid.totalAmount, payIso)}</p>
                   </>
                 ) : (
                   <>
                     <p><strong>מחיר כרטיסים:</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.baseAmount != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).baseAmount, payIso) : '—'}</p>
-                    <p><strong>דמי שירות ותפעול ({feeConfig.serviceFeePercent}%):</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.serviceFee != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).serviceFee, payIso) : '—'}</p>
+                    <p><strong>דמי שירות ותפעול ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(grossServiceFee, payIso)}</p>
                     <p><strong>סה"כ שולם:</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.totalAmount != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).totalAmount, payIso) : '—'}</p>
                   </>
                 )}
@@ -2125,12 +2122,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   )}
                   <div className="price-row">
-                    <span>מחיר כרטיס</span>
+                    <span>מחיר כרטיסים</span>
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.baseAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
                     <span>דמי שירות ותפעול ({feePercentLabel}%)</span>
-                    <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.serviceFee, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
+                    <span>{curSym}{formatAmountForCurrency(grossServiceFee, checkoutCurrency)}</span>
                   </div>
                   {appliedCoupon ? (
                     <div className="price-row coupon-applied-row">
@@ -2146,7 +2143,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               ) : (
                 <>
                   <div className="price-row">
-                    <span>מחיר כרטיס</span>
+                    <span>מחיר כרטיסים</span>
                     <span>{curSym}{formatAmountForCurrency(standardReceiptBaseTotal, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
@@ -2161,7 +2158,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   )}
                   <div className="price-row">
                     <span>דמי שירות ותפעול ({feePercentLabel}%)</span>
-                    <span>{curSym}{formatAmountForCurrency(standardReceiptFeeTotal, checkoutCurrency)}</span>
+                    <span>{curSym}{formatAmountForCurrency(grossServiceFee, checkoutCurrency)}</span>
                   </div>
                   {appliedCoupon ? (
                     <div className="price-row coupon-applied-row">
@@ -2487,12 +2484,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   )}
                   <div className="price-row">
-                    <span>מחיר כרטיס</span>
+                    <span>מחיר כרטיסים</span>
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.baseAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
                     <span>דמי שירות ותפעול ({feePercentLabel}%)</span>
-                    <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.serviceFee, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
+                    <span>{curSym}{formatAmountForCurrency(grossServiceFee, checkoutCurrency)}</span>
                   </div>
                   {appliedCoupon ? (
                     <div className="price-row coupon-applied-row">
@@ -2508,7 +2505,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               ) : (
                 <>
                   <div className="price-row">
-                    <span>מחיר כרטיס</span>
+                    <span>מחיר כרטיסים</span>
                     <span>{curSym}{formatAmountForCurrency(standardReceiptBaseTotal, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
@@ -2523,7 +2520,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   )}
                   <div className="price-row">
                     <span>דמי שירות ותפעול ({feePercentLabel}%)</span>
-                    <span>{curSym}{formatAmountForCurrency(standardReceiptFeeTotal, checkoutCurrency)}</span>
+                    <span>{curSym}{formatAmountForCurrency(grossServiceFee, checkoutCurrency)}</span>
                   </div>
                   {appliedCoupon ? (
                     <div className="price-row coupon-applied-row">

@@ -182,7 +182,6 @@ export function buyerChargeFromBaseWithFixedCoupon(
   return {
     ...standard,
     buyerDiscount: discountAg / 100,
-    serviceFee: (Math.round(standard.serviceFee * 100) - discountAg) / 100,
     totalAmount: Math.max(0, Math.round(standard.totalAmount * 100) - discountAg) / 100,
   };
 }
