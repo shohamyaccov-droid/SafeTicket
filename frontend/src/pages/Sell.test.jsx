@@ -155,3 +155,27 @@ describe('Sell wizard step 2 details', () => {
     expect(ticketAPI.createTicket).not.toHaveBeenCalled();
   });
 });
+
+describe('Sell event deep link', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    Element.prototype.scrollIntoView = vi.fn();
+    artistAPI.getArtists.mockResolvedValue({ data: [] });
+    eventAPI.getEvents.mockResolvedValue({ data: [mockEvent] });
+    eventAPI.getEvent.mockResolvedValue({ data: mockEvent });
+  });
+
+  it('auto-selects the event from ?event=', async () => {
+    render(
+      <HelmetProvider>
+        <MemoryRouter initialEntries={['/sell/new?event=99']}>
+          <Sell />
+        </MemoryRouter>
+      </HelmetProvider>,
+    );
+    const select = await screen.findByLabelText(/בחר אירוע/);
+    await waitFor(() => {
+      expect(select).toHaveValue('99');
+    });
+  });
+});

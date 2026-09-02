@@ -69,6 +69,8 @@ class LastMinuteEventsApiTests(APITestCase):
         self.assertNotIn(too_far.name, names)
         self.assertNotIn(empty.name, names)
         self.assertLess(names.index(soon.name), names.index(later.name))
+        self.assertIn('waitlist_count', payload[0])
+        self.assertEqual(payload[0]['waitlist_count'], 0)
 
     def test_default_event_list_still_includes_events_beyond_14_days(self):
         far = self._event(name='Far Marketplace Show', when=self.now + timedelta(days=20))

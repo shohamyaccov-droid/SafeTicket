@@ -19,6 +19,7 @@ from .querysets import (
     EVENT_CATALOG_SELECT_RELATED,
     TICKET_CATALOG_SELECT_RELATED,
     annotate_active_tickets_total,
+    annotate_waitlist_count,
     event_venue_sections_prefetch,
 )
 from rest_framework.decorators import api_view, permission_classes, action, throttle_classes
@@ -4618,7 +4619,7 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
                 search = qp.get('search')
                 if search:
                     qs = qs.filter(name__icontains=search)
-                return qs
+                return annotate_waitlist_count(qs)
 
         queryset = (
             Event.objects.filter(date__gte=now)
@@ -4681,7 +4682,7 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
                 # Homepage sold-out / high-demand row — no ticket-stock requirement.
                 queryset = queryset.filter(high_demand=True).order_by('date', 'name')
 
-        return queryset
+        return annotate_waitlist_count(queryset)
     
     def get_object(self):
         from users.seo import resolve_event_by_identifier

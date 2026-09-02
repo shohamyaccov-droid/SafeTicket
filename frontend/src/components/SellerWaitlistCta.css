@@ -1,0 +1,51 @@
+.seller-waitlist-cta {
+  display: block;
+  text-decoration: none;
+  text-align: right;
+  direction: rtl;
+  box-sizing: border-box;
+  font-family: inherit;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.seller-waitlist-cta--card {
+  margin: 0.5rem 0 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border: 1px solid #fdba74;
+  color: #9a3412;
+  font-size: 0.72rem;
+  font-weight: 750;
+  box-shadow: 0 4px 12px rgba(234, 88, 12, 0.12);
+}
+
+.seller-waitlist-cta--card:hover,
+.seller-waitlist-cta--card:focus-visible {
+  background: #ffedd5;
+  color: #7c2d12;
+}
+
+.seller-waitlist-cta--page {
+  margin: 1rem 0 0;
+  padding: 1rem 1.15rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border: 1px solid #fb923c;
+  color: #9a3412;
+  font-size: 1.02rem;
+  font-weight: 750;
+  box-shadow: 0 8px 22px rgba(234, 88, 12, 0.16);
+}
+
+.seller-waitlist-cta--page:hover,
+.seller-waitlist-cta--page:focus-visible {
+  background: #ffedd5;
+  color: #7c2d12;
+}
+
+.seller-waitlist-cta:focus-visible {
+  outline: 2px solid #ea580c;
+  outline-offset: 2px;
+}

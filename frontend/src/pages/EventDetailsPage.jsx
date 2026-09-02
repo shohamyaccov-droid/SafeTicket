@@ -6,6 +6,7 @@ import { eventAPI, offerAPI, artistAPI } from '../services/api';
 import { Analytics } from '../utils/analytics';
 import CheckoutModal from '../components/CheckoutModal';
 import WaitlistSignupModal from '../components/WaitlistSignupModal';
+import SellerWaitlistCta from '../components/SellerWaitlistCta';
 import Toast from '../components/Toast';
 import EventDetailsSkeleton from '../components/skeletons/EventDetailsSkeleton';
 import '../components/skeletons/EventDetailsSkeleton.css';
@@ -2013,6 +2014,7 @@ const EventDetailsPage = () => {
         </section>
       </div>
       ) : null}
+      <SellerWaitlistCta event={event} variant="page" />
       </>
       )}
 

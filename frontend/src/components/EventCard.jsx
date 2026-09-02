@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 import { getFullImageUrl } from '../utils/formatters';
 import { formatEventLocation } from '../utils/eventLocalTime';
+import SellerWaitlistCta from './SellerWaitlistCta';
 
 /**
  * Homepage event tile.
@@ -31,10 +32,14 @@ export default function EventCard({
   return (
     <article
       className={`home-carousel-card${isLastMinute ? ' home-carousel-card--last-minute' : ''}`}
-      role="link"
       tabIndex={0}
-      onClick={onNavigate}
+      aria-label={title}
+      onClick={(e) => {
+        if (e.target.closest('a, button')) return;
+        onNavigate?.();
+      }}
       onKeyDown={(e) => {
+        if (e.target.closest('a, button')) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onNavigate?.();
@@ -79,6 +84,7 @@ export default function EventCard({
         </p>
         {venueLine ? <p className="home-carousel-card__venue">{venueLine}</p> : null}
         <p className="home-carousel-card__tickets">לרכישת כרטיסים</p>
+        {isLastMinute ? <SellerWaitlistCta event={event} variant="card" /> : null}
       </div>
     </article>
   );

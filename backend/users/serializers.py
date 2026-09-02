@@ -740,10 +740,22 @@ class EventVenueApiNormalizeMixin:
         return data
 
 
-class EventSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializer):
+class EventWaitlistCountMixin:
+    def get_waitlist_count(self, obj):
+        ann = getattr(obj, '_waitlist_count', None)
+        if ann is not None:
+            return int(ann) if ann else 0
+        qs = getattr(obj, 'alerts', None)
+        if qs is None:
+            return 0
+        return int(qs.filter(notified=False).count())
+
+
+class EventSerializer(EventWaitlistCountMixin, EventVenueApiNormalizeMixin, serializers.ModelSerializer):
     """Serializer for Event model"""
     image_url = serializers.SerializerMethodField()
     tickets_count = serializers.SerializerMethodField()
+    waitlist_count = serializers.SerializerMethodField()
     currency = serializers.SerializerMethodField()
     currency_symbol = serializers.SerializerMethodField()
     high_demand = serializers.SerializerMethodField()
@@ -764,12 +776,12 @@ class EventSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializer):
             'id', 'slug', 'artist', 'artist_id', 'name', 'date', 'ends_at', 'venue', 'venue_detail', 'city', 'country',
             'currency', 'currency_symbol',
             'image', 'image_url',
-            'tickets_count', 'view_count', 'category', 'home_team', 'away_team', 'tournament', 'high_demand', 'is_hot',
+            'tickets_count', 'waitlist_count', 'view_count', 'category', 'home_team', 'away_team', 'tournament', 'high_demand', 'is_hot',
             'seo_title', 'seo_description', 'canonical_url', 'canonical_path', 'og_image', 'json_ld',
             'created_at', 'updated_at',
         )
         read_only_fields = (
-            'id', 'slug', 'created_at', 'updated_at', 'tickets_count', 'view_count', 'currency', 'currency_symbol',
+            'id', 'slug', 'created_at', 'updated_at', 'tickets_count', 'waitlist_count', 'view_count', 'currency', 'currency_symbol',
             'venue_detail', 'seo_title', 'seo_description', 'canonical_url', 'canonical_path', 'og_image', 'json_ld',
         )
 
@@ -826,10 +838,11 @@ class EventSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializer):
         return self._seo(obj)['json_ld']
 
 
-class EventListSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializer):
+class EventListSerializer(EventWaitlistCountMixin, EventVenueApiNormalizeMixin, serializers.ModelSerializer):
     """Simplified serializer for Event list view"""
     image_url = serializers.SerializerMethodField()
     tickets_count = serializers.SerializerMethodField()
+    waitlist_count = serializers.SerializerMethodField()
     currency = serializers.SerializerMethodField()
     currency_symbol = serializers.SerializerMethodField()
     high_demand = serializers.SerializerMethodField()
@@ -847,6 +860,7 @@ class EventListSerializer(EventVenueApiNormalizeMixin, serializers.ModelSerializ
             'currency', 'currency_symbol',
             'image_url',
             'tickets_count',
+            'waitlist_count',
             'category', 'home_team', 'away_team', 'tournament', 'high_demand', 'is_hot',
             'seo_title', 'canonical_path',
         )

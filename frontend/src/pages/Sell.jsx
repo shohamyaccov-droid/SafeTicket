@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ticketAPI, eventAPI, artistAPI, eventRequestAPI } from '../services/api';
 import { createListFetchAbort } from '../utils/listFetch';
@@ -25,6 +25,12 @@ import OptionalSeatingDisclosure from '../components/OptionalSeatingDisclosure';
 import ListingCreatedSuccessView from './ListingCreatedSuccessView';
 import useFocusScrollIntoView from '../hooks/useFocusScrollIntoView';
 import { clampSellWizardStep } from '../utils/sellWizard';
+import {
+  artistIdFromEvent,
+  eventDisplayNameForSell,
+  parseSellPresetEventId,
+  sellCategoryFromEvent,
+} from '../utils/sellEventPrefill';
 import PageSeo from '../components/PageSeo';
 import { HOW_TO_SELL, buildHowToSellFaqJsonLd } from '../content/howToSellContent';
 import { getStaticPageMeta, staticPageBreadcrumbs } from '../content/staticPageMeta';
@@ -275,13 +281,20 @@ function TicketAttachmentPreview({ file }) {
 
 const Sell = () => {
   const navigate = useNavigate();
-  const sellDraft = useMemo(() => readSellListingDraft(), []);
+  const [searchParams] = useSearchParams();
+  const presetEventId = parseSellPresetEventId(searchParams);
+  const sellDraft = useMemo(
+    () => (presetEventId ? null : readSellListingDraft()),
+    [presetEventId],
+  );
   const { user, refreshProfile, login, register } = useAuth();
   const [wizardStep, setWizardStep] = useState(() => clampSellWizardStep(sellDraft?.wizardStep));
   const [formData, setFormData] = useState(() => {
     const base = defaultSellFormData();
     const draftForm = sellDraft?.formData;
-    if (!draftForm) return base;
+    if (!draftForm) {
+      return presetEventId ? { ...base, event_id: presetEventId } : base;
+    }
     return {
       ...base,
       ...draftForm,
@@ -565,27 +578,66 @@ const Sell = () => {
 
   /** Exactly what the event <select> maps over — concerts use only `artistEvents` from the artist-scoped API. */
   const eventsForDropdown = useMemo(() => {
+    let list;
     if (selectedCategory === 'concert') {
-      if (!selectedArtistId || artistEventsLoading) return [];
-      return artistEvents;
+      list = !selectedArtistId || artistEventsLoading ? [] : artistEvents;
+    } else {
+      list = events.filter((event) => {
+        const cat = (event.category || '').toLowerCase();
+        if (selectedCategory === 'sport') {
+          return ['sport', 'football', 'basketball', 'משחקי ספורט', 'ספורט'].includes(cat);
+        }
+        if (selectedCategory === 'theater') {
+          return cat === 'theater' || cat === 'הצגות תיאטרון' || cat === 'הצגה';
+        }
+        if (selectedCategory === 'festival') {
+          return cat === 'festival' || cat === 'פסטיבלים' || cat === 'פסטיבל';
+        }
+        if (selectedCategory === 'standup') {
+          return cat === 'standup' || cat === 'סטנדאפ';
+        }
+        return false;
+      });
     }
-    return events.filter((event) => {
-      const cat = (event.category || '').toLowerCase();
-      if (selectedCategory === 'sport') {
-        return ['sport', 'football', 'basketball', 'משחקי ספורט', 'ספורט'].includes(cat);
+    const selected = formData.selectedEvent;
+    if (selected && !list.some((ev) => String(ev.id) === String(selected.id))) {
+      return [selected, ...list];
+    }
+    return list;
+  }, [events, artistEvents, artistEventsLoading, selectedCategory, selectedArtistId, formData.selectedEvent]);
+
+  useEffect(() => {
+    if (!presetEventId) return undefined;
+    let cancelled = false;
+    const { signal, clear, abort } = createListFetchAbort();
+    (async () => {
+      let ev = events.find((row) => String(row.id) === String(presetEventId));
+      if (!ev) {
+        try {
+          const res = await eventAPI.getEvent(presetEventId, { signal });
+          ev = res.data;
+        } catch {
+          return;
+        }
       }
-      if (selectedCategory === 'theater') {
-        return cat === 'theater' || cat === 'הצגות תיאטרון' || cat === 'הצגה';
-      }
-      if (selectedCategory === 'festival') {
-        return cat === 'festival' || cat === 'פסטיבלים' || cat === 'פסטיבל';
-      }
-      if (selectedCategory === 'standup') {
-        return cat === 'standup' || cat === 'סטנדאפ';
-      }
-      return false;
-    });
-  }, [events, artistEvents, artistEventsLoading, selectedCategory, selectedArtistId]);
+      if (cancelled || !ev) return;
+      const cat = sellCategoryFromEvent(ev);
+      const artistId = artistIdFromEvent(ev);
+      setSelectedCategory(cat);
+      setSelectedArtistId(cat === 'concert' && artistId ? artistId : '');
+      setFormData((prev) => ({
+        ...prev,
+        event_id: ev.id,
+        event_name: eventDisplayNameForSell(ev),
+        selectedEvent: ev,
+      }));
+    })();
+    return () => {
+      cancelled = true;
+      abort();
+      clear();
+    };
+  }, [presetEventId, events]);
 
   useEffect(() => {
     if (!formData.event_id || formData.selectedEvent) return;
