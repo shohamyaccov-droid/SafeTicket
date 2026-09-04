@@ -7,9 +7,8 @@ import { eventTicketCount } from './artistEventSupply';
 /** Homepage last-minute row: upcoming events within this many days. */
 export const LAST_MINUTE_WINDOW_DAYS = 14;
 
-/** Homepage row order: sold-out demand first, then last-minute, recommended, categories. */
+/** Homepage row order: last-minute first, then recommended, categories. */
 export const HOME_DISCOVER_ROW_ORDER = [
-  'hot-soldout',
   'last-minute',
   'recommended',
   'music',
@@ -41,40 +40,6 @@ export const SPORT_EVENT_PLACEHOLDERS = {
 
 export const SPORT_EVENT_CATEGORIES = ['sport', 'football', 'basketball'];
 export const SEASON_SPORTS_CATEGORIES = ['football', 'basketball'];
-
-/** Real artist photos (Wikimedia) when the catalog has no artist/event image. */
-export const HOT_EVENT_PLACEHOLDERS = {
-  _default: commonsFile('Ramat_Gan_Stadium_10.jpg'),
-  'חנן בן ארי': commonsFile('%D7%97%D7%A0%D7%9F_%D7%91%D7%9F_%D7%90%D7%A8%D7%99.jpg'),
-  'ישי ריבו': commonsFile('Yishai_Rivo6960.JPG'),
-  טונה: commonsFile('%D7%90%D7%99%D7%AA%D7%99_%D7%96%D7%91%D7%95%D7%9C%D7%95%D7%9F_%D7%98%D7%95%D7%A0%D7%94.jpg'),
-  פסטיגל:
-    'https://upload.wikimedia.org/wikipedia/he/4/42/%D7%9E%D7%99%D7%99_%D7%A4%D7%A1%D7%98%D7%99%D7%92%D7%9C.jpg',
-  'הדג נחש': 'https://upload.wikimedia.org/wikipedia/he/f/fa/HaDagNahash.jpg',
-  'נועם בתן': commonsFile('Noam_Bettan_2.jpg'),
-  'אגם בוחבוט': commonsFile('Agam_Buhbut_by_Pini_Siluk_%28cropped%29.jpg'),
-  'שרית חדד': commonsFile('Sarit_Hadad.jpg'),
-};
-
-/** Attach a placeholder image_url when the event/artist has none. */
-export function applyHotEventPlaceholder(ev) {
-  if (!ev) return ev;
-  if (ev.image_url || ev.artist_detail?.image_url) return ev;
-  const name = String(ev.artist_detail?.name || ev.artist_name || '').trim();
-  return { ...ev, image_url: HOT_EVENT_PLACEHOLDERS[name] || HOT_EVENT_PLACEHOLDERS._default };
-}
-
-/** Upcoming high-demand concerts/festivals only (excludes sports season row). */
-export function filterHighDemandEvents(list) {
-  const sportCats = new Set(SPORT_EVENT_CATEGORIES);
-  return [...(list || [])]
-    .filter((ev) => {
-      if (!Boolean(ev?.high_demand || ev?.is_hot) || !ev?.date) return false;
-      const cat = String(ev.category || '').toLowerCase();
-      return !sportCats.has(cat);
-    })
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
-}
 
 /** Attach a club-crest placeholder when the sports event has no image. */
 export function applySportEventPlaceholder(ev) {
