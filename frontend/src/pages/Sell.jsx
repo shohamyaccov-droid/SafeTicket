@@ -31,6 +31,8 @@ import {
   parseSellPresetEventId,
   sellCategoryFromEvent,
 } from '../utils/sellEventPrefill';
+import { resolveSellIntentCopy } from '../utils/sellIntentCopy';
+import SellerDemandBanner from '../components/SellerDemandBanner';
 import PageSeo from '../components/PageSeo';
 import { HOW_TO_SELL, buildHowToSellFaqJsonLd } from '../content/howToSellContent';
 import { getStaticPageMeta, staticPageBreadcrumbs } from '../content/staticPageMeta';
@@ -283,6 +285,7 @@ const Sell = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const presetEventId = parseSellPresetEventId(searchParams);
+  const sellIntentCopy = useMemo(() => resolveSellIntentCopy(searchParams), [searchParams]);
   const sellDraft = useMemo(
     () => (presetEventId ? null : readSellListingDraft()),
     [presetEventId],
@@ -1458,9 +1461,9 @@ const Sell = () => {
               <path d="M10 1L3 4V9C3 13.55 6.16 17.74 10 19C13.84 17.74 17 13.55 17 9V4L10 1Z" fill="currentColor"/>
               <path d="M8 9L9 10L12 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <h1>תהליך הצעת כרטיס מאובטח</h1>
+            <h1>{sellIntentCopy.h1}</h1>
           </div>
-          <p className="listing-subtitle">הצע את הכרטיס שלך בצורה בטוחה ומאובטחת</p>
+          <p className="listing-subtitle">{sellIntentCopy.subtitle}</p>
           <section className="sell-howto" aria-labelledby="sell-howto-heading">
             <h2 id="sell-howto-heading">איך למכור כרטיס ב-3 צעדים</h2>
             <ol className="sell-howto-ol">
@@ -1599,6 +1602,7 @@ const Sell = () => {
                           : 'לא נמצאו גושים לאולם זה'}
                     </span>
                   </div>
+                  <SellerDemandBanner event={formData.selectedEvent} />
                 </div>
               ) : null}
 
