@@ -18,7 +18,9 @@ import {
   sortPerformersByDemand,
   performerNavigateTarget,
   applySportEventPlaceholder,
+  applyHotEventPlaceholder,
   filterSeasonSportsEvents,
+  filterHighDemandEvents,
 } from '../utils/homeDiscover';
 import { formatEventLocation } from '../utils/eventLocalTime';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
@@ -46,6 +48,7 @@ const Home = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [events, setEvents] = useState([]);
   const [lastMinuteEvents, setLastMinuteEvents] = useState([]);
+  const [hotSoldOutEvents, setHotSoldOutEvents] = useState([]);
   const [seasonSportsEvents, setSeasonSportsEvents] = useState([]);
   const [artists, setArtists] = useState([]);
   const [recommendedArtists, setRecommendedArtists] = useState([]);
@@ -81,12 +84,17 @@ const Home = () => {
         const [
           eventsResponse,
           lastMinuteResponse,
+          hotSoldOutResponse,
           seasonSportsResponse,
           artistsResponse,
           recommendedArtistsResponse,
         ] = await Promise.all([
           eventAPI.getEvents({ signal }),
           eventAPI.getEvents({ signal, params: { last_minute: '1' } }),
+          eventAPI.getEvents({
+            signal,
+            params: { high_demand: '1', category: 'concert,festival' },
+          }),
           eventAPI.getEvents({
             signal,
             params: { high_demand: '1', category: 'football,basketball' },
@@ -115,6 +123,17 @@ const Home = () => {
           }
         }
         setLastMinuteEvents(lastMinuteData);
+
+        let hotSoldOutData = [];
+        if (hotSoldOutResponse.data) {
+          if (Array.isArray(hotSoldOutResponse.data)) {
+            hotSoldOutData = hotSoldOutResponse.data;
+          } else if (hotSoldOutResponse.data.results && Array.isArray(hotSoldOutResponse.data.results)) {
+            hotSoldOutData = hotSoldOutResponse.data.results;
+          }
+        }
+        setHotSoldOutEvents(hotSoldOutData);
+
         let seasonSportsData = [];
         if (seasonSportsResponse.data) {
           if (Array.isArray(seasonSportsResponse.data)) {
@@ -265,6 +284,22 @@ const Home = () => {
       return eventName.includes(q) || artistName.includes(q) || city.includes(q) || venue.includes(q);
     });
   }, [lastMinuteEvents, searchQuery]);
+
+  const hotSoldOutDisplayEvents = useMemo(() => {
+    const fromApi = Array.isArray(hotSoldOutEvents) ? hotSoldOutEvents : [];
+    const merged = fromApi.length ? fromApi : filterHighDemandEvents(inventoryEvents);
+    const withImages = filterHighDemandEvents(merged).map(applyHotEventPlaceholder);
+    if (!searchQuery.trim()) return withImages;
+    const q = searchQuery.toLowerCase().trim();
+    return withImages.filter((event) => {
+      const eventName = event.name?.toLowerCase() || '';
+      const artistName =
+        event.artist_detail?.name?.toLowerCase() || event.artist_name?.toLowerCase() || '';
+      const city = event.city?.toLowerCase() || '';
+      const venue = event.venue?.toLowerCase() || '';
+      return eventName.includes(q) || artistName.includes(q) || city.includes(q) || venue.includes(q);
+    });
+  }, [hotSoldOutEvents, inventoryEvents, searchQuery]);
 
   const seasonSportsDisplayEvents = useMemo(() => {
     const fromApi = Array.isArray(seasonSportsEvents) ? seasonSportsEvents : [];
@@ -622,6 +657,7 @@ const Home = () => {
       <section ref={resultsRef} className="home-layout" aria-label="אירועים ואמנים">
         {inventoryEvents.length === 0 &&
         allPerformers.length === 0 &&
+        hotSoldOutDisplayEvents.length === 0 &&
         seasonSportsDisplayEvents.length === 0 ? (
           <div className="home-empty-wrap home-layout__rows">
             <EmptyState
@@ -634,6 +670,12 @@ const Home = () => {
           </div>
         ) : (
           <div className="home-viagogo-rows viagogo-home-discover home-layout__rows">
+            <CarouselSection
+              slug="hot-soldout"
+              title="הופעות סולד-אאוט מבוקשות"
+              kind="event"
+              events={hotSoldOutDisplayEvents}
+            />
             <CarouselSection
               slug="last-minute"
               title="כרטיסים של הדקה ה-90"

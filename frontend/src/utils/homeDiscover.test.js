@@ -13,10 +13,10 @@ import {
 } from './homeDiscover';
 
 describe('performerNavigateTarget', () => {
-  it('puts last-minute first, with sports season directly below concerts', () => {
-    expect(HOME_DISCOVER_ROW_ORDER[0]).toBe('last-minute');
+  it('puts sold-out demand first, then last-minute, with sports season below concerts', () => {
+    expect(HOME_DISCOVER_ROW_ORDER[0]).toBe('hot-soldout');
+    expect(HOME_DISCOVER_ROW_ORDER[1]).toBe('last-minute');
     expect(LAST_MINUTE_WINDOW_DAYS).toBe(14);
-    expect(HOME_DISCOVER_ROW_ORDER).not.toContain('hot-soldout');
     expect(HOME_DISCOVER_ROW_ORDER.indexOf('last-minute')).toBeLessThan(
       HOME_DISCOVER_ROW_ORDER.indexOf('recommended'),
     );
@@ -83,11 +83,14 @@ describe('filterLastMinuteEvents', () => {
 });
 
 describe('filterHighDemandEvents', () => {
-  it('keeps only high_demand events, soonest first', () => {
-    const hotLater = { id: 2, date: '2026-10-01T21:00:00', high_demand: true };
-    const skip = { id: 3, date: '2026-09-16T21:00:00', high_demand: false };
-    const hotSoon = { id: 1, date: '2026-09-16T20:00:00', high_demand: true };
-    expect(filterHighDemandEvents([hotLater, skip, hotSoon]).map((ev) => ev.id)).toEqual([1, 2]);
+  it('keeps only high_demand concerts/festivals, soonest first, and drops sports', () => {
+    const hotLater = { id: 2, date: '2026-10-01T21:00:00', high_demand: true, category: 'concert' };
+    const skip = { id: 3, date: '2026-09-16T21:00:00', high_demand: false, category: 'concert' };
+    const hotSoon = { id: 1, date: '2026-09-16T20:00:00', high_demand: true, category: 'festival' };
+    const football = { id: 4, date: '2026-09-14T20:30:00', high_demand: true, category: 'football' };
+    expect(filterHighDemandEvents([hotLater, skip, hotSoon, football]).map((ev) => ev.id)).toEqual([
+      1, 2,
+    ]);
   });
 
   it('applies a placeholder image when the catalog has none', () => {

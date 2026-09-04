@@ -7,8 +7,9 @@ import { eventTicketCount } from './artistEventSupply';
 /** Homepage last-minute row: upcoming events within this many days. */
 export const LAST_MINUTE_WINDOW_DAYS = 14;
 
-/** Homepage row order: last-minute, then recommended, then category rows. */
+/** Homepage row order: sold-out demand first, then last-minute, recommended, categories. */
 export const HOME_DISCOVER_ROW_ORDER = [
+  'hot-soldout',
   'last-minute',
   'recommended',
   'music',
@@ -53,7 +54,6 @@ export const HOT_EVENT_PLACEHOLDERS = {
   'נועם בתן': commonsFile('Noam_Bettan_2.jpg'),
   'אגם בוחבוט': commonsFile('Agam_Buhbut_by_Pini_Siluk_%28cropped%29.jpg'),
   'שרית חדד': commonsFile('Sarit_Hadad.jpg'),
-  NEXT: commonsFile('Ramat_Gan_Stadium_10.jpg'),
 };
 
 /** Attach a placeholder image_url when the event/artist has none. */
@@ -64,10 +64,15 @@ export function applyHotEventPlaceholder(ev) {
   return { ...ev, image_url: HOT_EVENT_PLACEHOLDERS[name] || HOT_EVENT_PLACEHOLDERS._default };
 }
 
-/** Upcoming high-demand events, chronological. */
+/** Upcoming high-demand concerts/festivals only (excludes sports season row). */
 export function filterHighDemandEvents(list) {
+  const sportCats = new Set(SPORT_EVENT_CATEGORIES);
   return [...(list || [])]
-    .filter((ev) => Boolean(ev?.high_demand) && ev?.date)
+    .filter((ev) => {
+      if (!Boolean(ev?.high_demand || ev?.is_hot) || !ev?.date) return false;
+      const cat = String(ev.category || '').toLowerCase();
+      return !sportCats.has(cat);
+    })
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 

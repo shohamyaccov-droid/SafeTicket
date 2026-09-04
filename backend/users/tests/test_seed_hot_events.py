@@ -1,4 +1,4 @@
-"""Tests for seed_hot_events — verified Q3/Q4 2026 high-demand concerts."""
+"""Tests for seed_hot_events — Q3/Q4 2026 high-demand concerts (product brief)."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -15,52 +15,48 @@ TZ_IL = ZoneInfo('Asia/Jerusalem')
 
 
 class SeedHotEventsTests(TestCase):
-    def test_seed_creates_verified_high_demand_shows(self):
+    def test_seed_creates_brief_high_demand_shows(self):
         call_command('seed_hot_events', skip_images=True)
 
         ribo = Event.objects.get(artist__name='ישי ריבו', date=datetime(2026, 9, 16, 21, 0, tzinfo=TZ_IL))
         self.assertEqual(ribo.name, 'ישי ריבו - מופע סימפוני')
-        self.assertEqual(ribo.venue_place.name, 'אמפי MAX')
-        self.assertEqual(ribo.city, 'ראשון לציון')
+        self.assertEqual(ribo.venue_place.name, 'אקספו תל אביב')
+        self.assertEqual(ribo.city, 'תל אביב')
         self.assertTrue(ribo.high_demand)
         self.assertEqual(ribo.status, 'פעיל')
 
         tuna = Event.objects.get(artist__name='טונה', date=datetime(2026, 10, 17, 21, 0, tzinfo=TZ_IL))
-        self.assertEqual(tuna.venue_place.name, 'זאפה אמפי שוני')
-        self.assertEqual(tuna.city, 'בנימינה')
+        self.assertEqual(tuna.venue_place.name, 'זאפה תל אביב')
+        self.assertEqual(tuna.city, 'תל אביב')
 
-        agam = Event.objects.filter(artist__name='אגם בוחבוט', status='פעיל')
-        self.assertEqual(agam.count(), 1)
-        self.assertEqual(agam.get().date, datetime(2026, 10, 1, 21, 0, tzinfo=TZ_IL))
+        agam = Event.objects.filter(artist__name='אגם בוחבוט', status='פעיל').order_by('date')
+        self.assertEqual(agam.count(), 2)
+        self.assertEqual(agam[0].date, datetime(2026, 10, 1, 21, 0, tzinfo=TZ_IL))
+        self.assertEqual(agam[1].date, datetime(2026, 10, 3, 21, 0, tzinfo=TZ_IL))
+        self.assertEqual(agam[0].venue_place.name, 'היכל מנורה מבטחים, תל אביב')
 
-        hadag = Event.objects.filter(artist__name='הדג נחש', status='פעיל').order_by('date')
-        self.assertEqual(hadag.count(), 2)
-        self.assertEqual(hadag[0].venue_place.name, 'אמפי קיסריה')
-        self.assertEqual(hadag[1].venue_place.name, 'זאפה אמפי שוני')
-        self.assertFalse(
-            Event.objects.filter(
-                artist__name='הדג נחש',
-                date=datetime(2026, 9, 30, 20, 30, tzinfo=TZ_IL),
-            ).exists()
-        )
+        hadag = Event.objects.get(artist__name='הדג נחש', status='פעיל')
+        self.assertEqual(hadag.date, datetime(2026, 9, 30, 20, 30, tzinfo=TZ_IL))
+        self.assertEqual(hadag.venue_place.name, 'אמפי גבעת התחמושת, ירושלים')
+        self.assertEqual(hadag.city, 'ירושלים')
 
         sarit = Event.objects.filter(artist__name='שרית חדד', status='פעיל').order_by('date')
-        self.assertEqual(sarit.count(), 3)
+        self.assertEqual(sarit.count(), 2)
         self.assertEqual(sarit[0].name, 'שרית חדד - 30 שנות מוזיקה')
-        self.assertEqual(sarit[0].venue_place.name, 'פארק הירקון')
+        self.assertEqual(sarit[0].venue_place.name, 'פארק הירקון, תל אביב')
 
         festigal = Event.objects.get(artist__name='פסטיגל')
         self.assertEqual(festigal.category, 'festival')
         self.assertEqual(festigal.venue_place.name, 'אקספו תל אביב, ביתן 2')
 
-        next_shows = Event.objects.filter(artist__name='NEXT', status='פעיל').order_by('date')
-        self.assertEqual(next_shows.count(), 2)
-        self.assertEqual(next_shows[0].venue_place.name, 'האצטדיון הלאומי רמת גן')
-        self.assertEqual(next_shows[1].venue, 'פיס ארנה ירושלים')
-
         noam = Event.objects.get(artist__name='נועם בתן')
         self.assertEqual(noam.venue, 'היכל מנורה מבטחים')
         self.assertEqual(noam.name, 'נועם בתן - מופע בכורה')
+
+        hanan = Event.objects.get(artist__name='חנן בן ארי')
+        self.assertEqual(hanan.name, 'חנן בן ארי - הינדיקים')
+        self.assertEqual(hanan.venue_place.name, 'אקספו תל אביב')
+
         seeded_artists = (
             'חנן בן ארי',
             'ישי ריבו',
@@ -70,18 +66,19 @@ class SeedHotEventsTests(TestCase):
             'נועם בתן',
             'אגם בוחבוט',
             'שרית חדד',
-            'NEXT',
         )
         self.assertEqual(
             Event.objects.filter(artist__name__in=seeded_artists, high_demand=True).count(),
-            14,
+            10,
         )
+        self.assertFalse(Artist.objects.filter(name='NEXT').exists())
 
     def test_seed_is_idempotent(self):
         call_command('seed_hot_events', skip_images=True)
         call_command('seed_hot_events', skip_images=True)
-        self.assertEqual(Event.objects.filter(high_demand=True, artist__name='שרית חדד').count(), 3)
+        self.assertEqual(Event.objects.filter(high_demand=True, artist__name='שרית חדד').count(), 2)
         self.assertEqual(Artist.objects.filter(name='ישי ריבו').count(), 1)
+        self.assertEqual(Event.objects.filter(artist__name='אגם בוחבוט').count(), 2)
 
     def test_every_seeded_artist_has_a_wikimedia_image_url(self):
         from users.management.commands.seed_hot_events import ARTIST_IMAGE_URLS, SHOWS
@@ -130,3 +127,4 @@ class HighDemandEventsApiTests(APITestCase):
         self.assertIn(hot.name, names)
         self.assertNotIn('Regular Show', names)
         self.assertTrue(all(item.get('high_demand') for item in payload))
+        self.assertTrue(all(item.get('is_hot') for item in payload))

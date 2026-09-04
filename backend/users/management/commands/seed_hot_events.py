@@ -1,12 +1,10 @@
 """
 Seed Q3/Q4 2026 high-demand Israeli concerts (homepage "הופעות סולד-אאוט מבוקשות").
 
-Dates and venues were checked against official/artist/Tickchak/news listings
-(31 Aug 2026). Unverified rows from the original brief are omitted or corrected.
-
-Idempotent: update_or_create(artist, date). Sets Event.high_demand=True.
-Keeps status='פעיל' so the marketplace list still returns them (sold-out
-status is excluded from GET /users/events/).
+Catalog rows use the product-brief Hebrew titles, dates, and venues.
+Idempotent: update_or_create(artist, date). Sets Event.high_demand=True
+(API also exposes is_hot). Keeps status='פעיל' so GET /users/events/?high_demand=1
+returns them (sold-out status is excluded from the marketplace list).
 
 Downloads Wikimedia artist photos onto Artist.image / cover_image and Event.image.
 On production, pass --force-images so leftover Unsplash files are replaced.
@@ -20,6 +18,7 @@ Usage:
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urlparse
@@ -35,9 +34,13 @@ from users.models import Artist, Event, Venue
 TZ_IL = ZoneInfo('Asia/Jerusalem')
 
 VENUE_MENORA = 'היכל מנורה מבטחים'
-VENUE_BARBY = 'בארבי תל אביב'
-VENUE_PAIS = 'פיס ארנה ירושלים'
 VENUE_GENERIC = 'ישראל'
+
+
+def _console_safe(text: str) -> str:
+    """Avoid UnicodeEncodeError on Windows consoles (cp1252) during management commands."""
+    encoding = getattr(sys.stdout, 'encoding', None) or 'utf-8'
+    return str(text).encode(encoding, errors='replace').decode(encoding, errors='replace')
 
 # Wikimedia requires a descriptive User-Agent; HEAD-checked 31 Aug 2026 (HTTP 200).
 WIKIMEDIA_UA = {
@@ -61,7 +64,6 @@ ARTIST_IMAGE_URLS: dict[str, str] = {
         '%D7%9E%D7%99%D7%99_%D7%A4%D7%A1%D7%98%D7%99%D7%92%D7%9C.jpg'
     ),
     'הדג נחש': 'https://upload.wikimedia.org/wikipedia/he/f/fa/HaDagNahash.jpg',
-    'NEXT': _commons('Ramat_Gan_Stadium_10.jpg'),
 }
 
 
@@ -156,10 +158,8 @@ class ShowSpec:
     artist_description: str = ''
 
 
-# Hebrew titles follow the product brief; venues/times follow verified listings.
+# Exact Hebrew titles / venues from the product brief (evening showtimes).
 SHOWS: tuple[ShowSpec, ...] = (
-    # Tickchak listed "הינדיקים" at Expo on 30.7.2026 (past). Upcoming Expo
-    # residency date 19.9.2026 21:30 appears on secondary ticket sites.
     ShowSpec(
         'חנן בן ארי',
         'חנן בן ארי - הינדיקים',
@@ -168,35 +168,22 @@ SHOWS: tuple[ShowSpec, ...] = (
         artist_genre='Pop',
         artist_description='חנן בן ארי — זמר-יוצר ישראלי',
     ),
-    # Official ishayribo.com: 16.9.2026 21:00, אמפי MAX ראשון לציון (not Expo TLV).
     ShowSpec(
         'ישי ריבו',
         'ישי ריבו - מופע סימפוני',
         2026, 9, 16, 21, 0,
-        'אמפי MAX', 'ראשון לציון',
+        'אקספו תל אביב', 'תל אביב',
         artist_genre='Jewish / Pop',
         artist_description='ישי ריבו — זמר ישראלי',
     ),
-    # Oct 17 is listed at זאפה אמפי שוני (Binyamina), not Zappa Tel Aviv.
     ShowSpec(
         'טונה',
         'טונה - הופעת חיה',
         2026, 10, 17, 21, 0,
-        'זאפה אמפי שוני', 'בנימינה',
+        'זאפה תל אביב', 'תל אביב',
         artist_genre='Hip-Hop / Rap',
         artist_description='טונה — ראפר ישראלי',
     ),
-    # Tickchak: Tuna Barbie Tel Aviv 28.10.2026 (sold out). Extra verified date.
-    ShowSpec(
-        'טונה',
-        'טונה - הופעת חיה',
-        2026, 10, 28, 21, 0,
-        'מועדון הבארבי', 'תל אביב',
-        venue_choice=VENUE_BARBY,
-        artist_genre='Hip-Hop / Rap',
-        artist_description='טונה — ראפר ישראלי',
-    ),
-    # i24 / Srugim: Festigal 2026 TOP SECRET premiere 28.11.2026, Tel Aviv Expo.
     ShowSpec(
         'פסטיגל',
         'פסטיגל 2026 - TOP SECRET',
@@ -206,49 +193,46 @@ SHOWS: tuple[ShowSpec, ...] = (
         artist_genre='Family / Pop',
         artist_description='פסטיגל — מופע חנוכה משפחתי',
     ),
-    # Official hadagnahash.com — not Givat Hatachmoshet 30.9.
     ShowSpec(
         'הדג נחש',
         'הדג נחש - חוגגים 30 שנה',
-        2026, 9, 5, 19, 30,
-        'אמפי קיסריה', 'קיסריה',
+        2026, 9, 30, 20, 30,
+        'אמפי גבעת התחמושת, ירושלים', 'ירושלים',
         artist_genre='Hip-Hop',
         artist_description='הדג נחש — היפ-הופ ישראלי',
     ),
-    ShowSpec(
-        'הדג נחש',
-        'הדג נחש - חוגגים 30 שנה',
-        2026, 9, 29, 21, 0,
-        'זאפה אמפי שוני', 'בנימינה',
-        artist_genre='Hip-Hop',
-        artist_description='הדג נחש — היפ-הופ ישראלי',
-    ),
-    # ICE: Menora debut 28.9.2026.
     ShowSpec(
         'נועם בתן',
         'נועם בתן - מופע בכורה',
         2026, 9, 28, 21, 0,
-        'היכל מנורה מבטחים', 'תל אביב',
+        'היכל מנורה מבטחים, תל אביב', 'תל אביב',
         venue_choice=VENUE_MENORA,
         artist_genre='Pop',
-        artist_description='נועם בתן — זמר ישראלי, נציג אירוויזיון 2026',
+        artist_description='נועם בתן — זמר ישראלי',
     ),
-    # ICE / mako: Menora 1.10.2026 only (3.10 not announced).
     ShowSpec(
         'אגם בוחבוט',
         'אגם בוחבוט - אלבום 22',
         2026, 10, 1, 21, 0,
-        'היכל מנורה מבטחים', 'תל אביב',
+        'היכל מנורה מבטחים, תל אביב', 'תל אביב',
         venue_choice=VENUE_MENORA,
         artist_genre='Pop / Mizrahi',
         artist_description='אגם בוחבוט — זמרת ישראלית',
     ),
-    # ynet / El Al Flystore: Yarkon 16.9 and 17.9 at 20:00. Sold out on first sale.
+    ShowSpec(
+        'אגם בוחבוט',
+        'אגם בוחבוט - אלבום 22',
+        2026, 10, 3, 21, 0,
+        'היכל מנורה מבטחים, תל אביב', 'תל אביב',
+        venue_choice=VENUE_MENORA,
+        artist_genre='Pop / Mizrahi',
+        artist_description='אגם בוחבוט — זמרת ישראלית',
+    ),
     ShowSpec(
         'שרית חדד',
         'שרית חדד - 30 שנות מוזיקה',
         2026, 9, 16, 20, 0,
-        'פארק הירקון', 'תל אביב',
+        'פארק הירקון, תל אביב', 'תל אביב',
         artist_genre='Mizrahi',
         artist_description='שרית חדד — זמרת ישראלית',
     ),
@@ -256,36 +240,9 @@ SHOWS: tuple[ShowSpec, ...] = (
         'שרית חדד',
         'שרית חדד - 30 שנות מוזיקה',
         2026, 9, 17, 20, 0,
-        'פארק הירקון', 'תל אביב',
+        'פארק הירקון, תל אביב', 'תל אביב',
         artist_genre='Mizrahi',
         artist_description='שרית חדד — זמרת ישראלית',
-    ),
-    # El Al Flystore extra date: Live Park Rishon 20.10.2026 21:00.
-    ShowSpec(
-        'שרית חדד',
-        'שרית חדד - 30 שנות מוזיקה',
-        2026, 10, 20, 21, 0,
-        'אמפי MAX', 'ראשון לציון',
-        artist_genre='Mizrahi',
-        artist_description='שרית חדד — זמרת ישראלית',
-    ),
-    # mako / Tickchak: NEXT 2026 sold-out series, Ramat Gan from 8.10, Pais from 3.12.
-    ShowSpec(
-        'NEXT',
-        'NEXT 2026',
-        2026, 10, 8, 21, 0,
-        'האצטדיון הלאומי רמת גן', 'רמת גן',
-        artist_genre='Pop',
-        artist_description='NEXT — עומר אדם, ריטה, עידן עמדי, אושר כהן, אודיה, בן צור',
-    ),
-    ShowSpec(
-        'NEXT',
-        'NEXT 2026',
-        2026, 12, 3, 21, 0,
-        'פיס ארנה ירושלים', 'ירושלים',
-        venue_choice=VENUE_PAIS,
-        artist_genre='Pop',
-        artist_description='NEXT — עומר אדם, ריטה, עידן עמדי, אושר כהן, אודיה, בן צור',
     ),
 )
 
@@ -323,8 +280,10 @@ class Command(BaseCommand):
             for spec in SHOWS:
                 when = _dt(spec)
                 self.stdout.write(
-                    f'  - {spec.event_name} | {spec.artist_name} @ {when.isoformat()} '
-                    f'{spec.venue_place_name}, {spec.city}'
+                    _console_safe(
+                        f'  - {spec.event_name} | {spec.artist_name} @ {when.isoformat()} '
+                        f'{spec.venue_place_name}, {spec.city}'
+                    )
                 )
             self.stdout.write(f'Total shows: {len(SHOWS)}')
             return
@@ -350,7 +309,11 @@ class Command(BaseCommand):
                     )
                     artist_cache[spec.artist_name] = artist
                     label = 'Created' if artist_created else 'Updated'
-                    self.stdout.write(self.style.SUCCESS(f'{label} artist: {spec.artist_name} (id={artist.pk})'))
+                    self.stdout.write(
+                        self.style.SUCCESS(
+                            _console_safe(f'{label} artist: {spec.artist_name} (id={artist.pk})')
+                        )
+                    )
 
                 vkey = (spec.venue_place_name, spec.city)
                 venue_place = venue_cache.get(vkey)
@@ -378,10 +341,18 @@ class Command(BaseCommand):
                 )
                 if was_created:
                     created += 1
-                    self.stdout.write(self.style.SUCCESS(f'Created: {ev.name} @ {when.date()} (id={ev.pk})'))
+                    self.stdout.write(
+                        self.style.SUCCESS(
+                            _console_safe(f'Created: {ev.name} @ {when.date()} (id={ev.pk})')
+                        )
+                    )
                 else:
                     updated += 1
-                    self.stdout.write(self.style.NOTICE(f'Updated: {ev.name} @ {when.date()} (id={ev.pk})'))
+                    self.stdout.write(
+                        self.style.NOTICE(
+                            _console_safe(f'Updated: {ev.name} @ {when.date()} (id={ev.pk})')
+                        )
+                    )
                 seeded_events.append(ev)
 
         if not skip_images:
@@ -400,7 +371,9 @@ class Command(BaseCommand):
                     force=force_images,
                 )
                 if saved:
-                    self.stdout.write(self.style.SUCCESS(f'  images: {name} ({saved} files)'))
+                    self.stdout.write(
+                        self.style.SUCCESS(_console_safe(f'  images: {name} ({saved} files)'))
+                    )
 
         self.stdout.write(
             self.style.SUCCESS(
