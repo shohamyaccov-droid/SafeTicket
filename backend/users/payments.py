@@ -1156,6 +1156,7 @@ def finalize_payme_webhook_once(
     idempotency_key: str,
     sale_id: str = '',
     source: str = 'payme_webhook',
+    force_reclaim: bool = False,
 ) -> tuple[bool, str | None, str]:
     """
     Fulfill a PayMe success notify at most once for ``idempotency_key``.
@@ -1179,7 +1180,9 @@ def finalize_payme_webhook_once(
         )
 
         if claim == 'duplicate':
-            ok, err = finalize_pending_order_to_paid(order_id, source=f'{source}_replay')
+            ok, err = finalize_pending_order_to_paid(
+                order_id, source=f'{source}_replay', force_reclaim=force_reclaim
+            )
             return ok, err, 'duplicate'
 
         if claim == 'in_flight':
@@ -1189,9 +1192,13 @@ def finalize_payme_webhook_once(
                     break
                 row.refresh_from_db()
                 if row.status == PayMeWebhookIdempotency.STATUS_COMPLETED:
-                    ok, err = finalize_pending_order_to_paid(order_id, source=f'{source}_replay')
+                    ok, err = finalize_pending_order_to_paid(
+                        order_id, source=f'{source}_replay', force_reclaim=force_reclaim
+                    )
                     return ok, err, 'duplicate'
-            ok, err = finalize_pending_order_to_paid(order_id, source=f'{source}_recover')
+            ok, err = finalize_pending_order_to_paid(
+                order_id, source=f'{source}_recover', force_reclaim=force_reclaim
+            )
             if ok:
                 fresh = PayMeWebhookIdempotency.objects.filter(idempotency_key=idempotency_key).first()
                 _mark_payme_idempotency_completed(fresh or row)
@@ -1200,7 +1207,9 @@ def finalize_payme_webhook_once(
         if claim != 'claimed' or row is None:
             return False, 'idempotency_claim_failed', claim
 
-        ok, err = finalize_pending_order_to_paid(order_id, source=source)
+        ok, err = finalize_pending_order_to_paid(
+            order_id, source=source, force_reclaim=force_reclaim
+        )
         if ok:
             _mark_payme_idempotency_completed(row)
         return ok, err, 'claimed'
@@ -1210,15 +1219,114 @@ def finalize_payme_webhook_once(
 
 # Statuses the normal webhook/client path may finalize from.
 _FINALIZE_DEFAULT_STATUSES = frozenset({'pending_payment'})
-# Admin recovery only: abandoned cleanup may have cancelled a paid-in-PayMe order.
+# PSP-confirmed success (or admin recovery) may resurrect orders the buyer/UI cancelled
+# seconds before a delayed PayMe webhook, and reclaim released inventory.
 _FINALIZE_ADMIN_FORCE_STATUSES = frozenset(
     {
         'pending_payment',
         'cancelled',
         'canceled',  # defensive alias if ever stored
         'pending',
+        'expired',
     }
 )
+_WEBHOOK_SUCCESS_FINALIZE_STATUSES = frozenset({'paid'} | _FINALIZE_ADMIN_FORCE_STATUSES)
+_WEBHOOK_RECLAIM_STATUSES = frozenset({'cancelled', 'canceled', 'pending', 'expired'})
+
+
+def webhook_should_finalize_success(order_status: str | None) -> bool:
+    return (order_status or '') in _WEBHOOK_SUCCESS_FINALIZE_STATUSES
+
+
+def webhook_success_requires_reclaim(order_status: str | None) -> bool:
+    return (order_status or '') in _WEBHOOK_RECLAIM_STATUSES
+
+
+def reconcile_pending_payme_order_via_api(order):
+    """
+    Buyer success-page poll fail-safe: if PayMe already captured the sale but the
+    IPN webhook is delayed/missing, finalize the order from a live API lookup.
+    Only acts on pending_payment with a stored PayMe sale/transaction id.
+    """
+    if order is None:
+        return order
+    if (order.status or '') != 'pending_payment':
+        return order
+    txn = (getattr(order, 'payme_transaction_id', None) or '').strip()
+    if not txn:
+        return order
+
+    try:
+        from services.payme_service import confirm_payme_sale_status
+
+        confirmed = confirm_payme_sale_status(
+            payme_sale_id=txn,
+            payme_transaction_id=txn,
+        )
+    except Exception as exc:
+        logger.warning(
+            'PayMe status-poll reconcile lookup failed order_id=%s: %s',
+            getattr(order, 'pk', None),
+            exc,
+        )
+        return order
+
+    if not isinstance(confirmed, dict) or not confirmed.get('found'):
+        return order
+
+    raw_payload = confirmed.get('raw') if isinstance(confirmed.get('raw'), dict) else {}
+    status_payload = {
+        **raw_payload,
+        'status': confirmed.get('status') or raw_payload.get('status'),
+        'payme_status': confirmed.get('status') or raw_payload.get('payme_status'),
+    }
+    _, norm = normalize_payme_webhook_status(status_payload)
+    if norm and (order.payme_status or '') != norm:
+        try:
+            order.payme_status = norm[:64]
+            order.save(update_fields=['payme_status'])
+        except Exception:
+            logger.exception(
+                'PayMe status-poll failed to persist payme_status order_id=%s',
+                getattr(order, 'pk', None),
+            )
+
+    if norm != 'success':
+        return order
+
+    idem_key = build_payme_webhook_idempotency_key(
+        order,
+        {'payme_sale_id': txn, 'payme_transaction_id': txn},
+    )
+    try:
+        ok, err, _claim = finalize_payme_webhook_once(
+            int(order.pk),
+            idempotency_key=idem_key,
+            sale_id=txn,
+            source='payme_status_poll',
+            force_reclaim=False,
+        )
+    except Exception as exc:
+        logger.warning(
+            'PayMe status-poll finalize crashed order_id=%s: %s',
+            getattr(order, 'pk', None),
+            exc,
+        )
+        return order
+
+    if not ok:
+        logger.info(
+            'PayMe status-poll finalize skipped order_id=%s err=%s',
+            getattr(order, 'pk', None),
+            err,
+        )
+        return order
+
+    try:
+        order.refresh_from_db()
+    except Exception:
+        pass
+    return order
 
 
 def finalize_pending_order_to_paid(
@@ -1226,14 +1334,15 @@ def finalize_pending_order_to_paid(
     source: str = 'payme',
     *,
     force_from_admin: bool = False,
+    force_reclaim: bool = False,
 ) -> tuple[bool, str | None]:
     """
     Run the same inventory + status transition as confirm_order_payment (without user session checks).
     Caller must verify webhook signature / PSP trust first.
 
-    When force_from_admin=True (Django admin recovery only), also accepts cancelled/pending
+    When force_from_admin or force_reclaim is True, also accepts cancelled/expired/pending
     stuck orders, skips reservation-expiry checks, and re-claims released inventory so the
-    buyer gets the same paid order + sold tickets + payout ledger as a successful webhook.
+    buyer gets the same paid order + sold tickets + payout ledger + receipt email.
     """
     from users.models import Order, Ticket
     from users.ticket_status import PAYMENT_HOLD_MINUTES
@@ -1246,8 +1355,10 @@ def finalize_pending_order_to_paid(
     )
     from datetime import timedelta
 
+    reclaim = bool(force_from_admin or force_reclaim)
+
     try:
-        if not force_from_admin:
+        if not reclaim:
             release_abandoned_carts()
         with transaction.atomic():
             order = Order.objects.select_for_update().filter(pk=order_id).first()
@@ -1267,15 +1378,15 @@ def finalize_pending_order_to_paid(
                     )
                 return True, None
 
-            allowed = _FINALIZE_ADMIN_FORCE_STATUSES if force_from_admin else _FINALIZE_DEFAULT_STATUSES
+            allowed = _FINALIZE_ADMIN_FORCE_STATUSES if reclaim else _FINALIZE_DEFAULT_STATUSES
             if order.status not in allowed:
                 return False, 'order_not_pending'
 
-            if force_from_admin:
+            if reclaim:
                 conflict = _tickets_claimed_by_other_paid_order(order)
                 if conflict is not None:
                     logger.warning(
-                        'finalize_pending_order_to_paid admin force blocked order_id=%s '
+                        'finalize_pending_order_to_paid reclaim blocked order_id=%s '
                         'tickets already on paid order_id=%s',
                         order_id,
                         conflict,
@@ -1285,7 +1396,7 @@ def finalize_pending_order_to_paid(
             negotiated_offer = order.pending_offer
             ticket_ref = order.ticket
 
-            if force_from_admin:
+            if reclaim:
                 # Cancelled / expired holds often released inventory back to active — reclaim.
                 ticket_ids = list(order.ticket_ids or [])
                 if not ticket_ids and order.ticket_id:
@@ -1361,15 +1472,18 @@ def finalize_pending_order_to_paid(
             order.status = 'paid'
             order.payment_confirm_token = None
             update_fields = ['status', 'payment_confirm_token', 'updated_at']
-            if force_from_admin:
-                # Clear stale hold pointers left from abandoned-checkout cancel.
+            if reclaim:
+                # Clear stale hold pointers left from abandoned-checkout / buyer cancel.
                 order.held_ticket = None
                 order.held_quantity = 0
                 update_fields.extend(['held_ticket', 'held_quantity'])
-                if not (order.payme_status or '').strip() or order.payme_status in (
-                    'initialized',
-                    'pending',
-                    'unknown',
+                if force_from_admin and (
+                    not (order.payme_status or '').strip()
+                    or order.payme_status in (
+                        'initialized',
+                        'pending',
+                        'unknown',
+                    )
                 ):
                     order.payme_status = 'admin_force_paid'
                     update_fields.append('payme_status')
@@ -1383,10 +1497,10 @@ def finalize_pending_order_to_paid(
 
             ensure_seller_payout_for_order(order)
             logger.warning(
-                'finalize_pending_order_to_paid ok order_id=%s source=%s force_from_admin=%s',
+                'finalize_pending_order_to_paid ok order_id=%s source=%s reclaim=%s',
                 order_id,
                 source,
-                force_from_admin,
+                reclaim,
             )
     except ValueError as e:
         logger.warning('finalize_pending_order_to_paid order_id=%s: %s', order_id, e)

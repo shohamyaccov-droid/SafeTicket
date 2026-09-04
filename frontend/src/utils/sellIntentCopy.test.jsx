@@ -16,9 +16,10 @@ describe('resolveSellIntentCopy', () => {
   });
 
   it('uses sold-certainty copy for Facebook/Instagram landings', () => {
-    const copy = resolveSellIntentCopy('?utm_source=facebook&fbclid=abc');
-    expect(copy.intent).toBe('sold_certainty');
-    expect(copy.h1).toContain('כבר נמכר');
+    expect(resolveSellIntentCopy('?utm_source=facebook&fbclid=abc').intent).toBe('sold_certainty');
+    expect(resolveSellIntentCopy('?utm_source=instagram&igshid=xyz').intent).toBe('sold_certainty');
+    expect(resolveSellIntentCopy('?utm_medium=paid_social').intent).toBe('sold_certainty');
+    expect(resolveSellIntentCopy('?utm_source=facebook&fbclid=abc').h1).toContain('כבר נמכר');
   });
 
   it('honors explicit intent=stuck', () => {

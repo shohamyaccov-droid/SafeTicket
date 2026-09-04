@@ -68,6 +68,22 @@
   animation: payme-spin 0.85s linear infinite;
 }
 
+.payme-progress-track {
+  width: min(100%, 280px);
+  height: 6px;
+  margin: 18px auto 0;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.payme-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: #2563eb;
+  transition: width 0.4s ease;
+}
+
 .payme-success-icon,
 .payme-pending-icon {
   width: 78px;

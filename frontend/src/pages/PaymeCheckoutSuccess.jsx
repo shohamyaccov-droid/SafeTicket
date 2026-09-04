@@ -9,8 +9,11 @@ import { trackMetaPurchase } from '../utils/metaPixel';
 import { downloadTicketFromAxiosBlob } from '../utils/ticketDownload';
 import './PaymeCheckoutSuccess.css';
 
+/** Show reassuring “safe success” copy if paid is not confirmed yet. */
+const SOFT_TIMEOUT_MS = 15000;
+/** Keep polling in the background so a delayed webhook still upgrades UX + fires purchase. */
+const HARD_POLL_MS = 120000;
 const POLL_MS = 2500;
-const TIMEOUT_MS = 10000;
 
 const SAFE_SUCCESS_COPY =
   'התשלום התקבל בהצלחה! אנחנו מפיקים את הכרטיס והוא יישלח אליך למייל בדקות הקרובות.';
@@ -29,6 +32,16 @@ function isTransientStatusPollError(err) {
   );
 }
 
+function isPaidOrderStatus(status) {
+  const s = String(status || '').toLowerCase();
+  return s === 'paid' || s === 'completed';
+}
+
+function isPaymeCapturedStatus(paymeStatus) {
+  const s = String(paymeStatus || '').toLowerCase().replace(/[\s-]+/g, '_');
+  return s === 'success' || s === 'completed' || s === 'paid' || s === 'sale_complete';
+}
+
 export default function PaymeCheckoutSuccess() {
   const [searchParams] = useSearchParams();
   const orderIdRaw = searchParams.get('order_id');
@@ -38,12 +51,16 @@ export default function PaymeCheckoutSuccess() {
   const [paymeStatus, setPaymeStatus] = useState(null);
   const [lastCheckedAt, setLastCheckedAt] = useState(null);
   const [checkError, setCheckError] = useState('');
+  const [elapsedSec, setElapsedSec] = useState(0);
   const [adsPurchase, setAdsPurchase] = useState(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
   const pollTimerRef = useRef(null);
-  const timeoutTimerRef = useRef(null);
-  const completedRef = useRef(false);
+  const softTimeoutRef = useRef(null);
+  const hardTimeoutRef = useRef(null);
+  const paidConfirmedRef = useRef(false);
+  const purchaseTrackedRef = useRef(false);
+  const stopPollingRef = useRef(false);
   const userRef = useRef(user);
   const authLoadingRef = useRef(authLoading);
   const guestEmailRef = useRef(null);
@@ -71,33 +88,42 @@ export default function PaymeCheckoutSuccess() {
 
   const clearAllTimers = useCallback(() => {
     clearTimer(pollTimerRef);
-    clearTimer(timeoutTimerRef);
+    clearTimer(softTimeoutRef);
+    clearTimer(hardTimeoutRef);
   }, [clearTimer]);
 
+  const firePurchaseAnalytics = useCallback((data) => {
+    if (purchaseTrackedRef.current) return;
+    purchaseTrackedRef.current = true;
+    const paidValue = Number(data?.total_paid_by_buyer ?? data?.total_amount ?? 0);
+    const currency = data?.currency || 'ILS';
+    Analytics.checkoutComplete(orderId, {
+      value: Number.isFinite(paidValue) ? paidValue : 0,
+      currency,
+    });
+    trackMetaPurchase({
+      orderId,
+      value: Number.isFinite(paidValue) ? paidValue : 0,
+      currency,
+    });
+    setAdsPurchase({
+      value: Number.isFinite(paidValue) ? paidValue : 0,
+      transactionId: String(orderId),
+      currency,
+    });
+  }, [orderId]);
+
   const markPaidSuccess = useCallback((data) => {
-    completedRef.current = true;
+    paidConfirmedRef.current = true;
+    stopPollingRef.current = true;
     setPhase('success');
     clearAllTimers();
     if (data?.download_token) {
       downloadTokenRef.current = data.download_token;
     }
-    const paidValue = Number(data?.total_paid_by_buyer ?? data?.total_amount ?? 0);
-    Analytics.checkoutComplete(orderId, {
-      value: Number.isFinite(paidValue) ? paidValue : 0,
-      currency: data?.currency || 'ILS',
-    });
-    trackMetaPurchase({
-      orderId,
-      value: Number.isFinite(paidValue) ? paidValue : 0,
-      currency: data?.currency || 'ILS',
-    });
-    setAdsPurchase({
-      value: Number.isFinite(paidValue) ? paidValue : 0,
-      transactionId: String(orderId),
-      currency: data?.currency || 'ILS',
-    });
+    firePurchaseAnalytics(data);
     clearPaymePendingOrder();
-  }, [clearAllTimers, orderId]);
+  }, [clearAllTimers, firePurchaseAnalytics]);
 
   const checkStatusOnce = useCallback(async () => {
     if (!isValidOrderId) {
@@ -115,15 +141,20 @@ export default function PaymeCheckoutSuccess() {
     try {
       const res = await orderAPI.getPaymentStatus(orderId, guestEmail);
       const s = res.data?.status;
+      const pm = res.data?.payme_status ?? null;
       setOrderStatus(s);
-      setPaymeStatus(res.data?.payme_status ?? null);
+      setPaymeStatus(pm);
       setLastCheckedAt(new Date());
       if (res.data?.download_token) {
         downloadTokenRef.current = res.data.download_token;
       }
-      if (s === 'paid' || s === 'completed') {
+      if (isPaidOrderStatus(s)) {
         markPaidSuccess(res.data);
         return true;
+      }
+      // PayMe captured but order row still pending — fire ads once; keep polling for download token.
+      if (isPaymeCapturedStatus(pm) && !purchaseTrackedRef.current) {
+        firePurchaseAnalytics(res.data);
       }
       return false;
     } catch (err) {
@@ -137,7 +168,7 @@ export default function PaymeCheckoutSuccess() {
       }
       return false;
     }
-  }, [isValidOrderId, markPaidSuccess, orderId, readGuestEmail]);
+  }, [firePurchaseAnalytics, isValidOrderId, markPaidSuccess, orderId, readGuestEmail]);
 
   const handleDownloadTickets = useCallback(async () => {
     if (!isValidOrderId || downloading) return;
@@ -168,31 +199,46 @@ export default function PaymeCheckoutSuccess() {
     let cancelled = false;
     const startedAt = Date.now();
     setPhase('processing');
+    setElapsedSec(0);
     guestEmailRef.current = readGuestEmail();
+    paidConfirmedRef.current = false;
+    purchaseTrackedRef.current = false;
+    stopPollingRef.current = false;
+
+    const tickElapsed = window.setInterval(() => {
+      if (cancelled || paidConfirmedRef.current) return;
+      setElapsedSec(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
 
     const poll = async () => {
-      if (cancelled || completedRef.current) return;
+      if (cancelled || stopPollingRef.current || paidConfirmedRef.current) return;
       const paid = await checkStatusOnce();
-      if (cancelled || paid || completedRef.current) {
+      if (cancelled || paid || paidConfirmedRef.current || stopPollingRef.current) {
         return;
       }
-      if (Date.now() - startedAt < TIMEOUT_MS) {
+      if (Date.now() - startedAt < HARD_POLL_MS) {
         pollTimerRef.current = window.setTimeout(poll, POLL_MS);
       }
     };
 
-    timeoutTimerRef.current = window.setTimeout(() => {
-      if (completedRef.current || cancelled) return;
-      clearTimer(pollTimerRef);
-      completedRef.current = true;
-      setPhase('safe_success');
+    softTimeoutRef.current = window.setTimeout(() => {
+      if (paidConfirmedRef.current || cancelled) return;
+      setPhase((prev) => (prev === 'success' ? prev : 'safe_success'));
       clearPaymePendingOrder();
-    }, TIMEOUT_MS);
+    }, SOFT_TIMEOUT_MS);
+
+    hardTimeoutRef.current = window.setTimeout(() => {
+      if (paidConfirmedRef.current || cancelled) return;
+      stopPollingRef.current = true;
+      clearTimer(pollTimerRef);
+      setPhase((prev) => (prev === 'success' ? prev : 'safe_success'));
+    }, HARD_POLL_MS);
 
     void poll();
 
     return () => {
       cancelled = true;
+      window.clearInterval(tickElapsed);
       clearAllTimers();
     };
   }, [checkStatusOnce, clearAllTimers, clearTimer, isValidOrderId, readGuestEmail]);
@@ -244,6 +290,13 @@ export default function PaymeCheckoutSuccess() {
     lastCheckedAt ? `נבדק לאחרונה: ${lastCheckedAt.toLocaleTimeString('he-IL')}` : null,
   ].filter(Boolean).join(' · ');
 
+  const processingHint =
+    elapsedSec < 5
+      ? 'מאמתים את התשלום מול PayMe…'
+      : elapsedSec < 12
+        ? 'ממתינים לאישור סופי מהסליקה…'
+        : 'עדיין מעבדים — אפשר להישאר בעמוד, אנחנו ממשיכים לבדוק ברקע.';
+
   return (
     <div className="payme-return-page" dir="rtl">
       <section className={`payme-return-card payme-return-card--${phase}`}>
@@ -255,9 +308,21 @@ export default function PaymeCheckoutSuccess() {
             <p className="payme-return-message">
               מעבדים את התשלום... נא לא לצאת או לרענן את העמוד.
             </p>
-            <p className="payme-return-subtext">
-              אנחנו ממתינים לאישור הסופי מ-PayMe. זה בדרך כלל לוקח כמה שניות.
-            </p>
+            <p className="payme-return-subtext">{processingHint}</p>
+            <div
+              className="payme-progress-track"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={SOFT_TIMEOUT_MS / 1000}
+              aria-valuenow={Math.min(elapsedSec, SOFT_TIMEOUT_MS / 1000)}
+            >
+              <div
+                className="payme-progress-bar"
+                style={{
+                  width: `${Math.min(100, (elapsedSec / (SOFT_TIMEOUT_MS / 1000)) * 100)}%`,
+                }}
+              />
+            </div>
           </>
         )}
 
@@ -284,7 +349,7 @@ export default function PaymeCheckoutSuccess() {
             <h1>התשלום התקבל בהצלחה!</h1>
             <p className="payme-return-message">{SAFE_SUCCESS_COPY}</p>
             <p className="payme-return-subtext">
-              אין צורך להישאר בעמוד הזה. אם המייל לא מגיע תוך כמה דקות, בדקו בספאם או פנו לתמיכה עם מספר ההזמנה.
+              אנחנו ממשיכים לאשר את ההזמנה ברקע. אם המייל לא מגיע תוך כמה דקות, בדקו בספאם או פנו לתמיכה עם מספר ההזמנה.
             </p>
             {downloadActions}
           </>
@@ -295,7 +360,7 @@ export default function PaymeCheckoutSuccess() {
             מספר הזמנה: <strong>{orderIdRaw}</strong>
           </p>
         )}
-        {(lastStatusText || checkError) && phase === 'processing' && (
+        {(lastStatusText || checkError) && (phase === 'processing' || phase === 'safe_success') && (
           <p className="payme-last-status">
             {lastStatusText || 'סטטוס הזמנה טרם זמין'}
             {checkError ? ` · ${checkError}` : ''}

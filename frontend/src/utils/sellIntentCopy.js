@@ -93,14 +93,26 @@ export function resolveSellIntentCopy(search) {
     haystack.includes('נמכר') ||
     haystack.includes('העלת') ||
     haystack.includes('upload') ||
-    params.get('utm_source') === 'facebook' ||
-    params.get('utm_source') === 'instagram' ||
-    params.get('fbclid')
+    haystack.includes('sold')
   ) {
-    // Paid social winner creative leads with certainty — match landing headline.
-    if (params.get('fbclid') || params.get('utm_source') === 'facebook' || params.get('utm_source') === 'instagram') {
-      return { ...INTENT_COPY.sold_certainty, intent: 'sold_certainty' };
-    }
+    return { ...INTENT_COPY.sold_certainty, intent: 'sold_certainty' };
+  }
+
+  const utmSource = normalizeTerm(params.get('utm_source'));
+  const utmMedium = normalizeTerm(params.get('utm_medium'));
+  const paidSocial =
+    Boolean(params.get('fbclid')) ||
+    Boolean(params.get('igshid')) ||
+    utmSource === 'facebook' ||
+    utmSource === 'instagram' ||
+    utmSource === 'meta' ||
+    utmSource === 'ig' ||
+    utmSource === 'fb' ||
+    utmMedium.includes('social') ||
+    utmMedium === 'paid_social';
+
+  if (paidSocial) {
+    return { ...INTENT_COPY.sold_certainty, intent: 'sold_certainty' };
   }
 
   return { ...INTENT_COPY.default, intent: 'default' };

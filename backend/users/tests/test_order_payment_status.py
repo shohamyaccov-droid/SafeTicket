@@ -121,3 +121,36 @@ class OrderPaymentStatusTests(TestCase):
             {'email': 'not-the-buyer@example.test'},
         )
         self.assertEqual(res.status_code, 404)
+
+    def test_pending_status_poll_reconciles_when_payme_already_captured(self):
+        """Success-page poll must finalize if IPN is late but PayMe API says success."""
+        self.order.payme_transaction_id = 'SALE-STATUS-POLL-1'
+        self.order.payme_status = 'pending'
+        self.order.save(update_fields=['payme_transaction_id', 'payme_status'])
+
+        def _fake_finalize(order_id, **kwargs):
+            Order.objects.filter(pk=order_id).update(status='paid', payme_status='success')
+            return True, None, 'claimed'
+
+        with patch(
+            'services.payme_service.confirm_payme_sale_status',
+            return_value={
+                'ok': True,
+                'found': True,
+                'status': 'success',
+                'raw': {'status': 'success', 'payme_sale_id': 'SALE-STATUS-POLL-1'},
+            },
+        ) as mock_confirm, patch(
+            'users.payments.finalize_payme_webhook_once',
+            side_effect=_fake_finalize,
+        ) as mock_finalize:
+            self.client.force_authenticate(self.buyer)
+            res = self.client.get(STATUS_URL.format(self.order.pk))
+
+        self.assertEqual(res.status_code, 200, res.content)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'paid')
+        self.assertEqual(res.data['status'], 'paid')
+        self.assertTrue(res.data.get('download_token'))
+        mock_confirm.assert_called()
+        mock_finalize.assert_called()

@@ -1741,6 +1741,7 @@ def _buyer_order_for_payment_status(request, order_id):
         'id',
         'status',
         'payme_status',
+        'payme_transaction_id',
         'user_id',
         'guest_email',
         'total_amount',
@@ -1869,12 +1870,20 @@ def order_payment_status(request, order_id):
     """
     Tiny paid/pending check for the checkout success page.
     Does not generate receipts or dispatch email — the PayMe webhook owns fulfillment.
+    When the order is still pending_payment but PayMe already captured the sale,
+    reconcile via API so a delayed IPN cannot strand the buyer (or GA4 purchase).
     Returns 404 (never 401) when the caller cannot see the order, so the SPA
     interceptor cannot treat a poll miss as session expiry.
     """
+    from users.payments import reconcile_pending_payme_order_via_api
+
     order = _buyer_order_for_payment_status(request, order_id)
     if not order:
         return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+    try:
+        order = reconcile_pending_payme_order_via_api(order) or order
+    except Exception:
+        logger.exception('order_payment_status reconcile failed order_id=%s', order_id)
     payload = {
         'order_id': order.id,
         'status': order.status,

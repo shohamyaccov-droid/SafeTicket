@@ -1602,7 +1602,13 @@ const Sell = () => {
                           : 'לא נמצאו גושים לאולם זה'}
                     </span>
                   </div>
-                  <SellerDemandBanner event={formData.selectedEvent} />
+                  <SellerDemandBanner
+                    event={
+                      eventDetail && String(eventDetail.id) === String(formData.event_id)
+                        ? { ...formData.selectedEvent, ...eventDetail }
+                        : formData.selectedEvent
+                    }
+                  />
                 </div>
               ) : null}
 
