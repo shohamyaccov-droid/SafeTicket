@@ -58,6 +58,19 @@
   line-height: 1.7;
 }
 
+.payme-mail-notice {
+  max-width: 520px;
+  margin: 18px auto 0;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  color: #065f46;
+  font-size: 1.08rem;
+  font-weight: 800;
+  line-height: 1.65;
+}
+
 .payme-spinner {
   width: 76px;
   height: 76px;

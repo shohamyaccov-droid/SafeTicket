@@ -154,3 +154,37 @@ class OrderPaymentStatusTests(TestCase):
         self.assertTrue(res.data.get('download_token'))
         mock_confirm.assert_called()
         mock_finalize.assert_called()
+
+    def test_cancelled_status_poll_reconciles_when_payme_already_captured(self):
+        """Frontend timeout may cancel the order; a later poll must still pay it."""
+        self.order.status = 'cancelled'
+        self.order.payme_transaction_id = 'SALE-STATUS-POLL-CANCELLED'
+        self.order.payme_status = 'pending'
+        self.order.save(update_fields=['status', 'payme_transaction_id', 'payme_status'])
+
+        def _fake_finalize(order_id, **kwargs):
+            self.assertTrue(kwargs.get('force_reclaim'))
+            Order.objects.filter(pk=order_id).update(status='paid', payme_status='success')
+            return True, None, 'claimed'
+
+        with patch(
+            'services.payme_service.confirm_payme_sale_status',
+            return_value={
+                'ok': True,
+                'found': True,
+                'status': 'success',
+                'raw': {'status': 'success', 'payme_sale_id': 'SALE-STATUS-POLL-CANCELLED'},
+            },
+        ), patch(
+            'users.payments.finalize_payme_webhook_once',
+            side_effect=_fake_finalize,
+        ) as mock_finalize:
+            self.client.force_authenticate(self.buyer)
+            res = self.client.get(STATUS_URL.format(self.order.pk))
+
+        self.assertEqual(res.status_code, 200, res.content)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'paid')
+        self.assertEqual(res.data['status'], 'paid')
+        self.assertTrue(res.data.get('download_token'))
+        mock_finalize.assert_called()

@@ -17,6 +17,9 @@ const POLL_MS = 2500;
 
 const SAFE_SUCCESS_COPY =
   'התשלום התקבל בהצלחה! אנחנו מפיקים את הכרטיס והוא יישלח אליך למייל בדקות הקרובות.';
+const TICKET_MAIL_NOTICE =
+  'הכרטיסים נשלחו למייל (אנא בדקו גם בתיבת הספאם/קידומי מכירות).';
+const DOWNLOAD_BUTTON_LABEL = 'ניתן להוריד את הכרטיסים כאן';
 
 function isTransientStatusPollError(err) {
   const status = err?.response?.status;
@@ -263,7 +266,7 @@ export default function PaymeCheckoutSuccess() {
         onClick={handleDownloadTickets}
         disabled={downloading}
       >
-        {downloading ? 'מוריד כרטיסים...' : 'הורד כרטיסים עכשיו'}
+        {downloading ? 'מוריד כרטיסים...' : DOWNLOAD_BUTTON_LABEL}
       </button>
       {downloadError ? <p className="payme-download-error">{downloadError}</p> : null}
       <Link to={isLoggedIn ? '/dashboard' : '/'} className="payme-return-button payme-return-button--secondary">
@@ -339,6 +342,9 @@ export default function PaymeCheckoutSuccess() {
                 התשלום הושלם בהצלחה! הכרטיסים מוכנים להורדה. שלחנו גם עותק למייל.
               </p>
             )}
+            <p className="payme-mail-notice" role="status">
+              {TICKET_MAIL_NOTICE}
+            </p>
             {downloadActions}
           </>
         )}
@@ -348,8 +354,11 @@ export default function PaymeCheckoutSuccess() {
             <div className="payme-success-icon" aria-hidden>✓</div>
             <h1>התשלום התקבל בהצלחה!</h1>
             <p className="payme-return-message">{SAFE_SUCCESS_COPY}</p>
+            <p className="payme-mail-notice" role="status">
+              {TICKET_MAIL_NOTICE}
+            </p>
             <p className="payme-return-subtext">
-              אנחנו ממשיכים לאשר את ההזמנה ברקע. אם המייל לא מגיע תוך כמה דקות, בדקו בספאם או פנו לתמיכה עם מספר ההזמנה.
+              אנחנו ממשיכים לאשר את ההזמנה ברקע. אפשר להישאר בעמוד — אין מעבר אוטומטי לדף הבית.
             </p>
             {downloadActions}
           </>

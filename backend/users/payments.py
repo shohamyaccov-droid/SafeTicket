@@ -1246,11 +1246,16 @@ def reconcile_pending_payme_order_via_api(order):
     """
     Buyer success-page poll fail-safe: if PayMe already captured the sale but the
     IPN webhook is delayed/missing, finalize the order from a live API lookup.
-    Only acts on pending_payment with a stored PayMe sale/transaction id.
+
+    Recovers pending_payment and also cancelled/expired holds left by a frontend
+    timeout, so a captured PayMe sale still becomes a paid TradeTix order.
     """
     if order is None:
         return order
-    if (order.status or '') != 'pending_payment':
+    order_status = order.status or ''
+    if order_status in ('paid', 'completed'):
+        return order
+    if not webhook_should_finalize_success(order_status):
         return order
     txn = (getattr(order, 'payme_transaction_id', None) or '').strip()
     if not txn:
@@ -1299,12 +1304,13 @@ def reconcile_pending_payme_order_via_api(order):
         {'payme_sale_id': txn, 'payme_transaction_id': txn},
     )
     try:
+        reclaim = webhook_success_requires_reclaim(order_status)
         ok, err, _claim = finalize_payme_webhook_once(
             int(order.pk),
             idempotency_key=idem_key,
             sale_id=txn,
-            source='payme_status_poll',
-            force_reclaim=False,
+            source='payme_status_poll_cancelled_recover' if reclaim else 'payme_status_poll',
+            force_reclaim=reclaim,
         )
     except Exception as exc:
         logger.warning(

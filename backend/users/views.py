@@ -1764,7 +1764,7 @@ def _buyer_order_for_payment_status(request, order_id):
         return None
     return qs.filter(
         guest_email__iexact=guest_email,
-        status__in=['paid', 'completed', 'pending_payment', 'cancelled'],
+        status__in=['paid', 'completed', 'pending_payment', 'cancelled', 'canceled', 'expired'],
     ).first()
 
 

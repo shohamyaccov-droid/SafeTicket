@@ -38,6 +38,8 @@ from .payments import (
     parse_payme_raw_body_fields,
     payme_webhook_already_completed,
     verify_payme_webhook_request,
+    webhook_should_finalize_success,
+    webhook_success_requires_reclaim,
 )
 from .shabbat import shabbat_forbidden_response
 
@@ -226,7 +228,17 @@ def _resolve_order_from_payme_webhook(
             oid = int(raw)
         except (TypeError, ValueError):
             continue
-        order = Order.objects.filter(pk=oid, status__in=('pending_payment', 'paid')).first()
+        order = Order.objects.filter(
+            pk=oid,
+            status__in=(
+                'pending_payment',
+                'paid',
+                'cancelled',
+                'canceled',
+                'expired',
+                'pending',
+            ),
+        ).first()
         if order:
             logger.warning(
                 'PayMe webhook resolved order_id=%s via %s (sale refs did not match stored payme_transaction_id)',
@@ -653,7 +665,8 @@ def payme_webhook(request):
                 }
             )
 
-        if order.status == 'paid' or (norm == 'success' and order.status == 'pending_payment'):
+        if webhook_should_finalize_success(order.status) and (order.status == 'paid' or norm == 'success'):
+            reclaim = webhook_success_requires_reclaim(order.status)
             try:
                 last_lock = None
                 ok = err = claim = None
@@ -664,10 +677,15 @@ def payme_webhook(request):
                             idempotency_key=idem_key,
                             sale_id=sale_for_key,
                             source=(
-                                'payme_webhook'
-                                if order.status == 'pending_payment'
-                                else 'payme_webhook_idempotent_reconcile'
+                                'payme_webhook_cancelled_recover'
+                                if reclaim
+                                else (
+                                    'payme_webhook'
+                                    if order.status == 'pending_payment'
+                                    else 'payme_webhook_idempotent_reconcile'
+                                )
                             ),
+                            force_reclaim=reclaim,
                         )
                         last_lock = None
                         break

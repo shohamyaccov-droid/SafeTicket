@@ -17,6 +17,15 @@ RESEND_FROM_EMAIL = 'TradeTix <onboarding@resend.dev>'
 RESEND_API_URL = 'https://api.resend.com/emails'
 
 
+def _resend_from_email() -> str:
+    """Prefer a verified domain From; sandbox onboarding@resend.dev can only mail the Resend account owner."""
+    env_from = (os.environ.get('RESEND_FROM_EMAIL') or '').strip()
+    if env_from:
+        return env_from
+    settings_from = (getattr(settings, 'DEFAULT_FROM_EMAIL', '') or '').strip()
+    return settings_from or RESEND_FROM_EMAIL
+
+
 def _frontend_origin() -> str:
     return (getattr(settings, 'FRONTEND_ORIGIN', '') or '').strip().rstrip('/')
 
@@ -279,7 +288,7 @@ def send_resend_email(
         raise RuntimeError(msg)
 
     payload = {
-        'from': RESEND_FROM_EMAIL,
+        'from': _resend_from_email(),
         'to': [recipient],
         'subject': subject,
         'html': html_body,

@@ -124,6 +124,9 @@ describe('PaymeCheckoutSuccess purchase attribution', () => {
         'התשלום התקבל בהצלחה! אנחנו מפיקים את הכרטיס והוא יישלח אליך למייל בדקות הקרובות.',
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText('הכרטיסים נשלחו למייל (אנא בדקו גם בתיבת הספאם/קידומי מכירות).'),
+    ).toBeInTheDocument();
     expect(Analytics.checkoutComplete).not.toHaveBeenCalled();
 
     vi.mocked(orderAPI.getPaymentStatus).mockResolvedValue({
@@ -197,7 +200,10 @@ describe('PaymeCheckoutSuccess purchase attribution', () => {
     });
     vi.mocked(orderAPI.downloadTickets).mockResolvedValue(blobResponse);
     renderSuccess();
-    const button = await screen.findByRole('button', { name: 'הורד כרטיסים עכשיו' });
+    const button = await screen.findByRole('button', { name: 'ניתן להוריד את הכרטיסים כאן' });
+    expect(
+      screen.getByText('הכרטיסים נשלחו למייל (אנא בדקו גם בתיבת הספאם/קידומי מכירות).'),
+    ).toBeInTheDocument();
     fireEvent.click(button);
     await waitFor(() => {
       expect(orderAPI.downloadTickets).toHaveBeenCalledWith(42, {
@@ -206,5 +212,20 @@ describe('PaymeCheckoutSuccess purchase attribution', () => {
       });
     });
     expect(downloadTicketFromAxiosBlob).toHaveBeenCalledWith(blobResponse, { ticketId: 'order-42' });
+  });
+
+  it('does not auto-redirect away from the success page', async () => {
+    vi.mocked(orderAPI.getPaymentStatus).mockResolvedValue({
+      data: {
+        status: 'paid',
+        total_paid_by_buyer: 80,
+        currency: 'ILS',
+        download_token: 'dl',
+      },
+    });
+    renderSuccess();
+    expect(await screen.findByRole('heading', { name: 'התשלום הושלם בהצלחה!' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'חזרה לדף הבית' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'קישור לא תקין' })).not.toBeInTheDocument();
   });
 });

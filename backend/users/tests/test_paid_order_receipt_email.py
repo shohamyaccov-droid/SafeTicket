@@ -233,6 +233,26 @@ class ResendHttpTransportTests(TestCase):
         self.assertEqual(payload['to'], ['buyer@example.test'])
         self.assertEqual(payload['from'], 'TradeTix <onboarding@resend.dev>')
 
+    def test_resend_uses_default_from_email_not_sandbox_only(self):
+        from users.utils.emails import send_branded_email
+
+        with override_settings(DEFAULT_FROM_EMAIL='TradeTix <tickets@tradetix.co.il>'):
+            with patch.dict('os.environ', {'RESEND_API_KEY': 're_test', 'RESEND_FROM_EMAIL': ''}, clear=False):
+                with patch('users.utils.emails.build_branded_email', return_value=('plain', '<p>hi</p>')):
+                    with patch(
+                        'users.utils.emails._post_resend_http',
+                        return_value={'id': 're_1'},
+                    ) as http:
+                        sent = send_branded_email(
+                            subject='Test',
+                            to_email='buyer@example.test',
+                            template_basename='purchase_receipt',
+                        )
+        self.assertEqual(sent, 1)
+        _api_key, payload = http.call_args.args
+        self.assertEqual(payload['from'], 'TradeTix <tickets@tradetix.co.il>')
+        self.assertEqual(payload['to'], ['buyer@example.test'])
+
     @override_settings(
         EMAIL_HOST='smtp.gmail.com',
         EMAIL_HOST_USER='tradetix@gmail.com',
