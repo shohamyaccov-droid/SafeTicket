@@ -3,10 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import BloomfieldTicketListPanel from './BloomfieldTicketListPanel';
 
-vi.mock('../hooks/useBuyerServiceFeePercent', () => ({
-  default: () => 7,
-}));
-
 const buyableGroup = {
   id: 'g1',
   listing_group_id: 'g1',
@@ -54,7 +50,8 @@ describe('BloomfieldTicketListPanel buy CTA', () => {
     expect(screen.queryByText('כמות')).not.toBeInTheDocument();
     await userEvent.click(buy);
     expect(onBuy).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/₪\s*96(?!\.)/)).toBeInTheDocument();
+    expect(screen.getByText(/₪\s*90(?!\.)/)).toBeInTheDocument();
+    expect(screen.queryByText(/₪\s*96(?!\.)/)).not.toBeInTheDocument();
     expect(screen.queryByText(/דמי שירות/)).not.toBeInTheDocument();
   });
 

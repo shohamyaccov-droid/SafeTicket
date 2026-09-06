@@ -1,0 +1,46 @@
+.checkout-buyer-protection {
+  margin: 0.75rem 0 0;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  text-align: right;
+  direction: rtl;
+}
+
+.checkout-buyer-protection summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0f172a;
+  list-style: none;
+}
+
+.checkout-buyer-protection summary::-webkit-details-marker {
+  display: none;
+}
+
+.checkout-buyer-protection ul {
+  margin: 0.65rem 0 0;
+  padding-inline-start: 1.1rem;
+  color: #334155;
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.checkout-buyer-protection li + li {
+  margin-top: 0.45rem;
+}
+
+.checkout-buyer-protection__more {
+  margin: 0.55rem 0 0;
+  font-size: 0.78rem;
+}
+
+.checkout-escrow-note {
+  margin: 0.35rem 0 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-align: right;
+}

@@ -87,10 +87,10 @@ def _purchase_orders_for_user(user):
     return Order.objects.filter(scope, status__in=['paid', 'completed'])
 
 
-def _checkout_expected_total(*, ticket, order_quantity, negotiated_offer=None, coupon_code: str = ''):
-    """Server-authoritative checkout total, including optional coupon."""
+def _checkout_expected_breakdown(*, ticket, order_quantity, negotiated_offer=None, coupon_code: str = ''):
+    """Server-authoritative checkout lines: ticket_price, platform_fee, total_to_pay."""
     from users.coupons import CouponError, checkout_amounts_for_coupon, get_active_coupon
-    from users.pricing import expected_negotiated_total_from_offer_base
+    from users.pricing import buyer_charge_from_base_amount
 
     if negotiated_offer is not None:
         base = decimal_money(negotiated_offer.amount)
@@ -99,14 +99,46 @@ def _checkout_expected_total(*, ticket, order_quantity, negotiated_offer=None, c
         base = (unit * Decimal(max(1, int(order_quantity or 1)))).quantize(Decimal('0.01'))
     code = (coupon_code or '').strip()
     if not code:
-        if negotiated_offer is not None:
-            return expected_negotiated_total_from_offer_base(negotiated_offer.amount)
-        return expected_buy_now_total(ticket.asking_price, order_quantity)
+        ticket_price, platform_fee, total = buyer_charge_from_base_amount(base)
+        return {
+            'ticket_price': ticket_price,
+            'platform_fee': platform_fee,
+            'total_to_pay': total,
+        }
     try:
         coupon = get_active_coupon(code)
     except CouponError:
         raise
-    return checkout_amounts_for_coupon(coupon, base)['total']
+    amounts = checkout_amounts_for_coupon(coupon, base)
+    return {
+        'ticket_price': amounts['base'],
+        'platform_fee': amounts['buyer_fee'],
+        'total_to_pay': amounts['total'],
+    }
+
+
+def _checkout_expected_total(*, ticket, order_quantity, negotiated_offer=None, coupon_code: str = ''):
+    """Server-authoritative checkout total, including optional coupon."""
+    return _checkout_expected_breakdown(
+        ticket=ticket,
+        order_quantity=order_quantity,
+        negotiated_offer=negotiated_offer,
+        coupon_code=coupon_code,
+    )['total_to_pay']
+
+
+def _checkout_amount_mismatch_response(sent_total, breakdown):
+    return Response(
+        {
+            'error': (
+                f'Invalid total amount. Expected {breakdown["total_to_pay"]}, got {sent_total}'
+            ),
+            'ticket_price': str(breakdown['ticket_price']),
+            'platform_fee': str(breakdown['platform_fee']),
+            'total_to_pay': str(breakdown['total_to_pay']),
+        },
+        status=status.HTTP_400_BAD_REQUEST,
+    )
 
 
 def _listing_group_id_for_offer(negotiated_offer) -> str | None:
@@ -2355,12 +2387,13 @@ def create_order(request):
                 coupon_code_early = (request.data.get('coupon_code') or '').strip()
                 from users.coupons import CouponError as _CouponErrorEarly
                 try:
-                    expected_total = _checkout_expected_total(
+                    breakdown = _checkout_expected_breakdown(
                         ticket=negotiated_offer.ticket,
                         order_quantity=order_quantity,
                         negotiated_offer=negotiated_offer,
                         coupon_code=coupon_code_early,
                     )
+                    expected_total = breakdown['total_to_pay']
                 except _CouponErrorEarly as ce:
                     return Response(
                         {'error': ce.message, 'code': ce.code},
@@ -2368,17 +2401,7 @@ def create_order(request):
                     )
                 received_total = decimal_money(request.data.get('total_amount', 0))
                 if not payment_amounts_match(received_total, expected_total):
-                    return Response(
-                        {
-                            'error': (
-                                f'Amount mismatch. Expected {expected_total:.2f} '
-                                f'(negotiated base + buyer service fee'
-                                f'{", with coupon" if coupon_code_early else ""}), '
-                                f'got {received_total}'
-                            )
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+                    return _checkout_amount_mismatch_response(received_total, breakdown)
             # If listing_group_id is provided, IGNORE the specific ticket_id and find any active tickets in the group
             if listing_group_id:
                 logger.debug(f"Checking availability for Group: {listing_group_id}")
@@ -2420,12 +2443,13 @@ def create_order(request):
                             sent_total = decimal_money(request.data.get('total_amount', 0))
                             coupon_code = (request.data.get('coupon_code') or '').strip()
                             try:
-                                expected_total = _checkout_expected_total(
+                                breakdown = _checkout_expected_breakdown(
                                     ticket=reference_ticket,
                                     order_quantity=order_quantity,
                                     negotiated_offer=None,
                                     coupon_code=coupon_code,
                                 )
+                                expected_total = breakdown['total_to_pay']
                             except Exception as ce:
                                 from users.coupons import CouponError
                                 if isinstance(ce, CouponError):
@@ -2435,10 +2459,7 @@ def create_order(request):
                                     )
                                 raise
                             if not payment_amounts_match(sent_total, expected_total):
-                                return Response(
-                                    {'error': f'Invalid total amount. Expected {expected_total}, got {sent_total}'},
-                                    status=status.HTTP_400_BAD_REQUEST
-                                )
+                                return _checkout_amount_mismatch_response(sent_total, breakdown)
                         except Exception as e:
                             logger.debug(f"Error validating total_amount for grouped tickets: {e}")
                     logger.debug(f"IGNORING ticket_id {ticket_id} - looking for active tickets in group {listing_group_id}")
@@ -2572,22 +2593,20 @@ def create_order(request):
                             coupon_code = (request.data.get('coupon_code') or '').strip()
                             from users.coupons import CouponError
                             try:
-                                expected_total = _checkout_expected_total(
+                                breakdown = _checkout_expected_breakdown(
                                     ticket=ticket,
                                     order_quantity=order_quantity,
                                     negotiated_offer=None,
                                     coupon_code=coupon_code,
                                 )
+                                expected_total = breakdown['total_to_pay']
                             except CouponError as ce:
                                 return Response(
                                     {'error': ce.message, 'code': ce.code},
                                     status=status.HTTP_400_BAD_REQUEST,
                                 )
                             if not payment_amounts_match(sent_total, expected_total):
-                                return Response(
-                                    {'error': f'Invalid total amount. Expected {expected_total}, got {sent_total}'},
-                                    status=status.HTTP_400_BAD_REQUEST
-                                )
+                                return _checkout_amount_mismatch_response(sent_total, breakdown)
                         except Exception as e:
                             logger.debug(f"Error validating total_amount for single ticket: {e}")
                 except Ticket.DoesNotExist:
@@ -3153,8 +3172,11 @@ def payment_simulation(request):
         'payment_id': f'PAY_{ticket_id}_{request.data.get("timestamp", "")}',
         'message': 'Payment processed successfully',
         'base_price': float(base_dec),
+        'ticket_price': float(base_dec),
         'service_fee': float(fee_dec),
+        'platform_fee': float(fee_dec),
         'total_amount': float(total_dec),
+        'total_to_pay': float(total_dec),
         'is_negotiated': is_negotiated
     }, status=status.HTTP_200_OK)
 
@@ -3224,12 +3246,13 @@ def guest_checkout(request):
             coupon_code_early = (order_data.get('coupon_code') or '').strip()
             from users.coupons import CouponError as _CouponErrorEarly
             try:
-                expected_total = _checkout_expected_total(
+                breakdown = _checkout_expected_breakdown(
                     ticket=negotiated_offer.ticket,
                     order_quantity=int(order_data.get('quantity', 1) or 1),
                     negotiated_offer=negotiated_offer,
                     coupon_code=coupon_code_early,
                 )
+                expected_total = breakdown['total_to_pay']
             except _CouponErrorEarly as ce:
                 return Response(
                     {'error': ce.message, 'code': ce.code},
@@ -3237,10 +3260,7 @@ def guest_checkout(request):
                 )
             received_total = decimal_money(order_data.get('total_amount', 0))
             if not payment_amounts_match(received_total, expected_total):
-                return Response(
-                    {'error': f'Amount mismatch. Expected {expected_total:.2f}, got {received_total}'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return _checkout_amount_mismatch_response(received_total, breakdown)
         
         if not ticket_id:
             return Response(
@@ -3548,12 +3568,13 @@ def guest_checkout(request):
             coupon_code = (order_data.get('coupon_code') or '').strip()
             from users.coupons import CouponError
             try:
-                server_total = _checkout_expected_total(
+                breakdown = _checkout_expected_breakdown(
                     ticket=ticket,
                     order_quantity=order_quantity,
                     negotiated_offer=negotiated_offer,
                     coupon_code=coupon_code,
                 )
+                server_total = breakdown['total_to_pay']
             except CouponError as ce:
                 return Response(
                     {'error': ce.message, 'code': ce.code},
@@ -3562,14 +3583,7 @@ def guest_checkout(request):
             if not negotiated_offer:
                 sent_total = decimal_money(order_data.get('total_amount', 0))
                 if not payment_amounts_match(sent_total, server_total):
-                    return Response(
-                        {
-                            'error': (
-                                f'Invalid total amount. Expected {server_total}, got {sent_total}'
-                            )
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+                    return _checkout_amount_mismatch_response(sent_total, breakdown)
 
             event_name = order_data.get('event_name', ticket.event_name)
 

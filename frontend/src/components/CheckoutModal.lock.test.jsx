@@ -282,15 +282,15 @@ describe('CheckoutModal coupon field', () => {
         />
       </MemoryRouter>,
     );
-    expect(await screen.findByText('מחיר כרטיסים')).toBeInTheDocument();
+    expect(await screen.findByText('מחיר כרטיס:')).toBeInTheDocument();
     const input = await screen.findByPlaceholderText('הזן קוד קופון');
     await userEvent.type(input, 'SAVE20');
     await userEvent.click(screen.getByRole('button', { name: 'הפעל' }));
     await waitFor(() => expect(orderAPI.validateCoupon).toHaveBeenCalled());
-    expect(screen.getByText('דמי שירות ותפעול (7%)').closest('.price-row')).toHaveTextContent('34.86');
+    expect(screen.getByText('דמי פלטפורמה (7%):').closest('.price-row')).toHaveTextContent('34.86');
     expect(screen.queryByText(/14\.86/)).not.toBeInTheDocument();
     expect(screen.getByText(/הנחת קופון/).closest('.price-row')).toHaveTextContent('20');
-    expect(screen.getByText('סך הכל לתשלום:').closest('.price-row')).toHaveTextContent('512.86');
+    expect(screen.getByText('סה״כ לתשלום:').closest('.price-row')).toHaveTextContent('512.86');
   });
 });
 

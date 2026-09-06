@@ -3,12 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import EventMobileBuyBar from './EventMobileBuyBar';
 
-vi.mock('../hooks/useBuyerServiceFeePercent', () => ({
-  default: () => 7,
-}));
-
 describe('EventMobileBuyBar', () => {
-  it('shows the all-in price with no fee copy', async () => {
+  it('shows the listing base price with no fee copy', async () => {
     const onBuy = vi.fn();
     render(
       <EventMobileBuyBar
@@ -16,7 +12,8 @@ describe('EventMobileBuyBar', () => {
         onBuy={onBuy}
       />
     );
-    expect(screen.getByText(/₪\s*161/)).toBeInTheDocument();
+    expect(screen.getByText(/₪\s*150(?!\.)/)).toBeInTheDocument();
+    expect(screen.queryByText(/₪\s*161/)).not.toBeInTheDocument();
     expect(screen.queryByText(/דמי שירות/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'קנה עכשיו' }));
     expect(onBuy).toHaveBeenCalledTimes(1);

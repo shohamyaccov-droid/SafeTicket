@@ -81,6 +81,16 @@
   text-decoration: underline;
 }
 
+.footer-buyer-protection {
+  margin-top: 0.65rem;
+  font-size: 0.82rem !important;
+  color: #9ca3af !important;
+}
+
+.footer-buyer-protection a {
+  color: #93c5fd;
+}
+
 .footer-legal-links {
   margin-top: 0.75rem !important;
   line-height: 1.7;

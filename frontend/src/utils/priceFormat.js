@@ -113,7 +113,7 @@ export function getTicketPrice(ticket) {
 }
 
 /**
- * Buyer-facing listing total (face value + service fee). Same math as CheckoutModal.
+ * Buyer checkout total (face value + service fee). Used in CheckoutModal, not browse listings.
  */
 export function buyerAllInFromTicket(ticket, serviceFeePercent = BUYER_SERVICE_FEE_PERCENT) {
   const cur = resolveTicketCurrency(ticket);

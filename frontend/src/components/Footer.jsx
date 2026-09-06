@@ -13,6 +13,11 @@ const Footer = () => {
               TradeTix (טריידטיקס) · פרטי רישום ב־
               <Link to="/about">אודות</Link>
             </p>
+            <p className="footer-buyer-protection">
+              <Link to="/buyer-guarantee">הגנת הקונה</Link>
+              {' — '}
+              הכסף בנאמנות ומועבר למוכר רק אחרי המופע
+            </p>
           </div>
 
           <div className="footer-section">

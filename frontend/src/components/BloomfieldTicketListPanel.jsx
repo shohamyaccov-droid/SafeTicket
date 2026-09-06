@@ -5,7 +5,6 @@ import {
   resolveTicketCurrency,
   currencySymbol,
   formatListingAmountForCurrency,
-  buyerChargeFromBase,
 } from '../utils/priceFormat';
 
 import { listingAvailabilityLabel, listingQuantityOptions, normalizeListingSplitType } from '../utils/listingQuantity';
@@ -13,8 +12,6 @@ import TakenBuyButton from './TakenBuyButton';
 import TicketLockCountdown from './TicketLockCountdown';
 import { isListingGroupTaken } from '../utils/ticketAvailability';
 import { isListingGroupCartLocked } from '../utils/ticketLock';
-import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
-
 const ZONE_HE = {
   north: 'טריבונה צפון',
   south: 'טריבונה דרום',
@@ -98,8 +95,6 @@ export default function BloomfieldTicketListPanel({
   totalListingsBeforeQuantityFilter = 0,
   onLockExpire,
 }) {
-  const buyerFeePercent = useBuyerServiceFeePercent();
-
   return (
     <div className="flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm" dir="rtl">
 
@@ -177,8 +172,7 @@ export default function BloomfieldTicketListPanel({
             const cur = resolveTicketCurrency(firstTicket);
             const sym = currencySymbol(cur);
             const baseNum = getTicketBaseNumeric(firstTicket);
-            const allIn = buyerChargeFromBase(baseNum, buyerFeePercent).totalAmount;
-            const priceStr = formatListingAmountForCurrency(allIn, cur);
+            const priceStr = formatListingAmountForCurrency(baseNum, cur);
             const qty = group.available_count || 1;
             const qtyLabel = listingAvailabilityLabel(splitType, qty);
 

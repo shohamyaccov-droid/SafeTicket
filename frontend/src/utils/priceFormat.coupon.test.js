@@ -25,7 +25,7 @@ describe('buyerChargeFromBase (7% fee)', () => {
     expect(r.totalAmount).toBe(107);
   });
 
-  it('charges exactly 7% on 300 so listings can show ₪321', () => {
+  it('charges exactly 7% on 300 so checkout totals ₪321', () => {
     const r = buyerChargeFromBase(300);
     expect(r.baseAmount).toBe(300);
     expect(r.serviceFee).toBe(21);

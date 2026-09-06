@@ -1,14 +1,15 @@
 import {
   currencySymbol,
-  buyerAllInFromTicket,
+  formatListingAmountForCurrency,
+  getTicketBaseNumeric,
+  resolveTicketCurrency,
 } from '../utils/priceFormat';
-import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import './EventMobileBuyBar.css';
 
 /* eslint-disable react/prop-types -- project does not use PropTypes consistently */
 
 /**
- * Mobile-only sticky checkout bar: all-in listing price + קנה עכשיו.
+ * Mobile-only sticky checkout bar: listing base price + קנה עכשיו.
  * Hidden on desktop via CSS. Parent should unmount when checkout/offer is open.
  */
 export default function EventMobileBuyBar({
@@ -17,9 +18,9 @@ export default function EventMobileBuyBar({
   busy = false,
   onBuy,
 }) {
-  const feePercent = useBuyerServiceFeePercent();
   if (!ticket) return null;
-  const { formattedTotal, currency } = buyerAllInFromTicket(ticket, feePercent);
+  const currency = resolveTicketCurrency(ticket);
+  const formatted = formatListingAmountForCurrency(getTicketBaseNumeric(ticket), currency);
   const remaining = Number(remainingCount);
   const showScarcity = Number.isFinite(remaining) && remaining > 0 && remaining <= 3;
   const scarcityLabel =
@@ -29,7 +30,7 @@ export default function EventMobileBuyBar({
     <div className="event-mobile-buy-bar" dir="rtl" role="region" aria-label="רכישה מהירה">
       <div className="event-mobile-buy-bar__price">
         <span className="event-mobile-buy-bar__from">
-          {currencySymbol(currency)}{formattedTotal}
+          {currencySymbol(currency)}{formatted}
         </span>
         {showScarcity ? (
           <span className="event-mobile-buy-bar__scarcity">{scarcityLabel}</span>

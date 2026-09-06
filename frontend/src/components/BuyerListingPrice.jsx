@@ -1,17 +1,18 @@
 import {
-  buyerAllInFromTicket,
   currencySymbol,
+  formatListingAmountForCurrency,
+  getTicketBaseNumeric,
+  resolveTicketCurrency,
 } from '../utils/priceFormat';
-import useBuyerServiceFeePercent from '../hooks/useBuyerServiceFeePercent';
 import './BuyerListingPrice.css';
 
 /**
- * Browse surfaces: all-in buyer price only. Fee breakdown belongs in CheckoutModal.
+ * Browse surfaces: face-value (base) price only. Fees appear in CheckoutModal.
  */
 /* eslint-disable-next-line react/prop-types */
 const BuyerListingPrice = ({ ticket, compact = false, quantity = null }) => {
-  const feePercent = useBuyerServiceFeePercent();
-  const { formattedTotal, currency } = buyerAllInFromTicket(ticket, feePercent);
+  const currency = resolveTicketCurrency(ticket);
+  const formatted = formatListingAmountForCurrency(getTicketBaseNumeric(ticket), currency);
   const sym = currencySymbol(currency);
 
   const qty = quantity != null ? Number(quantity) : null;
@@ -22,7 +23,7 @@ const BuyerListingPrice = ({ ticket, compact = false, quantity = null }) => {
     <div className={`buyer-listing-price ${compact ? 'buyer-listing-price--compact' : ''}`}>
       {qtyLabel ? <div className="buyer-listing-price-qty">{qtyLabel}</div> : null}
       <div className="buyer-listing-price-main">
-        <span>{sym}{formattedTotal}</span>
+        <span>{sym}{formatted}</span>
         <span className="buyer-listing-price-per-ticket">לכרטיס</span>
       </div>
     </div>

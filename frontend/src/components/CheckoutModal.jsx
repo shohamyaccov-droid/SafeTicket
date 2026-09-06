@@ -34,6 +34,7 @@ import CheckoutLegalAcceptance, {
 import ShabbatModal from './ShabbatModal';
 import BuyerIdentityInlineForm from './BuyerIdentityInlineForm';
 import SafePayTrustLine from './SafePayTrustLine';
+import CheckoutBuyerProtection, { CheckoutEscrowNote } from './CheckoutBuyerProtection';
 import { buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
 import { isGuestContactComplete, validateGuestContact as sharedValidateGuestContact } from '../utils/contactValidation';
 import { isCheckoutAuthSessionFailure } from '../utils/checkoutAuth';
@@ -2093,21 +2094,21 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                       <p><strong>מחיר מוסכם (למוכר):</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.final_negotiated_price, payIso)}</p>
                     )}
                     {resolvedOrderData?.buyer_service_fee != null && Number(resolvedOrderData.buyer_service_fee) > 0 && (
-                      <p><strong>דמי שירות ותפעול ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.buyer_service_fee, payIso)}</p>
+                      <p><strong>דמי פלטפורמה ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.buyer_service_fee, payIso)}</p>
                     )}
-                    <p><strong>סה״כ שולם (לקונה):</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.total_paid_by_buyer ?? resolvedOrderData.total_amount, payIso)}</p>
+                    <p><strong>סה״כ לתשלום:</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.total_paid_by_buyer ?? resolvedOrderData.total_amount, payIso)}</p>
                   </>
                 ) : resolvedPaid ? (
                   <>
-                    <p><strong>מחיר כרטיסים:</strong> {paySym}{formatAmountForCurrency(resolvedPaid.baseAmount, payIso)}</p>
-                    <p><strong>דמי שירות ותפעול ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(grossServiceFee, payIso)}</p>
-                    <p><strong>סה"כ שולם:</strong> {paySym}{formatAmountForCurrency(resolvedPaid.totalAmount, payIso)}</p>
+                    <p><strong>מחיר כרטיס:</strong> {paySym}{formatAmountForCurrency(resolvedPaid.baseAmount, payIso)}</p>
+                    <p><strong>דמי פלטפורמה ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(grossServiceFee, payIso)}</p>
+                    <p><strong>סה״כ לתשלום:</strong> {paySym}{formatAmountForCurrency(resolvedPaid.totalAmount, payIso)}</p>
                   </>
                 ) : (
                   <>
-                    <p><strong>מחיר כרטיסים:</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.baseAmount != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).baseAmount, payIso) : '—'}</p>
-                    <p><strong>דמי שירות ותפעול ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(grossServiceFee, payIso)}</p>
-                    <p><strong>סה"כ שולם:</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.totalAmount != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).totalAmount, payIso) : '—'}</p>
+                    <p><strong>מחיר כרטיס:</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.baseAmount != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).baseAmount, payIso) : '—'}</p>
+                    <p><strong>דמי פלטפורמה ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(grossServiceFee, payIso)}</p>
+                    <p><strong>סה״כ לתשלום:</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.totalAmount != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).totalAmount, payIso) : '—'}</p>
                   </>
                 )}
               </div>
@@ -2412,11 +2413,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   )}
                   <div className="price-row">
-                    <span>מחיר כרטיסים</span>
+                    <span>מחיר כרטיס:</span>
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.baseAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
-                    <span>דמי שירות ותפעול ({feePercentLabel}%)</span>
+                    <span>דמי פלטפורמה ({feePercentLabel}%):</span>
                     <span>{curSym}{formatAmountForCurrency(grossServiceFee, checkoutCurrency)}</span>
                   </div>
                   {appliedCoupon ? (
@@ -2426,14 +2427,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   ) : null}
                   <div className="price-row total-row">
-                    <span>סך הכל לתשלום:</span>
+                    <span>סה״כ לתשלום:</span>
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.totalAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="price-row">
-                    <span>מחיר כרטיסים</span>
+                    <span>מחיר כרטיס:</span>
                     <span>{curSym}{formatAmountForCurrency(standardReceiptBaseTotal, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
@@ -2447,7 +2448,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   )}
                   <div className="price-row">
-                    <span>דמי שירות ותפעול ({feePercentLabel}%)</span>
+                    <span>דמי פלטפורמה ({feePercentLabel}%):</span>
                     <span>{curSym}{formatAmountForCurrency(grossServiceFee, checkoutCurrency)}</span>
                   </div>
                   {appliedCoupon ? (
@@ -2457,11 +2458,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   ) : null}
                   <div className="price-row total-row">
-                    <span>סך הכל לתשלום:</span>
+                    <span>סה״כ לתשלום:</span>
                     <span>{curSym}{formatAmountForCurrency(standardReceiptTotalPay, checkoutCurrency)}</span>
                   </div>
                 </>
               )}
+              <CheckoutEscrowNote />
             </div>
 
             <CheckoutCouponField inputId="checkout-coupon-input" {...couponFieldProps} />
@@ -2645,6 +2647,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                       : 'השלמת תשלום'}
               </button>
             </div>
+            <CheckoutBuyerProtection />
             <div className="payment-security-badges">
               <div className="payment-icons">
                 <svg width="40" height="24" viewBox="0 0 40 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -2774,11 +2777,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   )}
                   <div className="price-row">
-                    <span>מחיר כרטיסים</span>
+                    <span>מחיר כרטיס:</span>
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.baseAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
-                    <span>דמי שירות ותפעול ({feePercentLabel}%)</span>
+                    <span>דמי פלטפורמה ({feePercentLabel}%):</span>
                     <span>{curSym}{formatAmountForCurrency(grossServiceFee, checkoutCurrency)}</span>
                   </div>
                   {appliedCoupon ? (
@@ -2788,14 +2791,14 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   ) : null}
                   <div className="price-row total-row">
-                    <span>סך הכל לתשלום:</span>
+                    <span>סה״כ לתשלום:</span>
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.totalAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="price-row">
-                    <span>מחיר כרטיסים</span>
+                    <span>מחיר כרטיס:</span>
                     <span>{curSym}{formatAmountForCurrency(standardReceiptBaseTotal, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
@@ -2809,7 +2812,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   )}
                   <div className="price-row">
-                    <span>דמי שירות ותפעול ({feePercentLabel}%)</span>
+                    <span>דמי פלטפורמה ({feePercentLabel}%):</span>
                     <span>{curSym}{formatAmountForCurrency(grossServiceFee, checkoutCurrency)}</span>
                   </div>
                   {appliedCoupon ? (
@@ -2819,11 +2822,12 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   ) : null}
                   <div className="price-row total-row">
-                    <span>סך הכל לתשלום:</span>
+                    <span>סה״כ לתשלום:</span>
                     <span>{curSym}{formatAmountForCurrency(standardReceiptTotalPay, checkoutCurrency)}</span>
                   </div>
                 </>
               )}
+              <CheckoutEscrowNote />
             </div>
 
             <CheckoutCouponField inputId="checkout-coupon-input-info" {...couponFieldProps} />
@@ -2853,6 +2857,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
             <p className="checkout-hold-timer-line" role="status" aria-live="polite">
               {holdTimerLabel(timeRemaining)}
             </p>
+            <CheckoutBuyerProtection />
             <div className="button-group checkout-buttons-row modal-actions">
               <button
                 type="button"
@@ -2968,6 +2973,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               <p className="checkout-hold-timer-line" role="status" aria-live="polite">
                 {holdTimerLabel(timeRemaining)}
               </p>
+              <CheckoutBuyerProtection />
               <div className="button-group checkout-buttons-row modal-actions">
                 <button
                   type="button"
