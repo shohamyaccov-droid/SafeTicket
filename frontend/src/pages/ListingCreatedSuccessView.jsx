@@ -28,6 +28,21 @@ export default function ListingCreatedSuccessView({
             ? 'הוא יפורסם באתר לאחר אישור קצר (עד 24 שעות).'
             : 'הכרטיס פורסם באתר וזמין למכירה.'}
         </p>
+
+        {/* Critical Warning Block */}
+        <div className="sell-success-warning-block" role="alert">
+          <div className="warning-icon" aria-hidden="true">⚠️</div>
+          <div className="warning-content">
+            <p className="warning-title">שימו לב: ניהול כרטיס חשוב</p>
+            <p className="warning-text">
+              במידה והכרטיס נמכר מחוץ לאתר, <strong>חובה עליכם להסיר אותו מיידית</strong>.
+            </p>
+            <p className="warning-instruction">
+              כדי למחוק את הכרטיס או לשנות את מחירו, פשוט היכנסו לעמוד המופע ותוכלו לנהל אותו ישירות משם.
+            </p>
+          </div>
+        </div>
+
         <div className="success-cta-row">
           <button type="button" className="success-home-button listing-success-cta-primary" onClick={onAddPayoutDetails}>
             💳 הזנת פרטי בנק או ביט לקבלת התשלום

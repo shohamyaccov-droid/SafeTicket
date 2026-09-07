@@ -69,29 +69,37 @@
   display: inline;
 }
 
-/* Modal Overlays */
+/* Modal Overlays - CRITICAL: High z-index and fixed positioning to prevent element bleeding */
 .modal-overlay-ticket-action {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: rgba(0, 0, 0, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: 99999 !important;
   direction: rtl;
+  overflow: auto;
+  -webkit-backdrop-filter: blur(0px);
+  backdrop-filter: blur(0px);
 }
 
 .modal-content-ticket-action {
-  background: white;
+  position: relative;
+  background: #ffffff !important;
   border-radius: 12px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
   padding: 1.5rem;
   max-width: 400px;
   width: 90%;
   text-align: right;
+  z-index: 100000 !important;
+  margin: auto;
+  pointer-events: all !important;
 }
 
 .delete-ticket-modal h3,
@@ -108,6 +116,9 @@
   color: #4b5563;
   line-height: 1.5;
   font-size: 0.95rem;
+  position: relative;
+  z-index: 100001;
+  pointer-events: auto;
 }
 
 .delete-ticket-modal .small-text,
@@ -115,10 +126,20 @@
   font-size: 0.85rem;
   color: #64748b;
   margin-top: 0.5rem;
+  position: relative;
+  z-index: 100001;
+}
+
+.change-price-modal form {
+  position: relative;
+  z-index: 100001;
+  pointer-events: all !important;
 }
 
 .form-group-ticket-action {
   margin-bottom: 1.5rem;
+  position: relative;
+  z-index: 100001;
 }
 
 .form-group-ticket-action label {
@@ -127,16 +148,26 @@
   font-weight: 600;
   color: #1f2937;
   font-size: 0.95rem;
+  position: relative;
+  z-index: 100001;
 }
 
 .price-input-wrapper {
   display: flex;
   align-items: center;
-  border: 1px solid #e5e7eb;
+  border: 2px solid #d1d5db;
   border-radius: 8px;
-  background: #fafafa;
-  overflow: hidden;
+  background: #ffffff;
+  overflow: visible;
   direction: ltr;
+  position: relative;
+  z-index: 100001;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.price-input-wrapper:focus-within {
+  border-color: #0284c7;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 3px rgba(2, 132, 199, 0.1);
 }
 
 .price-input-wrapper .currency-symbol {
@@ -144,7 +175,10 @@
   color: #6b7280;
   font-weight: 600;
   user-select: none;
-  background: #f3f4f6;
+  background: #f9fafb;
+  border-right: 1px solid #e5e7eb;
+  position: relative;
+  z-index: 100001;
 }
 
 .price-input-field {
@@ -152,18 +186,33 @@
   padding: 0.6rem 0.8rem;
   border: none;
   font-size: 1rem;
-  background: transparent;
+  background: #ffffff;
+  position: relative;
+  z-index: 100001;
+  pointer-events: all !important;
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
 
 .price-input-field:focus {
   outline: none;
   background: #ffffff;
+  color: #1f2937;
+}
+
+.price-input-field::-webkit-outer-spin-button,
+.price-input-field::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .modal-actions-ticket {
   display: flex;
   gap: 0.75rem;
   flex-direction: row-reverse;
+  position: relative;
+  z-index: 100002;
+  pointer-events: all !important;
 }
 
 .modal-btn-cancel,
@@ -177,40 +226,62 @@
   border: none;
   transition: all 0.2s ease;
   font-size: 0.95rem;
+  position: relative;
+  z-index: 100002;
+  pointer-events: all !important;
 }
 
 .modal-btn-cancel {
   background: #f1f5f9;
   color: #475569;
+  border: 1px solid #cbd5e1;
 }
 
 .modal-btn-cancel:hover:not(:disabled) {
   background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+.modal-btn-cancel:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .modal-btn-confirm {
   background: #10b981;
   color: white;
+  border: 1px solid #059669;
 }
 
 .modal-btn-confirm:hover:not(:disabled) {
   background: #059669;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.modal-btn-confirm:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .modal-btn-danger {
   background: #ef4444;
   color: white;
+  border: 1px solid #dc2626;
 }
 
 .modal-btn-danger:hover:not(:disabled) {
   background: #dc2626;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.modal-btn-danger:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .modal-btn-cancel:disabled,
 .modal-btn-confirm:disabled,
 .modal-btn-danger:disabled {
-  opacity: 0.65;
+  opacity: 0.6;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* Mobile Responsiveness */

@@ -21,3 +21,91 @@
   border: 2px solid var(--primary-blue, #2563eb);
   box-shadow: none;
 }
+
+/* Warning Block - Critical Ticket Management Alert */
+.sell-success-warning-block {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  margin: 1.5rem auto;
+  padding: 1.2rem;
+  max-width: 28rem;
+  background: #fef3c7;
+  border: 2px solid #fcd34d;
+  border-radius: 12px;
+  direction: rtl;
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.15);
+}
+
+.warning-icon {
+  flex-shrink: 0;
+  font-size: 1.5rem;
+  line-height: 1.5;
+}
+
+.warning-content {
+  flex: 1;
+  text-align: right;
+}
+
+.warning-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #92400e;
+  line-height: 1.4;
+}
+
+.warning-text {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.95rem;
+  color: #b45309;
+  line-height: 1.5;
+}
+
+.warning-text strong {
+  font-weight: 700;
+  color: #d97706;
+}
+
+.warning-instruction {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #92400e;
+  line-height: 1.5;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  border-right: 3px solid #d97706;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 640px) {
+  .sell-success-warning-block {
+    flex-direction: column-reverse;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 1rem;
+    margin: 1rem auto;
+  }
+
+  .warning-icon {
+    font-size: 1.3rem;
+  }
+
+  .warning-content {
+    width: 100%;
+  }
+
+  .warning-title {
+    font-size: 0.95rem;
+  }
+
+  .warning-text {
+    font-size: 0.9rem;
+  }
+
+  .warning-instruction {
+    font-size: 0.85rem;
+  }
+}
