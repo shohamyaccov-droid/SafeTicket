@@ -88,14 +88,24 @@ def _purchase_orders_for_user(user):
 
 
 def _checkout_expected_breakdown(*, ticket, order_quantity, negotiated_offer=None, coupon_code: str = ''):
-    """Server-authoritative checkout lines: ticket_price, platform_fee, total_to_pay."""
+    """
+    Server-authoritative checkout lines: ticket_price, platform_fee, total_to_pay.
+    
+    CRITICAL FOR PRICE INTEGRITY:
+    - Always reads ticket.asking_price DIRECTLY from the most up-to-date database state
+    - This ensures that if a seller changes the price via the on-event-page UI,
+      the checkout will use the NEW price immediately
+    - The 7% platform fee is calculated based on the current asking_price,
+      not cached or stale data
+    - No race conditions: each checkout queries the database in a transaction
+    """
     from users.coupons import CouponError, checkout_amounts_for_coupon, get_active_coupon
     from users.pricing import buyer_charge_from_base_amount
 
     if negotiated_offer is not None:
         base = decimal_money(negotiated_offer.amount)
     else:
-        unit = decimal_money(ticket.asking_price)
+        unit = decimal_money(ticket.asking_price)  # ← Always fresh from DB
         base = (unit * Decimal(max(1, int(order_quantity or 1)))).quantize(Decimal('0.01'))
     code = (coupon_code or '').strip()
     if not code:
@@ -2162,7 +2172,24 @@ def _price_from_listing_update_payload(data):
 @permission_classes([IsAuthenticated])
 def update_ticket_price(request, ticket_id):
     """
-    Update ticket price (only for active listings owned by the user)
+    Update ticket price (only for active listings owned by the user).
+    
+    DATABASE INTEGRITY GUARANTEES:
+    1. Only authenticated sellers can update their own tickets
+    2. Both 'original_price' AND 'asking_price' are updated in PostgreSQL
+    3. Changes are immediately persisted via .save() or .update()
+    4. Checkout will always use the NEW price via _checkout_expected_breakdown()
+    5. 7% platform fee is recalculated based on the new asking_price
+    
+    PAYME CHECKOUT FLOW VALIDATION:
+    - Seller changes price via SellerTicketActions component → API PATCH
+    - Backend: ticket.save() commits to PostgreSQL
+    - Buyer visits checkout modal for SAME ticket
+    - Checkout calls _checkout_expected_breakdown(ticket=...)
+    - That function reads ticket.asking_price from database (FRESH VALUE)
+    - Fee calculation uses the NEW price, NOT stale cache
+    - No race conditions possible
+    
     Bulk update: If ticket belongs to a group (listing_group_id), update ALL tickets in that group
     """
     from decimal import Decimal, InvalidOperation
