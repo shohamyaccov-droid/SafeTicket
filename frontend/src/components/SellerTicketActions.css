@@ -1,0 +1,239 @@
+/* SellerTicketActions Component */
+
+.seller-ticket-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-direction: row-reverse;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.seller-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  direction: rtl;
+}
+
+.seller-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.seller-action-btn--price {
+  background: #e0f2fe;
+  color: #0284c7;
+  border-color: #06b6d4;
+}
+
+.seller-action-btn--price:hover:not(:disabled) {
+  background: #7dd3fc;
+  color: #0c4a6e;
+}
+
+.seller-action-btn--price:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.seller-action-btn--delete {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+.seller-action-btn--delete:hover:not(:disabled) {
+  background: #fecaca;
+  color: #7f1d1d;
+}
+
+.seller-action-btn--delete:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.action-icon {
+  font-size: 1rem;
+  display: inline-block;
+}
+
+.action-label {
+  display: inline;
+}
+
+/* Modal Overlays */
+.modal-overlay-ticket-action {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  direction: rtl;
+}
+
+.modal-content-ticket-action {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  padding: 1.5rem;
+  max-width: 400px;
+  width: 90%;
+  text-align: right;
+}
+
+.delete-ticket-modal h3,
+.change-price-modal h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.delete-ticket-modal p,
+.change-price-modal p {
+  margin: 0 0 0.5rem 0;
+  color: #4b5563;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.delete-ticket-modal .small-text,
+.change-price-modal .small-text {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-top: 0.5rem;
+}
+
+.form-group-ticket-action {
+  margin-bottom: 1.5rem;
+}
+
+.form-group-ticket-action label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 0.95rem;
+}
+
+.price-input-wrapper {
+  display: flex;
+  align-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+  overflow: hidden;
+  direction: ltr;
+}
+
+.price-input-wrapper .currency-symbol {
+  padding: 0.6rem 0.8rem;
+  color: #6b7280;
+  font-weight: 600;
+  user-select: none;
+  background: #f3f4f6;
+}
+
+.price-input-field {
+  flex: 1;
+  padding: 0.6rem 0.8rem;
+  border: none;
+  font-size: 1rem;
+  background: transparent;
+}
+
+.price-input-field:focus {
+  outline: none;
+  background: #ffffff;
+}
+
+.modal-actions-ticket {
+  display: flex;
+  gap: 0.75rem;
+  flex-direction: row-reverse;
+}
+
+.modal-btn-cancel,
+.modal-btn-confirm,
+.modal-btn-danger {
+  flex: 1;
+  padding: 0.7rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+  font-size: 0.95rem;
+}
+
+.modal-btn-cancel {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.modal-btn-cancel:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.modal-btn-confirm {
+  background: #10b981;
+  color: white;
+}
+
+.modal-btn-confirm:hover:not(:disabled) {
+  background: #059669;
+}
+
+.modal-btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.modal-btn-danger:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.modal-btn-cancel:disabled,
+.modal-btn-confirm:disabled,
+.modal-btn-danger:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 640px) {
+  .seller-ticket-actions {
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .seller-action-btn {
+    flex: 1;
+    min-width: 80px;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.85rem;
+  }
+
+  .action-label {
+    display: none;
+  }
+
+  .modal-content-ticket-action {
+    width: 95%;
+    max-width: 350px;
+    padding: 1.2rem;
+  }
+}

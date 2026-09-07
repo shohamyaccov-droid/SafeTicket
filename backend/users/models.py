@@ -1848,3 +1848,33 @@ class PayMeWebhookIdempotency(models.Model):
 
     def __str__(self):
         return f'PayMeWebhookIdempotency {self.idempotency_key} {self.status}'
+
+
+class SellerReminder(models.Model):
+    """
+    Tracks seller email reminders sent for tickets.
+    Prevents duplicate reminders within 24 hours.
+    """
+
+    seller = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='seller_reminders',
+    )
+    ticket = models.ForeignKey(
+        Ticket,
+        on_delete=models.CASCADE,
+        related_name='reminders_sent',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('seller', 'ticket')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['seller', 'created_at']),
+            models.Index(fields=['ticket', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f'SellerReminder #{self.pk} - {self.seller.email} (ticket #{self.ticket.id})'

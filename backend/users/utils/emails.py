@@ -617,3 +617,40 @@ def send_test_welcome_email(email_address: str) -> int:
             'cta_label': 'בקרו ב-TradeTix',
         },
     )
+
+
+def send_seller_reminder_email(
+    seller_email: str,
+    seller_name: str,
+    event_name: str,
+    event_slug: str,
+    ticket_id: int,
+) -> int:
+    """
+    Send a reminder email to a seller if their ticket has been live 3+ days
+    or if the event is within 24 hours.
+    
+    Args:
+        seller_email: Seller's email address
+        seller_name: Seller's name (first + last, or username)
+        event_name: Name of the event
+        event_slug: URL slug for the event (for building event page link)
+        ticket_id: Ticket ID (for reference)
+    
+    Returns:
+        Number of messages sent (typically 1 on success)
+    """
+    event_url = f'{_frontend_origin()}/event/{event_slug}' if event_slug else _frontend_origin()
+    
+    return send_branded_email(
+        subject=f'תזכורת TradeTix: הכרטיס שלך למופע {event_name}',
+        to_email=seller_email,
+        template_basename='seller_reminder',
+        context={
+            'seller_name': seller_name,
+            'event_name': event_name,
+            'event_url': event_url,
+            'ticket_id': ticket_id,
+            'dashboard_url': _dashboard_url(),
+        },
+    )

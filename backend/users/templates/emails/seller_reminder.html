@@ -1,0 +1,42 @@
+{% extends "emails/base.html" %}
+{% block title %}תזכורת — הכרטיס שלך עדיין במכירה — {{ site_name }}{% endblock %}
+{% block preheader %}הכרטיס שלך למופע {{ event_name }} עדיין פעיל. אם מכרת אותו במקום אחר, תוכל להסיר אותו מיד.{% endblock %}
+{% block hero_title %}תזכורת: הכרטיס שלך עדיין במכירה 🎫{% endblock %}
+{% block hero_subtitle %}הכרטיס למופע {{ event_name }} עדיין במערכת. בדוק אותו עכשיו.{% endblock %}
+{% block content %}
+  <p style="margin:0 0 16px;font-size:16px;">שלום {{ seller_name }},</p>
+  <p style="margin:0 0 18px;font-size:16px;">
+    זהו עדכון חשוב: הכרטיס שלך למופע <strong>{{ event_name }}</strong> עדיין פעיל בפלטפורמה ועומד למכירה.
+  </p>
+
+  <div style="margin:22px 0;padding:18px;border-radius:16px;background:#fef3c7;border:1px solid #fcd34d;">
+    <p style="margin:0;color:#92400e;font-weight:600;">
+      ⚠️ זכור: אם מכרת את הכרטיס הזה בפלטפורמה אחרת, עליך להסיר אותו מיד מ-TradeTix כדי למנוע בעיות.
+    </p>
+  </div>
+
+  <p style="margin:18px 0;font-size:16px;">
+    תוכל לבדוק את הכרטיס שלך ולהסיר אותו בקלות דרך האתר:
+  </p>
+
+  <div style="margin:24px 0;text-align:center;">
+    <a href="{{ event_url }}" style="display:inline-block;padding:12px 28px;background:#0284c7;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:16px;">
+      בדוק את הכרטיס שלך
+    </a>
+  </div>
+
+  <p style="margin:18px 0;font-size:14px;color:#6b7280;">
+    <strong>רמז:</strong> אם הכרטיס כבר נמכר או הוסר, לא תוכל לראות אותו בעמוד המכירה. בדוק את <a href="{{ dashboard_url }}" style="color:#0284c7;">לוח הבקרה שלך</a> למעקב מלא על כל הכרטיסים שלך.
+  </p>
+
+  <div style="margin:24px 0;padding:16px;border-radius:8px;background:#f3f4f6;border-left:4px solid #d1d5db;">
+    <p style="margin:0;font-size:14px;color:#4b5563;">
+      <strong>מדוע קיבלת הודעה זו?</strong><br/>
+      הכרטיס הזה פעיל אצלנו למעלה מ-3 ימים או שהמופע קרוב (פחות מ-24 שעות). אנחנו רוצים להיות בטוחים שאתה מודע לכך, במיוחד אם הוא כבר כבול במקום אחר.
+    </p>
+  </div>
+
+  <p style="margin:18px 0 0;font-size:14px;color:#6b7280;">
+    בחברת TradeTix, אנחנו עוסקים בקנייה בטוחה ומכירה שקופה. תודה שהוא חלק מהקהילה שלנו!
+  </p>
+{% endblock %}

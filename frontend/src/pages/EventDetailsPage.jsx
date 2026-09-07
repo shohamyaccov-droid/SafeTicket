@@ -84,6 +84,7 @@ import {
 } from '../utils/ticketLock';
 import { buildSectionMapStatus } from '../utils/mapSectionStatus';
 import TakenBuyButton from '../components/TakenBuyButton';
+import SellerTicketActions from '../components/SellerTicketActions';
 import TicketLockCountdown from '../components/TicketLockCountdown';
 import EventMobileBuyBar from '../components/EventMobileBuyBar';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
@@ -1902,7 +1903,24 @@ const EventDetailsPage = () => {
                       onClick={(e) => e.stopPropagation()}
                     >
                       {isOwnListing ? (
-                        <TakenBuyButton label="הכרטיס שלך" variant="own" />
+                        <SellerTicketActions
+                          ticket={firstTicket}
+                          group={group}
+                          onPriceChanged={(ticketId, newPrice) => {
+                            // Update ticket in local state with new price
+                            setTickets((prev) =>
+                              prev.map((t) =>
+                                t.id === ticketId
+                                  ? { ...t, asking_price: newPrice, original_price: newPrice }
+                                  : t
+                              )
+                            );
+                          }}
+                          onTicketDeleted={(ticketId) => {
+                            // Remove ticket from local state
+                            setTickets((prev) => prev.filter((t) => t.id !== ticketId));
+                          }}
+                        />
                       ) : isTakenListing ? (
                         <TakenBuyButton label="נתפס" variant="taken" />
                       ) : isCartLockedListing ? (
