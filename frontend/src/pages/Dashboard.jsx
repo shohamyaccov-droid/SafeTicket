@@ -92,6 +92,55 @@ function offerTicketGroupKey(offer) {
   return offer?.ticket_details?.id ?? `unknown-${offer?.id}`;
 }
 
+/**
+ * RemoveTicketConfirmModal - Confirmation before deactivating a listing
+ */
+function RemoveTicketConfirmModal({
+  isOpen,
+  listingId,
+  listingTitle,
+  onConfirm,
+  onCancel,
+  loading,
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div
+        className="modal-content remove-ticket-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3>הסרת כרטיס מהמכירה</h3>
+        <p>
+          האם אתה בטוח שברצונך להסיר את הכרטיס "<strong>{listingTitle}</strong>" מהמכירה?
+        </p>
+        <p className="small-text">
+          הכרטיס הזה לא יהיה זמין יותר לקונים, אך ההזמנות שכבר בוצעו לא תתבטלנה.
+        </p>
+        <div className="modal-actions">
+          <button
+            type="button"
+            className="modal-cancel-btn"
+            onClick={onCancel}
+            disabled={loading}
+          >
+            ביטול
+          </button>
+          <button
+            type="button"
+            className="modal-confirm-btn modal-confirm-btn--danger"
+            onClick={() => onConfirm(listingId)}
+            disabled={loading}
+          >
+            {loading ? '...הסרה' : 'הסר כרטיס'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* --- Account Settings Tab Component --- */
 const AccountSettingsTab = () => {
   const { user, refreshProfile } = useAuth();
@@ -329,6 +378,12 @@ const Dashboard = () => {
   const [counterAmount, setCounterAmount] = useState('');
   const [offerExpirationTimers, setOfferExpirationTimers] = useState({});
   const [negotiationModalGroup, setNegotiationModalGroup] = useState(null);
+  const [removeTicketModal, setRemoveTicketModal] = useState({
+    isOpen: false,
+    listingId: null,
+    listingTitle: '',
+  });
+  const [removeTicketLoading, setRemoveTicketLoading] = useState(false);
   const dashboardReadyRef = useRef(false);
   const offersReceivedRef = useRef([]);
   const offersSentRef = useRef([]);
@@ -673,6 +728,22 @@ const Dashboard = () => {
       }
     } finally {
       if (!silent) setLoading(false);
+    }
+  };
+
+  const handleRemoveTicket = async (listingId) => {
+    setRemoveTicketLoading(true);
+    try {
+      await ticketAPI.deleteTicket(listingId);
+      toastSuccess('הכרטיס הוסר בהצלחה מהמכירה.');
+      setRemoveTicketModal({ isOpen: false, listingId: null, listingTitle: '' });
+      // Refresh listings
+      await fetchDashboardData();
+    } catch (err) {
+      const msg = apiErrorMessageHe(err, 'שגיאה בהסרת הכרטיס.');
+      toastError(msg);
+    } finally {
+      setRemoveTicketLoading(false);
     }
   };
 
@@ -1639,6 +1710,24 @@ const Dashboard = () => {
                                       {copiedListingId === listing.id ? '✓' : '🔗'}
                                     </button>
                                   )}
+                                  {!isSoldLike && (
+                                    <button
+                                      className="row-action-button remove-listing-btn"
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setRemoveTicketModal({
+                                          isOpen: true,
+                                          listingId: listing.id,
+                                          listingTitle: `${listing.section || ''} ${listing.row || ''}`.trim() || 'כרטיס'
+                                        });
+                                      }}
+                                      title="הסר כרטיס זה מהמכירה"
+                                      aria-label="Remove ticket from marketplace"
+                                    >
+                                      🗑
+                                    </button>
+                                  )}
                                   <button
                                     className="row-action-button"
                                     type="button"
@@ -1916,6 +2005,15 @@ const Dashboard = () => {
           onClose={() => setToast(null)}
         />
       )}
+
+      <RemoveTicketConfirmModal
+        isOpen={removeTicketModal.isOpen}
+        listingId={removeTicketModal.listingId}
+        listingTitle={removeTicketModal.listingTitle}
+        onConfirm={handleRemoveTicket}
+        onCancel={() => setRemoveTicketModal({ isOpen: false, listingId: null, listingTitle: '' })}
+        loading={removeTicketLoading}
+      />
     </div>
   );
 };

@@ -2292,3 +2292,117 @@
     flex-wrap: wrap !important;
   }
 }
+
+/* --- Remove Ticket Modal Styles --- */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  direction: rtl;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  padding: 1.5rem;
+  max-width: 420px;
+  width: 90%;
+  text-align: right;
+}
+
+.remove-ticket-modal h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.remove-ticket-modal p {
+  margin: 0 0 0.75rem 0;
+  color: #4b5563;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.remove-ticket-modal .small-text {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-top: 0.5rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  flex-direction: row-reverse;
+}
+
+.modal-cancel-btn,
+.modal-confirm-btn {
+  flex: 1;
+  padding: 0.7rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+  font-size: 0.95rem;
+}
+
+.modal-cancel-btn {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.modal-cancel-btn:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.modal-confirm-btn--danger {
+  background: #ef4444;
+  color: white;
+}
+
+.modal-confirm-btn--danger:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.modal-cancel-btn:disabled,
+.modal-confirm-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Remove Listing Button Styling */
+.remove-listing-btn {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.9rem;
+  border-radius: 6px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.remove-listing-btn:hover:not(:disabled) {
+  background: #fecaca;
+  border-color: #fca5a5;
+}
+
+.remove-listing-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.remove-listing-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
