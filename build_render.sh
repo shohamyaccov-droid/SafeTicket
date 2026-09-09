@@ -51,19 +51,21 @@ python manage.py backup_critical_data
 
 python manage.py migrate --noinput
 
-# CRITICAL RESCUE: Restore valid tickets/events from pre-cleanup backup
-# The cleanup_empty_images command was deleting valid events (like Eyal Golan)
-# that lacked images, wiping out active user tickets. We restore from the
-# latest backup (created BEFORE migrate/cleanup) to recover all valid data.
-# File must be committed to git (not ephemeral) and available at deployment time.
+# CRITICAL RESCUE: Fault-tolerant restore from backup
+# Standard loaddata is atomic: if ANY record fails (e.g., IntegrityError), the ENTIRE
+# transaction rolls back and NO records are restored (deleted tickets stay deleted).
+# Solution: Use force_restore command which attempts each object individually.
+# If one fails (e.g., PK conflict), it logs a warning but CONTINUES.
+# Result: All restorable records are recovered; broken ones are skipped.
+# This ensures deleted tickets reappear even if some events already exist.
 BACKUP_FILE="$ROOT/backend/critical_backups/latest_critical_backup.json"
 if [ -f "$BACKUP_FILE" ]; then
-  echo "build_render.sh: RESTORING from latest_critical_backup.json..."
-  python manage.py loaddata "$BACKUP_FILE"
+  echo "build_render.sh: FAULT-TOLERANT RESTORE from latest_critical_backup.json..."
+  python manage.py force_restore
   if [ $? -eq 0 ]; then
-    echo "build_render.sh: Backup restore successful ✓"
+    echo "build_render.sh: Backup restore completed ✓"
   else
-    echo "build_render.sh: WARNING - Backup restore failed, continuing anyway..."
+    echo "build_render.sh: WARNING - Backup restore had issues, see output above..."
   fi
 else
   echo "build_render.sh: FATAL - Critical backup file not found at $BACKUP_FILE"
