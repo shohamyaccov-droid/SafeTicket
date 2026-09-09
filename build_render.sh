@@ -67,6 +67,17 @@ if [ -f "$BACKUP_FILE" ]; then
   else
     echo "build_render.sh: WARNING - Backup restore had issues, see output above..."
   fi
+
+  # BRUTE-FORCE TICKET RESTORE: Ensure ALL 39 tickets are restored
+  # Even if force_restore skips some due to constraints, this command forces all tickets
+  # using raw JSON + update_or_create to maximize recovery (handles missing Events).
+  echo "build_render.sh: BRUTE-FORCE RESTORE - all 39 tickets..."
+  python manage.py restore_all_39_tickets
+  if [ $? -eq 0 ]; then
+    echo "build_render.sh: Brute-force ticket restore completed ✓"
+  else
+    echo "build_render.sh: WARNING - Some tickets could not be restored, see output above..."
+  fi
 else
   echo "build_render.sh: FATAL - Critical backup file not found at $BACKUP_FILE"
   echo "  This file MUST be committed to git for production deployment."
