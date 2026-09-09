@@ -68,16 +68,6 @@ class Command(BaseCommand):
         # Define events
         events_data = [
             {
-                'name': 'דודו טסה - מופע להקה',
-                'date': datetime(2026, 9, 12, 21, 0, tzinfo=TZ_IL),
-                'venue': 'בארבי נמל יפו',
-                'city': 'תל אביב',
-                'artists': ['דודו טסה'],
-                'category': 'concert',
-                'country': 'IL',
-                'status': 'סולד אאוט',
-            },
-            {
                 'name': 'פאר טסי | חנן בן ארי',
                 'date': datetime(2026, 9, 24, 20, 45, tzinfo=TZ_IL),
                 'venue': 'אמפי MAX',

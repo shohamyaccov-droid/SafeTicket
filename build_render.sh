@@ -50,8 +50,6 @@ echo "build_render.sh: CRITICAL BACKUP (before migrate)..."
 python manage.py backup_critical_data
 
 python manage.py migrate --noinput
-# Seed verified real-world 2026 events (idempotent: update_or_create prevents duplicates)
-python manage.py seed_2026_real_events
 python manage.py collectstatic --noinput
 
 echo "build_render.sh finished OK"
