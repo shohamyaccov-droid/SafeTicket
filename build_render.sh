@@ -50,6 +50,10 @@ echo "build_render.sh: CRITICAL BACKUP (before migrate)..."
 python manage.py backup_critical_data
 
 python manage.py migrate --noinput
+# CLEANUP: Remove broken Event/Artist records with null/empty images (prevents UI breakage)
+python manage.py cleanup_empty_images
+# SEED: Populate NEXT 2026 festival events (Ramat Gan + Jerusalem)
+python manage.py seed_next_2026
 python manage.py collectstatic --noinput
 
 echo "build_render.sh finished OK"
