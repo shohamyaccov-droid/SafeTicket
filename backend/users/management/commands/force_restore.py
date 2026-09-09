@@ -102,7 +102,9 @@ class Command(BaseCommand):
         error_count = 0
         errors_detail = []
 
-        for i, obj in enumerate(deserialized_objects, 1):
+        for i, deserialized_obj in enumerate(deserialized_objects, 1):
+            # DeserializedObject wraps the actual model instance
+            obj = deserialized_obj.object
             model_label = f'{obj._meta.app_label}.{obj._meta.model_name}'
             obj_id = getattr(obj, 'pk', '?')
 
@@ -126,7 +128,9 @@ class Command(BaseCommand):
                 skipped_count += 1
                 errors_detail.append((model_label, obj_id, error_msg))
                 self.stdout.write(
-                    self.style.WARNING(f'  ⚠️  [{i:3d}] {model_label} pk={obj_id} — skipped (likely already exists)')
+                    self.style.WARNING(
+                        f'  ⚠️  [{i:3d}] {model_label} pk={obj_id} — skipped (likely already exists)'
+                    )
                 )
             except Exception as e:
                 # Unexpected error
