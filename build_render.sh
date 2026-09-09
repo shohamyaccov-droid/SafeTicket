@@ -55,16 +55,22 @@ python manage.py migrate --noinput
 # The cleanup_empty_images command was deleting valid events (like Eyal Golan)
 # that lacked images, wiping out active user tickets. We restore from the
 # latest backup (created BEFORE migrate/cleanup) to recover all valid data.
-if [ -f "$ROOT/backend/critical_backups/latest_critical_backup.json" ]; then
+# File must be committed to git (not ephemeral) and available at deployment time.
+BACKUP_FILE="$ROOT/backend/critical_backups/latest_critical_backup.json"
+if [ -f "$BACKUP_FILE" ]; then
   echo "build_render.sh: RESTORING from latest_critical_backup.json..."
-  python manage.py loaddata "$ROOT/backend/critical_backups/latest_critical_backup.json"
+  python manage.py loaddata "$BACKUP_FILE"
   if [ $? -eq 0 ]; then
     echo "build_render.sh: Backup restore successful ✓"
   else
     echo "build_render.sh: WARNING - Backup restore failed, continuing anyway..."
   fi
 else
-  echo "build_render.sh: WARNING - No critical backup found at critical_backups/latest_critical_backup.json"
+  echo "build_render.sh: FATAL - Critical backup file not found at $BACKUP_FILE"
+  echo "  This file MUST be committed to git for production deployment."
+  echo "  File: backend/critical_backups/latest_critical_backup.json"
+  echo "  Size: ~350 KB (JSON export of critical marketplace data)"
+  exit 1
 fi
 
 # SEED: Populate NEXT 2026 festival events (Ramat Gan + Jerusalem)

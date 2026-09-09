@@ -27,7 +27,9 @@ media/
 staticfiles/
 
 # Pre-deploy critical marketplace JSON hard-copies (contain PII / order data)
+# EXCEPTION: latest_critical_backup.json MUST be committed for Render deployment
 critical_backups/**
 !critical_backups/README.md
+!critical_backups/latest_critical_backup.json
 *.json.meta.json
 
