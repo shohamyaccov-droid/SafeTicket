@@ -50,9 +50,25 @@ echo "build_render.sh: CRITICAL BACKUP (before migrate)..."
 python manage.py backup_critical_data
 
 python manage.py migrate --noinput
-# CLEANUP: Remove broken Event/Artist records with null/empty images (prevents UI breakage)
-python manage.py cleanup_empty_images
+
+# CRITICAL RESCUE: Restore valid tickets/events from pre-cleanup backup
+# The cleanup_empty_images command was deleting valid events (like Eyal Golan)
+# that lacked images, wiping out active user tickets. We restore from the
+# latest backup (created BEFORE migrate/cleanup) to recover all valid data.
+if [ -f "$ROOT/backend/critical_backups/latest_critical_backup.json" ]; then
+  echo "build_render.sh: RESTORING from latest_critical_backup.json..."
+  python manage.py loaddata "$ROOT/backend/critical_backups/latest_critical_backup.json"
+  if [ $? -eq 0 ]; then
+    echo "build_render.sh: Backup restore successful ✓"
+  else
+    echo "build_render.sh: WARNING - Backup restore failed, continuing anyway..."
+  fi
+else
+  echo "build_render.sh: WARNING - No critical backup found at critical_backups/latest_critical_backup.json"
+fi
+
 # SEED: Populate NEXT 2026 festival events (Ramat Gan + Jerusalem)
+# Runs AFTER restore so we add to the recovered data
 python manage.py seed_next_2026
 python manage.py collectstatic --noinput
 
