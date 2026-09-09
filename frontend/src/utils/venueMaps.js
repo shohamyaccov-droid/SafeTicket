@@ -9,6 +9,9 @@ export const VENUE_BLOOMFIELD_CONCERT = 'אצטדיון בלומפילד (הופ
 /** Ramat Gan Stadium — InteractiveStadiumMap on EventDetailsPage (venue_place.name). */
 export const VENUE_RAMAT_GAN = 'אצטדיון רמת גן';
 
+/** Abbreviated form of Ramat Gan (used in some event data). */
+export const VENUE_RAMAT_GAN_ABBR = 'אצטדיון ר"ג';
+
 /** Caesarea Amphitheater — CaesareaMap on EventDetailsPage. */
 export const VENUE_CAESAREA = 'אמפי קיסריה';
 

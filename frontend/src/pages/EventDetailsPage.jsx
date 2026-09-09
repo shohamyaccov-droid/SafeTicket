@@ -980,7 +980,8 @@ const EventDetailsPage = () => {
 
     if (
       candidates.some((v) => v === VENUE_RAMAT_GAN || v.includes(VENUE_RAMAT_GAN)) ||
-      candidates.some((v) => v.includes('רמת גן') && v.includes('אצטדיון'))
+      candidates.some((v) => v.includes('רמת גן') && v.includes('אצטדיון')) ||
+      candidates.some((v) => v === 'אצטדיון ר"ג' || v === 'אצטדיון רג') // Handle abbreviated forms
     ) {
       return VENUE_RAMAT_GAN;
     }
