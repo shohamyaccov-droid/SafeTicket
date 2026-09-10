@@ -42,3 +42,44 @@ export function pickNextUpcomingEvent(events, { now = new Date(), excludeId = nu
   const withTickets = upcoming.filter((ev) => (Number(ev.tickets_count) || 0) > 0);
   return withTickets[0] || upcoming[0] || null;
 }
+
+function eventNameKey(event) {
+  return String(event?.name || '').trim().toLowerCase();
+}
+
+function eventIdentityKey(event) {
+  if (!event) return '';
+  if (event.id != null && event.id !== '') return `id:${event.id}`;
+  if (event.slug) return `slug:${String(event.slug).trim()}`;
+  return '';
+}
+
+/**
+ * Dates to show on an event page: prefer other performances with the same
+ * show name; otherwise fall back to the artist's upcoming catalog.
+ * Always includes the current event when it has a date.
+ */
+export function selectRelatedShowDates(artistEvents, currentEvent) {
+  const list = Array.isArray(artistEvents) ? artistEvents.filter(Boolean) : [];
+  const currentKey = eventIdentityKey(currentEvent);
+  const nameKey = eventNameKey(currentEvent);
+  const sameName = nameKey
+    ? list.filter((ev) => eventNameKey(ev) === nameKey)
+    : [];
+  const pool = sameName.length >= 2 ? sameName : list;
+
+  const byId = new Map();
+  for (const ev of pool) {
+    const key = eventIdentityKey(ev) || `date:${ev.date}`;
+    if (!byId.has(key)) byId.set(key, ev);
+  }
+  if (currentEvent && currentKey && !byId.has(currentKey)) {
+    byId.set(currentKey, currentEvent);
+  }
+
+  return [...byId.values()].sort((a, b) => {
+    const da = a?.date ? new Date(a.date).getTime() : 0;
+    const db = b?.date ? new Date(b.date).getTime() : 0;
+    return da - db;
+  });
+}

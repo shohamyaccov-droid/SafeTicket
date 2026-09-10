@@ -34,6 +34,20 @@ export function localityLabelFromTicketLike(obj) {
 /**
  * Compact artist-page row: "13 באוגוסט 2026 | 20:30" (no seconds, timezone, or locality suffix).
  */
+/** Compact date switcher label, e.g. "13.10". */
+export function formatEventDatePill(dateString) {
+  if (!dateString) return '';
+  try {
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return '';
+    const day = date.getDate();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${day}.${month}`;
+  } catch {
+    return '';
+  }
+}
+
 export function formatArtistEventRowDate(dateString) {
   if (!dateString) return 'תאריך בהמשך';
   try {

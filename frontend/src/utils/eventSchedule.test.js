@@ -3,6 +3,7 @@ import {
   eventArtistId,
   isEventDatePassed,
   pickNextUpcomingEvent,
+  selectRelatedShowDates,
 } from './eventSchedule';
 
 describe('eventSchedule', () => {
@@ -27,5 +28,18 @@ describe('eventSchedule', () => {
 
   it('reads artist id from nested artist objects', () => {
     expect(eventArtistId({ artist: { id: 44, name: 'x' } })).toBe(44);
+  });
+
+  it('keeps same-named shows as separate date cards and includes the current event', () => {
+    const current = { id: 10, name: 'Show', date: '2026-10-13T18:00:00Z' };
+    const dates = selectRelatedShowDates(
+      [
+        current,
+        { id: 11, name: 'Show', date: '2026-10-14T18:00:00Z' },
+        { id: 12, name: 'Other', date: '2026-11-01T18:00:00Z' },
+      ],
+      current
+    );
+    expect(dates.map((d) => d.id)).toEqual([10, 11]);
   });
 });

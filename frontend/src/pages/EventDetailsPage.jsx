@@ -58,6 +58,7 @@ import PageSeo from '../components/PageSeo';
 import BreadcrumbNav from '../components/BreadcrumbNav';
 import { eventHref } from '../utils/eventSeo';
 import { crumbs } from '../utils/breadcrumbSeo';
+import EventMoreDates from '../components/EventMoreDates';
 import { artistHrefFromEvent } from '../utils/artistSeo';
 import {
   eventArtistId,
@@ -120,6 +121,7 @@ const EventDetailsPage = () => {
   const [offerSubmitting, setOfferSubmitting] = useState(false);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [eventHasPassed, setEventHasPassed] = useState(false);
+  const [relatedEvents, setRelatedEvents] = useState([]);
 
   // Filtering and sorting state
   const [filters, setFilters] = useState({
@@ -334,6 +336,7 @@ const EventDetailsPage = () => {
     setEvent(null);
     setTickets([]);
     setEventHasPassed(false);
+    setRelatedEvents([]);
 
     const { signal, clear, abort } = createListFetchAbort();
 
@@ -347,22 +350,27 @@ const EventDetailsPage = () => {
         if (cancelled) return;
 
         const loadedEvent = eventResponse.data;
+        const artistKey = loadedEvent?.artist?.slug || eventArtistId(loadedEvent);
+        let artistEvents = [];
+        if (artistKey) {
+          try {
+            const othersRes = await artistAPI.getArtistEvents(artistKey, { signal });
+            if (cancelled) return;
+            artistEvents = normalizeArtistEventsPayload(othersRes.data);
+          } catch {
+            artistEvents = [];
+          }
+        }
+        if (cancelled) return;
+        setRelatedEvents(artistEvents);
+
         if (isEventDatePassed(loadedEvent?.date)) {
-          const artistKey = loadedEvent?.artist?.slug || eventArtistId(loadedEvent);
-          if (artistKey) {
-            try {
-              const othersRes = await artistAPI.getArtistEvents(artistKey, { signal });
-              if (cancelled) return;
-              const next = pickNextUpcomingEvent(normalizeArtistEventsPayload(othersRes.data), {
-                excludeId: loadedEvent.id ?? eventKey,
-              });
-              if (next && String(next.id) !== String(loadedEvent.id)) {
-                navigate(eventHref(next), { replace: true });
-                return;
-              }
-            } catch {
-              /* stay on this page and show the passed-event UI */
-            }
+          const next = pickNextUpcomingEvent(artistEvents, {
+            excludeId: loadedEvent.id ?? eventKey,
+          });
+          if (next && String(next.id) !== String(loadedEvent.id)) {
+            navigate(eventHref(next), { replace: true });
+            return;
           }
           if (cancelled) return;
           setEvent(loadedEvent);
@@ -1304,6 +1312,8 @@ const EventDetailsPage = () => {
           </div>
         </section>
       </header>
+
+      <EventMoreDates event={event} relatedEvents={relatedEvents} />
 
       {eventHasPassed ? (
         <div className="event-passed-banner" dir="rtl" role="status">

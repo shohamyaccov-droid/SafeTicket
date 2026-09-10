@@ -15,6 +15,13 @@ export function eventHref(event) {
   return eventCanonicalPath(event);
 }
 
+/** Ticket-group hub for all dates of the same show name. */
+export function eventGroupHref(eventName) {
+  const name = String(eventName || '').trim();
+  if (!name) return '/';
+  return `/event-group/${encodeURIComponent(name)}`;
+}
+
 /**
  * Sanitize JSON for embedding in <script type="application/ld+json">.
  */
