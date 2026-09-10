@@ -8,6 +8,7 @@ import {
   pickCheapestBuyableGroup,
   pickBuyableListingTicket,
   sortListingGroupsForBuyer,
+  groupTicketsByListing,
 } from './ticketAvailability';
 
 describe('ticketAvailability', () => {
@@ -141,5 +142,75 @@ describe('ticketAvailability', () => {
     };
     expect(isListingGroupTaken(group)).toBe(false);
     expect(pickBuyableListingTicket(group)?.id).toBe(3);
+  });
+
+  it('keeps same-block tickets in different rows as separate cards', () => {
+    const grouped = groupTicketsByListing([
+      {
+        id: 1,
+        status: 'active',
+        seller_username: 'seller-a',
+        asking_price: 250,
+        venue_section: 2,
+        section: '2',
+        row: '54',
+      },
+      {
+        id: 2,
+        status: 'active',
+        seller_username: 'seller-a',
+        asking_price: 250,
+        venue_section: 2,
+        section: '2',
+        row: '61',
+      },
+    ]);
+    expect(grouped).toHaveLength(2);
+    const rows = grouped.map((g) => g.tickets[0].row).sort();
+    expect(rows).toEqual(['54', '61']);
+    expect(grouped.every((g) => g.available_count === 1)).toBe(true);
+  });
+
+  it('still groups seats that share listing_group_id, section, and row', () => {
+    const grouped = groupTicketsByListing([
+      {
+        id: 1,
+        status: 'active',
+        listing_group_id: 'lg-1',
+        venue_section: 2,
+        row: '54',
+        asking_price: 100,
+      },
+      {
+        id: 2,
+        status: 'active',
+        listing_group_id: 'lg-1',
+        venue_section: 2,
+        row: '54',
+        asking_price: 100,
+      },
+    ]);
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0].available_count).toBe(2);
+  });
+
+  it('splits a shared listing_group_id when rows differ', () => {
+    const grouped = groupTicketsByListing([
+      {
+        id: 1,
+        status: 'active',
+        listing_group_id: 'lg-shared',
+        section: '2',
+        row: '54',
+      },
+      {
+        id: 2,
+        status: 'active',
+        listing_group_id: 'lg-shared',
+        section: '2',
+        row: '61',
+      },
+    ]);
+    expect(grouped).toHaveLength(2);
   });
 });

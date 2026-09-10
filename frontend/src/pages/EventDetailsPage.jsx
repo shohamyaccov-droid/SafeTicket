@@ -69,18 +69,17 @@ import { PUBLIC_SITE_ORIGIN, toPublicAbsoluteUrl } from '../utils/publicSite';
 import { DEFAULT_SITE_DESCRIPTION, DEFAULT_SITE_TITLE, eventDocumentTitle } from '../utils/siteSeo';
 import {
   filterMarketplaceTickets,
+  groupTicketsByListing,
   isCurrentUserOwnListing,
   isListingGroupTaken,
   isListingUnavailableForBuyer,
-  isTicketTaken,
   pickBuyableListingTicket,
   pickCheapestBuyableGroup,
   sortListingGroupsForBuyer,
+  stableListingGroupKey,
 } from '../utils/ticketAvailability';
 import {
   isListingGroupCartLocked,
-  isTicketCartLocked,
-  listingGroupCartLockedUntilMs,
 } from '../utils/ticketLock';
 import { buildSectionMapStatus } from '../utils/mapSectionStatus';
 import TakenBuyButton from '../components/TakenBuyButton';
@@ -97,14 +96,6 @@ const defaultOgImageUrl = () => `${PUBLIC_SITE_ORIGIN}/og-share.png`;
 
 /** Seller id from API may be a numeric PK or nested object — compare robustly to current user. */
 const isCurrentUserSellerOfTicket = isCurrentUserOwnListing;
-
-/** Stable id for matching listing groups after refetch (avoids 5 === "5" false negatives). */
-function stableListingGroupKey(group) {
-  if (!group) return '';
-  const lid = group.listing_group_id;
-  if (lid != null && lid !== '') return String(lid).trim();
-  return String(group.id ?? '');
-}
 
 const EventDetailsPage = () => {
   const { eventSlug, eventId } = useParams();
@@ -152,78 +143,6 @@ const EventDetailsPage = () => {
   /** Skip the filters/sort effect on the initial mount fetch (already loaded in parallel). */
   const skipNextTicketsFilterFetchRef = useRef(true);
 
-  // Helper function to group tickets by listing
-  const groupTicketsByListing = (ticketsArray) => {
-    const groups = {};
-
-    ticketsArray.forEach(ticket => {
-      // Group by listing_group_id if available, otherwise by seller+price combination
-      // IMPORTANT: Use strict comparison and handle null/undefined/empty string
-      let groupKey;
-      const listingGroupId = ticket.listing_group_id;
-      
-      // Check if listing_group_id exists and is valid
-      if (listingGroupId !== null && listingGroupId !== undefined && listingGroupId !== '') {
-        // Use listing_group_id as the group key
-        groupKey = String(listingGroupId).trim(); // Ensure it's a string and trim whitespace
-      } else {
-        // Fallback: group by seller+price (individual listings)
-        // Note: serializer returns seller_username, not seller or seller_id
-        const sellerId = ticket.seller_username || ticket.seller || ticket.seller_id || 'unknown';
-        const price = ticket.asking_price || ticket.original_price;
-        groupKey = `${sellerId}_${price}`;
-        
-      }
-      
-      if (!groups[groupKey]) {
-        groups[groupKey] = {
-          id: groupKey,
-          tickets: [],
-          price: ticket.asking_price || ticket.original_price,
-          available_count: 0,
-          seller_id:
-            ticket.seller_id ??
-            (typeof ticket.seller === 'object' && ticket.seller != null
-              ? ticket.seller.id
-              : ticket.seller),
-          seller_username: ticket.seller_username, // Seller username as fallback
-          seller_is_verified: ticket.seller_is_verified || false,
-          delivery_method: ticket.delivery_method || 'instant',
-          listing_group_id: listingGroupId, // Store original for debugging
-        };
-      }
-      
-      groups[groupKey].tickets.push(ticket);
-      // Count only seats that another buyer can still purchase.
-      if (
-        ticket.status === 'active'
-        || (ticket.status === 'reserved' && !isTicketCartLocked(ticket))
-      ) {
-        groups[groupKey].available_count += 1;
-      }
-    });
-
-    const grouped = Object.values(groups).map((g) => {
-      const lockMs = listingGroupCartLockedUntilMs(g);
-      const buyableFirst = [];
-      const rest = [];
-      for (const t of g.tickets) {
-        if (t && t.status === 'active' && !isTicketTaken(t)) buyableFirst.push(t);
-        else rest.push(t);
-      }
-      return {
-        ...g,
-        tickets: [...buyableFirst, ...rest],
-        is_taken: isListingGroupTaken(g),
-        is_cart_locked: isListingGroupCartLocked(g),
-        locked_until: lockMs != null ? new Date(lockMs).toISOString() : null,
-      };
-    });
-
-    return grouped;
-  };
-
-  // Helper function to get seat range display
   // Helper to format section display - translate Lower/Upper to Hebrew
   const formatSectionDisplay = (sectionName) => {
     if (!sectionName) return '';
@@ -657,7 +576,7 @@ const EventDetailsPage = () => {
           return getSectionNameForMap(firstTicket) === sectionId;
         });
         if (matchingGroup) {
-          const groupId = matchingGroup.listing_group_id || matchingGroup.id;
+          const groupId = stableListingGroupKey(matchingGroup);
           setActiveTicketId(groupId);
           setTimeout(() => {
             try {
@@ -677,7 +596,7 @@ const EventDetailsPage = () => {
           return getSectionNameForMap(firstTicket) === 'VIP';
         });
         if (matchingGroup) {
-          const groupId = matchingGroup.listing_group_id || matchingGroup.id;
+          const groupId = stableListingGroupKey(matchingGroup);
           setActiveTicketId(groupId);
           setTimeout(() => {
             try {
@@ -734,7 +653,7 @@ const EventDetailsPage = () => {
       });
 
       if (matchingGroup) {
-        const groupId = matchingGroup.listing_group_id || matchingGroup.id;
+        const groupId = stableListingGroupKey(matchingGroup);
         setActiveTicketId(groupId);
         
         // Scroll to the ticket row
@@ -828,7 +747,7 @@ const EventDetailsPage = () => {
     if (!ticketGroup) return;
     const first = ticketGroup.tickets?.[0];
     const split = normalizeSplitType(first?.split_type || ticketGroup.split_type || '');
-    const groupId = ticketGroup.listing_group_id || ticketGroup.id;
+    const groupId = stableListingGroupKey(ticketGroup);
     const options = listingQuantityOptions(split, ticketGroup.available_count || 1);
     const isThisRowActive =
       activeTicketId != null && String(activeTicketId) === String(groupId);
@@ -1080,7 +999,7 @@ const EventDetailsPage = () => {
         (g) => ramatGanSectionIdFromTicket(g.tickets?.[0]) === sectionId
       );
       if (matchingGroup) {
-        const gid = matchingGroup.listing_group_id ?? matchingGroup.id;
+        const gid = stableListingGroupKey(matchingGroup);
         setActiveTicketId(gid);
         setTimeout(() => {
           try {
@@ -1131,7 +1050,7 @@ const EventDetailsPage = () => {
     if (bloomfieldHoverId) return String(bloomfieldHoverId);
     if (activeTicketId == null) return null;
     const g = bloomfieldFilteredGroups.find(
-      (x) => String(x.listing_group_id ?? x.id) === String(activeTicketId)
+      (x) => stableListingGroupKey(x) === String(activeTicketId)
     );
     return g ? stableListingGroupKey(g) : String(activeTicketId);
   }, [bloomfieldHoverId, activeTicketId, bloomfieldFilteredGroups]);
@@ -1140,7 +1059,7 @@ const EventDetailsPage = () => {
     (stableId) => {
       const row = bloomfieldRows.find((r) => String(r.stableId) === String(stableId));
       if (!row) return;
-      const gid = row.group.listing_group_id ?? row.group.id;
+      const gid = stableListingGroupKey(row.group);
       setActiveTicketId(gid);
       setBloomfieldHoverId(null);
       setTimeout(() => {
@@ -1171,7 +1090,7 @@ const EventDetailsPage = () => {
     if (jerusalemHoverId) return String(jerusalemHoverId);
     if (activeTicketId == null) return null;
     const g = ticketGroups.find(
-      (x) => String(x.listing_group_id ?? x.id) === String(activeTicketId)
+      (x) => stableListingGroupKey(x) === String(activeTicketId)
     );
     return g ? stableListingGroupKey(g) : String(activeTicketId);
   }, [jerusalemHoverId, activeTicketId, ticketGroups]);
@@ -1180,7 +1099,7 @@ const EventDetailsPage = () => {
     (stableId) => {
       const row = jerusalemRows.find((r) => String(r.stableId) === String(stableId));
       if (!row) return;
-      const gid = row.group.listing_group_id ?? row.group.id;
+      const gid = stableListingGroupKey(row.group);
       setActiveTicketId(gid);
       setJerusalemHoverId(null);
       setTimeout(() => {
@@ -1591,7 +1510,7 @@ const EventDetailsPage = () => {
                     let activeSectionName = null;
                     if (activeTicketId) {
                       const activeGroup = ticketGroups.find(
-                        (g) => String(g.listing_group_id ?? g.id) === String(activeTicketId)
+                        (g) => stableListingGroupKey(g) === String(activeTicketId)
                       );
                       if (activeGroup?.tickets?.length) {
                         const section = getSectionNameForMap(activeGroup.tickets[0]);
@@ -1676,7 +1595,7 @@ const EventDetailsPage = () => {
                       let activePinPrice = null;
                       if (activeTicketId) {
                         const activeGroup = ticketGroups.find(
-                          (g) => String(g.listing_group_id ?? g.id) === String(activeTicketId),
+                          (g) => stableListingGroupKey(g) === String(activeTicketId),
                         );
                         const p = parseFloat(getTicketPrice(activeGroup?.tickets?.[0]));
                         if (Number.isFinite(p)) activePinPrice = p;
@@ -1818,7 +1737,7 @@ const EventDetailsPage = () => {
               const splitType = normalizeSplitType(splitTypeRaw);
               // Persist split type on the group itself for downstream consumers (e.g. checkout)
               group.split_type = splitTypeRaw;
-              const groupId = group.listing_group_id || group.id;
+              const groupId = stableListingGroupKey(group);
               const isExpanded = activeTicketId === groupId;
               const isBuyOpening = buyOpeningKey === stableListingGroupKey(group);
               const isOwnListing = Boolean(
@@ -2323,7 +2242,7 @@ const EventDetailsPage = () => {
           onBuy={() => {
             const group = cheapestBuyableGroup;
             if (!group) return;
-            const gid = group.listing_group_id || group.id;
+            const gid = stableListingGroupKey(group);
             setActiveTicketId(gid);
             scrollTicketRowIntoTopView(gid);
             beginBuy(group);
