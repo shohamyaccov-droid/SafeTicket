@@ -63,6 +63,33 @@ DISCOVERY_EXCLUDED_ARTIST_NAMES = (
     'ב Checkout אמן בדיקת',
 )
 
+# Sell artist dropdown: music festivals (e.g. NEXT 2026) share the concert/festival flow.
+SELL_MUSIC_EVENT_CATEGORIES = ('concert', 'festival')
+
+
+def parse_sell_event_categories(query_params):
+    """Map Sell-page category filters to Event.category values.
+
+    Concert listings include festivals so acts like NEXT appear under הופעות.
+    """
+    raw = query_params.get('category') if query_params is not None else None
+    if raw in (None, '', 'all'):
+        return SELL_MUSIC_EVENT_CATEGORIES
+    cats = []
+    for part in str(raw).split(','):
+        c = part.strip().lower()
+        if not c:
+            continue
+        if c in ('sport', 'sports'):
+            cats.extend(('sport', 'football', 'basketball'))
+        elif c in ('concert', 'music'):
+            cats.extend(SELL_MUSIC_EVENT_CATEGORIES)
+        elif c == 'festival':
+            cats.extend(SELL_MUSIC_EVENT_CATEGORIES)
+        else:
+            cats.append(c)
+    return tuple(dict.fromkeys(cats)) or SELL_MUSIC_EVENT_CATEGORIES
+
 
 def csrf_required(view):
     """
@@ -4616,6 +4643,10 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
     # Homepage / Sell need the full upcoming marketplace (default PAGE_SIZE=20 hid whole categories).
     pagination_class = None
 
+    def paginate_queryset(self, queryset):
+        # Dropdowns must never be truncated by the global PAGE_SIZE=20.
+        return None
+
     def get_serializer_class(self):
         if self.action == 'list':
             return EventListSerializer
@@ -4952,6 +4983,10 @@ class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
     throttle_classes = [PublicCatalogScopedThrottle]
     pagination_class = None
 
+    def paginate_queryset(self, queryset):
+        # Sell/homepage artist dropdowns need the full catalog, not PAGE_SIZE=20.
+        return None
+
     def get_serializer_class(self):
         if self.action == 'list':
             return ArtistListSerializer
@@ -4967,12 +5002,14 @@ class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
             recommended_raw = str(self.request.query_params.get('recommended', '')).lower()
             recommended = recommended_raw in ('1', 'true', 'yes', 'on')
             if for_sell:
-                # Sell form: any artist with an upcoming active concert (inventory not required).
+                # Sell form: any artist with an upcoming active concert or festival
+                # (inventory not required; do not cap how far in the future the date is).
                 now = timezone.now()
+                sell_cats = parse_sell_event_categories(self.request.query_params)
                 queryset = (
                     queryset.filter(
                         events__date__gte=now,
-                        events__category='concert',
+                        events__category__in=sell_cats,
                         events__status='פעיל',
                     )
                     .distinct()

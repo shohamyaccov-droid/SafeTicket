@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -256,6 +258,49 @@ class ArtistListApiTests(TestCase):
         self.assertNotIn('א Checkout אמן בדיקת', names)
         self.assertNotIn('ב Checkout אמן בדיקת', names)
         self.assertNotIn('Demo checkout bot artist', names)
+
+
+class ArtistSellListApiTests(TestCase):
+    def test_for_sell_includes_festival_artist_with_late_year_event(self):
+        artist = Artist.objects.create(name='NEXT', category='music')
+        Event.objects.create(
+            name='NEXT 2026 - Ramat Gan',
+            artist=artist,
+            date=timezone.make_aware(datetime(2026, 12, 10, 20, 0)),
+            venue='אצטדיון רמת גן',
+            city='רמת גן',
+            country='IL',
+            category='festival',
+            status='פעיל',
+        )
+
+        res = APIClient().get('/api/users/artists/?for_sell=1')
+
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertIsInstance(res.data, list)
+        names = [item['name'] for item in res.data]
+        self.assertIn('NEXT', names)
+
+    def test_for_sell_artist_list_is_not_paginated(self):
+        now = timezone.now() + timezone.timedelta(days=40)
+        for idx in range(25):
+            artist = Artist.objects.create(name=f'Sell Artist {idx:02d}')
+            Event.objects.create(
+                name=f'Show {idx}',
+                artist=artist,
+                date=now,
+                venue='היכל מנורה מבטחים',
+                city='Tel Aviv',
+                country='IL',
+                category='concert',
+                status='פעיל',
+            )
+
+        res = APIClient().get('/api/users/artists/?for_sell=1')
+
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertIsInstance(res.data, list)
+        self.assertGreaterEqual(len(res.data), 25)
 
 
 class EventListApiTests(TestCase):

@@ -215,7 +215,39 @@ function validateAuthPayload(payload) {
   return fe;
 }
 
-/** Merge for_sell artists API with concert artists inferred from for_sell events (belt-and-suspenders). */
+/** Concert + festival share an artist picker (NEXT and similar festivals). */
+const SELL_ARTIST_CATEGORIES = new Set(['concert', 'festival']);
+
+function usesSellArtistDropdown(category) {
+  return SELL_ARTIST_CATEGORIES.has(String(category || '').toLowerCase());
+}
+
+/** Unwrap DRF list or paginated { results, next } payloads; follow extra pages if present. */
+export function unwrapCatalogList(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (payload && Array.isArray(payload.results)) return payload.results;
+  return [];
+}
+
+export async function fetchAllCatalogPages(requestFn, { signal, params } = {}) {
+  const mergedParams = { page: 1, page_size: 500, ...(params || {}) };
+  const first = await requestFn({ signal, params: mergedParams });
+  const payload = first?.data;
+  if (Array.isArray(payload)) return payload;
+  const out = unwrapCatalogList(payload);
+  let nextUrl = payload?.next;
+  let page = 2;
+  while (nextUrl && page <= 50) {
+    const res = await requestFn({ signal, params: { ...mergedParams, page } });
+    const chunk = unwrapCatalogList(res?.data);
+    out.push(...chunk);
+    nextUrl = Array.isArray(res?.data) ? null : res?.data?.next;
+    page += 1;
+  }
+  return out;
+}
+
+/** Merge for_sell artists API with concert/festival artists inferred from for_sell events. */
 function mergeSellCatalogArtists(artistsFromApi, upcomingEvents) {
   const byId = new Map();
   for (const artist of artistsFromApi || []) {
@@ -225,7 +257,7 @@ function mergeSellCatalogArtists(artistsFromApi, upcomingEvents) {
   }
   for (const ev of upcomingEvents || []) {
     const cat = String(ev.category || '').toLowerCase();
-    if (cat !== 'concert') continue;
+    if (cat !== 'concert' && cat !== 'festival') continue;
     const detail = ev.artist_detail;
     const id = detail?.id ?? ev.artist;
     if (id == null) continue;
@@ -424,20 +456,16 @@ const Sell = () => {
       setEventsLoading(true);
       setCatalogError(null);
       try {
-        const [artRes, evRes] = await Promise.all([
-          artistAPI.getArtists({ signal, params: { for_sell: '1' } }),
-          eventAPI.getEvents({ signal, params: { for_sell: '1' } }),
+        const [artistsData, eventsData] = await Promise.all([
+          fetchAllCatalogPages(artistAPI.getArtists, {
+            signal,
+            params: { for_sell: '1', category: 'concert,festival' },
+          }),
+          fetchAllCatalogPages(eventAPI.getEvents, {
+            signal,
+            params: { for_sell: '1' },
+          }),
         ]);
-        let artistsData = [];
-        if (artRes.data) {
-          if (Array.isArray(artRes.data)) artistsData = artRes.data;
-          else if (artRes.data.results && Array.isArray(artRes.data.results)) artistsData = artRes.data.results;
-        }
-        let eventsData = [];
-        if (evRes.data) {
-          if (Array.isArray(evRes.data)) eventsData = evRes.data;
-          else if (evRes.data.results && Array.isArray(evRes.data.results)) eventsData = evRes.data.results;
-        }
         const now = new Date();
         const upcomingEvents = eventsData
           .filter((event) => {
@@ -480,7 +508,7 @@ const Sell = () => {
 
   // Concerts: ONLY source for dropdown — GET ?for_sell=1&artist=<id>. No extra client filters (date/category) that can drop valid rows.
   useEffect(() => {
-    if (selectedCategory !== 'concert' || !selectedArtistId) {
+    if (!usesSellArtistDropdown(selectedCategory) || !selectedArtistId) {
       setArtistEvents([]);
       setArtistEventsLoading(false);
       return undefined;
@@ -491,15 +519,10 @@ const Sell = () => {
     setArtistEvents([]);
     (async () => {
       try {
-        const evRes = await eventAPI.getEvents({
+        const eventsData = await fetchAllCatalogPages(eventAPI.getEvents, {
           signal,
           params: { for_sell: '1', artist: String(selectedArtistId) },
         });
-        let eventsData = [];
-        if (evRes.data) {
-          if (Array.isArray(evRes.data)) eventsData = evRes.data;
-          else if (evRes.data.results && Array.isArray(evRes.data.results)) eventsData = evRes.data.results;
-        }
         const sorted = [...eventsData].sort((a, b) => {
           const da = a?.date ? new Date(a.date).getTime() : 0;
           const db = b?.date ? new Date(b.date).getTime() : 0;
@@ -582,7 +605,7 @@ const Sell = () => {
   /** Exactly what the event <select> maps over — concerts use only `artistEvents` from the artist-scoped API. */
   const eventsForDropdown = useMemo(() => {
     let list;
-    if (selectedCategory === 'concert') {
+    if (usesSellArtistDropdown(selectedCategory)) {
       list = !selectedArtistId || artistEventsLoading ? [] : artistEvents;
     } else {
       list = events.filter((event) => {
@@ -627,7 +650,7 @@ const Sell = () => {
       const cat = sellCategoryFromEvent(ev);
       const artistId = artistIdFromEvent(ev);
       setSelectedCategory(cat);
-      setSelectedArtistId(cat === 'concert' && artistId ? artistId : '');
+      setSelectedArtistId(usesSellArtistDropdown(cat) && artistId ? artistId : '');
       setFormData((prev) => ({
         ...prev,
         event_id: ev.id,
@@ -1354,7 +1377,7 @@ const Sell = () => {
   const scrollWizardTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   const validateIdentityStep = () => {
-    if (selectedCategory === 'concert' && !selectedArtistId) {
+    if (usesSellArtistDropdown(selectedCategory) && !selectedArtistId) {
       setFieldErrors({ event: 'אנא בחר אמן.' });
       return false;
     }
@@ -1522,7 +1545,7 @@ const Sell = () => {
             </select>
           </div>
 
-          {selectedCategory === 'concert' && artistsLoading && eventsLoading ? (
+          {usesSellArtistDropdown(selectedCategory) && artistsLoading && eventsLoading ? (
             <div className="form-group">
               <label>טוען אמנים ואירועים…</label>
               <SellFormSkeleton />
@@ -1530,7 +1553,7 @@ const Sell = () => {
           ) : (
             <>
               {/* Step 2: Artist Selection (ONLY for concerts) */}
-              {selectedCategory === 'concert' && (
+              {usesSellArtistDropdown(selectedCategory) && (
                 <div className="form-group">
                   <label htmlFor="artist_select">בחר אמן *</label>
                   {artistsLoading ? (
@@ -1559,7 +1582,7 @@ const Sell = () => {
               <div className="form-group">
                 <label htmlFor="event_select">בחר אירוע *</label>
                 {eventsLoading ||
-                (selectedCategory === 'concert' && selectedArtistId && artistEventsLoading) ? (
+                (usesSellArtistDropdown(selectedCategory) && selectedArtistId && artistEventsLoading) ? (
                   <SellFormSkeleton />
                 ) : (
                   <select
@@ -1570,7 +1593,8 @@ const Sell = () => {
                     className="premium-select"
                     required
                     disabled={
-                      selectedCategory === 'concert' && (!selectedArtistId || artistEventsLoading)
+                      usesSellArtistDropdown(selectedCategory) &&
+                      (!selectedArtistId || artistEventsLoading)
                     }
                   >
                     <option value="">-- בחר אירוע --</option>
@@ -1581,7 +1605,7 @@ const Sell = () => {
                     ))}
                   </select>
                 )}
-                {selectedCategory === 'concert' && !selectedArtistId && (
+                {usesSellArtistDropdown(selectedCategory) && !selectedArtistId && (
                   <small className="field-hint">אנא בחר אמן תחילה</small>
                 )}
                 <SellFieldError message={fieldErrors.event} />

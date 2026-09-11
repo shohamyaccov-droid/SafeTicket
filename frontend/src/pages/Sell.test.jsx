@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 
-import Sell from './Sell';
+import Sell, { fetchAllCatalogPages, unwrapCatalogList } from './Sell';
 import { artistAPI, eventAPI, ticketAPI } from '../services/api';
 
 vi.mock('../context/AuthContext', () => ({
@@ -177,5 +177,25 @@ describe('Sell event deep link', () => {
     await waitFor(() => {
       expect(select).toHaveValue('99');
     });
+  });
+});
+
+describe('sell catalog pagination helpers', () => {
+  it('unwraps a DRF results page', () => {
+    expect(unwrapCatalogList({ results: [{ id: 1 }], next: null })).toEqual([{ id: 1 }]);
+    expect(unwrapCatalogList([{ id: 2 }])).toEqual([{ id: 2 }]);
+  });
+
+  it('follows extra pages so late-index artists are not dropped', async () => {
+    const requestFn = vi.fn()
+      .mockResolvedValueOnce({
+        data: { results: [{ id: 1, name: 'A' }], next: '/api/users/artists/?page=2' },
+      })
+      .mockResolvedValueOnce({
+        data: { results: [{ id: 2, name: 'NEXT' }], next: null },
+      });
+    const rows = await fetchAllCatalogPages(requestFn, { params: { for_sell: '1' } });
+    expect(rows.map((r) => r.name)).toEqual(['A', 'NEXT']);
+    expect(requestFn).toHaveBeenCalledTimes(2);
   });
 });
