@@ -139,7 +139,7 @@ class TicketAdmin(admin.ModelAdmin):
     ]
     list_filter = ['verification_status', 'ticket_type', 'status', 'split_type', 'is_obstructed_view', 'created_at', 'event_date']
     search_fields = ['event_name', 'seller__username', 'venue', 'section_legacy', 'custom_section_text', 'row']
-    readonly_fields = ['created_at', 'updated_at', 'asking_price']
+    readonly_fields = ['created_at', 'updated_at']
     actions = [
         'approve_and_activate_selected',
         'force_release_expired_reservations',
@@ -221,9 +221,7 @@ class TicketAdmin(admin.ModelAdmin):
         ro = list(super().get_readonly_fields(request, obj))
         if obj and obj.pk:
             ro += [
-                'seller',
                 'event',
-                'original_price',
                 'pdf_file_display',
                 'pdf_inline_preview',
             ]
