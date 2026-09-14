@@ -4664,28 +4664,12 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
             for_sell_raw = str(qp.get('for_sell', '')).lower()
             for_sell = for_sell_raw in ('1', 'true', 'yes', 'on')
             if for_sell:
+                # Sell catalog: no JOIN aggregates on tickets (Postgres COALESCE/GROUP BY 500s).
                 qs = (
                     Event.objects.filter(date__gte=now)
                     .select_related('artist', 'venue_place')
-                    .prefetch_related(
-                        Prefetch(
-                            'venue_place__sections',
-                            queryset=VenueSection.objects.order_by('name'),
-                        ),
-                    )
-                    .annotate(
-                        _active_tickets_total=Coalesce(
-                            Sum(
-                                'tickets__available_quantity',
-                                filter=Q(
-                                    tickets__status='active',
-                                    tickets__available_quantity__gt=0,
-                                ),
-                            ),
-                            Value(0),
-                        )
-                    )
-                    .order_by('date', 'name')
+                    .prefetch_related(event_venue_sections_prefetch())
+                    .order_by('date', 'name', 'id')
                 )
                 artist_raw = qp.get('artist')
                 if artist_raw not in (None, ''):
@@ -4702,26 +4686,11 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
                     qs = qs.filter(name__icontains=search)
                 return annotate_waitlist_count(qs)
 
-        queryset = (
+        queryset = annotate_active_tickets_total(
             Event.objects.filter(date__gte=now)
             .select_related('artist', 'venue_place')
-            .prefetch_related(
-                Prefetch(
-                    'venue_place__sections',
-                    queryset=VenueSection.objects.order_by('name'),
-                ),
-            )
-            .annotate(
-                _active_tickets_total=Coalesce(
-                    Sum(
-                        'tickets__available_quantity',
-                        filter=Q(tickets__status='active', tickets__available_quantity__gt=0),
-                    ),
-                    Value(0),
-                )
-            )
-            .order_by('-_active_tickets_total', 'date', 'name')
-        )
+            .prefetch_related(event_venue_sections_prefetch())
+        ).order_by('-_active_tickets_total', 'date', 'name', 'id')
         # Marketplace list: show all upcoming events (abundance UX — inventory hidden on cards).
         if self.action == 'list':
             queryset = queryset.filter(status='פעיל').exclude(artist__is_international=True)
@@ -4763,7 +4732,7 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
                 # Homepage sold-out / high-demand row — no ticket-stock requirement.
                 queryset = queryset.filter(high_demand=True).order_by('date', 'name')
 
-        return annotate_waitlist_count(queryset)
+        return queryset
     
     def get_object(self):
         from users.seo import resolve_event_by_identifier

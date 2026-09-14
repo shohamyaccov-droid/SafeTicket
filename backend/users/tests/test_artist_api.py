@@ -417,3 +417,20 @@ class EventListApiTests(TestCase):
         row = next((item for item in payload if item['name'] == 'Orphan Sell Event'), None)
         self.assertIsNotNone(row)
         self.assertEqual(row.get('artist_name') or '', '')
+
+    def test_for_sell_event_list_evaluates_without_join_aggregate(self):
+        artist = Artist.objects.create(name='Sell Catalog Artist')
+        Event.objects.create(
+            name='Sell Catalog Show',
+            artist=artist,
+            date=timezone.now() + timezone.timedelta(days=21),
+            venue='היכל מנורה מבטחים',
+            city='Tel Aviv',
+            country='IL',
+            category='concert',
+            status='פעיל',
+        )
+        res = APIClient().get('/api/users/events/?for_sell=1&page=1&page_size=500')
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertIsInstance(res.data, list)
+        self.assertTrue(any(item['name'] == 'Sell Catalog Show' for item in res.data))
