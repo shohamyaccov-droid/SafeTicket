@@ -1453,20 +1453,23 @@ const Sell = () => {
         }}
       >
       <div className="listing-card sell-form-compact sell-listing-card--mobile-cta">
-        <aside className="sell-trust-strip" aria-label="יתרונות למוכרים">
-          <ul className="sell-trust-strip__list">
-            <li className="sell-trust-strip__item">
+        <aside
+          className="sell-trust-strip rounded-xl border border-green-300 bg-green-100 px-3 py-3 sm:px-4 sm:py-3.5"
+          aria-label="יתרונות למוכרים"
+        >
+          <ul className="sell-trust-strip__list flex flex-wrap items-stretch justify-center gap-2 sm:gap-2.5">
+            <li className="sell-trust-strip__item text-base font-bold sm:text-lg">
               <span className="sell-trust-strip__icon" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                   <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.75" />
                   <path d="M8 12.5L10.5 15L16 9.5" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </span>
               <span>0% עמלה למוכרים</span>
             </li>
-            <li className="sell-trust-strip__item">
+            <li className="sell-trust-strip__item text-base font-bold sm:text-lg">
               <span className="sell-trust-strip__icon" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                   <path d="M16 11a3.5 3.5 0 1 0-3.2-4.9" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
                   <circle cx="9" cy="9" r="3.25" stroke="currentColor" strokeWidth="1.75" />
                   <path d="M3.5 18.5c.7-2.4 2.9-4 5.5-4s4.8 1.6 5.5 4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
@@ -1475,9 +1478,9 @@ const Sell = () => {
               </span>
               <span>קונים כבר מחכים ברשימת ההמתנה</span>
             </li>
-            <li className="sell-trust-strip__item">
+            <li className="sell-trust-strip__item text-base font-bold sm:text-lg">
               <span className="sell-trust-strip__icon" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                   <path d="M12 3L5 6v5c0 4.4 3.1 8.4 7 9.5 3.9-1.1 7-5.1 7-9.5V6l-7-3Z" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
                   <path d="M9.5 12l1.8 1.8L15 10.2" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
