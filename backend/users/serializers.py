@@ -847,8 +847,8 @@ class EventListSerializer(EventWaitlistCountMixin, EventVenueApiNormalizeMixin, 
     currency_symbol = serializers.SerializerMethodField()
     high_demand = serializers.SerializerMethodField()
     is_hot = serializers.SerializerMethodField()
-    artist_name = serializers.CharField(source='artist.name', read_only=True)
-    artist_detail = ArtistCardSerializer(source='artist', read_only=True)
+    artist_name = serializers.SerializerMethodField()
+    artist_detail = ArtistCardSerializer(source='artist', read_only=True, allow_null=True)
     venue_detail = VenueDetailSerializer(source='venue_place', read_only=True)
     seo_title = serializers.SerializerMethodField()
     canonical_path = serializers.SerializerMethodField()
@@ -874,6 +874,10 @@ class EventListSerializer(EventWaitlistCountMixin, EventVenueApiNormalizeMixin, 
 
     def get_image_url(self, obj):
         return first_resolved_image_url_for_event(self.context.get('request'), obj)
+
+    def get_artist_name(self, obj):
+        artist = getattr(obj, 'artist', None)
+        return (getattr(artist, 'name', None) or '') if artist else ''
 
     def get_tickets_count(self, obj):
         ann = getattr(obj, '_active_tickets_total', None)

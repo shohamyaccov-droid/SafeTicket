@@ -33,7 +33,7 @@ from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.http import Http404, HttpResponse, JsonResponse
 from django.views.decorators.http import require_GET
-from django.db.models import F, Q, Count, Sum, Exists, OuterRef, Value, Prefetch, DecimalField
+from django.db.models import F, Q, Count, Sum, Exists, OuterRef, Value, Prefetch, DecimalField, IntegerField
 from django.db.models.functions import Coalesce
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
@@ -5002,17 +5002,19 @@ class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
             recommended_raw = str(self.request.query_params.get('recommended', '')).lower()
             recommended = recommended_raw in ('1', 'true', 'yes', 'on')
             if for_sell:
-                # Sell form: any artist with an upcoming active concert or festival
-                # (inventory not required; do not cap how far in the future the date is).
+                # Sell form: upcoming concert/festival artists (inventory not required).
+                # Use Exists() instead of JOIN+distinct — Postgres rejects DISTINCT + reverse-FK
+                # aggregates used for _artist_tickets_total (500 on /artists/?for_sell=1).
                 now = timezone.now()
                 sell_cats = parse_sell_event_categories(self.request.query_params)
+                upcoming_music = Event.objects.filter(
+                    artist_id=OuterRef('pk'),
+                    date__gte=now,
+                    category__in=sell_cats,
+                    status='פעיל',
+                )
                 queryset = (
-                    queryset.filter(
-                        events__date__gte=now,
-                        events__category__in=sell_cats,
-                        events__status='פעיל',
-                    )
-                    .distinct()
+                    queryset.filter(Exists(upcoming_music))
                     .annotate(
                         _artist_tickets_total=Coalesce(
                             Sum(
@@ -5025,6 +5027,7 @@ class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
                                 ),
                             ),
                             Value(0),
+                            output_field=IntegerField(),
                         ),
                     )
                     .order_by('name')

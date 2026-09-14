@@ -281,6 +281,25 @@ class ArtistSellListApiTests(TestCase):
         names = [item['name'] for item in res.data]
         self.assertIn('NEXT', names)
 
+    def test_for_sell_artists_accepts_concert_festival_category_query(self):
+        artist = Artist.objects.create(name='NEXT Query', category='music')
+        Event.objects.create(
+            name='NEXT 2026 query',
+            artist=artist,
+            date=timezone.make_aware(datetime(2026, 12, 10, 20, 0)),
+            venue='אצטדיון רמת גן',
+            city='רמת גן',
+            country='IL',
+            category='festival',
+            status='פעיל',
+        )
+        res = APIClient().get(
+            '/api/users/artists/?for_sell=1&category=concert,festival&page=1&page_size=500'
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertIsInstance(res.data, list)
+        self.assertIn('NEXT Query', [item['name'] for item in res.data])
+
     def test_for_sell_artist_list_is_not_paginated(self):
         now = timezone.now() + timezone.timedelta(days=40)
         for idx in range(25):
@@ -380,3 +399,21 @@ class EventListApiTests(TestCase):
         names = [item['name'] for item in payload]
         self.assertIn(local_event.name, names)
         self.assertNotIn('International Event', names)
+
+    def test_for_sell_event_list_includes_events_without_artist(self):
+        Event.objects.create(
+            name='Orphan Sell Event',
+            artist=None,
+            date=timezone.now() + timezone.timedelta(days=10),
+            venue='היכל מנורה מבטחים',
+            city='Tel Aviv',
+            country='IL',
+            category='concert',
+            status='פעיל',
+        )
+        res = APIClient().get('/api/users/events/?for_sell=1')
+        self.assertEqual(res.status_code, 200, res.content)
+        payload = res.data if isinstance(res.data, list) else res.data.get('results', [])
+        row = next((item for item in payload if item['name'] == 'Orphan Sell Event'), None)
+        self.assertIsNotNone(row)
+        self.assertEqual(row.get('artist_name') or '', '')
