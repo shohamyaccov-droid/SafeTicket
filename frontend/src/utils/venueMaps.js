@@ -18,6 +18,29 @@ export const VENUE_CAESAREA = 'אמפי קיסריה';
 /** Menora Mivtachim Arena — InteractiveMenoraMap on EventDetailsPage. */
 export const VENUE_MENORA = 'היכל מנורה מבטחים';
 
+/** Pais Arena Jerusalem — official venue choice + NEXT seed alias. */
+export const VENUE_PAIS_ARENA = 'פיס ארנה ירושלים';
+
+/**
+ * NEXT festival dates at Pais Arena use the static octagon seating photo.
+ * Sports (and any non-NEXT Pais Arena event) keep JerusalemArenaMap SVG.
+ */
+export function shouldUsePaisArenaPhotoMap(event, canonicalVenue = '') {
+  if (!event) return false;
+  const name = String(event.name || '');
+  const venueHay = [event.venue, event.venue_detail?.name, canonicalVenue, name]
+    .filter(Boolean)
+    .map((v) => String(v))
+    .join(' ');
+  const isPaisArena =
+    canonicalVenue === VENUE_PAIS_ARENA ||
+    /פיס\s*ארנה|ארנה\s*ירושלים|pais\s*arena|arena\s+jerusalem/i.test(venueHay);
+  if (!isPaisArena) return false;
+  const isNext = /next/i.test(name) || /נקסט/.test(name);
+  const isFestival = String(event.category || '').toLowerCase() === 'festival';
+  return isNext || isFestival;
+}
+
 /** True when a venue string should use the interactive Menora SVG map (not Bloomfield / pin fallback). */
 export function isMenoraVenueName(venueName) {
   if (!venueName) return false;
@@ -102,9 +125,10 @@ export const VENUE_MAPS = {
       'שער 11': { x: 75, y: 40 },
     }
   },
-  // פיס ארנה ירושלים — interactive SVG map (see JerusalemArenaMap.jsx)
+  // פיס ארנה ירושלים — NEXT uses /images/venues/pais_arena_map.png (PaisArenaMap);
+  // other events use interactive SVG (JerusalemArenaMap.jsx)
   'פיס ארנה ירושלים': {
-    imageUrl: 'https://www.leaan.co.il/he-IL/images/menora_map.png',
+    imageUrl: '/images/venues/pais_arena_map.png',
     sections: {},
   },
   // בריכת הסולטן — interactive SVG map (see SultansPoolMap.jsx)

@@ -17,9 +17,10 @@ import BloomfieldStadiumMap from '../components/BloomfieldStadiumMap';
 import BloomfieldConcertMap from '../components/BloomfieldConcertMap';
 import BloomfieldTicketListPanel from '../components/BloomfieldTicketListPanel';
 import JerusalemArenaMap from '../components/JerusalemArenaMap';
+import PaisArenaMap from '../components/PaisArenaMap';
 import InteractiveStadiumMap from '../components/InteractiveStadiumMap';
 import SultansPoolMap from '../components/SultansPoolMap';
-import { VENUE_MAPS, VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN, VENUE_CAESAREA, VENUE_MENORA, getVenueConfig, isMenoraVenueName, normalizeSection } from '../utils/venueMaps';
+import { VENUE_MAPS, VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN, VENUE_CAESAREA, VENUE_MENORA, getVenueConfig, isMenoraVenueName, normalizeSection, shouldUsePaisArenaPhotoMap } from '../utils/venueMaps';
 import {
   VENUE_SULTANS_POOL,
   SULTANS_POOL_ZONE_LABELS,
@@ -962,6 +963,7 @@ const EventDetailsPage = () => {
         String(event?.category || '').toLowerCase() === 'concert'));
   const isCaesareaVenue = canonicalVenueForMap === VENUE_CAESAREA;
   const isJerusalemArenaVenue = canonicalVenueForMap === 'פיס ארנה ירושלים';
+  const usePaisArenaPhotoMap = shouldUsePaisArenaPhotoMap(event, canonicalVenueForMap);
   const isRamatGanVenue = canonicalVenueForMap === VENUE_RAMAT_GAN;
   const isSultansPoolVenue =
     canonicalVenueForMap === VENUE_SULTANS_POOL ||
@@ -1590,6 +1592,9 @@ const EventDetailsPage = () => {
                     }
 
                     if (isJerusalemArenaVenue) {
+                      if (usePaisArenaPhotoMap) {
+                        return <PaisArenaMap />;
+                      }
                       return (
                         <JerusalemArenaMap
                           rows={jerusalemRows}
