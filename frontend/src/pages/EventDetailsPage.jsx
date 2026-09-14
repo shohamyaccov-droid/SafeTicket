@@ -16,11 +16,10 @@ import CaesareaMap from '../components/CaesareaMap';
 import BloomfieldStadiumMap from '../components/BloomfieldStadiumMap';
 import BloomfieldConcertMap from '../components/BloomfieldConcertMap';
 import BloomfieldTicketListPanel from '../components/BloomfieldTicketListPanel';
-import JerusalemArenaMap from '../components/JerusalemArenaMap';
 import PaisArenaMap from '../components/PaisArenaMap';
 import InteractiveStadiumMap from '../components/InteractiveStadiumMap';
 import SultansPoolMap from '../components/SultansPoolMap';
-import { VENUE_MAPS, VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN, VENUE_CAESAREA, VENUE_MENORA, getVenueConfig, isMenoraVenueName, normalizeSection, shouldUsePaisArenaPhotoMap } from '../utils/venueMaps';
+import { VENUE_MAPS, VENUE_BLOOMFIELD_CONCERT, VENUE_RAMAT_GAN, VENUE_CAESAREA, VENUE_MENORA, getVenueConfig, isMenoraVenueName, normalizeSection } from '../utils/venueMaps';
 import {
   VENUE_SULTANS_POOL,
   SULTANS_POOL_ZONE_LABELS,
@@ -41,6 +40,7 @@ import {
 } from '../utils/bloomfieldListing';
 import { enrichBloomfieldConcertGroup } from '../utils/bloomfieldConcertListing';
 import { enrichJerusalemGroup } from '../utils/jerusalemListing';
+import { enrichPaisArenaGroup } from '../utils/paisArenaSectionMap';
 import {
   getTicketPrice,
   iso4217FromCountry,
@@ -963,7 +963,6 @@ const EventDetailsPage = () => {
         String(event?.category || '').toLowerCase() === 'concert'));
   const isCaesareaVenue = canonicalVenueForMap === VENUE_CAESAREA;
   const isJerusalemArenaVenue = canonicalVenueForMap === 'פיס ארנה ירושלים';
-  const usePaisArenaPhotoMap = shouldUsePaisArenaPhotoMap(event, canonicalVenueForMap);
   const isRamatGanVenue = canonicalVenueForMap === VENUE_RAMAT_GAN;
   const isSultansPoolVenue =
     canonicalVenueForMap === VENUE_SULTANS_POOL ||
@@ -1092,6 +1091,7 @@ const EventDetailsPage = () => {
         group: g,
         firstTicket: g.tickets[0],
         jerusalem: enrichJerusalemGroup(g),
+        pais: enrichPaisArenaGroup(g),
       };
     });
   }, [isJerusalemArenaVenue, ticketGroups]);
@@ -1592,12 +1592,10 @@ const EventDetailsPage = () => {
                     }
 
                     if (isJerusalemArenaVenue) {
-                      if (usePaisArenaPhotoMap) {
-                        return <PaisArenaMap />;
-                      }
                       return (
-                        <JerusalemArenaMap
+                        <PaisArenaMap
                           rows={jerusalemRows}
+                          tickets={ticketGroups}
                           highlightStableId={jerusalemMapHighlight}
                           onSelectGroup={handleJerusalemMapSelect}
                           onHoverGroup={setJerusalemHoverId}
