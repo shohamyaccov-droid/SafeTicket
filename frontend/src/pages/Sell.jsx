@@ -1457,7 +1457,7 @@ const Sell = () => {
           className="sell-trust-strip rounded-xl border border-green-300 bg-green-100 px-3 py-3 sm:px-4 sm:py-3.5"
           aria-label="יתרונות למוכרים"
         >
-          <ul className="sell-trust-strip__list flex flex-wrap items-stretch justify-center gap-2 sm:gap-2.5">
+          <ul className="sell-trust-strip__list flex flex-wrap items-stretch justify-center gap-2.5 sm:gap-3">
             <li className="sell-trust-strip__item text-base font-bold sm:text-lg">
               <span className="sell-trust-strip__icon" aria-hidden="true">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -1477,15 +1477,6 @@ const Sell = () => {
                 </svg>
               </span>
               <span>קונים כבר מחכים ברשימת ההמתנה</span>
-            </li>
-            <li className="sell-trust-strip__item text-base font-bold sm:text-lg">
-              <span className="sell-trust-strip__icon" aria-hidden="true">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 3L5 6v5c0 4.4 3.1 8.4 7 9.5 3.9-1.1 7-5.1 7-9.5V6l-7-3Z" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
-                  <path d="M9.5 12l1.8 1.8L15 10.2" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              <span>תשלום מוגן באמינות</span>
             </li>
           </ul>
         </aside>
