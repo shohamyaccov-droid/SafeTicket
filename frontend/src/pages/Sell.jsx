@@ -222,26 +222,28 @@ function usesSellArtistDropdown(category) {
   return SELL_ARTIST_CATEGORIES.has(String(category || '').toLowerCase());
 }
 
-/** Unwrap DRF list or paginated { results, next } payloads; follow extra pages if present. */
+/** Unwrap DRF list or paginated { results, next } payloads. */
 export function unwrapCatalogList(payload) {
   if (Array.isArray(payload)) return payload;
-  if (payload && Array.isArray(payload.results)) return payload.results;
+  if (!payload || typeof payload !== 'object') return [];
+  if (Array.isArray(payload.results)) return payload.results;
+  if (Array.isArray(payload.data)) return payload.data;
   return [];
 }
 
 export async function fetchAllCatalogPages(requestFn, { signal, params } = {}) {
   const mergedParams = { page: 1, page_size: 500, ...(params || {}) };
   const first = await requestFn({ signal, params: mergedParams });
-  const payload = first?.data;
+  const payload = first?.data !== undefined ? first.data : first;
   if (Array.isArray(payload)) return payload;
-  const out = unwrapCatalogList(payload);
-  let nextUrl = payload?.next;
+  const out = [...unwrapCatalogList(payload)];
+  let nextUrl = payload && !Array.isArray(payload) ? payload.next : null;
   let page = 2;
   while (nextUrl && page <= 50) {
     const res = await requestFn({ signal, params: { ...mergedParams, page } });
-    const chunk = unwrapCatalogList(res?.data);
-    out.push(...chunk);
-    nextUrl = Array.isArray(res?.data) ? null : res?.data?.next;
+    const chunkPayload = res?.data !== undefined ? res.data : res;
+    out.push(...unwrapCatalogList(chunkPayload));
+    nextUrl = Array.isArray(chunkPayload) ? null : chunkPayload?.next;
     page += 1;
   }
   return out;
@@ -456,7 +458,7 @@ const Sell = () => {
       setEventsLoading(true);
       setCatalogError(null);
       try {
-        const [artistsData, eventsData] = await Promise.all([
+        const [artistsPayload, eventsPayload] = await Promise.all([
           fetchAllCatalogPages(artistAPI.getArtists, {
             signal,
             params: { for_sell: '1', category: 'concert,festival' },
@@ -466,19 +468,22 @@ const Sell = () => {
             params: { for_sell: '1' },
           }),
         ]);
+        const artistsList = unwrapCatalogList(artistsPayload);
+        const eventsList = unwrapCatalogList(eventsPayload);
         const now = new Date();
-        const upcomingEvents = eventsData
+        const upcomingEvents = eventsList
           .filter((event) => {
-            if (!event.date) return false;
+            if (!event?.date) return false;
             return new Date(event.date) >= now;
           })
           .sort((a, b) => new Date(a.date) - new Date(b.date));
-        artistsData = mergeSellCatalogArtists(artistsData, upcomingEvents);
+        const mergedArtists = mergeSellCatalogArtists(artistsList, upcomingEvents);
         if (!cancelled) {
-          setArtists(artistsData);
+          setArtists(mergedArtists);
           setEvents(upcomingEvents);
         }
       } catch (err) {
+        console.error('Sell catalog load failed', err);
         if (!cancelled) {
           const code = err?.code;
           const aborted =
@@ -519,10 +524,12 @@ const Sell = () => {
     setArtistEvents([]);
     (async () => {
       try {
-        const eventsData = await fetchAllCatalogPages(eventAPI.getEvents, {
-          signal,
-          params: { for_sell: '1', artist: String(selectedArtistId) },
-        });
+        const eventsData = unwrapCatalogList(
+          await fetchAllCatalogPages(eventAPI.getEvents, {
+            signal,
+            params: { for_sell: '1', artist: String(selectedArtistId) },
+          }),
+        );
         const sorted = [...eventsData].sort((a, b) => {
           const da = a?.date ? new Date(a.date).getTime() : 0;
           const db = b?.date ? new Date(b.date).getTime() : 0;
@@ -532,6 +539,7 @@ const Sell = () => {
           setArtistEvents(sorted);
         }
       } catch (err) {
+        console.error('Sell artist events load failed', err);
         if (!cancelled) {
           const code = err?.code;
           const aborted =

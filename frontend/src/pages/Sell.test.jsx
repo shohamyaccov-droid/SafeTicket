@@ -184,6 +184,7 @@ describe('sell catalog pagination helpers', () => {
   it('unwraps a DRF results page', () => {
     expect(unwrapCatalogList({ results: [{ id: 1 }], next: null })).toEqual([{ id: 1 }]);
     expect(unwrapCatalogList([{ id: 2 }])).toEqual([{ id: 2 }]);
+    expect(unwrapCatalogList({ data: [{ id: 3 }] })).toEqual([{ id: 3 }]);
   });
 
   it('follows extra pages so late-index artists are not dropped', async () => {
@@ -197,5 +198,37 @@ describe('sell catalog pagination helpers', () => {
     const rows = await fetchAllCatalogPages(requestFn, { params: { for_sell: '1' } });
     expect(rows.map((r) => r.name)).toEqual(['A', 'NEXT']);
     expect(requestFn).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Sell catalog 200 OK parsing', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    Element.prototype.scrollIntoView = vi.fn();
+    artistAPI.getArtists.mockResolvedValue({
+      data: [{ id: 10, name: 'NEXT' }],
+    });
+    eventAPI.getEvents.mockResolvedValue({
+      data: [
+        {
+          id: 77,
+          name: 'NEXT 2026',
+          category: 'festival',
+          date: '2099-10-22T17:00:00Z',
+          artist: 10,
+          artist_name: 'NEXT',
+        },
+      ],
+    });
+    eventAPI.getEvent.mockResolvedValue({ data: {} });
+  });
+
+  it('renders artist options from a flat 200 array without catalog error', async () => {
+    renderSell();
+    const artistSelect = await screen.findByLabelText(/בחר אמן/);
+    await waitFor(() => {
+      expect(artistSelect).toContainHTML('NEXT');
+    });
+    expect(screen.queryByText(/לא ניתן לטעון אמנים ואירועים/)).not.toBeInTheDocument();
   });
 });
