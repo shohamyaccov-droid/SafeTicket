@@ -23,13 +23,12 @@ export function extractPaisArenaSectionId(ticket) {
   const compact = s.replace(/\s+/g, ' ');
 
   if (/vip|ויפ/i.test(compact)) {
-    const letter = compact.match(/vip\s*[-:]?\s*([a-gא-ו])/i)?.[1];
+    if (SECTION_BY_ID.vip) return 'vip';
+    const letter = compact.match(/vip\s*[-:]?\s*([a-g])/i)?.[1];
     if (letter) {
-      const latin = 'abcdefg'['אבגדהוו'.indexOf(letter)] || letter;
-      const id = `vip-${String(latin).toUpperCase()}`;
+      const id = `vip-${letter.toUpperCase()}`;
       if (SECTION_BY_ID[id]) return id;
     }
-    return SECTION_BY_ID['vip-B'] ? 'vip-B' : 'vip-A';
   }
 
   const isUpper = /עליון|upper/i.test(compact);

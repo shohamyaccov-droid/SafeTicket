@@ -6,6 +6,7 @@ import {
   PAIS_ARENA_VIEWBOX,
   PAIS_ARENA_OUTLINE_D,
   PAIS_ARENA_STAGE_D,
+  PAIS_ARENA_STAGE,
   PAIS_ARENA_SECTIONS,
 } from '../utils/paisArenaInteractiveGeometry';
 import { extractPaisArenaSectionId } from '../utils/paisArenaSectionMap';
@@ -42,48 +43,24 @@ function sectionIdFromRow(row) {
 }
 
 function PaisArenaPriceTag({ cx, cy, priceLine, isTaken, inverted }) {
-  const len = String(priceLine || '').length;
-  const tagW = Math.max(72, Math.min(128, 28 + len * 9.2));
-  const tagH = 28;
-  const fill = isTaken ? '#e5e7eb' : inverted ? '#ea580c' : '#fff7ed';
-  const stroke = isTaken ? '#9ca3af' : '#f97316';
-  const text = isTaken ? '#6b7280' : inverted ? '#ffffff' : '#9a3412';
-
+  const w = 80;
+  const h = 28;
   return (
-    <g transform={`translate(${cx}, ${cy})`} pointerEvents="none">
-      <rect
-        x={-tagW / 2 + 1.5}
-        y={-tagH / 2 + 2}
-        width={tagW}
-        height={tagH}
-        rx={tagH / 2}
-        fill="#0f172a"
-        opacity="0.12"
-      />
-      <rect
-        x={-tagW / 2}
-        y={-tagH / 2}
-        width={tagW}
-        height={tagH}
-        rx={tagH / 2}
-        fill={fill}
-        stroke={stroke}
-        strokeWidth="1.8"
-      />
-      <text
-        x={0}
-        y={1}
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fill={text}
-        fontSize="13"
-        fontWeight="800"
-        fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-        style={{ direction: 'ltr', unicodeBidi: 'isolate' }}
+    <foreignObject x={cx - w / 2} y={cy - h / 2} width={w} height={h} style={{ overflow: 'visible' }}>
+      <div
+        xmlns="http://www.w3.org/1999/xhtml"
+        className={`pointer-events-none flex h-full w-full items-center justify-center rounded-full border px-2 text-[11px] font-extrabold tracking-tight shadow-sm ${
+          isTaken
+            ? 'border-slate-300 bg-slate-200 text-slate-500'
+            : inverted
+              ? 'border-orange-600 bg-orange-500 text-white'
+              : 'border-orange-400 bg-orange-50 text-orange-800'
+        }`}
+        style={{ direction: 'ltr' }}
       >
         {priceLine}
-      </text>
-    </g>
+      </div>
+    </foreignObject>
   );
 }
 
@@ -202,8 +179,35 @@ export default function PaisArenaMap({
     if (first) onSelectGroup?.(first.stableId);
   };
 
+  const renderSectionPath = (sec) => {
+    const status = blockStatusById[sec.id] || 'empty';
+    const isAvailable = status === 'available';
+    const isTaken = status === 'taken';
+    const isHi = highlightBlockId === sec.id && isAvailable;
+    let fill = MAP_FILL_EMPTY;
+    if (isTaken) fill = MAP_FILL_TAKEN;
+    if (isAvailable) fill = FILL_ACTIVE;
+    return (
+      <path
+        key={sec.id}
+        id={sec.id}
+        data-section-id={sec.id}
+        d={sec.d}
+        fill={fill}
+        stroke={isHi ? STROKE_ACTIVE : STROKE_EMPTY}
+        strokeWidth={isHi ? 2.4 : 1.1}
+        strokeLinejoin="round"
+        className="transition-[fill,stroke] duration-150 ease-out"
+        style={{ cursor: isAvailable ? 'pointer' : isTaken ? 'not-allowed' : 'default' }}
+        onMouseEnter={isAvailable ? () => handleEnter(sec.id) : undefined}
+        onMouseLeave={isAvailable ? () => onHoverGroup?.(null) : undefined}
+        onClick={isAvailable ? () => handleClick(sec.id) : undefined}
+      />
+    );
+  };
+
   return (
-    <div className="relative w-full aspect-square max-h-[min(560px,74vh)] min-h-[240px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="relative w-full max-h-[min(560px,74vh)] min-h-[240px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm aspect-[402/349]">
       <div className="absolute top-2 left-2 z-[5] flex flex-col overflow-hidden rounded-md shadow-md">
         <button
           type="button"
@@ -240,48 +244,23 @@ export default function PaisArenaMap({
             role="img"
             aria-label="מפת ישיבה אינטראקטיבית — פיס ארנה ירושלים"
           >
-            <rect width="1080" height="1080" fill="#ffffff" />
-            <path d={PAIS_ARENA_OUTLINE_D} fill="#f1f5f9" stroke="#94a3b8" strokeWidth="3" />
+            <rect width="402" height="349" fill="#ffffff" />
+            <path d={PAIS_ARENA_OUTLINE_D} fill="#f8fafc" stroke="#94a3b8" strokeWidth="1.4" />
 
-            {PAIS_ARENA_SECTIONS.map((sec) => {
-              const status = blockStatusById[sec.id] || 'empty';
-              const isAvailable = status === 'available';
-              const isTaken = status === 'taken';
-              const isHi = highlightBlockId === sec.id && isAvailable;
-              let fill = MAP_FILL_EMPTY;
-              if (isTaken) fill = MAP_FILL_TAKEN;
-              if (isAvailable) fill = FILL_ACTIVE;
-              if (sec.kind === 'extra' && status === 'empty') fill = '#e2e8f0';
-              return (
-                <path
-                  key={sec.id}
-                  id={sec.id}
-                  data-section-id={sec.id}
-                  d={sec.d}
-                  fill={fill}
-                  stroke={isHi ? STROKE_ACTIVE : STROKE_EMPTY}
-                  strokeWidth={isHi ? 4 : 1.6}
-                  strokeLinejoin="round"
-                  className="transition-[fill,stroke] duration-150 ease-out"
-                  style={{ cursor: isAvailable ? 'pointer' : isTaken ? 'not-allowed' : 'default' }}
-                  onMouseEnter={isAvailable ? () => handleEnter(sec.id) : undefined}
-                  onMouseLeave={isAvailable ? () => onHoverGroup?.(null) : undefined}
-                  onClick={isAvailable ? () => handleClick(sec.id) : undefined}
-                />
-              );
-            })}
+            {PAIS_ARENA_SECTIONS.filter((sec) => sec.kind === 'vip').map((sec) => renderSectionPath(sec))}
+            {PAIS_ARENA_SECTIONS.filter((sec) => sec.kind !== 'vip').map((sec) => renderSectionPath(sec))}
 
-            <path d={PAIS_ARENA_STAGE_D} fill="#111827" stroke="#0f172a" strokeWidth="2" />
+            <path d={PAIS_ARENA_STAGE_D} fill="#111827" stroke="#0f172a" strokeWidth="1.2" />
             <text
-              x="541.5"
-              y="451"
+              x={PAIS_ARENA_STAGE.cx}
+              y={PAIS_ARENA_STAGE.cy}
               textAnchor="middle"
               dominantBaseline="middle"
               fill="#f8fafc"
-              fontSize="22"
+              fontSize="9"
               fontWeight="800"
               fontFamily="system-ui, sans-serif"
-              style={{ pointerEvents: 'none', letterSpacing: '0.12em' }}
+              style={{ pointerEvents: 'none', letterSpacing: '0.08em' }}
             >
               STAGE
             </text>
@@ -292,11 +271,11 @@ export default function PaisArenaMap({
                 <text
                   key={`lbl-${sec.id}`}
                   x={sec.cx}
-                  y={sec.cy + (pins.some((p) => p.id === sec.id) ? 18 : 0)}
+                  y={sec.cy + (pins.some((p) => p.id === sec.id) ? 10 : 0)}
                   textAnchor="middle"
                   dominantBaseline="middle"
                   fill={available ? '#14532d' : '#94a3b8'}
-                  fontSize={sec.kind === 'floor' ? 18 : 13}
+                  fontSize="8"
                   fontWeight="700"
                   style={{ pointerEvents: 'none', userSelect: 'none' }}
                 >

@@ -16,15 +16,16 @@ describe('PaisArenaMap', () => {
         stableId: 'listing-2',
         group: { available_count: 2, tickets: [ticket] },
         firstTicket: ticket,
-        pais: { sectionId: 'floor-2' },
+        pais: { sectionId: 'lower-2' },
       },
     ];
     const { container } = render(<PaisArenaMap rows={rows} />);
-    const path = container.querySelector('[data-section-id="floor-2"]');
+    const path = container.querySelector('[data-section-id="lower-2"]');
     expect(path).toBeTruthy();
     expect(path.getAttribute('fill')).toBe('#22c55e');
-    const empty = container.querySelector('[data-section-id="floor-3"]');
+    const empty = container.querySelector('[data-section-id="lower-3"]');
     expect(empty.getAttribute('fill')).toBe('#f3f4f6');
     expect(container.textContent).toMatch(/240/);
+    expect(container.querySelector('foreignObject')).toBeTruthy();
   });
 });
