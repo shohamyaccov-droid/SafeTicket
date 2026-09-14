@@ -22,23 +22,19 @@ export const VENUE_MENORA = 'היכל מנורה מבטחים';
 export const VENUE_PAIS_ARENA = 'פיס ארנה ירושלים';
 
 /**
- * NEXT festival dates at Pais Arena use the static octagon seating photo.
- * Sports (and any non-NEXT Pais Arena event) keep JerusalemArenaMap SVG.
+ * Pais Arena Jerusalem uses the static seating diagram (PaisArenaMap).
+ * Other venues keep their own maps (Ramat Gan, Caesarea, Menora, etc.).
  */
 export function shouldUsePaisArenaPhotoMap(event, canonicalVenue = '') {
-  if (!event) return false;
-  const name = String(event.name || '');
-  const venueHay = [event.venue, event.venue_detail?.name, canonicalVenue, name]
+  const venueHay = [event?.venue, event?.venue_detail?.name, canonicalVenue]
     .filter(Boolean)
     .map((v) => String(v))
     .join(' ');
-  const isPaisArena =
+  if (!venueHay.trim()) return false;
+  return (
     canonicalVenue === VENUE_PAIS_ARENA ||
-    /פיס\s*ארנה|ארנה\s*ירושלים|pais\s*arena|arena\s+jerusalem/i.test(venueHay);
-  if (!isPaisArena) return false;
-  const isNext = /next/i.test(name) || /נקסט/.test(name);
-  const isFestival = String(event.category || '').toLowerCase() === 'festival';
-  return isNext || isFestival;
+    /פיס\s*ארנה|ארנה\s*ירושלים|pais\s*arena|arena\s+jerusalem/i.test(venueHay)
+  );
 }
 
 /** True when a venue string should use the interactive Menora SVG map (not Bloomfield / pin fallback). */
@@ -125,7 +121,7 @@ export const VENUE_MAPS = {
       'שער 11': { x: 75, y: 40 },
     }
   },
-  // פיס ארנה ירושלים — NEXT uses /images/venues/pais_arena_map.png (PaisArenaMap);
+  // פיס ארנה ירושלים — static diagram at /images/venues/pais_arena_map.png (PaisArenaMap)
   // other events use interactive SVG (JerusalemArenaMap.jsx)
   'פיס ארנה ירושלים': {
     imageUrl: '/images/venues/pais_arena_map.png',
