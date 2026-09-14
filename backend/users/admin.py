@@ -1104,7 +1104,7 @@ class SellerPayoutAdmin(admin.ModelAdmin):
         failed = 0
         for payout in queryset.select_related('seller', 'order'):
             try:
-                mark_seller_payout_paid(payout)
+                mark_seller_payout_paid(payout, acting_user=request.user)
                 updated += 1
             except ValidationError:
                 failed += 1

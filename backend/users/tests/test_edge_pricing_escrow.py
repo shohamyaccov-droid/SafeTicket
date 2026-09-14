@@ -168,6 +168,12 @@ class EscrowGateEdgeTests(TestCase):
             email='edge_admin@test.invalid',
             password='x',
         )
+        self.staff = User.objects.create_user(
+            username='edge_staff',
+            email='edge_staff@test.invalid',
+            password='x',
+            is_staff=True,
+        )
         self.seller = User.objects.create_user(
             username='edge_escrow_seller',
             email='edge_escrow_seller@test.invalid',
@@ -223,14 +229,24 @@ class EscrowGateEdgeTests(TestCase):
         self.payout = ensure_seller_payout_for_order(self.order)
 
     def test_mark_paid_blocked_while_locked(self):
-        self.api.force_authenticate(self.admin)
+        self.api.force_authenticate(self.staff)
         res = self.api.post(f'/api/users/admin/payouts/{self.payout.pk}/mark-paid/', {}, format='json')
         self.assertEqual(res.status_code, 400)
         self.payout.refresh_from_db()
         self.assertEqual(self.payout.payout_status, SellerPayout.PayoutStatus.PENDING)
         body = res.json()
         self.assertIn('error', body)
+        self.assertRegex(str(body['error']), r'locked in escrow|36-hour')
         self.assertNotIn('traceback', str(body).lower())
+
+    def test_superuser_can_mark_paid_before_escrow_threshold(self):
+        self.api.force_authenticate(self.admin)
+        res = self.api.post(f'/api/users/admin/payouts/{self.payout.pk}/mark-paid/', {}, format='json')
+        self.assertEqual(res.status_code, 200)
+        self.payout.refresh_from_db()
+        self.assertEqual(self.payout.payout_status, SellerPayout.PayoutStatus.TRANSFERRED)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payout_status, 'paid')
 
     def test_eligible_date_is_after_event(self):
         eligible = compute_payout_eligible_date(self.ticket)

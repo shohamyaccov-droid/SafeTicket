@@ -280,7 +280,7 @@ def admin_payout_mark_paid(request, payout_id: int):
         return Response({'error': 'Cannot mark a cancelled payout as paid.'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        payout = mark_seller_payout_paid(payout)
+        payout = mark_seller_payout_paid(payout, acting_user=request.user)
     except ValidationError as exc:
         return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 

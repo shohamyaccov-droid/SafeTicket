@@ -225,18 +225,42 @@ def release_eligible_wallet_payouts(*, seller=None) -> int:
     return released
 
 
-def mark_seller_payout_paid(payout):
+def _force_release_payout_wallet_credit(payout, *, wallet, credit_tx) -> None:
+    """Move this payout's SALE_CREDIT from locked to available (admin escrow bypass)."""
+    if credit_tx is None or credit_tx.status == WalletTransaction.Status.COMPLETED:
+        return
+    amount = Decimal(credit_tx.amount or 0).quantize(Decimal('0.01'))
+    if amount <= 0:
+        credit_tx.status = WalletTransaction.Status.COMPLETED
+        credit_tx.save(update_fields=['status', 'updated_at'])
+        return
+    if wallet.locked_balance < amount:
+        raise ValidationError('Wallet locked balance is insufficient to release payout.')
+    wallet.locked_balance -= amount
+    wallet.available_balance += amount
+    wallet.save(update_fields=['locked_balance', 'available_balance', 'updated_at'])
+    credit_tx.status = WalletTransaction.Status.COMPLETED
+    credit_tx.note = (credit_tx.note or 'Seller payout released from escrow (admin bypass)')[:255]
+    credit_tx.save(update_fields=['status', 'note', 'updated_at'])
+
+
+def mark_seller_payout_paid(payout, *, acting_user=None):
     """
     Mark one available SellerPayout as manually transferred and write a negative wallet withdrawal.
+
+    Superusers may bypass the 36-hour escrow gate so staff can force a paid transfer.
     """
     from users.models import Order, SellerPayout
+
+    bypass_escrow = bool(getattr(acting_user, 'is_superuser', False))
 
     if payout.payout_status == SellerPayout.PayoutStatus.TRANSFERRED:
         return payout
     if payout.payout_status == SellerPayout.PayoutStatus.CANCELLED:
         raise ValidationError('Cannot mark a cancelled payout as paid.')
 
-    release_eligible_wallet_payouts(seller=payout.seller)
+    if not bypass_escrow:
+        release_eligible_wallet_payouts(seller=payout.seller)
 
     amount = _seller_credit_amount(payout)
     with transaction.atomic():
@@ -245,10 +269,11 @@ def mark_seller_payout_paid(payout):
             return payout
         if payout.payout_status == SellerPayout.PayoutStatus.CANCELLED:
             raise ValidationError('Cannot mark a cancelled payout as paid.')
-        if (payout.order.payout_status if payout.order_id else 'eligible') == 'locked':
-            raise ValidationError('Payout is still locked in escrow.')
-        if not _payout_is_past_escrow_release_threshold(payout):
-            raise ValidationError('Payout has not passed the 36-hour escrow release threshold.')
+        if not bypass_escrow:
+            if (payout.order.payout_status if payout.order_id else 'eligible') == 'locked':
+                raise ValidationError('Payout is still locked in escrow.')
+            if not _payout_is_past_escrow_release_threshold(payout):
+                raise ValidationError('Payout has not passed the 36-hour escrow release threshold.')
 
         wallet, _created = UserWallet.objects.select_for_update().get_or_create(user_id=payout.seller_id)
         credit_tx = (
@@ -259,6 +284,20 @@ def mark_seller_payout_paid(payout):
             )
             .first()
         )
+        if credit_tx is None:
+            credit_tx = credit_wallet_for_seller_payout(payout)
+            if credit_tx is not None:
+                credit_tx = (
+                    WalletTransaction.objects.select_for_update()
+                    .filter(pk=credit_tx.pk)
+                    .first()
+                )
+        wallet.refresh_from_db()
+        if bypass_escrow:
+            _force_release_payout_wallet_credit(payout, wallet=wallet, credit_tx=credit_tx)
+            wallet.refresh_from_db()
+            if credit_tx is not None:
+                credit_tx.refresh_from_db()
         if credit_tx is None or credit_tx.status != WalletTransaction.Status.COMPLETED:
             raise ValidationError('Payout wallet credit is not available for withdrawal.')
         if wallet.available_balance < amount:
