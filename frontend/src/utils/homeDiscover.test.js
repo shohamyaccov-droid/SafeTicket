@@ -62,6 +62,46 @@ describe('performerNavigateTarget', () => {
       href: '/event/only-date',
     });
   });
+
+  it('splits NEXT homepage cards by venue and routes into that location only', () => {
+    const ramat = {
+      id: 1,
+      slug: 'next-rg-8',
+      name: 'NEXT 2026 - אצטדיון ר"ג (8.10)',
+      venue: 'אצטדיון ר"ג',
+      city: 'רמת גן',
+      artist: 99,
+      artist_detail: { id: 99, name: 'NEXT', slug: 'next' },
+      tickets_count: 2,
+      date: '2026-10-08T17:00:00Z',
+    };
+    const jerusalem = {
+      id: 2,
+      slug: 'next-jr-3',
+      name: 'NEXT 2026 - פיס ארנה י-ם (3.12)',
+      venue: 'פיס ארנה י-ם',
+      city: 'ירושלים',
+      artist: 99,
+      artist_detail: { id: 99, name: 'NEXT', slug: 'next' },
+      tickets_count: 3,
+      date: '2026-12-03T18:00:00Z',
+    };
+    const ramatB = {
+      ...ramat,
+      id: 3,
+      slug: 'next-rg-10',
+      name: 'NEXT 2026 - אצטדיון ר"ג (10.10)',
+      tickets_count: 1,
+      date: '2026-10-10T17:00:00Z',
+    };
+    const groups = groupEventsByPerformer([ramat, jerusalem, ramatB]);
+    expect(groups).toHaveLength(2);
+    const names = groups.map((g) => g.performerName).sort();
+    expect(names).toEqual(['NEXT - אצטדיון רמת גן', 'NEXT - פיס ארנה ירושלים']);
+    const rg = groups.find((g) => g.performerName.includes('רמת גן'));
+    expect(rg.events.map((e) => e.id).sort()).toEqual([1, 3]);
+    expect(performerNavigateTarget(rg)).toEqual({ type: 'event', href: eventHref(ramat) });
+  });
 });
 
 describe('filterLastMinuteEvents', () => {

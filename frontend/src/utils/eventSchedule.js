@@ -47,6 +47,43 @@ function eventNameKey(event) {
   return String(event?.name || '').trim().toLowerCase();
 }
 
+function nextArtistBlob(event) {
+  return [
+    event?.artist_detail?.name,
+    event?.artist_name,
+    event?.artist?.name,
+    event?.name,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** NEXT festival dates should never mix Ramat Gan and Jerusalem. */
+export function isNextPerformer(event) {
+  return /\bNEXT\b/i.test(nextArtistBlob(event));
+}
+
+export function nextLocationKey(event) {
+  const blob = [
+    event?.venue,
+    event?.venue_place?.name,
+    event?.city,
+    event?.name,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  if (/ירושל|פיס|י-ם|pais/.test(blob)) return 'jerusalem';
+  if (/רמת גן|ר"ג|ר״ג|ramat/.test(blob)) return 'ramat-gan';
+  return 'other';
+}
+
+export function nextLocationDisplayName(locationKey) {
+  if (locationKey === 'jerusalem') return 'NEXT - פיס ארנה ירושלים';
+  if (locationKey === 'ramat-gan') return 'NEXT - אצטדיון רמת גן';
+  return 'NEXT';
+}
+
 function eventIdentityKey(event) {
   if (!event) return '';
   if (event.id != null && event.id !== '') return `id:${event.id}`;
@@ -66,7 +103,12 @@ export function selectRelatedShowDates(artistEvents, currentEvent) {
   const sameName = nameKey
     ? list.filter((ev) => eventNameKey(ev) === nameKey)
     : [];
-  const pool = sameName.length >= 2 ? sameName : list;
+  let pool = sameName.length >= 2 ? sameName : list;
+  if (isNextPerformer(currentEvent)) {
+    const loc = nextLocationKey(currentEvent);
+    const sameVenue = list.filter((ev) => nextLocationKey(ev) === loc);
+    pool = sameVenue.length ? sameVenue : [currentEvent].filter(Boolean);
+  }
 
   const byId = new Map();
   for (const ev of pool) {

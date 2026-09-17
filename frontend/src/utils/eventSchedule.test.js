@@ -42,4 +42,35 @@ describe('eventSchedule', () => {
     );
     expect(dates.map((d) => d.id)).toEqual([10, 11]);
   });
+
+  it('keeps NEXT related dates on the same venue only', () => {
+    const current = {
+      id: 10,
+      name: 'NEXT 2026 - אצטדיון ר"ג (8.10)',
+      venue: 'אצטדיון ר"ג',
+      artist_detail: { name: 'NEXT' },
+      date: '2026-10-08T18:00:00Z',
+    };
+    const dates = selectRelatedShowDates(
+      [
+        current,
+        {
+          id: 11,
+          name: 'NEXT 2026 - אצטדיון ר"ג (10.10)',
+          venue: 'אצטדיון ר"ג',
+          artist_detail: { name: 'NEXT' },
+          date: '2026-10-10T18:00:00Z',
+        },
+        {
+          id: 12,
+          name: 'NEXT 2026 - פיס ארנה י-ם (3.12)',
+          venue: 'פיס ארנה י-ם',
+          artist_detail: { name: 'NEXT' },
+          date: '2026-12-03T18:00:00Z',
+        },
+      ],
+      current
+    );
+    expect(dates.map((d) => d.id)).toEqual([10, 11]);
+  });
 });

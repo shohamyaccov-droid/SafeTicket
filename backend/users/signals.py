@@ -6,6 +6,7 @@ Marketplace offer/order emails are not sent via signals: see users.notifications
 """
 import logging
 
+from django.db.models import Q
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils import timezone
@@ -45,7 +46,10 @@ def notify_ticket_alerts(sender, instance, created, **kwargs):
             event = instance.event
             available = listing_available_quantity(instance)
             _notify_matching_alerts(
-                TicketAlert.objects.filter(event=event, notified=False),
+                TicketAlert.objects.filter(
+                    Q(event=event) | Q(watched_events=event),
+                    notified=False,
+                ).distinct(),
                 available,
                 f'event {event.pk}',
             )

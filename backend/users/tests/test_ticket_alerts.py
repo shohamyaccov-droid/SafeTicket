@@ -123,6 +123,35 @@ class TicketAlertSubscribeTests(TestCase):
         alert = TicketAlert.objects.get(event=self.event, email='user@example.com')
         self.assertEqual(alert.user_id, self.user.pk)
 
+    def test_subscribe_multiple_event_ids_saves_m2m(self):
+        other = Event.objects.create(
+            artist=self.artist,
+            name='Test Show 2',
+            date=timezone.now() + timedelta(days=32),
+            venue='ישראל',
+            venue_place=self.venue,
+            city='Tel Aviv',
+            category='concert',
+            status='פעיל',
+        )
+        resp = self._subscribe(
+            {
+                'event': self.event.id,
+                'event_ids': [self.event.id, other.id],
+                'email': 'multi@example.com',
+                'full_name': 'ישראל ישראלי',
+                'phone': '0501234567',
+            }
+        )
+        self.assertEqual(resp.status_code, 201, getattr(resp, 'data', resp.content))
+        alert = TicketAlert.objects.get(email='multi@example.com')
+        self.assertEqual(alert.full_name, 'ישראל ישראלי')
+        self.assertCountEqual(
+            list(alert.watched_events.values_list('id', flat=True)),
+            [self.event.id, other.id],
+        )
+        self.assertCountEqual(resp.data['alert']['watched_event_ids'], [self.event.id, other.id])
+
     def test_legacy_users_alerts_route(self):
         resp = self.client.post(
             '/api/users/alerts/',
@@ -201,6 +230,34 @@ class TicketAlertQuantityMatchingTests(TestCase):
         )
         want_two.refresh_from_db()
         self.assertTrue(want_two.notified)
+
+    def test_m2m_watched_event_notifies_without_fk_match(self):
+        other = Event.objects.create(
+            artist=self.artist,
+            name='Other Show',
+            date=timezone.now() + timedelta(days=22),
+            venue='ישראל',
+            venue_place=self.venue,
+            city='Tel Aviv',
+            category='concert',
+            status='פעיל',
+        )
+        alert = TicketAlert.objects.create(
+            event=other,
+            email='watch@example.com',
+            desired_quantity=None,
+        )
+        alert.watched_events.set([self.event.id, other.id])
+        Ticket.objects.create(
+            seller=self.seller,
+            event=self.event,
+            original_price=Decimal('100.00'),
+            asking_price=Decimal('100.00'),
+            available_quantity=1,
+            status='active',
+        )
+        alert.refresh_from_db()
+        self.assertTrue(alert.notified)
 
     def test_prioritize_specific_over_any(self):
         any_alert = TicketAlert.objects.create(

@@ -5088,6 +5088,8 @@ def subscribe_ticket_alert(request):
     artist = serializer.validated_data.get('artist')
     email = (serializer.validated_data.get('email') or '').strip().lower()
     phone = (serializer.validated_data.get('phone') or '').strip()
+    full_name = (serializer.validated_data.get('full_name') or '').strip()
+    watched_events = list(serializer.validated_data.get('watched_events') or [])
     desired_quantity = serializer.validated_data.get('desired_quantity', None)
     if desired_quantity is not None and desired_quantity <= 0:
         desired_quantity = None
@@ -5108,33 +5110,41 @@ def subscribe_ticket_alert(request):
 
     from django.db.models import Sum
 
+    def _listed_qty(ev):
+        return (
+            Ticket.objects.filter(event=ev, status='active').aggregate(
+                s=Sum('available_quantity'),
+            )['s']
+            or 0
+        )
+
     defaults = {
         'notified': False,
         'phone': phone,
+        'full_name': full_name,
         'user': linked_user,
         'desired_quantity': desired_quantity,
     }
 
     if event:
-        listed = (
-            Ticket.objects.filter(event=event, status='active').aggregate(
-                s=Sum('available_quantity'),
-            )['s']
-            or 0
-        )
-        if listed > 0:
+        candidates = watched_events or [event]
+        sold_out = [ev for ev in candidates if _listed_qty(ev) == 0]
+        if not sold_out:
             return Response(
                 {
                     'error': 'לאירוע זה יש כרטיסים זמינים — ניתן לרכוש ישירות מהמודעות.',
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        event = sold_out[0]
+        watched_events = sold_out
 
         alert, created = TicketAlert.objects.get_or_create(
             event=event,
             email=email,
             defaults=defaults,
         )
+        alert.watched_events.add(*[ev.pk for ev in watched_events])
     else:
         alert, created = TicketAlert.objects.get_or_create(
             artist=artist,
@@ -5148,6 +5158,9 @@ def subscribe_ticket_alert(request):
         if phone and alert.phone != phone:
             alert.phone = phone
             update_fields.append('phone')
+        if full_name and alert.full_name != full_name:
+            alert.full_name = full_name
+            update_fields.append('full_name')
         if linked_user and alert.user_id != linked_user.pk:
             alert.user = linked_user
             update_fields.append('user')

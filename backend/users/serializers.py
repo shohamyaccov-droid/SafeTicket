@@ -1678,6 +1678,12 @@ class TicketAlertSubscribeSerializer(serializers.Serializer):
     )
     email = serializers.EmailField(required=False, allow_blank=True)
     phone = serializers.CharField(required=False, allow_blank=True, max_length=32, default='')
+    full_name = serializers.CharField(required=False, allow_blank=True, max_length=120, default='')
+    event_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=False,
+    )
     desired_quantity = serializers.IntegerField(
         required=False,
         allow_null=True,
@@ -1690,6 +1696,21 @@ class TicketAlertSubscribeSerializer(serializers.Serializer):
     def validate(self, attrs):
         event = attrs.get('event')
         artist = attrs.get('artist')
+        event_ids = attrs.get('event_ids') or []
+        watched = []
+        if event_ids:
+            unique_ids = list(dict.fromkeys(event_ids))
+            found = {e.pk: e for e in Event.objects.filter(pk__in=unique_ids)}
+            missing = [eid for eid in unique_ids if eid not in found]
+            if missing:
+                raise serializers.ValidationError({'event_ids': 'One or more event dates are invalid.'})
+            watched = [found[eid] for eid in unique_ids]
+            if event and event.pk not in found:
+                raise serializers.ValidationError('event must be included in event_ids.')
+            if not event:
+                attrs['event'] = watched[0]
+                event = attrs['event']
+        attrs['watched_events'] = watched
         if event and artist:
             raise serializers.ValidationError('Provide either event or artist, not both.')
         if not event and not artist:
@@ -1706,6 +1727,12 @@ class TicketAlertSerializer(serializers.ModelSerializer):
     artist_name = serializers.CharField(source='artist.name', read_only=True, allow_null=True)
     email = serializers.EmailField(required=False, allow_blank=True)
     phone = serializers.CharField(required=False, allow_blank=True, max_length=32, default='')
+    full_name = serializers.CharField(required=False, allow_blank=True, max_length=120, default='')
+    watched_event_ids = serializers.PrimaryKeyRelatedField(
+        source='watched_events',
+        many=True,
+        read_only=True,
+    )
     desired_quantity = serializers.IntegerField(
         required=False,
         allow_null=True,
@@ -1718,7 +1745,8 @@ class TicketAlertSerializer(serializers.ModelSerializer):
         model = TicketAlert
         fields = (
             'id', 'user', 'event', 'event_name', 'artist', 'artist_name',
-            'email', 'phone', 'desired_quantity', 'created_at', 'notified', 'notified_at',
+            'email', 'phone', 'full_name', 'watched_event_ids',
+            'desired_quantity', 'created_at', 'notified', 'notified_at',
         )
         read_only_fields = ('id', 'user', 'created_at', 'notified', 'notified_at')
         extra_kwargs = {

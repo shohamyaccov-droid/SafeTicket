@@ -19,6 +19,9 @@ export default function EventMoreDates({ event, relatedEvents }) {
 
   const dates = selectRelatedShowDates(relatedEvents, event);
   const groupName = String(event.name || '').trim();
+  const sameShowName = dates.every(
+    (d) => String(d?.name || '').trim().toLowerCase() === groupName.toLowerCase(),
+  );
   if (dates.length < 2) return null;
 
   return (
@@ -64,7 +67,7 @@ export default function EventMoreDates({ event, relatedEvents }) {
         })}
       </div>
 
-      {groupName ? (
+      {groupName && sameShowName ? (
         <Link
           to={eventGroupHref(groupName)}
           className="mt-1 flex w-full items-center justify-center rounded-xl bg-gradient-to-l from-[#0045af] to-[#003894] px-4 py-3 text-center text-sm font-extrabold text-white no-underline shadow-lg shadow-blue-200 transition hover:brightness-110 sm:text-base"

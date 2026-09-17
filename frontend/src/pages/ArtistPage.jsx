@@ -205,10 +205,10 @@ const ArtistPage = () => {
           <button
             type="button"
             className={featuredBuyEvent ? 'artist-notify-cta artist-notify-cta--secondary' : 'artist-notify-cta'}
-            aria-label={`התראת כרטיסים ל${artistName}`}
+            aria-label={`הצטרף לרשימת המתנה ל${artistName}`}
             onClick={() => setShowAlertModal(true)}
           >
-            התראת כרטיסים
+            הצטרף לרשימת המתנה
           </button>
         </div>
       </header>
@@ -294,10 +294,18 @@ const ArtistPage = () => {
       ) : null}
 
       {showAlertModal ? (
-        <WaitlistSignupModal artist={artist} onClose={() => setShowAlertModal(false)} />
+        <WaitlistSignupModal
+          artist={artist}
+          relatedEvents={upcomingEvents}
+          onClose={() => setShowAlertModal(false)}
+        />
       ) : null}
       {waitlistEvent ? (
-        <WaitlistSignupModal event={waitlistEvent} onClose={() => setWaitlistEvent(null)} />
+        <WaitlistSignupModal
+          event={waitlistEvent}
+          relatedEvents={upcomingEvents}
+          onClose={() => setWaitlistEvent(null)}
+        />
       ) : null}
     </article>
   );

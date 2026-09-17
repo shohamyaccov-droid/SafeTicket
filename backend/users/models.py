@@ -1152,7 +1152,19 @@ class TicketAlert(models.Model):
         related_name='alerts',
         null=True,
         blank=True,
-        help_text='Subscribe to a specific event',
+        help_text='Subscribe to a specific event (anchor date for unique email constraint)',
+    )
+    watched_events = models.ManyToManyField(
+        'Event',
+        related_name='waitlist_alerts',
+        blank=True,
+        help_text='All event dates this waitlist registration should match',
+    )
+    full_name = models.CharField(
+        max_length=120,
+        blank=True,
+        default='',
+        help_text='Buyer name from waitlist signup',
     )
     email = models.EmailField(help_text="Email address to notify when tickets become available")
     phone = models.CharField(

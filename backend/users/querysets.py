@@ -1,5 +1,5 @@
 """Shared select_related / prefetch / annotate helpers for catalog querysets."""
-from django.db.models import Count, IntegerField, OuterRef, Prefetch, Subquery, Sum, Value
+from django.db.models import Count, IntegerField, OuterRef, Prefetch, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 
 from users.models import Ticket, TicketAlert, VenueSection
@@ -35,10 +35,12 @@ def annotate_waitlist_count(qs):
     DISTINCT / GROUP BY with reverse-FK sums.
     """
     waiting = (
-        TicketAlert.objects.filter(event_id=OuterRef('pk'), notified=False)
+        TicketAlert.objects.filter(notified=False)
+        .filter(Q(event_id=OuterRef('pk')) | Q(watched_events__id=OuterRef('pk')))
         .order_by()
-        .values('event_id')
-        .annotate(c=Count('id'))
+        .annotate(_g=Value(1))
+        .values('_g')
+        .annotate(c=Count('id', distinct=True))
         .values('c')[:1]
     )
     return qs.annotate(

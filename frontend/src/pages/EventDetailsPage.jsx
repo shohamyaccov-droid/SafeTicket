@@ -1348,7 +1348,7 @@ const EventDetailsPage = () => {
         <div className="event-waitlist-hero-banner" dir="rtl">
           <p className="event-waitlist-hero-text">אין כרטיסים זמינים כרגע</p>
           <button type="button" className="event-waitlist-cta" onClick={() => setWaitlistOpen(true)}>
-            התראת כרטיסים
+            הצטרף לרשימת המתנה
           </button>
         </div>
       ) : null}
@@ -1947,7 +1947,7 @@ const EventDetailsPage = () => {
               <div className="empty-state">
                 <p>אין כרטיסים זמינים כרגע</p>
                 <button type="button" className="event-waitlist-cta event-waitlist-cta--block" onClick={() => setWaitlistOpen(true)}>
-                  התראת כרטיסים
+                  הצטרף לרשימת המתנה
                 </button>
                 {(filters.minPrice || filters.maxPrice || filters.minQuantity) && (
                   <button
@@ -1971,7 +1971,11 @@ const EventDetailsPage = () => {
 
       {/* Checkout Modal */}
       {waitlistOpen && event ? (
-        <WaitlistSignupModal event={event} onClose={() => setWaitlistOpen(false)} />
+        <WaitlistSignupModal
+          event={event}
+          relatedEvents={relatedEvents}
+          onClose={() => setWaitlistOpen(false)}
+        />
       ) : null}
 
       {showCheckout && selectedTicketGroup && (

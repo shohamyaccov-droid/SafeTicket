@@ -35,15 +35,16 @@
 
 .event-waitlist-cta {
   display: inline-block;
-  padding: 0.85rem 1.35rem;
+  padding: 1rem 1.6rem;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
   color: #fff;
-  font-weight: 800;
-  font-size: 1.05rem;
+  font-weight: 900;
+  font-size: 1.12rem;
   cursor: pointer;
-  box-shadow: 0 8px 22px rgba(234, 88, 12, 0.35);
+  box-shadow: 0 10px 26px rgba(234, 88, 12, 0.42);
+  min-height: 48px;
 }
 
 .event-waitlist-cta:hover {

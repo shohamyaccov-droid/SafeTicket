@@ -3,6 +3,11 @@
  */
 import { eventHref } from './eventSeo';
 import { eventTicketCount } from './artistEventSupply';
+import {
+  isNextPerformer,
+  nextLocationDisplayName,
+  nextLocationKey,
+} from './eventSchedule';
 
 /** Homepage last-minute row: upcoming events within this many days. */
 export const LAST_MINUTE_WINDOW_DAYS = 14;
@@ -86,9 +91,10 @@ export function eventCategoryKey(ev) {
 /** @param {object} ev */
 export function performerKey(ev) {
   const id = ev?.artist_detail?.id ?? ev?.artist;
-  if (id != null && id !== '') return `artist:${id}`;
+  const locSuffix = isNextPerformer(ev) ? `|loc:${nextLocationKey(ev)}` : '';
+  if (id != null && id !== '') return `artist:${id}${locSuffix}`;
   const name = String(ev?.artist_detail?.name ?? ev?.artist_name ?? '').trim();
-  if (name) return `name:${name}`;
+  if (name) return `name:${name}${locSuffix}`;
   const sport = isSportEventCategory(ev);
   if (sport && ev?.home_team && ev?.away_team) {
     return `match:${ev.home_team}\u0000${ev.away_team}`;
@@ -100,6 +106,9 @@ export function performerKey(ev) {
 
 /** @param {object} ev */
 export function performerDisplayName(ev) {
+  if (isNextPerformer(ev)) {
+    return nextLocationDisplayName(nextLocationKey(ev));
+  }
   const fromArtist = ev?.artist_detail?.name || ev?.artist_name;
   if (fromArtist) return String(fromArtist).trim();
   if (isSportEventCategory(ev) && ev?.home_team && ev?.away_team) {
@@ -165,6 +174,7 @@ export function groupEventsByPerformer(list) {
       key: `perf-${performerKey(display)}`,
       artistId: artistId != null ? artistId : null,
       artistSlug: artistSlug || null,
+      splitByLocation: isNextPerformer(display),
       performerName: performerDisplayName(display),
       imageUrl: performerImageUrl(display),
       category: performerCategory(display),
@@ -230,6 +240,10 @@ export function performerEventsWithTickets(group) {
  */
 export function performerNavigateTarget(group) {
   const stocked = performerEventsWithTickets(group);
+  if (group?.splitByLocation) {
+    const first = stocked[0] || group?.events?.[0];
+    if (first) return { type: 'event', href: eventHref(first) };
+  }
   if (stocked.length === 1) {
     return { type: 'event', href: eventHref(stocked[0]) };
   }
