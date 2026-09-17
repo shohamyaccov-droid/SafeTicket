@@ -1,0 +1,18 @@
+.buy-escrow-banner {
+  margin: 0.4rem 0 0;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.buy-escrow-banner--compact {
+  margin-top: 0.3rem;
+  padding: 0.35rem 0.45rem;
+  font-size: 0.68rem;
+}

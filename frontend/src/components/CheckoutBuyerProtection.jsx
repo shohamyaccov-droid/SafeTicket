@@ -3,7 +3,9 @@ import './CheckoutBuyerProtection.css';
 
 export function CheckoutEscrowNote() {
   return (
-    <p className="checkout-escrow-note">הכסף יועבר למוכר רק אחרי המופע</p>
+    <p className="checkout-escrow-note">
+      הכסף שלך מוגן – התשלום מועבר למוכר רק לאחר כניסתך להופעה בהצלחה.
+    </p>
   );
 }
 

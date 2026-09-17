@@ -20,11 +20,6 @@ function validatePhone(phone) {
   return null;
 }
 
-function validateName(name) {
-  const s = String(name || '').trim();
-  if (s.length < 2) return 'נא להזין שם מלא';
-  return null;
-}
 
 /** null = any quantity (ברירת מחדל); 5 = 5+ */
 const QUANTITY_OPTIONS = [
@@ -55,7 +50,6 @@ export default function WaitlistSignupModal({ event, artist, relatedEvents, onCl
     [dateOptions],
   );
 
-  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [desiredQuantity, setDesiredQuantity] = useState(null);
@@ -90,11 +84,6 @@ export default function WaitlistSignupModal({ event, artist, relatedEvents, onCl
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    const nErr = validateName(fullName);
-    if (nErr) {
-      setError(nErr);
-      return;
-    }
     const eErr = validateEmail(email);
     if (eErr) {
       setError(eErr);
@@ -114,7 +103,6 @@ export default function WaitlistSignupModal({ event, artist, relatedEvents, onCl
       const payload = {
         email: String(email).trim(),
         phone: String(phone).trim(),
-        full_name: String(fullName).trim(),
         desired_quantity: desiredQuantity,
       };
       if (isEventScope) {
@@ -201,17 +189,6 @@ export default function WaitlistSignupModal({ event, artist, relatedEvents, onCl
               </div>
             </fieldset>
           ) : null}
-          <label className="waitlist-modal-label">
-            שם מלא *
-            <input
-              type="text"
-              value={fullName}
-              onChange={(ev) => setFullName(ev.target.value)}
-              required
-              autoComplete="name"
-              placeholder="ישראל ישראלי"
-            />
-          </label>
           <label className="waitlist-modal-label">
             טלפון *
             <input

@@ -35,6 +35,7 @@ import ShabbatModal from './ShabbatModal';
 import BuyerIdentityInlineForm from './BuyerIdentityInlineForm';
 import SafePayTrustLine from './SafePayTrustLine';
 import CheckoutBuyerProtection, { CheckoutEscrowNote } from './CheckoutBuyerProtection';
+import CheckoutSecureBadges from './CheckoutSecureBadges';
 import { buyerMissingPaymeFields } from '../utils/buyerPaymeIdentity';
 import { isGuestContactComplete, validateGuestContact as sharedValidateGuestContact } from '../utils/contactValidation';
 import { isCheckoutAuthSessionFailure } from '../utils/checkoutAuth';
@@ -2094,21 +2095,21 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                       <p><strong>מחיר מוסכם (למוכר):</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.final_negotiated_price, payIso)}</p>
                     )}
                     {resolvedOrderData?.buyer_service_fee != null && Number(resolvedOrderData.buyer_service_fee) > 0 && (
-                      <p><strong>דמי פלטפורמה ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.buyer_service_fee, payIso)}</p>
+                      <p><strong>עמלת שירות והגנת קונה ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.buyer_service_fee, payIso)}</p>
                     )}
-                    <p><strong>סה״כ לתשלום:</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.total_paid_by_buyer ?? resolvedOrderData.total_amount, payIso)}</p>
+                    <p><strong>סך הכל לתשלום:</strong> {paySym}{formatAmountForCurrency(resolvedOrderData.total_paid_by_buyer ?? resolvedOrderData.total_amount, payIso)}</p>
                   </>
                 ) : resolvedPaid ? (
                   <>
                     <p><strong>מחיר כרטיס:</strong> {paySym}{formatAmountForCurrency(resolvedPaid.baseAmount, payIso)}</p>
-                    <p><strong>דמי פלטפורמה ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(grossServiceFee, payIso)}</p>
-                    <p><strong>סה״כ לתשלום:</strong> {paySym}{formatAmountForCurrency(resolvedPaid.totalAmount, payIso)}</p>
+                    <p><strong>עמלת שירות והגנת קונה ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(grossServiceFee, payIso)}</p>
+                    <p><strong>סך הכל לתשלום:</strong> {paySym}{formatAmountForCurrency(resolvedPaid.totalAmount, payIso)}</p>
                   </>
                 ) : (
                   <>
                     <p><strong>מחיר כרטיס:</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.baseAmount != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).baseAmount, payIso) : '—'}</p>
-                    <p><strong>דמי פלטפורמה ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(grossServiceFee, payIso)}</p>
-                    <p><strong>סה״כ לתשלום:</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.totalAmount != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).totalAmount, payIso) : '—'}</p>
+                    <p><strong>עמלת שירות והגנת קונה ({feeConfig.serviceFeePercent}%):</strong> {paySym}{formatAmountForCurrency(grossServiceFee, payIso)}</p>
+                    <p><strong>סך הכל לתשלום:</strong> {paySym}{(negotiatedBundleBreakdown || listBreakdown)?.totalAmount != null ? formatAmountForCurrency((negotiatedBundleBreakdown || listBreakdown).totalAmount, payIso) : '—'}</p>
                   </>
                 )}
               </div>
@@ -2417,7 +2418,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.baseAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
-                    <span>דמי פלטפורמה ({feePercentLabel}%):</span>
+                    <span>עמלת שירות והגנת קונה ({feePercentLabel}%):</span>
                     <span>{curSym}{formatAmountForCurrency(grossServiceFee, checkoutCurrency)}</span>
                   </div>
                   {appliedCoupon ? (
@@ -2427,7 +2428,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   ) : null}
                   <div className="price-row total-row">
-                    <span>סה״כ לתשלום:</span>
+                    <span>סך הכל לתשלום:</span>
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.totalAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                 </>
@@ -2448,7 +2449,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   )}
                   <div className="price-row">
-                    <span>דמי פלטפורמה ({feePercentLabel}%):</span>
+                    <span>עמלת שירות והגנת קונה ({feePercentLabel}%):</span>
                     <span>{curSym}{formatAmountForCurrency(grossServiceFee, checkoutCurrency)}</span>
                   </div>
                   {appliedCoupon ? (
@@ -2458,7 +2459,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   ) : null}
                   <div className="price-row total-row">
-                    <span>סה״כ לתשלום:</span>
+                    <span>סך הכל לתשלום:</span>
                     <span>{curSym}{formatAmountForCurrency(standardReceiptTotalPay, checkoutCurrency)}</span>
                   </div>
                 </>
@@ -2648,20 +2649,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               </button>
             </div>
             <CheckoutBuyerProtection />
-            <div className="payment-security-badges">
-              <div className="payment-icons">
-                <svg width="40" height="24" viewBox="0 0 40 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect width="40" height="24" rx="4" fill="#1434CB"/>
-                  <path d="M16.5 12C16.5 10.5 17.5 9.5 19 9.5C20.5 9.5 21.5 10.5 21.5 12C21.5 13.5 20.5 14.5 19 14.5C17.5 14.5 16.5 13.5 16.5 12Z" fill="white"/>
-                  <path d="M23.5 12C23.5 10.5 24.5 9.5 26 9.5C27.5 9.5 28.5 10.5 28.5 12C28.5 13.5 27.5 14.5 26 14.5C24.5 14.5 23.5 13.5 23.5 12Z" fill="white"/>
-                </svg>
-                <svg width="40" height="24" viewBox="0 0 40 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect width="40" height="24" rx="4" fill="#EB001B"/>
-                  <circle cx="15" cy="12" r="6" fill="#F79E1B"/>
-                  <circle cx="25" cy="12" r="6" fill="#FF5F00"/>
-                </svg>
-              </div>
-            </div>
+            <CheckoutSecureBadges />
           </form>
         </div>
       </div>
@@ -2781,7 +2769,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.baseAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                   <div className="price-row">
-                    <span>דמי פלטפורמה ({feePercentLabel}%):</span>
+                    <span>עמלת שירות והגנת קונה ({feePercentLabel}%):</span>
                     <span>{curSym}{formatAmountForCurrency(grossServiceFee, checkoutCurrency)}</span>
                   </div>
                   {appliedCoupon ? (
@@ -2791,7 +2779,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   ) : null}
                   <div className="price-row total-row">
-                    <span>סה״כ לתשלום:</span>
+                    <span>סך הכל לתשלום:</span>
                     <span>{curSym}{negotiatedBundleBreakdown ? formatAmountForCurrency(negotiatedBundleBreakdown.totalAmount, checkoutCurrency) : formatAmountForCurrency(0, checkoutCurrency)}</span>
                   </div>
                 </>
@@ -2812,7 +2800,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   )}
                   <div className="price-row">
-                    <span>דמי פלטפורמה ({feePercentLabel}%):</span>
+                    <span>עמלת שירות והגנת קונה ({feePercentLabel}%):</span>
                     <span>{curSym}{formatAmountForCurrency(grossServiceFee, checkoutCurrency)}</span>
                   </div>
                   {appliedCoupon ? (
@@ -2822,7 +2810,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                     </div>
                   ) : null}
                   <div className="price-row total-row">
-                    <span>סה״כ לתשלום:</span>
+                    <span>סך הכל לתשלום:</span>
                     <span>{curSym}{formatAmountForCurrency(standardReceiptTotalPay, checkoutCurrency)}</span>
                   </div>
                 </>

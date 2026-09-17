@@ -48,20 +48,31 @@ export default function EventMoreDates({ event, relatedEvents }) {
           const label = formatEventDatePill(ev.date);
           if (!label) return null;
           const current = isSameEvent(ev, event);
+          const hasTickets = (Number(ev.tickets_count) || 0) > 0;
           const key = ev.id ?? ev.slug ?? ev.date;
           const className = current
             ? 'shrink-0 rounded-full border-2 border-[#0045af] bg-[#0045af] px-3.5 py-2 text-sm font-extrabold text-white shadow-md shadow-sky-200'
             : 'shrink-0 rounded-full border border-slate-200 bg-white px-3.5 py-2 text-sm font-bold text-slate-800 shadow-sm transition hover:border-[#0045af] hover:text-[#0045af]';
+          const dateButtonContent = (
+            <>
+              {hasTickets && (
+                <span className="absolute -top-2 left-1/2 -translate-x-1/2 inline-flex items-center rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white whitespace-nowrap">
+                  כרטיסים אחרונים
+                </span>
+              )}
+              {label}
+            </>
+          );
           if (current) {
             return (
-              <span key={key} className={className} aria-current="date">
-                {label}
+              <span key={key} className={`${className} relative`} aria-current="date">
+                {dateButtonContent}
               </span>
             );
           }
           return (
-            <Link key={key} to={eventHref(ev)} className={`${className} no-underline`}>
-              {label}
+            <Link key={key} to={eventHref(ev)} className={`${className} relative no-underline`}>
+              {dateButtonContent}
             </Link>
           );
         })}

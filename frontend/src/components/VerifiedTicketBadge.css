@@ -1,0 +1,51 @@
+.verified-ticket-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  margin-top: 0.2rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.2;
+  cursor: help;
+  width: fit-content;
+}
+
+.verified-ticket-badge--compact {
+  margin-top: 0.15rem;
+  padding: 0.08rem 0.32rem;
+  font-size: 0.62rem;
+}
+
+.verified-ticket-badge__icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.verified-ticket-badge__tip {
+  display: none;
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(16.5rem, 70vw);
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: right;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
+}
+
+.verified-ticket-badge:hover .verified-ticket-badge__tip,
+.verified-ticket-badge:focus-visible .verified-ticket-badge__tip {
+  display: block;
+}

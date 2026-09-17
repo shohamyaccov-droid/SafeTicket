@@ -46,8 +46,12 @@ fi
 
 # FAILSAFE: hard-copy critical marketplace rows BEFORE migrate (and any ORM mutations).
 # Do not invoke wipe/reset manage.py helpers in this script.
-echo "build_render.sh: CRITICAL BACKUP (before migrate)..."
-python manage.py backup_critical_data
+# NOTE: TEMPORARILY DISABLED during 2026-09-09 emergency restore
+# The backup_critical_data runs FIRST and overwrites latest_critical_backup.json with broken state,
+# preventing restore from working. We use the good backup from Cloudinary instead.
+# After restore completes and marketplace is fixed, re-enable this line.
+# echo "build_render.sh: CRITICAL BACKUP (before migrate)..."
+# python manage.py backup_critical_data
 
 python manage.py migrate --noinput
 

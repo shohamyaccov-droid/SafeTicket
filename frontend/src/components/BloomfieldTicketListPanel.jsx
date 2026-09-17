@@ -12,6 +12,8 @@ import TakenBuyButton from './TakenBuyButton';
 import TicketLockCountdown from './TicketLockCountdown';
 import { isListingGroupTaken } from '../utils/ticketAvailability';
 import { isListingGroupCartLocked } from '../utils/ticketLock';
+import BuyEscrowBanner from './BuyEscrowBanner';
+import VerifiedTicketBadge from './VerifiedTicketBadge';
 const ZONE_HE = {
   north: 'טריבונה צפון',
   south: 'טריבונה דרום',
@@ -152,7 +154,7 @@ export default function BloomfieldTicketListPanel({
           </div>
         ) : (
           rows.map(({ stableId, group, bloomfield, firstTicket }) => {
-            const groupId = group.listing_group_id ?? group.id;
+            const groupId = group.id ?? group.listing_group_id;
             const isExpanded =
               activeTicketId != null && String(activeTicketId) === String(groupId);
             const isHi =
@@ -267,19 +269,29 @@ export default function BloomfieldTicketListPanel({
 
                   {/* RIGHT: Section title + badges */}
                   <div dir="rtl" style={SECTION_COL_STYLE}>
-                    <span
+                    <div
                       style={{
-                        fontSize: '0.875rem',
-                        fontWeight: 600,
-                        color: '#1f2937',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        maxWidth: '160px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.2rem',
+                        minWidth: 0,
                       }}
                     >
-                      {detailTitle}
-                    </span>
+                      <span
+                        style={{
+                          fontSize: '0.875rem',
+                          fontWeight: 600,
+                          color: '#1f2937',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          maxWidth: '160px',
+                        }}
+                      >
+                        {detailTitle}
+                      </span>
+                      <VerifiedTicketBadge compact />
+                    </div>
                   </div>
 
                   <div
@@ -297,17 +309,20 @@ export default function BloomfieldTicketListPanel({
                         onExpire={onLockExpire}
                       />
                     ) : (
-                      <button
-                        type="button"
-                        style={ROW_BUY_BTN_STYLE}
-                        disabled={group.available_count <= 0 || isBuying}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onBuy(group);
-                        }}
-                      >
-                        {isBuying ? 'מעביר לתשלום…' : 'קנה עכשיו'}
-                      </button>
+                      <div style={{ flex: 1 }}>
+                        <button
+                          type="button"
+                          style={ROW_BUY_BTN_STYLE}
+                          disabled={group.available_count <= 0 || isBuying}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onBuy(group);
+                          }}
+                        >
+                          {isBuying ? 'מעביר לתשלום…' : 'קנה עכשיו'}
+                        </button>
+                        <BuyEscrowBanner compact />
+                      </div>
                     )}
                   </div>
 

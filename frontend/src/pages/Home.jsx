@@ -538,6 +538,7 @@ const Home = () => {
       <section className="hero-search-section">
         <div className="hero-stack">
           <div className="hero-content">
+            <span className="hero-sabbath-badge">אתר שומר שבת</span>
             <p className="hero-eyebrow">TradeTix</p>
             <p className="hero-blessing">הכל בחסדי השם יתברך</p>
             <h1 className="hero-title">מצאו את הכרטיסים המושלמים</h1>

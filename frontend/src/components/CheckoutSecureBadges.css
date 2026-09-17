@@ -1,0 +1,46 @@
+.checkout-secure-badges {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+  text-align: right;
+}
+
+.checkout-secure-badges__icons {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.checkout-secure-badges__lock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 24px;
+  border-radius: 6px;
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.checkout-secure-badges__payme {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 0.45rem;
+  border-radius: 4px;
+  background: #0f766e;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.checkout-secure-badges__copy {
+  margin: 0.45rem 0 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
