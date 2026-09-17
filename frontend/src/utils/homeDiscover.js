@@ -4,8 +4,8 @@
 import { eventHref } from './eventSeo';
 import { eventTicketCount } from './artistEventSupply';
 import {
-  isNextPerformer,
-  nextLocationDisplayName,
+  isLocationSplitPerformer,
+  locationSplitDisplayName,
   nextLocationKey,
 } from './eventSchedule';
 
@@ -91,7 +91,7 @@ export function eventCategoryKey(ev) {
 /** @param {object} ev */
 export function performerKey(ev) {
   const id = ev?.artist_detail?.id ?? ev?.artist;
-  const locSuffix = isNextPerformer(ev) ? `|loc:${nextLocationKey(ev)}` : '';
+  const locSuffix = isLocationSplitPerformer(ev) ? `|loc:${nextLocationKey(ev)}` : '';
   if (id != null && id !== '') return `artist:${id}${locSuffix}`;
   const name = String(ev?.artist_detail?.name ?? ev?.artist_name ?? '').trim();
   if (name) return `name:${name}${locSuffix}`;
@@ -106,8 +106,8 @@ export function performerKey(ev) {
 
 /** @param {object} ev */
 export function performerDisplayName(ev) {
-  if (isNextPerformer(ev)) {
-    return nextLocationDisplayName(nextLocationKey(ev));
+  if (isLocationSplitPerformer(ev)) {
+    return locationSplitDisplayName(ev);
   }
   const fromArtist = ev?.artist_detail?.name || ev?.artist_name;
   if (fromArtist) return String(fromArtist).trim();
@@ -120,7 +120,7 @@ export function performerDisplayName(ev) {
 
 /** @param {object} ev */
 export function performerImageUrl(ev) {
-  return ev?.artist_detail?.image_url || ev?.image_url || '';
+  return ev?.image_url || ev?.artist_detail?.image_url || ev?.artist_detail?.cover_image_url || '';
 }
 
 /** @param {object} ev */
@@ -174,7 +174,7 @@ export function groupEventsByPerformer(list) {
       key: `perf-${performerKey(display)}`,
       artistId: artistId != null ? artistId : null,
       artistSlug: artistSlug || null,
-      splitByLocation: isNextPerformer(display),
+      splitByLocation: isLocationSplitPerformer(display),
       performerName: performerDisplayName(display),
       imageUrl: performerImageUrl(display),
       category: performerCategory(display),

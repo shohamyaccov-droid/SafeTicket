@@ -101,5 +101,11 @@ export function generatedSectionOptionsForVenue(venueName) {
   if (venueName === VENUE_SULTANS_POOL || isSultansPoolVenueName(venueName)) {
     return sultansPoolSellSectionOptions();
   }
+  if (String(venueName || '').includes('אמפי תל אביב')) {
+    return [
+      { value: 'עמידה', label: 'עמידה', structured: false },
+      { value: 'ישיבה', label: 'ישיבה', structured: false },
+    ];
+  }
   return [];
 }

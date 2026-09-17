@@ -47,7 +47,7 @@ function eventNameKey(event) {
   return String(event?.name || '').trim().toLowerCase();
 }
 
-function nextArtistBlob(event) {
+function performerBlob(event) {
   return [
     event?.artist_detail?.name,
     event?.artist_name,
@@ -58,15 +58,24 @@ function nextArtistBlob(event) {
     .join(' ');
 }
 
-/** NEXT festival dates should never mix Ramat Gan and Jerusalem. */
 export function isNextPerformer(event) {
-  return /\bNEXT\b/i.test(nextArtistBlob(event));
+  return /\bNEXT\b/i.test(performerBlob(event));
+}
+
+export function isHysteriaPerformer(event) {
+  return /היסטריה/.test(performerBlob(event));
+}
+
+/** Mega-events whose dates must stay split by city/venue on homepage + event pages. */
+export function isLocationSplitPerformer(event) {
+  return isNextPerformer(event) || isHysteriaPerformer(event);
 }
 
 export function nextLocationKey(event) {
   const blob = [
     event?.venue,
     event?.venue_place?.name,
+    event?.venue_detail?.name,
     event?.city,
     event?.name,
   ]
@@ -75,6 +84,7 @@ export function nextLocationKey(event) {
     .toLowerCase();
   if (/ירושל|פיס|י-ם|pais/.test(blob)) return 'jerusalem';
   if (/רמת גן|ר"ג|ר״ג|ramat/.test(blob)) return 'ramat-gan';
+  if (/מנורה|תל אביב|tel.?aviv/.test(blob)) return 'tel-aviv';
   return 'other';
 }
 
@@ -82,6 +92,16 @@ export function nextLocationDisplayName(locationKey) {
   if (locationKey === 'jerusalem') return 'NEXT - פיס ארנה ירושלים';
   if (locationKey === 'ramat-gan') return 'NEXT - אצטדיון רמת גן';
   return 'NEXT';
+}
+
+export function locationSplitDisplayName(event) {
+  const loc = nextLocationKey(event);
+  if (isHysteriaPerformer(event)) {
+    if (loc === 'jerusalem') return 'היסטריה - ירושלים';
+    return 'היסטריה - תל אביב';
+  }
+  if (isNextPerformer(event)) return nextLocationDisplayName(loc);
+  return performerBlob(event) || 'אירוע';
 }
 
 function eventIdentityKey(event) {
@@ -104,7 +124,7 @@ export function selectRelatedShowDates(artistEvents, currentEvent) {
     ? list.filter((ev) => eventNameKey(ev) === nameKey)
     : [];
   let pool = sameName.length >= 2 ? sameName : list;
-  if (isNextPerformer(currentEvent)) {
+  if (isLocationSplitPerformer(currentEvent)) {
     const loc = nextLocationKey(currentEvent);
     const sameVenue = list.filter((ev) => nextLocationKey(ev) === loc);
     pool = sameVenue.length ? sameVenue : [currentEvent].filter(Boolean);
