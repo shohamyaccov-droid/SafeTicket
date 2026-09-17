@@ -41,7 +41,7 @@ export default function EventMoreDates({ event, relatedEvents }) {
       </div>
 
       <div
-        className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2 [scrollbar-width:thin]"
+        className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-6 [scrollbar-width:thin]"
         aria-label="בחירת תאריך"
       >
         {dates.map((ev) => {
@@ -56,7 +56,7 @@ export default function EventMoreDates({ event, relatedEvents }) {
           const dateButtonContent = (
             <>
               {hasTickets && (
-                <span className="absolute -top-2 left-1/2 -translate-x-1/2 inline-flex items-center rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white whitespace-nowrap">
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white whitespace-nowrap z-10">
                   כרטיסים אחרונים
                 </span>
               )}
@@ -65,13 +65,13 @@ export default function EventMoreDates({ event, relatedEvents }) {
           );
           if (current) {
             return (
-              <span key={key} className={`${className} relative`} aria-current="date">
+              <span key={key} className={`${className} relative overflow-visible`} aria-current="date">
                 {dateButtonContent}
               </span>
             );
           }
           return (
-            <Link key={key} to={eventHref(ev)} className={`${className} relative no-underline`}>
+            <Link key={key} to={eventHref(ev)} className={`${className} relative overflow-visible no-underline`}>
               {dateButtonContent}
             </Link>
           );

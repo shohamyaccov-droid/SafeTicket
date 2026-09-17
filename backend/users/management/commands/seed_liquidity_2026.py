@@ -230,8 +230,6 @@ class Command(BaseCommand):
         if dry_run:
             self.stdout.write(self.style.WARNING('[DRY-RUN] No database changes will be made.\n'))
 
-        with transaction.atomic():
-            # Artists
             if not dry_run:
                 for spec in ARTISTS.values():
                     artist, created = Artist.objects.update_or_create(
@@ -251,7 +249,8 @@ class Command(BaseCommand):
                             artist.save(update_fields=['image'])
             else:
                 for spec in ARTISTS.values():
-                    self.stdout.write(f'Would create: Artist {spec.name}')
+                    self.stdout.write(f'Would create: Artist (skipping Unicode)')
+
 
             # Venues
             venues_cache = {}
@@ -353,13 +352,9 @@ class Command(BaseCommand):
                         ev.image = img
                         ev.save(update_fields=['image'])
                 status = '[+] Created' if created else '[*] Updated'
-                self.stdout.write(f'{status}: {ev.name}')
+                self.stdout.write(f'{status}: Event')
 
             if not dry_run:
                 self.stdout.write('\n' + self.style.SUCCESS('=' * 60))
-                self.stdout.write(self.style.SUCCESS('LIQUIDITY SEEDING COMPLETE'))
-                self.stdout.write(self.style.SUCCESS('=' * 60))
-                event_count = Event.objects.filter(name__contains='היסטריה').count()
-                self.stdout.write(f'📊 Hysteria events: {event_count}')
-                self.stdout.write(f'📊 Artists: {len(ARTISTS)}')
-                self.stdout.write(f'📊 Regular shows: {len(EVENTS)}')
+                self.stdout.write('LIQUIDITY SEEDING COMPLETE')
+                self.stdout.write('Events injected into database')
