@@ -49,10 +49,6 @@ class ArtistSpec:
     description: str = ''
     image_file: str = None
 
-    def __post_init__(self):
-        if not self.slug:
-            self.slug = self.name.replace(' ', '-').lower()
-
 
 @dataclass
 class VenueSpec:
@@ -66,7 +62,7 @@ class EventSpec:
     date: datetime
     venue_choice: str
     venue_place: VenueSpec
-    event_name: str = None
+    event_name: str = ''
     category: str = 'concert'
     image_file: str = None
     high_demand: bool = True
@@ -149,23 +145,15 @@ EVENTS = [
     EventSpec(
         artist_name='אזיליה בנקס',
         date=datetime(2026, 10, 8, 20, 0, tzinfo=TZ_IL),
-        venue_choice='אמפי תל אביב',
+        venue_choice='ישראל',
         venue_place=VENUES[('אמפי תל אביב', 'תל אביב')],
-        event_name='Azealia Banks — אמפי תל אביב',
+        event_name='אזיליה בנקס — אמפי תל אביב',
         image_file='azealia_banks.png',
-    ),
-    EventSpec(
-        artist_name='נועם בתן',
-        date=datetime(2026, 9, 28, 20, 0, tzinfo=TZ_IL),
-        venue_choice='היכל מנורה מבטחים',
-        venue_place=VENUES[('היכל מנורה מבטחים', 'תל אביב')],
-        event_name='נועם בתן — היכל מנורה',
-        image_file='noam_batan.png',
     ),
     EventSpec(
         artist_name='מור',
         date=datetime(2026, 11, 12, 20, 0, tzinfo=TZ_IL),
-        venue_choice='היכל מנורה מבטחים',
+        venue_choice='ישראל',
         venue_place=VENUES[('היכל מנורה מבטחים', 'תל אביב')],
         event_name='מור — היכל מנורה',
         image_file='mor.png',
@@ -173,14 +161,21 @@ EVENTS = [
     EventSpec(
         artist_name='איתי לוי',
         date=datetime(2026, 10, 29, 20, 0, tzinfo=TZ_IL),
-        venue_choice='היכל מנורה מבטחים',
+        venue_choice='ישראל',
         venue_place=VENUES[('היכל מנורה מבטחים', 'תל אביב')],
         event_name='איתי לוי — היכל מנורה',
         image_file='itai_levi.png',
     ),
+    EventSpec(
+        artist_name='נועם בתן',
+        date=datetime(2026, 9, 28, 20, 0, tzinfo=TZ_IL),
+        venue_choice='ישראל',
+        venue_place=VENUES[('היכל מנורה מבטחים', 'תל אביב')],
+        event_name='נועם בתן — היכל מנורה',
+        image_file='noam_batan.png',
+    ),
 ]
 
-# Hysteria: two location cards
 HYSTERIA_DATES_TELAVIV = [
     datetime(2026, 12, 3, 20, 0, tzinfo=TZ_IL),
     datetime(2026, 12, 5, 20, 0, tzinfo=TZ_IL),
@@ -202,36 +197,38 @@ HYSTERIA_DATES_JERUSALEM = [
 ]
 
 
-def _load_image(filename: str):
-    """Load image from seed_assets/liquidity_2026/ as ContentFile."""
-    if not filename:
-        return None
+def _load_image(filename):
+    """Load image from seed_assets/liquidity_2026/"""
     path = ASSET_DIR / filename
     if not path.exists():
         return None
     with open(path, 'rb') as f:
-        ext = path.suffix.lstrip('.')
-        return ContentFile(f.read(), name=f'seed_{filename}')
+        return ContentFile(f.read(), name=filename)
 
 
 class Command(BaseCommand):
-    help = 'Seed high-demand Q3/Q4 2026 concerts and Hysteria mega-event (location split).'
+    help = 'Seed Q3/Q4 2026 high-demand artists, venues, and events for liquidity'
 
     def add_arguments(self, parser):
         parser.add_argument(
             '--dry-run',
             action='store_true',
-            help='Print planned rows without writing to the database.',
+            dest='dry_run',
+            help='Show what would be created without saving to DB',
         )
 
     def handle(self, *args, **options):
         dry_run = options.get('dry_run', False)
 
         if dry_run:
-            self.stdout.write(self.style.WARNING('[DRY-RUN] No database changes will be made.\n'))
+            self.stdout.write(self.style.WARNING('[DRY-RUN] No database changes will be made.'))
 
-            if not dry_run:
-                for spec in ARTISTS.values():
+        with transaction.atomic():
+            # Artists
+            for spec in ARTISTS.values():
+                if dry_run:
+                    self.stdout.write('Would create: Artist')
+                else:
                     artist, created = Artist.objects.update_or_create(
                         name=spec.name,
                         defaults={
@@ -247,10 +244,6 @@ class Command(BaseCommand):
                         if img:
                             artist.image = img
                             artist.save(update_fields=['image'])
-            else:
-                for spec in ARTISTS.values():
-                    self.stdout.write(f'Would create: Artist (skipping Unicode)')
-
 
             # Venues
             venues_cache = {}
@@ -265,7 +258,7 @@ class Command(BaseCommand):
             # Regular events
             for spec in EVENTS:
                 if dry_run:
-                    self.stdout.write(f'Would create: {spec.event_name} @ {spec.date.isoformat()}')
+                    self.stdout.write('Would create: Event')
                     continue
 
                 artist = Artist.objects.get(name=spec.artist_name)
@@ -290,8 +283,6 @@ class Command(BaseCommand):
                     if img:
                         ev.image = img
                         ev.save(update_fields=['image'])
-                status = '✅ Created' if created else '♻️  Updated'
-                self.stdout.write(f'{status}: {ev.name}')
 
             # Hysteria events (location split)
             hysteria_artist = Artist.objects.get(name='היסטריה')
@@ -299,10 +290,10 @@ class Command(BaseCommand):
             pais_venue = venues_cache[('פיס ארנה ירושלים', 'ירושלים')]
 
             for dt in HYSTERIA_DATES_TELAVIV:
-                event_name = f'היסטריה - תל אביב ({dt.strftime("%d.%m")})'
                 if dry_run:
-                    self.stdout.write(f'Would create: {event_name} @ {dt.isoformat()}')
+                    self.stdout.write('Would create: Hysteria Event (TLV)')
                     continue
+                event_name = f'היסטריה - תל אביב ({dt.strftime("%d.%m")})'
                 ev, created = Event.objects.update_or_create(
                     name=event_name,
                     date=dt,
@@ -318,19 +309,17 @@ class Command(BaseCommand):
                         'age_restriction': 'ללא הגבלה',
                     },
                 )
-                if not ev.image_id and not dry_run:
+                if not ev.image and not dry_run:
                     img = _load_image('hysteria.png')
                     if img:
                         ev.image = img
                         ev.save(update_fields=['image'])
-                status = '✅ Created' if created else '♻️  Updated'
-                self.stdout.write(f'{status}: {ev.name}')
 
             for dt in HYSTERIA_DATES_JERUSALEM:
-                event_name = f'היסטריה - ירושלים ({dt.strftime("%d.%m")})'
                 if dry_run:
-                    self.stdout.write(f'Would create: {event_name} @ {dt.isoformat()}')
+                    self.stdout.write('Would create: Hysteria Event (JLM)')
                     continue
+                event_name = f'היסטריה - ירושלים ({dt.strftime("%d.%m")})'
                 ev, created = Event.objects.update_or_create(
                     name=event_name,
                     date=dt,
@@ -346,15 +335,13 @@ class Command(BaseCommand):
                         'age_restriction': 'ללא הגבלה',
                     },
                 )
-                if not ev.image_id and not dry_run:
+                if not ev.image and not dry_run:
                     img = _load_image('hysteria.png')
                     if img:
                         ev.image = img
                         ev.save(update_fields=['image'])
-                status = '[+] Created' if created else '[*] Updated'
-                self.stdout.write(f'{status}: Event')
 
             if not dry_run:
                 self.stdout.write('\n' + self.style.SUCCESS('=' * 60))
-                self.stdout.write('LIQUIDITY SEEDING COMPLETE')
-                self.stdout.write('Events injected into database')
+                self.stdout.write(self.style.SUCCESS('LIQUIDITY SEEDING COMPLETE'))
+                self.stdout.write(self.style.SUCCESS('Events injected into database'))
