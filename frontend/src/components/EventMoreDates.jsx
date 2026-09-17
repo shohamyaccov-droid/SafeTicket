@@ -41,7 +41,7 @@ export default function EventMoreDates({ event, relatedEvents }) {
       </div>
 
       <div
-        className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-6 [scrollbar-width:thin]"
+        className="-mx-1 flex gap-2 overflow-visible px-1 pb-8 [scrollbar-width:thin] md:overflow-x-auto"
         aria-label="בחירת תאריך"
       >
         {dates.map((ev) => {
@@ -53,25 +53,29 @@ export default function EventMoreDates({ event, relatedEvents }) {
           const className = current
             ? 'shrink-0 rounded-full border-2 border-[#0045af] bg-[#0045af] px-3.5 py-2 text-sm font-extrabold text-white shadow-md shadow-sky-200'
             : 'shrink-0 rounded-full border border-slate-200 bg-white px-3.5 py-2 text-sm font-bold text-slate-800 shadow-sm transition hover:border-[#0045af] hover:text-[#0045af]';
+          
+          // Badge wrapper with absolute positioning
           const dateButtonContent = (
-            <>
+            <div className="relative inline-block">
               {hasTickets && (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white whitespace-nowrap z-10">
-                  כרטיסים אחרונים
-                </span>
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+                  <span className="inline-flex items-center rounded-full bg-red-600 px-2 py-1 text-[9px] font-bold text-white whitespace-nowrap">
+                    כרטיסים אחרונים
+                  </span>
+                </div>
               )}
-              {label}
-            </>
+              <span className="block">{label}</span>
+            </div>
           );
           if (current) {
             return (
-              <span key={key} className={`${className} relative overflow-visible`} aria-current="date">
+              <span key={key} className={`${className} relative`} aria-current="date">
                 {dateButtonContent}
               </span>
             );
           }
           return (
-            <Link key={key} to={eventHref(ev)} className={`${className} relative overflow-visible no-underline`}>
+            <Link key={key} to={eventHref(ev)} className={`${className} relative no-underline`}>
               {dateButtonContent}
             </Link>
           );
