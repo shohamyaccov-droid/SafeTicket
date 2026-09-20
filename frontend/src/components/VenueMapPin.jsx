@@ -119,11 +119,6 @@ const VenueMapPin = ({ venueName, sectionName }) => {
 
   return (
     <div className="venue-map-container">
-      {/* Visual Proof: Loading text */}
-      <div className="loading-map-text">
-        LOADING MAP FOR: {venueName || 'UNKNOWN'}
-      </div>
-      
       <div className="venue-map-wrapper">
         {imageError ? (
           // SVG Fallback

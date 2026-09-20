@@ -15,6 +15,9 @@ export const VENUE_RAMAT_GAN_ABBR = 'אצטדיון ר"ג';
 /** Caesarea Amphitheater — CaesareaMap on EventDetailsPage. */
 export const VENUE_CAESAREA = 'אמפי קיסריה';
 
+/** Amphi MAX (Rishon Lezion) — static venue map. */
+export const VENUE_AMPHI_MAX = 'אמפי MAX';
+
 /** Menora Mivtachim Arena — InteractiveMenoraMap on EventDetailsPage. */
 export const VENUE_MENORA = 'היכל מנורה מבטחים';
 
@@ -192,6 +195,14 @@ export const VENUE_MAPS = {
       'גוש 204': { x: 55, y: 25 },
       'גוש 205': { x: 65, y: 25 },
       'גוש 206': { x: 75, y: 25 },
+    }
+  },
+  // אמפי MAX - Amphitheater in Rishon Lezion
+  'אמפי MAX': {
+    imageUrl: '/images/venues/amphi_max_map.png',
+    sections: {
+      'עמידה': { x: 50, y: 50 },
+      'ישיבה': { x: 50, y: 50 },
     }
   }
 };
