@@ -124,7 +124,7 @@ function renderCheckout(onClose = vi.fn()) {
 
 async function acceptTermsAndFindPayButton() {
   const payBtn = await screen.findByRole('button', { name: 'המשך לתשלום' });
-  const tos = screen.getByRole('checkbox');
+  const tos = screen.getByLabelText(/קראתי ואני מאשר/);
   if (!tos.checked) {
     await userEvent.click(tos);
   }

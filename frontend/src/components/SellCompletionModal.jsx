@@ -1,5 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useState } from 'react';
+import MarketingConsentCheckbox from './MarketingConsentCheckbox';
 import './SellCompletionModal.css';
 
 function PasswordField({ id, name, label, value, onChange, required }) {
@@ -58,11 +59,12 @@ export default function SellCompletionModal({
     email: '',
     phone_number: '',
     password: '',
+    agreed_to_marketing: false,
   });
 
   const onAuthChange = (e) => {
-    const { name, value } = e.target;
-    setAuthForm((prev) => ({ ...prev, [name]: value }));
+    const { name, type, checked, value } = e.target;
+    setAuthForm((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
   const handleSubmit = (e) => {
@@ -146,6 +148,13 @@ export default function SellCompletionModal({
         />
         {fieldErrors.password ? (
           <span className="become-seller-field-error">{fieldErrors.password}</span>
+        ) : null}
+        {authMode === 'register' ? (
+          <MarketingConsentCheckbox
+            id="sell_auth_agreed_to_marketing"
+            checked={Boolean(authForm.agreed_to_marketing)}
+            onChange={(next) => setAuthForm((prev) => ({ ...prev, agreed_to_marketing: next }))}
+          />
         ) : null}
         <button
           type="button"

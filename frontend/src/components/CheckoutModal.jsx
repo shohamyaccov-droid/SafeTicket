@@ -31,6 +31,7 @@ import { formatBuyerFeePercent } from '../services/pricingSettings';
 import CheckoutLegalAcceptance, {
   validateLegalAcceptance,
 } from './CheckoutLegalAcceptance';
+import MarketingConsentCheckbox from './MarketingConsentCheckbox';
 import ShabbatModal from './ShabbatModal';
 import BuyerIdentityInlineForm from './BuyerIdentityInlineForm';
 import SafePayTrustLine from './SafePayTrustLine';
@@ -356,6 +357,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
   const [couponError, setCouponError] = useState('');
   const [legalAccepted, setLegalAccepted] = useState(() => Boolean(autoStartPayme && user));
   const [legalError, setLegalError] = useState('');
+  const [agreedToMarketing, setAgreedToMarketing] = useState(false);
   const [shabbatOpen, setShabbatOpen] = useState(false);
   const [shabbatHavdalah, setShabbatHavdalah] = useState(null);
   const [shabbatMessage, setShabbatMessage] = useState('בצאת שבת תתחדש האפשרות לתשלום');
@@ -980,6 +982,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           quantity: orderQuantity,
           event_name: eventName,
           accepted_terms: true,
+          agreed_to_marketing: Boolean(agreedToMarketing),
         };
         
         // CRITICAL: If this is a negotiated price from an accepted offer, include offer_id
@@ -1010,6 +1013,7 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
           quantity: orderQuantity,
           event_name: eventName,
           accepted_terms: true,
+          agreed_to_marketing: Boolean(agreedToMarketing),
         };
         
         // CRITICAL: If this is a negotiated price from an accepted offer, include offer_id
@@ -2837,6 +2841,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
               }}
               error={legalError}
             />
+            <MarketingConsentCheckbox
+              id="checkout-marketing-consent"
+              checked={agreedToMarketing}
+              onChange={setAgreedToMarketing}
+            />
             {error && (
               <div className="error-message" role="alert" aria-live="polite">
                 {error || 'שגיאה לא ידועה'}
@@ -2952,6 +2961,11 @@ const CheckoutModal = ({ ticket, ticketGroup, user, quantity: initialQuantity = 
                   }
                 }}
                 error={legalError}
+              />
+              <MarketingConsentCheckbox
+                id="checkout-marketing-consent-guest"
+                checked={agreedToMarketing}
+                onChange={setAgreedToMarketing}
               />
               {error && (
               <div className="error-message" role="alert" aria-live="polite">

@@ -544,6 +544,7 @@ def _user_payload_for_auth_response(request, user):
             'phone_number': user.phone_number or '',
             'payout_details': user.payout_details or '',
             'accepted_escrow_terms': user.accepted_escrow_terms,
+            'agreed_to_marketing': getattr(user, 'agreed_to_marketing', False),
             'profile_image': None,
             'is_verified_seller': user.is_verified_seller,
             'is_email_verified': user.is_email_verified,
@@ -2811,6 +2812,15 @@ def create_order(request):
                 quantity=order_quantity,
                 total_amount=server_total,
             )
+            from users.consent import is_explicit_marketing_opt_in, persist_user_marketing_opt_in
+
+            if is_explicit_marketing_opt_in(
+                order.agreed_to_marketing or request.data.get('agreed_to_marketing')
+            ):
+                if not order.agreed_to_marketing:
+                    order.agreed_to_marketing = True
+                    order.save(update_fields=['agreed_to_marketing', 'updated_at'])
+                persist_user_marketing_opt_in(user=request.user)
             order.ticket_ids = ticket_ids
             order.pending_offer = negotiated_offer
             if listing_group_id:
@@ -3671,7 +3681,12 @@ def guest_checkout(request):
                 held_ticket=(ticket if (not listing_group_id and order_quantity > 1) else None),
                 held_quantity=(held_qty if (not listing_group_id and order_quantity > 1) else 0),
                 payment_confirm_token=secrets.token_urlsafe(32),
+                agreed_to_marketing=bool(order_data.get('agreed_to_marketing')),
             )
+            if order.agreed_to_marketing:
+                from users.consent import persist_user_marketing_opt_in
+
+                persist_user_marketing_opt_in(email=order_data.get('guest_email'))
             if coupon_code:
                 try:
                     _maybe_claim_coupon_on_order(

@@ -11,6 +11,7 @@ import Register from './pages/Register';
 import AdminRoute from './components/AdminRoute';
 import FloatingWhatsApp from './components/FloatingWhatsApp';
 import Footer from './components/Footer';
+import AccessibilityWidget from './components/AccessibilityWidget';
 import LaunchPromoBanner from './components/LaunchPromoBanner';
 import ScrollToTop from './components/ScrollToTop';
 import DashboardSkeleton from './components/skeletons/DashboardSkeleton';
@@ -217,9 +218,10 @@ function AppChrome({ children }) {
         isActive={Boolean(announcementBanner?.is_active)}
       />
       {!isSellerFunnel && <Navbar />}
-      <main>{children}</main>
+      <main id="main-content">{children}</main>
       {!isSellerFunnel && <Footer />}
       {!isSellerFunnel && <FloatingWhatsApp />}
+      <AccessibilityWidget />
     </div>
   );
 }

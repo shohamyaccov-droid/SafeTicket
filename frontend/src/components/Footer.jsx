@@ -45,10 +45,10 @@ const Footer = () => {
             <h3>מידע משפטי</h3>
             <ul>
               <li>
-                <Link to="/terms">תקנון</Link>
+                <Link to="/terms">תקנון ותנאי שימוש</Link>
               </li>
               <li>
-                <Link to="/privacy">פרטיות</Link>
+                <Link to="/privacy">מדיניות פרטיות</Link>
               </li>
               <li>
                 <Link to="/refunds">החזרים</Link>
@@ -60,7 +60,7 @@ const Footer = () => {
                 <Link to="/about">אודות</Link>
               </li>
               <li>
-                <Link to="/accessibility">נגישות</Link>
+                <Link to="/accessibility">הצהרת נגישות</Link>
               </li>
               <li>
                 <Link to="/contact">צור קשר</Link>
@@ -85,9 +85,9 @@ const Footer = () => {
           <p>&copy; {new Date().getFullYear()} TradeTix. כל הזכויות שמורות.</p>
           <p className="footer-shabbat">אתר שומר שבת.</p>
           <p className="footer-legal-links">
-            <Link to="/terms">תקנון</Link>
+            <Link to="/terms">תקנון ותנאי שימוש</Link>
             {' · '}
-            <Link to="/privacy">פרטיות</Link>
+            <Link to="/privacy">מדיניות פרטיות</Link>
             {' · '}
             <Link to="/refunds">החזרים</Link>
             {' · '}
@@ -95,7 +95,7 @@ const Footer = () => {
             {' · '}
             <Link to="/about">אודות</Link>
             {' · '}
-            <Link to="/accessibility">נגישות</Link>
+            <Link to="/accessibility">הצהרת נגישות</Link>
             {' · '}
             <Link to="/contact">צור קשר</Link>
           </p>

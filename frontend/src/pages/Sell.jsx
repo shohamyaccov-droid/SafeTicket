@@ -1081,6 +1081,7 @@ const Sell = () => {
           password: authForm.password,
           password2: authForm.password,
           role: 'buyer',
+          agreed_to_marketing: Boolean(authForm.agreed_to_marketing),
         });
         if (!reg.success) {
           setAuthError(parseApiMessage(reg.error, 'ההרשמה נכשלה.'));

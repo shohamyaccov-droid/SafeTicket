@@ -68,6 +68,10 @@ class User(AbstractUser):
     )
     accepted_escrow_terms = models.BooleanField(default=False)
     escrow_terms_accepted_at = models.DateTimeField(null=True, blank=True)
+    agreed_to_marketing = models.BooleanField(
+        default=False,
+        help_text='Explicit opt-in to marketing email/WhatsApp (Israeli spam law). Never default True.',
+    )
     profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True)
     is_verified_seller = models.BooleanField(default=False, help_text="Verified seller badge (for trust indicators)")
     is_email_verified = models.BooleanField(default=True, help_text="Email verified via OTP (False when OTP enforcement is enabled)")
@@ -737,6 +741,10 @@ class Order(models.Model):
     guest_phone = models.CharField(max_length=20, blank=True, null=True)
     guest_first_name = models.CharField(max_length=100, blank=True, null=True)
     guest_last_name = models.CharField(max_length=100, blank=True, null=True)
+    agreed_to_marketing = models.BooleanField(
+        default=False,
+        help_text='Checkout marketing opt-in captured for this order (guest or registered).',
+    )
     
     # Order details
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')

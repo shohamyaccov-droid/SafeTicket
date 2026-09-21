@@ -94,12 +94,12 @@ def _admin_image_preview_html(fieldfile):
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ['username', 'email', 'role', 'phone_number', 'is_active', 'date_joined']
-    list_filter = ['role', 'is_active', 'is_staff', 'date_joined']
+    list_display = ['username', 'email', 'role', 'phone_number', 'agreed_to_marketing', 'is_active', 'date_joined']
+    list_filter = ['role', 'agreed_to_marketing', 'is_active', 'is_staff', 'date_joined']
     
     # Properly handle fieldsets for Django 6.0 compatibility
     fieldsets = list(BaseUserAdmin.fieldsets) + [
-        ('Additional Info', {'fields': ('role', 'phone_number', 'profile_image')}),
+        ('Additional Info', {'fields': ('role', 'phone_number', 'agreed_to_marketing', 'profile_image')}),
         (
             'Seller payout (bank transfer)',
             {
@@ -117,7 +117,7 @@ class UserAdmin(BaseUserAdmin):
     
     # Properly handle add_fieldsets for Django 6.0 compatibility  
     add_fieldsets = list(BaseUserAdmin.add_fieldsets) + [
-        ('Additional Info', {'fields': ('role', 'phone_number', 'profile_image')}),
+        ('Additional Info', {'fields': ('role', 'phone_number', 'agreed_to_marketing', 'profile_image')}),
     ]
 
 

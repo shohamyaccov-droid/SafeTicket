@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import { toastError, toastSuccess } from '../utils/toast';
 import { apiErrorMessageHe } from '../utils/apiErrors';
 import { isValidRequiredEmail, isValidRequiredPhone, validateRequiredEmail, validateRequiredPhone } from '../utils/contactValidation';
+import MarketingConsentCheckbox from './MarketingConsentCheckbox';
+import './MarketingConsentCheckbox.css';
 import '../pages/Auth.css';
 
 export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 'register' } = {}) {
@@ -15,6 +17,7 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
     phone_number: '',
     password: '',
     password2: '',
+    agreed_to_marketing: false,
   });
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
@@ -24,7 +27,7 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
   const fieldId = (name) => `${idPrefix}-${name}`;
 
   const handleChange = (e) => {
-    const { name } = e.target;
+    const { name, type, checked, value } = e.target;
     if (error) setError('');
     if (fieldErrors[name]) {
       setFieldErrors((prev) => {
@@ -35,7 +38,7 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
     }
     setFormData({
       ...formData,
-      [name]: e.target.value,
+      [name]: type === 'checkbox' ? checked : value,
     });
   };
 
@@ -69,6 +72,7 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
       password: formData.password,
       password2: formData.password2,
       role: 'buyer',
+      agreed_to_marketing: Boolean(formData.agreed_to_marketing),
     };
     const result = await register(registerData);
     setLoading(false);
@@ -196,6 +200,11 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
           />
           {fieldErrors.password2 ? <span className="field-error-text">{fieldErrors.password2}</span> : null}
         </div>
+        <MarketingConsentCheckbox
+          id={fieldId('agreed_to_marketing')}
+          checked={Boolean(formData.agreed_to_marketing)}
+          onChange={(next) => setFormData((prev) => ({ ...prev, agreed_to_marketing: next }))}
+        />
         <button
           type="submit"
           disabled={

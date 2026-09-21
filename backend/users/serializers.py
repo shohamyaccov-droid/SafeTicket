@@ -300,10 +300,14 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
     last_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
     phone_number = serializers.CharField(required=True, allow_blank=False, max_length=30)
+    agreed_to_marketing = serializers.BooleanField(required=False, default=False)
     
     class Meta:
         model = User
-        fields = ('username', 'email', 'password', 'password2', 'first_name', 'last_name', 'phone_number')
+        fields = (
+            'username', 'email', 'password', 'password2', 'first_name', 'last_name',
+            'phone_number', 'agreed_to_marketing',
+        )
         extra_kwargs = {
             'email': {'required': True, 'allow_blank': False},
             'first_name': {'required': False, 'allow_blank': True},
@@ -330,8 +334,15 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"password": "Password fields didn't match."})
         return attrs
     
+    def validate_agreed_to_marketing(self, value):
+        from users.consent import is_explicit_marketing_opt_in
+
+        return is_explicit_marketing_opt_in(value)
+
     def create(self, validated_data):
         validated_data.pop('password2')
+        from users.consent import is_explicit_marketing_opt_in
+
         user = User.objects.create_user(
             username=validated_data['username'],
             email=validated_data['email'],
@@ -340,6 +351,9 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             last_name=validated_data.get('last_name', ''),
             role='buyer',
             phone_number=validated_data['phone_number'],
+            agreed_to_marketing=is_explicit_marketing_opt_in(
+                validated_data.get('agreed_to_marketing', False)
+            ),
         )
         return user
 
@@ -371,12 +385,12 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'username', 'email', 'role', 'first_name', 'last_name', 'full_name',
             'phone_number', 'payout_details',
             'payout_method', 'bit_phone_number', 'has_payout_details',
-            'accepted_escrow_terms', 'profile_image', 'is_verified_seller', 'is_email_verified',
+            'accepted_escrow_terms', 'agreed_to_marketing', 'profile_image', 'is_verified_seller', 'is_email_verified',
             'is_superuser', 'is_staff', 'date_joined',
         )
         read_only_fields = (
             'id', 'date_joined', 'is_verified_seller', 'is_email_verified', 'is_superuser', 'is_staff',
-            'accepted_escrow_terms', 'full_name', 'has_payout_details',
+            'accepted_escrow_terms', 'agreed_to_marketing', 'full_name', 'has_payout_details',
         )
 
 
@@ -511,6 +525,7 @@ class OrderSerializer(serializers.ModelSerializer):
     ticket_info = serializers.SerializerMethodField()
     tickets = serializers.SerializerMethodField()
     quantity = serializers.IntegerField(default=1, min_value=1, max_value=10)
+    agreed_to_marketing = serializers.BooleanField(required=False, default=False)
     
     class Meta:
         model = Order
@@ -521,6 +536,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'total_paid_by_buyer', 'net_seller_revenue',
             'payout_status', 'payout_eligible_date',
             'payme_transaction_id', 'payme_status',
+            'agreed_to_marketing',
         )
         read_only_fields = (
             'id', 'created_at', 'status', 'ticket_info', 'tickets', 'ticket_ids', 'currency',
@@ -531,6 +547,11 @@ class OrderSerializer(serializers.ModelSerializer):
             'payme_transaction_id', 'payme_status',
         )
     
+    def validate_agreed_to_marketing(self, value):
+        from users.consent import is_explicit_marketing_opt_in
+
+        return is_explicit_marketing_opt_in(value)
+
     def create(self, validated_data):
         ticket = validated_data.get('ticket')
         validated_data['currency'] = iso4217_for_ticket_listing(ticket) if ticket else 'ILS'
@@ -920,9 +941,15 @@ class GuestCheckoutSerializer(serializers.Serializer):
     listing_group_id = serializers.CharField(required=False, allow_blank=True, max_length=120)
     coupon_code = serializers.CharField(required=False, allow_blank=True, max_length=40)
     accepted_terms = serializers.BooleanField(required=True)
+    agreed_to_marketing = serializers.BooleanField(required=False, default=False)
 
     def validate_guest_phone(self, value):
         return normalize_required_phone(value)
+
+    def validate_agreed_to_marketing(self, value):
+        from users.consent import is_explicit_marketing_opt_in
+
+        return is_explicit_marketing_opt_in(value)
 
     def validate_accepted_terms(self, value):
         if value is not True:
