@@ -16,9 +16,11 @@ class RenderDeployHooksTests(SimpleTestCase):
         text = _START_RENDER.read_text(encoding='utf-8')
         self.assertIn('python manage.py backup_critical_data', text)
         self.assertIn('python manage.py migrate --noinput', text)
-        self.assertIn('python manage.py seed_odiya_osher_hope_event', text)
-        self.assertIn('python manage.py seed_eyal_golan_menora', text)
-        self.assertIn('python manage.py seed_itay_levi_caesarea', text)
+        self.assertIn('python manage.py seed_client_catalog', text)
+        self.assertNotIn('python manage.py seed_odiya_osher_hope_event', text)
+        self.assertNotIn('python manage.py seed_eyal_golan_menora', text)
+        self.assertNotIn('python manage.py seed_itay_levi_caesarea', text)
+        self.assertNotIn('python manage.py seed_august_2026_concerts', text)
         self.assertIn('python manage.py deactivate_affiliate5_coupon', text)
         self.assertIn('python manage.py seed_platform_coupon', text)
         self.assertIn('python manage.py seed_dummy_tickets', text)
@@ -56,6 +58,8 @@ class RenderDeployHooksTests(SimpleTestCase):
         backup_idx = text.index('python manage.py backup_critical_data')
         migrate_idx = text.index('python manage.py migrate --noinput')
         self.assertLess(backup_idx, migrate_idx)
+        self.assertIn('python manage.py seed_client_catalog', text)
+        self.assertNotIn('python manage.py seed_next_2026', text)
 
     def test_render_yaml_start_command_is_safe(self):
         yaml_path = _REPO_ROOT / 'render.yaml'

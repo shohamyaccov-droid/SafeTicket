@@ -640,9 +640,10 @@ def _seed_all(*, skip_prune: bool = False) -> None:
         prune_legacy_placeholder_events()
     seed_admin()
     seed_qa_user()
-    seed_artists()
-    seed_launch_events_and_tickets()
-    seed_waitlist_events()
+    _seed_log(
+        '[seed] skipping Unsplash/launch/waitlist catalog — owned by seed_client_catalog '
+        '(copyright-safe, no extra artists, no images)'
+    )
     _seed_log(f'[seed] done: {_artist_model().objects.count()} artists, {_event_model().objects.count()} events total in DB')
 
 
@@ -651,13 +652,20 @@ def run_after_total_wipe(historical_apps=None) -> None:
     Rebuild catalog after all Event/Ticket rows were removed (e.g. data migration).
     Skips prune — DB is already clean.
 
+    Historical migration 0046 still expects the launch/waitlist inventory.
+    Runtime boot uses seed_client_catalog instead (see start_render.sh).
+
     Pass ``historical_apps`` from RunPython so User queries match the migration-era schema.
     """
     global _seed_historical_apps
     prev = _seed_historical_apps
     _seed_historical_apps = historical_apps
     try:
-        _seed_all(skip_prune=True)
+        seed_admin()
+        seed_qa_user()
+        seed_artists()
+        seed_launch_events_and_tickets()
+        seed_waitlist_events()
         assert_catalog_event_inventory()
     finally:
         _seed_historical_apps = prev

@@ -62,15 +62,8 @@ print(f'[start_render] DB engine={engine} host={host} name={name} order_count={O
 echo "[start_render] Idempotent production seed (skips if DB unavailable)..."
 python seed_production.py
 
-echo "[start_render] Concert catalog (Mor Ravia, Pe'er Tasi, Itay Levi, Eden Ben Zaken, Ben Tzur)..."
-python manage.py seed_august_2026_concerts || true
-
-echo "[start_render] High-demand Menora events (Odiya & Osher Cohen, Eyal Golan Sept 2026)..."
-python manage.py seed_odiya_osher_hope_event || true
-python manage.py seed_eyal_golan_menora || true
-
-echo "[start_render] Itay Levi Caesarea Amphitheater (29.08 & 01.09.2026)..."
-python manage.py seed_itay_levi_caesarea || true
+echo "[start_render] Client catalog (exact 7 artists, no images, prune extras)..."
+python manage.py seed_client_catalog || true
 
 echo "[start_render] Deactivate demo coupon AFFILIATE5 (no longer offered)..."
 python manage.py deactivate_affiliate5_coupon || true

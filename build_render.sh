@@ -90,9 +90,8 @@ else
   exit 1
 fi
 
-# SEED: Populate NEXT 2026 festival events (Ramat Gan + Jerusalem)
-# Runs AFTER restore so we add to the recovered data
-python manage.py seed_next_2026
+# SEED: Approved 2026 catalog only (no images). Runs AFTER restore so extras can be pruned.
+python manage.py seed_client_catalog
 python manage.py collectstatic --noinput
 
 echo "build_render.sh finished OK"
