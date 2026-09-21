@@ -48,4 +48,10 @@ describe('EventCard last-minute waitlist CTA', () => {
     renderCard({ variant: 'default' });
     expect(screen.queryByRole('link', { name: /רשימת ההמתנה/ })).not.toBeInTheDocument();
   });
+
+  it('shows available listings badge when hasListings is true', () => {
+    renderCard({ variant: 'default', hasListings: true });
+    expect(screen.getByText('כרטיסים זמינים')).toBeInTheDocument();
+    expect(screen.getByText('לרכישה ומכירה')).toBeInTheDocument();
+  });
 });

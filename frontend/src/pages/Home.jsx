@@ -512,6 +512,7 @@ const Home = () => {
                       event={ev}
                       formatEventDateHe={formatEventDateHe}
                       variant={kind === 'lastMinute' ? 'lastMinute' : 'default'}
+                      hasListings={(Number(ev.tickets_count) || 0) > 0}
                       onNavigate={() => navigate(eventHref(ev))}
                     />
                   </div>
