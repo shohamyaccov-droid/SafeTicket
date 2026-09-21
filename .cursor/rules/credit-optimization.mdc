@@ -1,0 +1,86 @@
+---
+description: Zero-waste Cursor usage for SafeTicket (Django/React) — models, prompts, tools, diffs
+alwaysApply: true
+---
+
+# Credit optimization (SafeTicket)
+
+Solo full-stack: Django backend + React frontend. Maximize the 30-day Cursor Pro cycle. Every token must do work.
+
+## Zero-waste replies
+
+- No greetings, filler, recaps of the request, or “great question.”
+- No apologies or “as an AI.”
+- Lead with the answer, patch, or decision.
+- Do not restated the user’s prompt. Do not narrate tool use.
+- Skip long architecture essays unless they asked for a plan.
+- Do not paste unchanged files. Cite `start:end:path` only when it helps.
+- After a change: what changed, where, and how to verify — short.
+
+## Model routing (current session vs. user switch)
+
+This chat’s model is fixed. Do not claim you switched models.
+
+**Stay on the current (cheap/fast) model for:** UI copy, CSS, boilerplate, CRUD, tests, lint/build fixes, grep-driven bugs, small Django views/serializers, React presentational components, commit messages.
+
+**Stop and ask the user to switch to Sonnet (or Sol only if Sonnet already failed) before continuing if the task is:**
+
+- Cross-cutting Django architecture (models, migrations, payments, auth, wallets, payouts)
+- React state that spans routes/modals/cart/checkout
+- Security: payments, PII, permissions, CSRF/CORS, secrets, injection
+- Data integrity, race conditions, concurrency, money rounding
+- “Why is this wrong?” after two failed cheap-model attempts
+
+Ask once, in one sentence, e.g.: *Switch this chat to Sonnet — this touches payment + listing locks.* Then wait. Do not dump a speculative design in the meantime.
+
+Never recommend On-Demand spend. Never use Opus/Sol for boilerplate.
+
+## Diffs over rewrites
+
+- Prefer `StrReplace` / minimal hunks. Touch only what the task needs.
+- Do not rewrite a file to “clean it up” unless asked.
+- Match existing naming, imports, and style. No drive-by refactors.
+- New files only when there is no reasonable home in existing modules.
+- If a file is huge, edit the relevant function/component, not the whole module.
+
+## Tool mastery (do not ask for paste)
+
+Find context yourself before asking the user:
+
+1. `Glob` — locate apps, pages, serializers, tests
+2. `Grep` — symbols, URLs, error strings, model fields
+3. `Read` — only the files/lines that matter (offset/limit on large files)
+
+Typical roots: `backend/` (Django), `frontend/src/` (React).
+
+Do not say “paste the file.” Do not ask for a repo tour. Use the explore/subagent tools only when a single Grep/Glob pass is clearly insufficient.
+
+## No speculation
+
+If a required fact is missing after a reasonable tool search (secret, env, intended product behavior, prod-only data):
+
+- Stop.
+- Ask **one** focused question.
+- Do not invent APIs, schema fields, or “probably this works” patches.
+
+If two interpretations are equally likely, ask which one — do not implement both.
+
+## Prompt contract (what to assume from the user)
+
+Treat incomplete prompts as a signal to Grep first, then one question if still blocked. Prefer implementing from repo evidence over chatting.
+
+When the user *is* specific (path, lines, error, done-when): execute that scope only.
+
+## Stack defaults (do not re-discover every turn)
+
+- Frontend: React, Vite-style `frontend/`; verify with `npm run build` in `frontend/` when UI changes.
+- Backend: Django; do not run speculative migrations. Prefer existing apps/models.
+- Follow `.cursor/rules/agent-workflow.mdc` for QA after code changes. Git push only per that rule vs. the user’s git instructions — do not debate it in chat.
+
+## Anti-patterns
+
+- Multi-file “while we’re here” refactors
+- Regenerating `frontend/dist/` as a feature
+- Dumping entire components to change one handler
+- Retrying the same failing approach without new evidence
+- Explaining Cursor billing or repeating this rule in answers
