@@ -31,6 +31,7 @@ ALLOWED_ARTISTS = [
     'מור',
     'איתי לוי',
     'נועם בתן',
+    'פאר טסי',
 ]
 
 IMAGE_STORAGE_PREFIXES = (
@@ -187,7 +188,7 @@ class Command(BaseCommand):
         self.stdout.write(_console(f'EVENT COUNT: {events}'))
         self.stdout.write(f'IMAGE FIELDS STILL SET: {imaged}')
         self.stdout.write(self.style.SUCCESS('=' * 56))
-        expected_events = 35  # 10 NEXT-RG + 6 NEXT-JLM + 9 Hysteria-TLV + 5 Hysteria-JLM + 5 solos
+        expected_events = 36  # 10 NEXT-RG + 6 NEXT-JLM + 9 Hysteria-TLV + 5 Hysteria-JLM + 5 solos + Peer Tasi
         if events != expected_events:
             raise CommandError(_console(f'Expected {expected_events} events, got {events}'))
         if set(artists) != set(ALLOWED_ARTISTS):
@@ -296,6 +297,7 @@ class Command(BaseCommand):
         mor = upsert_artist('מור')
         itay = upsert_artist('איתי לוי')
         noam = upsert_artist('נועם בתן')
+        peer = upsert_artist('פאר טסי')
 
         specs = []
         for dt in (
@@ -416,6 +418,15 @@ class Command(BaseCommand):
                 'venue': VENUE_MENORA,
                 'venue_place': menora,
                 'city': 'תל אביב',
+                'category': 'concert',
+            },
+            {
+                'artist': peer,
+                'name': 'פאר טסי — אמפי MAX',
+                'date': _il(2026, 9, 24),
+                'venue': VENUE_GENERIC,
+                'venue_place': ampi_max,
+                'city': 'ראשון לציון',
                 'category': 'concert',
             },
         ])

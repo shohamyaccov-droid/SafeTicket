@@ -38,10 +38,10 @@ class SeedClientCatalogTests(TestCase):
                 names = set(Artist.objects.values_list('name', flat=True))
                 self.assertEqual(
                     names,
-                    {'NEXT', 'אזיליה בנקס', 'איתי לוי', 'היסטריה', 'ישי ריבו', 'מור', 'נועם בתן'},
+                    {'NEXT', 'אזיליה בנקס', 'איתי לוי', 'היסטריה', 'ישי ריבו', 'מור', 'נועם בתן', 'פאר טסי'},
                 )
-                self.assertEqual(Artist.objects.count(), 7)
-                self.assertEqual(Event.objects.count(), 35)
+                self.assertEqual(Artist.objects.count(), 8)
+                self.assertEqual(Event.objects.count(), 36)
                 self.assertFalse(Artist.objects.exclude(image='').exclude(image__isnull=True).exists())
                 self.assertFalse(Artist.objects.exclude(cover_image='').exclude(cover_image__isnull=True).exists())
                 self.assertFalse(Event.objects.exclude(image='').exclude(image__isnull=True).exists())

@@ -1,8 +1,11 @@
 /* eslint-disable react/prop-types */
+import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Calendar, MapPin } from 'lucide-react';
 import { formatEventLocation } from '../utils/eventLocalTime';
 import { eventTicketCount } from '../utils/artistEventSupply';
-import SellerWaitlistCta from './SellerWaitlistCta';
+import { eventHref } from '../utils/eventSeo';
+import { sellTicketsPathForEvent } from '../utils/sellEventPrefill';
 import './EventCard.css';
 
 const GRADIENTS = [
@@ -20,17 +23,14 @@ function nameGradient(name) {
   return GRADIENTS[h % GRADIENTS.length];
 }
 
-function glowForName(name) {
-  const g = nameGradient(name);
-  if (g.includes('#5b21b6')) return 'hover:shadow-[0_22px_44px_rgba(91,33,182,0.38)]';
-  if (g.includes('#0e7490')) return 'hover:shadow-[0_22px_44px_rgba(14,116,144,0.38)]';
-  if (g.includes('#312e81')) return 'hover:shadow-[0_22px_44px_rgba(49,46,129,0.38)]';
-  if (g.includes('#44403c')) return 'hover:shadow-[0_22px_44px_rgba(68,64,60,0.32)]';
-  return 'hover:shadow-[0_22px_44px_rgba(29,78,216,0.38)]';
+/** Stable FOMO count per event id (12–45) — avoids flicker on re-render. */
+function fauxWaitlistCount(eventId) {
+  const n = Math.abs(Number(eventId) || 0);
+  return 12 + (n * 17) % 34;
 }
 
 /**
- * Homepage event tile — physical ticket stub metaphor.
+ * Homepage event tile — physical ticket stub with dual buy/sell CTAs.
  */
 export default function EventCard({
   event,
@@ -51,6 +51,10 @@ export default function EventCard({
     ? `${dateVariantCount} תאריכים זמינים`
     : formatEventDateHe?.(event.date) || '';
 
+  const waiting = useMemo(() => fauxWaitlistCount(event?.id), [event?.id]);
+  const buyHref = eventHref(event);
+  const sellHref = sellTicketsPathForEvent(event);
+
   let badge = listings ? 'כרטיסים זמינים' : 'ביקוש גבוה';
   if (isLastMinute) badge = 'כרטיסים אחרונים';
   else if (multiDates) badge = `${dateVariantCount} תאריכים`;
@@ -64,7 +68,7 @@ export default function EventCard({
 
   return (
     <article
-      className={`event-ticket group relative flex h-full cursor-pointer flex-col rounded-2xl bg-white shadow-md transition duration-200 hover:-translate-y-1 hover:shadow-2xl ${glowForName(title)}`}
+      className="event-ticket group relative flex h-full cursor-pointer flex-col rounded-2xl bg-white shadow-md transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl"
       tabIndex={0}
       aria-label={title}
       onClick={(e) => {
@@ -99,7 +103,7 @@ export default function EventCard({
         ) : null}
       </div>
 
-      <div className="event-ticket__stub border-t border-dashed border-slate-300 bg-white px-3 pb-3 pt-3">
+      <div className="event-ticket__stub border-t-2 border-dashed border-gray-200 bg-white px-3 pb-3 pt-3">
         <p className="m-0 flex items-center justify-center gap-1.5 text-[0.78rem] font-semibold text-slate-600">
           <Calendar size={14} strokeWidth={2.25} aria-hidden />
           <span>{dateLabel}</span>
@@ -110,10 +114,27 @@ export default function EventCard({
             <span className="line-clamp-2 text-center">{venueLine}</span>
           </p>
         ) : null}
-        <span className="mt-3 block w-full rounded-xl bg-[#0045af] py-2.5 text-center text-[0.82rem] font-extrabold text-white shadow-md transition group-hover:bg-[#1d5fd6] group-hover:shadow-lg">
-          לרכישה ומכירה
-        </span>
-        {isLastMinute ? <SellerWaitlistCta event={event} variant="card" /> : null}
+
+        <p className="mt-2.5 mb-0 text-center text-[0.72rem] font-bold text-orange-600" role="status">
+          🔥 {waiting} ממתינים לכרטיס
+        </p>
+
+        <div className="mt-2.5 flex flex-col gap-2">
+          <Link
+            to={buyHref}
+            className="block w-full rounded-xl bg-[#0045af] py-2.5 text-center text-[0.82rem] font-extrabold text-white no-underline shadow-md transition hover:bg-[#1d5fd6] hover:shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            לרכישת כרטיסים
+          </Link>
+          <Link
+            to={sellHref}
+            className="block w-full rounded-xl border-2 border-[#0045af] bg-white py-2 text-center text-[0.8rem] font-extrabold text-[#0045af] no-underline transition hover:bg-blue-50 hover:border-[#1d5fd6]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            מכירת כרטיס
+          </Link>
+        </div>
       </div>
     </article>
   );

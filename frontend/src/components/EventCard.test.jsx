@@ -6,6 +6,7 @@ import EventCard from './EventCard';
 
 const event = {
   id: 8,
+  slug: 'last-show',
   name: 'הופעה אחרונה',
   date: '2026-09-10T20:00:00+03:00',
   venue: 'בלומפילד',
@@ -29,29 +30,25 @@ function renderCard(props = {}) {
   return { ...view, onNavigate };
 }
 
-describe('EventCard last-minute waitlist CTA', () => {
-  it('shows seller waitlist CTA below tickets and does not open the event on CTA click', async () => {
+describe('EventCard dual CTAs and FOMO', () => {
+  it('shows buy and sell links without navigating the card on sell click', async () => {
     const user = userEvent.setup();
-    const { onNavigate } = renderCard();
-    const cta = screen.getByRole('link', { name: /5 אנשים מחכים/ });
-    expect(cta).toHaveAttribute('href', '/sell/new?event=8');
-    await user.click(cta);
+    const { onNavigate } = renderCard({ variant: 'default' });
+    const buy = screen.getByRole('link', { name: 'לרכישת כרטיסים' });
+    const sell = screen.getByRole('link', { name: 'מכירת כרטיס' });
+    expect(buy).toHaveAttribute('href', '/event/last-show');
+    expect(sell).toHaveAttribute('href', '/sell/new?event=8');
+    await user.click(sell);
     expect(onNavigate).not.toHaveBeenCalled();
   });
 
-  it('hides the waitlist CTA when nobody is waiting', () => {
-    renderCard({ event: { ...event, waitlist_count: 0 } });
-    expect(screen.queryByRole('link', { name: /רשימת ההמתנה/ })).not.toBeInTheDocument();
-  });
-
-  it('does not show the waitlist CTA on default homepage cards', () => {
+  it('shows stable FOMO waitlist line', () => {
     renderCard({ variant: 'default' });
-    expect(screen.queryByRole('link', { name: /רשימת ההמתנה/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/ממתינים לכרטיס/)).toBeInTheDocument();
   });
 
   it('shows available listings badge when hasListings is true', () => {
     renderCard({ variant: 'default', hasListings: true });
     expect(screen.getByText('כרטיסים זמינים')).toBeInTheDocument();
-    expect(screen.getByText('לרכישה ומכירה')).toBeInTheDocument();
   });
 });
