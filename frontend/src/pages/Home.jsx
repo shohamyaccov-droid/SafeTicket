@@ -482,18 +482,25 @@ const Home = () => {
           </button>
           <div ref={scrollRef} className="home-carousel-scroll viagogo-carousel-track" role="list">
             {kind === 'performer'
-              ? performers.map((group) => (
-                  <div key={group.key} className="home-carousel-item home-carousel-item--performer" role="listitem">
-                    <PerformerCard
-                      performerName={group.performerName}
-                      imageUrl={group.imageUrl}
-                      eventCount={group.eventCount}
-                      totalTickets={group.totalTickets}
-                      artistHref={artistHrefFromGroup(group)}
-                      onNavigate={() => handlePerformerNavigate(group)}
-                    />
-                  </div>
-                ))
+              ? performers.map((group) => {
+                  const target = performerNavigateTarget(group);
+                  const singleEv =
+                    group.eventCount === 1 && group.events?.length >= 1 ? group.events[0] : null;
+                  return (
+                    <div key={group.key} className="home-carousel-item home-carousel-item--performer" role="listitem">
+                      <PerformerCard
+                        performerName={group.performerName}
+                        eventCount={group.eventCount}
+                        totalTickets={group.totalTickets}
+                        href={target.href || ''}
+                        singleEvent={singleEv}
+                        waitlistOnly={Boolean(group.waitlistOnly)}
+                        onNavigate={() => handlePerformerNavigate(group)}
+                        onNotify={() => handlePerformerNavigate(group)}
+                      />
+                    </div>
+                  );
+                })
               : events.map((ev) => (
                   <div
                     key={`ev-${ev.id}`}
