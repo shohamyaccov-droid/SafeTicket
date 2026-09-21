@@ -1,27 +1,31 @@
 /* eslint-disable react/prop-types */
 import { Link } from 'react-router-dom';
 
-/** Deterministic hue (0-359) from an artist name — stable across renders. */
-function nameToHue(name) {
+const PREMIUM_GRADIENTS = [
+  'linear-gradient(145deg, #071018 0%, #0f2744 55%, #1d4ed8 140%)',
+  'linear-gradient(145deg, #0c0618 0%, #2e1065 50%, #5b21b6 130%)',
+  'linear-gradient(145deg, #111318 0%, #1c1917 55%, #292524 130%)',
+  'linear-gradient(145deg, #08111f 0%, #1e1b4b 50%, #312e81 130%)',
+  'linear-gradient(145deg, #0a0f1c 0%, #164e63 55%, #0e7490 130%)',
+  'linear-gradient(145deg, #14080f 0%, #3b0764 50%, #6b21a8 130%)',
+];
+
+function nameToGradient(name) {
   let h = 0;
   const s = String(name || '');
   for (let i = 0; i < s.length; i++) {
-    h = (h * 31 + s.charCodeAt(i)) % 360;
+    h = (h * 31 + s.charCodeAt(i)) >>> 0;
   }
-  return h;
+  return PREMIUM_GRADIENTS[h % PREMIUM_GRADIENTS.length];
 }
 
-/** DD.MM.YYYY in venue-local time (Israel, UTC+3). */
 function fmtDate(dateStr) {
   if (!dateStr) return '';
   try {
     const d = new Date(dateStr);
     if (Number.isNaN(d.getTime())) return '';
     const opts = { timeZone: 'Asia/Jerusalem', day: '2-digit', month: '2-digit', year: 'numeric' };
-    // Returns "DD/MM/YYYY" in he-IL; reformat to DD.MM.YYYY
-    return new Intl.DateTimeFormat('he-IL', opts)
-      .format(d)
-      .replace(/\//g, '.');
+    return new Intl.DateTimeFormat('he-IL', opts).format(d).replace(/\//g, '.');
   } catch {
     return '';
   }
@@ -37,19 +41,6 @@ function venueLabel(ev) {
   );
 }
 
-/**
- * Homepage performer tile — no image, gradient header, smart routing.
- *
- * Props:
- *   performerName  string
- *   eventCount     number   – total events in group
- *   totalTickets   number
- *   onNavigate     () => void  – called on card body click
- *   href           string   – destination URL (pre-computed by Home)
- *   singleEvent    object|null – event row when eventCount === 1, for date/venue display
- *   waitlistOnly   bool
- *   onNotify       () => void  – waitlist CTA
- */
 export default function PerformerCard({
   performerName,
   eventCount = 0,
@@ -60,7 +51,6 @@ export default function PerformerCard({
   waitlistOnly = false,
   onNotify,
 }) {
-  const hue = nameToHue(performerName);
   const isMulti = eventCount > 1;
   const hasSingle = !isMulti && singleEvent;
 
@@ -81,14 +71,15 @@ export default function PerformerCard({
       : 'לרכישת כרטיסים ←';
 
   const handleClick = (e) => {
-    if (e.target.closest('a')) return;
+    if (e.target.closest('a, button')) return;
     onNavigate?.();
   };
   const handleKey = (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(); }
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onNavigate?.();
+    }
   };
-
-  const initial = String(performerName || '?')[0];
 
   return (
     <article
@@ -99,44 +90,21 @@ export default function PerformerCard({
       onClick={handleClick}
       onKeyDown={handleKey}
     >
-      {/* Gradient accent band */}
-      <div
-        className="hpc__accent"
-        style={{
-          background: `linear-gradient(135deg,
-            hsl(${hue},65%,28%) 0%,
-            hsl(${(hue + 35) % 360},55%,40%) 100%)`,
-        }}
-        aria-hidden
-      >
-        <span className="hpc__initial">{initial}</span>
+      <div className="hpc__accent" style={{ background: nameToGradient(performerName) }}>
+        <h3 className="hpc__accent-name">{performerName}</h3>
       </div>
 
       <div className="hpc__body">
-        <h3 className="hpc__name">
-          {href ? (
-            <Link
-              to={href}
-              className="hpc__name-link"
-              tabIndex={-1}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {performerName}
-            </Link>
-          ) : (
-            performerName
-          )}
-        </h3>
-
-        {metaLine ? (
-          <p className="hpc__meta">{metaLine}</p>
-        ) : null}
+        {metaLine ? <p className="hpc__meta">{metaLine}</p> : null}
 
         {waitlistOnly ? (
           <button
             type="button"
-            className="hpc__btn hpc__btn--waitlist"
-            onClick={(e) => { e.stopPropagation(); onNotify?.(); }}
+            className="hpc__btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onNotify?.();
+            }}
           >
             {ctaLabel}
           </button>
@@ -150,7 +118,14 @@ export default function PerformerCard({
             {ctaLabel}
           </Link>
         ) : (
-          <button type="button" className="hpc__btn" onClick={(e) => { e.stopPropagation(); onNavigate?.(); }}>
+          <button
+            type="button"
+            className="hpc__btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onNavigate?.();
+            }}
+          >
             {ctaLabel}
           </button>
         )}

@@ -2820,7 +2820,7 @@ def create_order(request):
                 if not order.agreed_to_marketing:
                     order.agreed_to_marketing = True
                     order.save(update_fields=['agreed_to_marketing', 'updated_at'])
-                persist_user_marketing_opt_in(user=request.user)
+                persist_user_marketing_opt_in(user=request.user, request=request)
             order.ticket_ids = ticket_ids
             order.pending_offer = negotiated_offer
             if listing_group_id:
@@ -3686,7 +3686,7 @@ def guest_checkout(request):
             if order.agreed_to_marketing:
                 from users.consent import persist_user_marketing_opt_in
 
-                persist_user_marketing_opt_in(email=order_data.get('guest_email'))
+                persist_user_marketing_opt_in(email=order_data.get('guest_email'), request=request)
             if coupon_code:
                 try:
                     _maybe_claim_coupon_on_order(
@@ -4684,7 +4684,7 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
                     Event.objects.filter(date__gte=now)
                     .select_related('artist', 'venue_place')
                     .prefetch_related(event_venue_sections_prefetch())
-                    .order_by('date', 'name', 'id')
+                    .order_by('-ordering_priority', 'date', 'name', 'id')
                 )
                 artist_raw = qp.get('artist')
                 if artist_raw not in (None, ''):
@@ -4705,7 +4705,7 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
             Event.objects.filter(date__gte=now)
             .select_related('artist', 'venue_place')
             .prefetch_related(event_venue_sections_prefetch())
-        ).order_by('-_active_tickets_total', 'date', 'name', 'id')
+        ).order_by('-ordering_priority', '-_active_tickets_total', 'date', 'name', 'id')
         # Marketplace list: show all upcoming events (abundance UX — inventory hidden on cards).
         if self.action == 'list':
             queryset = queryset.filter(status='פעיל').exclude(artist__is_international=True)
@@ -4740,12 +4740,12 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
                 queryset = (
                     queryset.filter(date__lte=horizon)
                     .filter(_active_tickets_total__gt=0)
-                    .order_by('date', 'name')
+                    .order_by('-ordering_priority', 'date', 'name')
                 )
             high_demand_raw = str(qp.get('high_demand', '') or qp.get('is_hot', '')).lower()
             if high_demand_raw in ('1', 'true', 'yes', 'on'):
                 # Homepage sold-out / high-demand row — no ticket-stock requirement.
-                queryset = queryset.filter(high_demand=True).order_by('date', 'name')
+                queryset = queryset.filter(high_demand=True).order_by('-ordering_priority', 'date', 'name')
 
         return queryset
     
@@ -5014,7 +5014,7 @@ class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
                             output_field=IntegerField(),
                         ),
                     )
-                    .order_by('name')
+                    .order_by('-ordering_priority', 'name')
                 )
             else:
                 # Marketplace browse/homepage: return all artists so the discovery UI stays full
@@ -5041,12 +5041,12 @@ class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
                             distinct=True,
                         ),
                     )
-                    .order_by('-_artist_tickets_total', 'name')
+                    .order_by('-ordering_priority', '-_artist_tickets_total', 'name')
                 )
                 if recommended:
                     queryset = queryset.filter(_artist_upcoming_events_total__gt=0)
         else:
-            queryset = queryset.order_by('name')
+            queryset = queryset.order_by('-ordering_priority', 'name')
         search = self.request.query_params.get('search', None)
         if search:
             queryset = queryset.filter(name__icontains=search)

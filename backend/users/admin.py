@@ -99,7 +99,12 @@ class UserAdmin(BaseUserAdmin):
     
     # Properly handle fieldsets for Django 6.0 compatibility
     fieldsets = list(BaseUserAdmin.fieldsets) + [
-        ('Additional Info', {'fields': ('role', 'phone_number', 'agreed_to_marketing', 'profile_image')}),
+        ('Additional Info', {
+            'fields': (
+                'role', 'phone_number', 'agreed_to_marketing',
+                'marketing_opt_in_at', 'marketing_opt_in_ip', 'profile_image',
+            ),
+        }),
         (
             'Seller payout (bank transfer)',
             {
@@ -494,13 +499,15 @@ class TicketAdmin(admin.ModelAdmin):
 
 @admin.register(Artist)
 class ArtistAdmin(admin.ModelAdmin):
-    list_display = ['name', 'slug', 'category', 'genre', 'is_international', 'created_at']
+    list_display = ['name', 'ordering_priority', 'slug', 'category', 'genre', 'is_international', 'created_at']
+    list_display_links = ['name']
+    list_editable = ['ordering_priority']
     list_filter = ['category', 'is_international', 'genre', 'created_at']
     search_fields = ['name', 'slug', 'description', 'genre']
     readonly_fields = ['created_at', 'updated_at', 'slug', 'image_delivery_preview', 'cover_image_delivery_preview']
     fieldsets = (
         ('Basic Information', {
-            'fields': ('name', 'slug', 'category', 'is_international', 'genre', 'description', 'bottom_seo_text')
+            'fields': ('name', 'slug', 'category', 'is_international', 'ordering_priority', 'genre', 'description', 'bottom_seo_text')
         }),
         ('Media & Images', {
             'fields': ('image', 'cover_image', 'image_delivery_preview', 'cover_image_delivery_preview')
@@ -544,15 +551,17 @@ class VenueAdmin(admin.ModelAdmin):
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     list_display = [
-        'name', 'slug', 'artist', 'category', 'high_demand', 'home_team', 'away_team', 'status', 'date',
+        'name', 'ordering_priority', 'slug', 'artist', 'category', 'high_demand', 'home_team', 'away_team', 'status', 'date',
         'venue', 'city', 'country_display', 'created_at',
     ]
+    list_display_links = ['name']
+    list_editable = ['ordering_priority']
     list_filter = ['artist', 'category', 'high_demand', 'status', 'venue', 'city', 'country', 'age_restriction', 'date', 'created_at']
     search_fields = ['name', 'slug', 'legacy_slug', 'venue', 'city', 'artist__name', 'home_team', 'away_team', 'tournament']
     readonly_fields = ['created_at', 'updated_at', 'view_count', 'image_delivery_preview', 'slug', 'legacy_slug']
     fieldsets = (
         ('Basic Information', {
-            'fields': ('artist', 'name', 'slug', 'legacy_slug', 'category', 'status', 'high_demand')
+            'fields': ('artist', 'name', 'slug', 'legacy_slug', 'category', 'status', 'high_demand', 'ordering_priority')
         }),
         ('Location & Timing', {
             'fields': ('venue', 'venue_place', 'city', 'country', 'date', 'ends_at', 'doors_open')

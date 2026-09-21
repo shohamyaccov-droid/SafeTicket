@@ -60,11 +60,27 @@ class RegistrationMarketingOptInTests(TestCase):
             '/api/users/register/',
             self._payload(username='mkt_yes', email='mkt_yes@example.test', agreed_to_marketing=True),
             format='json',
+            HTTP_X_FORWARDED_FOR='203.0.113.40',
         )
         self.assertEqual(res.status_code, 201, res.content)
         user = User.objects.get(email='mkt_yes@example.test')
         self.assertTrue(user.agreed_to_marketing)
         self.assertTrue(res.json()['user']['agreed_to_marketing'])
+        self.assertIsNotNone(user.marketing_opt_in_at)
+        self.assertEqual(user.marketing_opt_in_ip, '203.0.113.40')
+
+    def test_register_unchecked_leaves_audit_blank(self):
+        res = self.api.post(
+            '/api/users/register/',
+            self._payload(username='mkt_blank', email='mkt_blank@example.test', agreed_to_marketing=False),
+            format='json',
+            HTTP_X_FORWARDED_FOR='203.0.113.41',
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        user = User.objects.get(email='mkt_blank@example.test')
+        self.assertFalse(user.agreed_to_marketing)
+        self.assertIsNone(user.marketing_opt_in_at)
+        self.assertIsNone(user.marketing_opt_in_ip)
 
 
 @override_settings(DEBUG=False, SECRET_KEY='marketing-opt-in-secret')
@@ -116,12 +132,15 @@ class CheckoutMarketingOptInTests(TestCase):
                 'agreed_to_marketing': True,
             },
             format='json',
+            HTTP_X_FORWARDED_FOR='198.51.100.20',
         )
         self.assertEqual(res.status_code, 201, res.content)
         order = Order.objects.get(pk=res.json()['id'])
         self.assertTrue(order.agreed_to_marketing)
         self.buyer.refresh_from_db()
         self.assertTrue(self.buyer.agreed_to_marketing)
+        self.assertIsNotNone(self.buyer.marketing_opt_in_at)
+        self.assertEqual(self.buyer.marketing_opt_in_ip, '198.51.100.20')
 
     def test_guest_checkout_opt_in_saved_on_order_not_implied(self):
         res_off = self.api.post(

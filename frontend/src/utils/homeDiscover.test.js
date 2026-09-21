@@ -8,6 +8,7 @@ import {
   HOME_DISCOVER_ROW_ORDER,
   LAST_MINUTE_WINDOW_DAYS,
   performerNavigateTarget,
+  sortPerformersByDemand,
 } from './homeDiscover';
 
 describe('performerNavigateTarget', () => {
@@ -159,5 +160,15 @@ describe('filterSeasonSportsEvents', () => {
     });
     expect(ev.image_url).toMatch(/^https:\/\/upload\.wikimedia\.org\//);
     expect(ev.image_url).toContain('%D7%9E%D7%9B%D7%91%D7%99_%D7%97%D7%99%D7%A4%D7%94');
+  });
+});
+
+describe('sortPerformersByDemand', () => {
+  it('puts higher orderingPriority first', () => {
+    const sorted = sortPerformersByDemand([
+      { performerName: 'ב', orderingPriority: 1, totalTickets: 0 },
+      { performerName: 'א', orderingPriority: 10, totalTickets: 0 },
+    ]);
+    expect(sorted.map((g) => g.performerName)).toEqual(['א', 'ב']);
   });
 });

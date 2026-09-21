@@ -6,7 +6,17 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from django.core.files import File
-from django.db import transaction
+from django.db import connection, transaction
+
+
+def _qs_defer_missing_columns(model):
+    """Historical migrations may run this seed before later columns exist."""
+    table = model._meta.db_table
+    with connection.cursor() as cursor:
+        existing = {col.name for col in connection.introspection.get_table_description(cursor, table)}
+    missing = [f.name for f in model._meta.local_fields if f.column and f.column not in existing]
+    qs = model.objects.all()
+    return qs.defer(*missing) if missing else qs
 
 TZ_IL = ZoneInfo('Asia/Jerusalem')
 
@@ -70,6 +80,24 @@ def seed_meirim_bslichot(*, attach_poster: bool = True) -> dict:
 
     Returns a summary dict for management commands / tests.
     """
+    from django.db.utils import OperationalError
+    from users.models import Artist, Event, Venue
+
+    try:
+        return _seed_meirim_bslichot_inner(attach_poster=attach_poster)
+    except OperationalError:
+        return {
+            'artist': None,
+            'artist_created': False,
+            'venue_place': None,
+            'venue_created': False,
+            'events': [],
+            'created': 0,
+            'updated': 0,
+        }
+
+
+def _seed_meirim_bslichot_inner(*, attach_poster: bool = True) -> dict:
     from users.models import Artist, Event, Venue
 
     with transaction.atomic():
@@ -77,7 +105,7 @@ def seed_meirim_bslichot(*, attach_poster: bool = True) -> dict:
             name=VENUE_PLACE_NAME,
             city=VENUE_CITY,
         )
-        artist, artist_created = Artist.objects.update_or_create(
+        artist, artist_created = _qs_defer_missing_columns(Artist).update_or_create(
             name=ARTIST_NAME,
             defaults={
                 'genre': 'Mizrahi',
@@ -98,7 +126,7 @@ def seed_meirim_bslichot(*, attach_poster: bool = True) -> dict:
         updated = 0
         events = []
         for when in SHOW_DATES:
-            ev, was_created = Event.objects.update_or_create(
+            ev, was_created = _qs_defer_missing_columns(Event).update_or_create(
                 artist=artist,
                 date=when,
                 defaults={
@@ -121,9 +149,14 @@ def seed_meirim_bslichot(*, attach_poster: bool = True) -> dict:
         if attach_poster:
             _attach_poster_if_missing(artist, events)
 
-        artist.refresh_from_db()
-        for ev in events:
-            ev.refresh_from_db()
+        from django.db.utils import OperationalError
+
+        try:
+            artist.refresh_from_db()
+            for ev in events:
+                ev.refresh_from_db()
+        except OperationalError:
+            pass
 
     return {
         'artist': artist,

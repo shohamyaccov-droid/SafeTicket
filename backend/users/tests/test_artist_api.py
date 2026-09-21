@@ -110,6 +110,35 @@ class ArtistListApiTests(TestCase):
         self.assertIn('Local Artist', names)
         self.assertNotIn('Taylor Swift', names)
 
+    def test_artist_list_sorts_by_ordering_priority_desc(self):
+        low = Artist.objects.create(name='Priority Low', ordering_priority=1)
+        high = Artist.objects.create(name='Priority High', ordering_priority=50)
+        Event.objects.create(
+            name='High Show',
+            artist=high,
+            date=timezone.now() + timezone.timedelta(days=10),
+            venue='היכל מנורה מבטחים',
+            city='Tel Aviv',
+            country='IL',
+            category='concert',
+            status='פעיל',
+        )
+        Event.objects.create(
+            name='Low Show',
+            artist=low,
+            date=timezone.now() + timezone.timedelta(days=10),
+            venue='היכל מנורה מבטחים',
+            city='Tel Aviv',
+            country='IL',
+            category='concert',
+            status='פעיל',
+        )
+        res = APIClient().get('/api/users/artists/?recommended=1')
+        self.assertEqual(res.status_code, 200, res.content)
+        payload = res.data if isinstance(res.data, list) else res.data.get('results', [])
+        names = [item['name'] for item in payload]
+        self.assertLess(names.index(high.name), names.index(low.name))
+
     def test_recommended_artist_list_excludes_empty_and_past_only_artists(self):
         seller = User.objects.create_user(
             username='recommended_seller',

@@ -72,6 +72,16 @@ class User(AbstractUser):
         default=False,
         help_text='Explicit opt-in to marketing email/WhatsApp (Israeli spam law). Never default True.',
     )
+    marketing_opt_in_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the user first explicitly opted in to marketing (legal audit trail).',
+    )
+    marketing_opt_in_ip = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        help_text='Client IP at first marketing opt-in (legal audit trail).',
+    )
     profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True)
     is_verified_seller = models.BooleanField(default=False, help_text="Verified seller badge (for trust indicators)")
     is_email_verified = models.BooleanField(default=True, help_text="Email verified via OTP (False when OTP enforcement is enabled)")
@@ -122,6 +132,11 @@ class Artist(models.Model):
         default=False,
         help_text='Hide from local-market homepage discovery when enabled',
     )
+    ordering_priority = models.IntegerField(
+        default=0,
+        db_index=True,
+        help_text='Homepage sort: higher numbers appear first.',
+    )
     cover_image = models.ImageField(upload_to='artist_covers/', blank=True, null=True, help_text="Artist cover/banner image")
     youtube_link = models.URLField(blank=True, null=True, help_text="YouTube channel or video link")
     spotify_link = models.URLField(blank=True, null=True, help_text="Spotify artist page link")
@@ -163,9 +178,10 @@ class Artist(models.Model):
         return self.name
     
     class Meta:
-        ordering = ['name']
+        ordering = ['-ordering_priority', 'name']
         indexes = [
             models.Index(fields=['name']),
+            models.Index(fields=['-ordering_priority', 'name']),
         ]
 
 
@@ -351,6 +367,11 @@ class Event(models.Model):
         default=False,
         help_text='Show high-demand urgency badge on discovery (e.g. official launch headliners).',
     )
+    ordering_priority = models.IntegerField(
+        default=0,
+        db_index=True,
+        help_text='Homepage sort: higher numbers appear first.',
+    )
 
     slug = models.SlugField(
         max_length=220,
@@ -418,10 +439,11 @@ class Event(models.Model):
         return f"{self.name} - {self.venue}, {self.city}"
     
     class Meta:
-        ordering = ['-date', 'name']
+        ordering = ['-ordering_priority', '-date', 'name']
         indexes = [
             models.Index(fields=['-date', 'name']),
             models.Index(fields=['city']),
+            models.Index(fields=['-ordering_priority', '-date']),
         ]
 
 

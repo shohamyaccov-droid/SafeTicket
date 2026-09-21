@@ -225,6 +225,7 @@ const Home = () => {
           nextDate: null,
           hasTickets: (Number(artist.total_tickets_count) || 0) > 0,
           waitlistOnly: true,
+          orderingPriority: Number(artist.ordering_priority) || 0,
         }));
     },
     [artists, searchQuery]

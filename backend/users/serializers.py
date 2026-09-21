@@ -341,8 +341,14 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop('password2')
-        from users.consent import is_explicit_marketing_opt_in
+        from users.consent import is_explicit_marketing_opt_in, request_client_ip
+        from django.utils import timezone
 
+        opted = is_explicit_marketing_opt_in(validated_data.get('agreed_to_marketing', False))
+        extra = {}
+        if opted:
+            extra['marketing_opt_in_at'] = timezone.now()
+            extra['marketing_opt_in_ip'] = request_client_ip(self.context.get('request'))
         user = User.objects.create_user(
             username=validated_data['username'],
             email=validated_data['email'],
@@ -351,9 +357,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             last_name=validated_data.get('last_name', ''),
             role='buyer',
             phone_number=validated_data['phone_number'],
-            agreed_to_marketing=is_explicit_marketing_opt_in(
-                validated_data.get('agreed_to_marketing', False)
-            ),
+            agreed_to_marketing=opted,
+            **extra,
         )
         return user
 
@@ -621,7 +626,7 @@ class ArtistSerializer(serializers.ModelSerializer):
         model = Artist
         fields = (
             'id', 'name', 'slug', 'image', 'image_url', 'description', 'category', 'is_international',
-            'total_tickets_count', 'created_at', 'updated_at'
+            'ordering_priority', 'total_tickets_count', 'created_at', 'updated_at'
         )
         read_only_fields = ('id', 'slug', 'created_at', 'updated_at', 'total_tickets_count')
     
@@ -694,7 +699,7 @@ class ArtistListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Artist
         fields = (
-            'id', 'name', 'slug', 'image_url', 'category', 'is_international', 'total_tickets_count'
+            'id', 'name', 'slug', 'image_url', 'category', 'is_international', 'ordering_priority', 'total_tickets_count'
         )
         read_only_fields = fields
     
@@ -722,7 +727,7 @@ class ArtistCardSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Artist
-        fields = ('id', 'name', 'slug', 'image_url', 'category')
+        fields = ('id', 'name', 'slug', 'image_url', 'category', 'ordering_priority')
         read_only_fields = fields
 
     def get_image_url(self, obj):
@@ -798,6 +803,7 @@ class EventSerializer(EventWaitlistCountMixin, EventVenueApiNormalizeMixin, seri
             'currency', 'currency_symbol',
             'image', 'image_url',
             'tickets_count', 'waitlist_count', 'view_count', 'category', 'home_team', 'away_team', 'tournament', 'high_demand', 'is_hot',
+            'ordering_priority',
             'seo_title', 'seo_description', 'canonical_url', 'canonical_path', 'og_image', 'json_ld',
             'created_at', 'updated_at',
         )
@@ -883,6 +889,7 @@ class EventListSerializer(EventWaitlistCountMixin, EventVenueApiNormalizeMixin, 
             'tickets_count',
             'waitlist_count',
             'category', 'home_team', 'away_team', 'tournament', 'high_demand', 'is_hot',
+            'ordering_priority',
             'seo_title', 'canonical_path',
         )
         read_only_fields = fields

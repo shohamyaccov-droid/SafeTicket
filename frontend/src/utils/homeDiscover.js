@@ -170,6 +170,12 @@ export function groupEventsByPerformer(list) {
     const artistId = display.artist_detail?.id ?? display.artist ?? null;
     const artistSlug = display.artist_detail?.slug || display.artist?.slug || null;
 
+    const artistPri = Number(display.artist_detail?.ordering_priority) || 0;
+    const eventPri = events.reduce(
+      (max, e) => Math.max(max, Number(e.ordering_priority) || 0),
+      0,
+    );
+
     out.push({
       key: `perf-${performerKey(display)}`,
       artistId: artistId != null ? artistId : null,
@@ -184,6 +190,7 @@ export function groupEventsByPerformer(list) {
       nextDate: display.date ?? null,
       hasTickets,
       waitlistOnly,
+      orderingPriority: Math.max(artistPri, eventPri),
     });
   }
 
@@ -212,9 +219,12 @@ export function filterLastMinuteEvents(list, todayStart, days = LAST_MINUTE_WIND
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 
-/** Sort performer groups by live inventory first, then demand, then name. */
+/** Sort performer groups by admin priority, then live inventory, then name. */
 export function sortPerformersByDemand(groups) {
   return [...groups].sort((a, b) => {
+    const aPri = Number(a?.orderingPriority) || 0;
+    const bPri = Number(b?.orderingPriority) || 0;
+    if (aPri !== bPri) return bPri - aPri;
     const aTickets = Number(a?.totalTickets) || 0;
     const bTickets = Number(b?.totalTickets) || 0;
     const aHas = aTickets > 0 ? 1 : 0;
