@@ -5,6 +5,7 @@ import { toastError, toastSuccess } from '../utils/toast';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { formatEventDatePill } from '../utils/eventLocalTime';
 import { selectRelatedShowDates } from '../utils/eventSchedule';
+import MarketingConsentCheckbox from './MarketingConsentCheckbox';
 import './WaitlistSignupModal.css';
 
 function validateEmail(em) {
@@ -57,6 +58,8 @@ export default function WaitlistSignupModal({ event, artist, relatedEvents, onCl
     if (event?.id) return [String(event.id)];
     return [];
   });
+  const [agreedToLegal, setAgreedToLegal] = useState(false);
+  const [agreedToMarketing, setAgreedToMarketing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -94,6 +97,10 @@ export default function WaitlistSignupModal({ event, artist, relatedEvents, onCl
       setError(pErr);
       return;
     }
+    if (!agreedToLegal) {
+      setError('יש לאשר את התקנון ומדיניות הפרטיות לפני ההרשמה.');
+      return;
+    }
     if (isEventScope && allIds.length > 0 && selectedIds.length === 0) {
       setError('בחרו לפחות תאריך אחד');
       return;
@@ -104,6 +111,7 @@ export default function WaitlistSignupModal({ event, artist, relatedEvents, onCl
         email: String(email).trim(),
         phone: String(phone).trim(),
         desired_quantity: desiredQuantity,
+        accepts_marketing: Boolean(agreedToMarketing),
       };
       if (isEventScope) {
         payload.event = event.id;
@@ -243,7 +251,37 @@ export default function WaitlistSignupModal({ event, artist, relatedEvents, onCl
               {error}
             </p>
           ) : null}
-          <button type="submit" className="waitlist-modal-submit waitlist-modal-submit--prominent" disabled={busy}>
+          <div className="waitlist-modal-legal" dir="rtl">
+            <label className="waitlist-modal-legal__label" htmlFor="waitlist-legal-agree">
+              <input
+                id="waitlist-legal-agree"
+                type="checkbox"
+                className="waitlist-modal-legal__checkbox"
+                checked={agreedToLegal}
+                onChange={(e) => {
+                  setAgreedToLegal(e.target.checked);
+                  if (e.target.checked) setError('');
+                }}
+                disabled={busy}
+              />
+              <span>
+                קראתי ואני מסכים/ה ל
+                <a href="/terms" target="_blank" rel="noopener noreferrer">תקנון ותנאי השימוש</a>
+                {' '}ול
+                <a href="/privacy" target="_blank" rel="noopener noreferrer">מדיניות הפרטיות</a>.
+              </span>
+            </label>
+          </div>
+          <MarketingConsentCheckbox
+            id="waitlist-marketing-consent"
+            checked={agreedToMarketing}
+            onChange={setAgreedToMarketing}
+          />
+          <button
+            type="submit"
+            className="waitlist-modal-submit waitlist-modal-submit--prominent"
+            disabled={busy || !agreedToLegal}
+          >
             {busy ? 'שולח...' : 'הצטרף לרשימת המתנה'}
           </button>
         </form>

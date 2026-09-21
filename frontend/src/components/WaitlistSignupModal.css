@@ -231,6 +231,38 @@
   cursor: not-allowed;
 }
 
+.waitlist-modal-legal {
+  margin-top: 0.9rem;
+  margin-bottom: 0.1rem;
+}
+
+.waitlist-modal-legal__label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #374151;
+  cursor: pointer;
+  line-height: 1.5;
+}
+
+.waitlist-modal-legal__checkbox {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+  accent-color: #ea580c;
+  cursor: pointer;
+}
+
+.waitlist-modal-legal__label a {
+  color: #ea580c;
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+.waitlist-modal-legal__label a:hover {
+  color: #c2410c;
+}
+
 @media (max-width: 480px) {
   .waitlist-modal-overlay {
     align-items: flex-end;

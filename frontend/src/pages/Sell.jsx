@@ -20,6 +20,7 @@ import {
 } from '../utils/sellVenueSections';
 import { displayEventVenueName, formatEventLocation } from '../utils/eventLocalTime';
 import SellCompletionModal from '../components/SellCompletionModal';
+import MarketingConsentCheckbox from '../components/MarketingConsentCheckbox';
 import TicketUploadWizard from '../components/TicketUploadWizard';
 import OptionalSeatingDisclosure from '../components/OptionalSeatingDisclosure';
 import ListingCreatedSuccessView from './ListingCreatedSuccessView';
@@ -366,6 +367,8 @@ const Sell = () => {
   const [sellerListingTermsAccepted, setSellerListingTermsAccepted] = useState(
     Boolean(sellDraft?.sellerListingTermsAccepted)
   );
+  const [sellerLegalAccepted, setSellerLegalAccepted] = useState(false);
+  const [sellerMarketing, setSellerMarketing] = useState(false);
   const [eventRequestOpen, setEventRequestOpen] = useState(false);
   const [eventRequestHint, setEventRequestHint] = useState('');
   const [eventRequestDetails, setEventRequestDetails] = useState('');
@@ -1153,6 +1156,7 @@ const Sell = () => {
     submitData.append('original_price', listingPriceStr);
     submitData.append('listing_price', fdText(String(Math.max(0, Math.round(listingPriceNum)))));
     if (ilEvent) submitData.append('il_legal_declaration', 'true');
+    submitData.append('accepts_marketing', sellerMarketing ? 'true' : 'false');
     submitData.append('delivery_method', 'instant');
     submitData.append('available_quantity', fdText(qtyNum));
     submitData.append('is_together', activeForm.is_together ? 'true' : 'false');
@@ -1254,6 +1258,11 @@ const Sell = () => {
 
     if (!sellerListingTermsAccepted) {
       setFieldErrors({ terms: 'יש לאשר את תנאי ההצהרה כדי להמשיך' });
+      releaseListingSubmitLock();
+      return;
+    }
+    if (!sellerLegalAccepted) {
+      setFieldErrors({ legalAccept: 'יש לאשר את התקנון ומדיניות הפרטיות כדי להמשיך' });
       releaseListingSubmitLock();
       return;
     }
@@ -2171,6 +2180,34 @@ const Sell = () => {
             </label>
           </div>
           <SellFieldError message={fieldErrors.terms} />
+
+          <div className="terms-checkbox-container sell-single-compliance" style={{ marginTop: '0.75rem' }}>
+            <label className="terms-checkbox-label" htmlFor="sellerLegalAccepted">
+              <input
+                id="sellerLegalAccepted"
+                type="checkbox"
+                className="terms-checkbox-input"
+                checked={sellerLegalAccepted}
+                onChange={(e) => {
+                  setSellerLegalAccepted(e.target.checked);
+                  if (e.target.checked) setFieldErrors((prev) => { const n = { ...prev }; delete n.legalAccept; return n; });
+                }}
+                required={wizardStep === 2}
+              />
+              <span>
+                קראתי ואני מסכים/ה ל
+                <a href="/terms" target="_blank" rel="noopener noreferrer">תקנון ותנאי השימוש</a>
+                {' '}ול
+                <a href="/privacy" target="_blank" rel="noopener noreferrer">מדיניות הפרטיות</a>.
+              </span>
+            </label>
+          </div>
+          <SellFieldError message={fieldErrors.legalAccept} />
+          <MarketingConsentCheckbox
+            id="sell-marketing-consent"
+            checked={sellerMarketing}
+            onChange={setSellerMarketing}
+          />
 
           <div className="sell-wizard-actions">
             <button

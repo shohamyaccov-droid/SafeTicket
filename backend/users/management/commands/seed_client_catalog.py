@@ -187,8 +187,9 @@ class Command(BaseCommand):
         self.stdout.write(_console(f'EVENT COUNT: {events}'))
         self.stdout.write(f'IMAGE FIELDS STILL SET: {imaged}')
         self.stdout.write(self.style.SUCCESS('=' * 56))
-        if events != 21:
-            raise CommandError(_console(f'Expected 21 events, got {events}'))
+        expected_events = 35  # 10 NEXT-RG + 6 NEXT-JLM + 9 Hysteria-TLV + 5 Hysteria-JLM + 5 solos
+        if events != expected_events:
+            raise CommandError(_console(f'Expected {expected_events} events, got {events}'))
         if set(artists) != set(ALLOWED_ARTISTS):
             raise CommandError(
                 _console(f'Artist set mismatch. expected={ALLOWED_ARTISTS} got={artists}')
@@ -296,26 +297,45 @@ class Command(BaseCommand):
         itay = upsert_artist('איתי לוי')
         noam = upsert_artist('נועם בתן')
 
-        specs = [
-            {
+        specs = []
+        for dt in (
+            _il(2026, 10, 8),
+            _il(2026, 10, 10),
+            _il(2026, 10, 11),
+            _il(2026, 10, 12),
+            _il(2026, 10, 13),
+            _il(2026, 10, 14),
+            _il(2026, 10, 15),
+            _il(2026, 10, 17),
+            _il(2026, 10, 18),
+            _il(2026, 10, 22),
+        ):
+            specs.append({
                 'artist': next_artist,
                 'name': 'NEXT - אצטדיון רמת גן',
-                'date': _il(2026, 10, 22),
+                'date': dt,
                 'venue': VENUE_GENERIC,
                 'venue_place': ramat_gan,
                 'city': 'רמת גן',
                 'category': 'festival',
-            },
-            {
+            })
+        for dt in (
+            _il(2026, 12, 3),
+            _il(2026, 12, 5),
+            _il(2026, 12, 6),
+            _il(2026, 12, 7),
+            _il(2026, 12, 9),
+            _il(2026, 12, 10),
+        ):
+            specs.append({
                 'artist': next_artist,
                 'name': 'NEXT - פיס ארנה ירושלים',
-                'date': _il(2026, 12, 7),
+                'date': dt,
                 'venue': VENUE_PAIS,
                 'venue_place': pais,
                 'city': 'ירושלים',
                 'category': 'festival',
-            },
-        ]
+            })
         for dt in (
             _il(2026, 12, 3),
             _il(2026, 12, 5),
