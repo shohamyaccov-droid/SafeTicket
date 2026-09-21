@@ -173,6 +173,9 @@ const Navbar = () => {
       <Link to="/refunds" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
         ביטולים והחזרים
       </Link>
+      <Link to="/cancel-transaction" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
+        ביטול עסקה
+      </Link>
       <Link to="/buyer-guarantee" className="nav-link nav-link-static nav-drawer-link" onClick={closeDrawer}>
         הגנת הקונה
       </Link>

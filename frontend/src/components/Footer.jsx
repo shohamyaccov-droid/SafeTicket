@@ -51,6 +51,9 @@ const Footer = () => {
                 <Link to="/privacy">מדיניות פרטיות</Link>
               </li>
               <li>
+                <Link to="/cancel-transaction">ביטול עסקה</Link>
+              </li>
+              <li>
                 <Link to="/refunds">החזרים</Link>
               </li>
               <li>
@@ -88,6 +91,8 @@ const Footer = () => {
             <Link to="/terms">תקנון ותנאי שימוש</Link>
             {' · '}
             <Link to="/privacy">מדיניות פרטיות</Link>
+            {' · '}
+            <Link to="/cancel-transaction">ביטול עסקה</Link>
             {' · '}
             <Link to="/refunds">החזרים</Link>
             {' · '}

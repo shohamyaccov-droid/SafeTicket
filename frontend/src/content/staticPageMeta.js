@@ -6,6 +6,7 @@ const CRUMB_NAMES = {
   '/terms': 'תקנון',
   '/privacy': 'פרטיות',
   '/refunds': 'החזרים',
+  '/cancel-transaction': 'ביטול עסקה',
   '/buyer-guarantee': 'הגנת הקונה',
   '/accessibility': 'נגישות',
   '/contact': 'צור קשר',

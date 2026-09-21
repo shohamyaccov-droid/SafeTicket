@@ -52,6 +52,7 @@ const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 const AboutPage = lazy(() => import('./pages/AboutPage'));
 const BuyerGuaranteePage = lazy(() => import('./pages/BuyerGuaranteePage'));
 const AccessibilityPage = lazy(() => import('./pages/AccessibilityPage'));
+const CancelTransactionPage = lazy(() => import('./pages/CancelTransactionPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const PaymeCheckoutSuccess = lazy(() => import('./pages/PaymeCheckoutSuccess'));
 const PaymeCheckoutCancel = lazy(() => import('./pages/PaymeCheckoutCancel'));
@@ -325,6 +326,7 @@ function App() {
               <Route path="/terms" element={routeElement(<TermsPage />)} />
               <Route path="/privacy" element={routeElement(<PrivacyPage />)} />
               <Route path="/refunds" element={routeElement(<RefundsPage />)} />
+              <Route path="/cancel-transaction" element={routeElement(<CancelTransactionPage />)} />
               <Route path="/about" element={routeElement(<AboutPage />)} />
               <Route path="/buyer-guarantee" element={routeElement(<BuyerGuaranteePage />)} />
               <Route path="/accessibility" element={routeElement(<AccessibilityPage />)} />
