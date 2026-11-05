@@ -1,7 +1,7 @@
 import './BuyEscrowBanner.css';
 
 export const BUY_ESCROW_COPY =
-  'הכסף שלך מוגן – התשלום מועבר למוכר רק לאחר כניסתך להופעה בהצלחה.';
+  'הכסף נשמר בנאמנות ומשוחרר למוכר 36 שעות לאחר תום האירוע, בכפוף לתקינות הכרטיס ולהיעדר תלונה מבוססת.';
 
 /* eslint-disable react/prop-types */
 export default function BuyEscrowBanner({ compact = false }) {

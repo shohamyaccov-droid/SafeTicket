@@ -104,14 +104,14 @@ def compose() -> Image.Image:
     y = draw_centered(draw, "TRADETIX", y, font(F_EX, 36), CYAN, stroke_w=3) + 4
     y = draw_centered(draw, rtl("הקבוצה הבטוחה"), y, font(F_EX, 70), WHITE, stroke_w=5) + 0
     y = draw_centered(draw, rtl("לכרטיסים בישראל"), y, font(F_EX, 70), WHITE, stroke_w=5) + 4
-    y = draw_centered(draw, rtl("הכסף בנאמנות עד הכניסה"), y, font(F_BD, 32), CYAN, stroke_w=3) + 16
+    y = draw_centered(draw, rtl("נאמנות 36 שעות אחרי האירוע"), y, font(F_BD, 32), CYAN, stroke_w=3) + 16
 
     rule_f = font(F_EX, 26)
     y = pill(bg, rtl("0% עמלה למוכרים"), y, rule_f) + 8
     y = pill(bg, rtl("תשלום רק באתר  ·  לא בביט ישיר"), y, rule_f) + 10
 
     draw = ImageDraw.Draw(bg)
-    y = draw_centered(draw, rtl("אין ספסרות  ·  עוקץ = הרחקה"), y, font(F_BD, 22), MUTED, stroke_w=2) + 4
+    y = draw_centered(draw, rtl("שוק משני  ·  המחיר לפי המוכר"), y, font(F_BD, 22), MUTED, stroke_w=2) + 4
     draw_centered(draw, "tradetix.co.il", y, font(F_SM, 22), MUTED, stroke_w=2)
     return bg.convert("RGB")
 

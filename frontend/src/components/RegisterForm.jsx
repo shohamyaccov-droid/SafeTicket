@@ -21,6 +21,7 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
   });
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -54,6 +55,9 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
     if (phoneErr) nextFieldErrors.phone_number = phoneErr;
     if (formData.password !== formData.password2) {
       nextFieldErrors.password2 = 'הסיסמאות אינן תואמות';
+    }
+    if (!acceptedLegal) {
+      nextFieldErrors.accepted_legal = 'יש לאשר את התקנון ומדיניות הפרטיות כדי להמשיך';
     }
     if (Object.keys(nextFieldErrors).length) {
       setFieldErrors(nextFieldErrors);
@@ -200,6 +204,38 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
           />
           {fieldErrors.password2 ? <span className="field-error-text">{fieldErrors.password2}</span> : null}
         </div>
+        <div className="register-legal-consent" dir="rtl">
+          <label className="register-legal-consent__label" htmlFor={fieldId('accepted_legal')}>
+            <input
+              id={fieldId('accepted_legal')}
+              name="accepted_legal"
+              type="checkbox"
+              className="register-legal-consent__checkbox"
+              checked={acceptedLegal}
+              onChange={(e) => {
+                setAcceptedLegal(e.target.checked);
+                if (e.target.checked) {
+                  setFieldErrors((prev) => {
+                    if (!prev.accepted_legal) return prev;
+                    const next = { ...prev };
+                    delete next.accepted_legal;
+                    return next;
+                  });
+                }
+              }}
+              required
+            />
+            <span>
+              קראתי ואני מסכים/ה ל
+              <a href="/terms" target="_blank" rel="noopener noreferrer">תקנון ותנאי השימוש</a>
+              {' '}ול
+              <a href="/privacy" target="_blank" rel="noopener noreferrer">מדיניות הפרטיות</a>.
+            </span>
+          </label>
+          {fieldErrors.accepted_legal ? (
+            <span className="field-error-text">{fieldErrors.accepted_legal}</span>
+          ) : null}
+        </div>
         <MarketingConsentCheckbox
           id={fieldId('agreed_to_marketing')}
           checked={Boolean(formData.agreed_to_marketing)}
@@ -212,7 +248,8 @@ export default function RegisterForm({ onSuccess, onRequestLogin, idPrefix = 're
             !isValidRequiredEmail(formData.email) ||
             !isValidRequiredPhone(formData.phone_number) ||
             !formData.password ||
-            !formData.password2
+            !formData.password2 ||
+            !acceptedLegal
           }
           className="auth-button"
         >

@@ -16,7 +16,7 @@ const Footer = () => {
             <p className="footer-buyer-protection">
               <Link to="/buyer-guarantee">הגנת הקונה</Link>
               {' — '}
-              הכסף בנאמנות ומועבר למוכר רק אחרי המופע
+              הכסף בנאמנות ומשוחרר למוכר 36 שעות לאחר תום האירוע
             </p>
           </div>
 
@@ -85,6 +85,9 @@ const Footer = () => {
         </div>
 
         <div className="footer-bottom">
+          <p className="footer-secondary-disclaimer">
+            TradeTix היא זירת מסחר משנית לכרטיסים ואינה הקופה הראשית של האירועים. מחירי הכרטיסים נקבעים על ידי המוכרים ועשויים להיות גבוהים או נמוכים מהמחיר הנקוב של הכרטיס.
+          </p>
           <p>&copy; {new Date().getFullYear()} TradeTix. כל הזכויות שמורות.</p>
           <p className="footer-shabbat">אתר שומר שבת.</p>
           <p className="footer-legal-links">

@@ -562,7 +562,7 @@ def build_artist_seo_description(artist) -> str:
     name = artist_display_name(artist)
     return _strip_html(
         f'מחפשים כרטיסים ל{name}? כל המועדים והכרטיסים הכי שווים מחכים לכם ב-TradeTix. '
-        f'קנייה ומכירה בטוחה ללא ספסרות.'
+        f'קנייה ומכירה בטוחה. המחיר נקבע על ידי המוכרים ועשוי להיות גבוה או נמוך מהמחיר הנקוב.'
     )
 
 
