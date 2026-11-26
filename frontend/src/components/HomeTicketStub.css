@@ -1,19 +1,30 @@
 .home-ticket-section {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   margin: 0 0 1.75rem;
   padding-inline: 24px;
+  box-sizing: border-box;
   font-family: 'Heebo', 'Assistant', sans-serif;
 }
 
 .home-ticket-head {
   display: flex;
+  flex-direction: row;
   justify-content: space-between;
   align-items: flex-end;
   gap: 16px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
   padding: 0;
+  box-sizing: border-box;
 }
 
 .home-ticket-heading {
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .home-ticket-sub {
@@ -27,29 +38,35 @@
 .home-ticket-arrows {
   display: flex;
   flex-direction: row;
+  align-items: center;
   direction: ltr;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .home-ticket-section .h2 {
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 800;
   margin: 0;
   color: #0B1B4A;
   font-family: 'Heebo', 'Assistant', sans-serif;
   line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .home-ticket-section .rail {
   display: flex;
-  gap: 22px;
+  gap: 16px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   scrollbar-width: none;
   margin: 0;
   padding: 10px 0 28px;
+  box-sizing: border-box;
   -webkit-overflow-scrolling: touch;
   cursor: grab;
 }
@@ -65,15 +82,15 @@
 }
 
 .tk {
-  flex: 0 0 480px;
+  flex: 0 0 350px;
   scroll-snap-align: start;
   display: flex;
   position: relative;
   overflow: hidden;
   background: #fff;
   border: 1px solid #D6E4FF;
-  border-radius: 24px;
-  min-height: 196px;
+  border-radius: 18px;
+  min-height: 150px;
   box-shadow: 0 12px 32px rgba(37, 99, 235, 0.1);
   transition: transform 0.25s, box-shadow 0.25s;
   color: inherit;
@@ -93,10 +110,10 @@
 .ta {
   position: relative;
   overflow: hidden;
-  width: 170px;
+  width: 116px;
   flex-shrink: 0;
   color: #fff;
-  padding: 20px;
+  padding: 14px 16px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -106,23 +123,23 @@
 .ta::before {
   content: '';
   position: absolute;
-  width: 260px;
-  height: 260px;
+  width: 190px;
+  height: 190px;
   border-radius: 50%;
-  bottom: -120px;
-  left: -90px;
+  bottom: -90px;
+  left: -65px;
   border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 0 0 0 30px rgba(255, 255, 255, 0.06), 0 0 0 60px rgba(255, 255, 255, 0.04);
+  box-shadow: 0 0 0 22px rgba(255, 255, 255, 0.06), 0 0 0 44px rgba(255, 255, 255, 0.04);
 }
 
 .ta .lt {
   position: absolute;
-  top: -18px;
-  right: 6px;
+  top: -6px;
+  right: 4px;
   font-family: 'Space Grotesk', 'Heebo', sans-serif;
-  font-size: 150px;
+  font-size: 100px;
   font-weight: 700;
-  opacity: 0.14;
+  opacity: 0.1;
   line-height: 1;
   pointer-events: none;
   user-select: none;
@@ -134,18 +151,18 @@
 
 .ta .n {
   font-family: 'Space Grotesk', 'Heebo', sans-serif;
-  font-size: 60px;
+  font-size: 42px;
   font-weight: 700;
   line-height: 1;
 }
 
 .ta .n--soon {
-  font-size: 28px;
+  font-size: 22px;
   font-family: 'Heebo', 'Assistant', sans-serif;
 }
 
 .ta .l {
-  font-size: 14px;
+  font-size: 12px;
   color: #E3EEFF;
 }
 
@@ -153,7 +170,7 @@
   position: relative;
   width: 0;
   border-right: 2px dashed #C5D8FF;
-  margin: 14px 0;
+  margin: 10px 0;
   flex-shrink: 0;
 }
 
@@ -163,8 +180,8 @@
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: #F2F7FF;
   border: 1px solid #D6E4FF;
@@ -172,44 +189,48 @@
 }
 
 .td::before {
-  top: -27px;
+  top: -21px;
 }
 
 .td::after {
-  bottom: -27px;
+  bottom: -21px;
 }
 
 .tb {
   flex: 1;
-  padding: 22px 24px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px;
   color: #0B1B4A;
   min-width: 0;
 }
 
 .tb .nm {
-  font-size: 25px;
+  font-size: 19px;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.2;
   letter-spacing: -0.3px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .tb .ct {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 13px;
   color: #4A5B85;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .tb .ct::before {
   content: '';
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: #10B981;
   flex-shrink: 0;
@@ -230,22 +251,22 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 42px;
-  padding: 0 22px;
-  border-radius: 12px;
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 10px;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
   font-family: inherit;
   border: 0;
   cursor: pointer;
   background: #2563EB;
-  color: #fff;
+  color: #ffffff;
   text-decoration: none;
 }
 
 .tk .btn:hover {
   background: #1D4ED8;
-  color: #fff;
+  color: #ffffff;
 }
 
 .tk .btn:focus-visible,
@@ -255,13 +276,13 @@
 }
 
 .home-ticket-section .arw {
-  width: 46px;
-  height: 46px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   border: 1px solid #BCD3FF;
   background: #fff;
   color: #1D4ED8;
-  font-size: 20px;
+  font-size: 16px;
   cursor: pointer;
   box-shadow: 0 6px 16px rgba(37, 99, 235, 0.14);
   display: inline-flex;
@@ -270,6 +291,7 @@
   font-family: 'Heebo', 'Assistant', sans-serif;
   line-height: 1;
   padding: 0;
+  flex-shrink: 0;
 }
 
 .home-ticket-section .arw:hover {
@@ -278,12 +300,12 @@
 }
 
 @media (max-width: 900px) {
-  .home-ticket-section .h2 {
-    font-size: 24px;
-  }
-
   .home-ticket-section {
     padding-inline: 16px;
+  }
+
+  .home-ticket-section .h2 {
+    font-size: 22px;
   }
 
   .home-ticket-head {
@@ -291,32 +313,34 @@
   }
 
   .tk {
-    flex-basis: 86%;
+    flex: 0 0 82%;
+    max-width: 320px;
+    min-height: 140px;
   }
 
   .ta {
-    width: 130px;
-    padding: 16px;
+    width: 100px;
+    padding: 12px 14px;
   }
 
   .ta .n {
-    font-size: 44px;
+    font-size: 36px;
   }
 
   .ta .n--soon {
-    font-size: 22px;
+    font-size: 18px;
   }
 
   .ta .lt {
-    font-size: 110px;
+    font-size: 72px;
   }
 
   .tb {
-    padding: 16px 16px;
+    padding: 14px 14px;
   }
 
   .tb .nm {
-    font-size: 20px;
+    font-size: 17px;
   }
 
   .home-ticket-section .rail {

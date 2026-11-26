@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { eventHref } from '../utils/eventSeo';
-import { artistHrefFromGroup } from '../utils/artistSeo';
 import { DEFAULT_SITE_DESCRIPTION, DEFAULT_SITE_TITLE } from '../utils/siteSeo';
 import PageSeo from '../components/PageSeo';
 import { artistAPI, eventAPI } from '../services/api';
@@ -459,7 +458,7 @@ const Home = () => {
             <button
               type="button"
               className="arw"
-              onClick={() => scrollRail(-480)}
+              onClick={() => scrollRail(-366)}
               aria-label="גלילה קדימה ברשימה"
             >
               <span aria-hidden="true">←</span>
@@ -467,7 +466,7 @@ const Home = () => {
             <button
               type="button"
               className="arw"
-              onClick={() => scrollRail(480)}
+              onClick={() => scrollRail(366)}
               aria-label="גלילה אחורה ברשימה"
             >
               <span aria-hidden="true">→</span>

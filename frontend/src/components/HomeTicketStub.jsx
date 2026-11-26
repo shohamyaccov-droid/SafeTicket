@@ -21,6 +21,22 @@ function ticketInitial(name) {
   return chars[0] || '';
 }
 
+/** Display-only. Does not change the title passed in for links, aria, or data. */
+function titleWithoutRepeatedCity(title, city) {
+  const name = String(title || '').trim();
+  const place = String(city || '').trim();
+  if (!name || !place || !name.includes(place)) return name;
+
+  const escaped = place.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const next = name
+    .replace(new RegExp(`(?:\\s*[-–—|,]\\s*)?${escaped}`, 'g'), ' ')
+    .replace(/\s*[-–—|,]\s*$/g, '')
+    .replace(/^\s*[-–—|,]\s*/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return next || name;
+}
+
 /**
  * Shared homepage ticket-stub. Callers own the CTA children, labels, and navigation.
  */
@@ -35,6 +51,7 @@ export default function HomeTicketStub({
   const letter = ticketInitial(title);
   const hasCount = typeof count === 'number' && Number.isFinite(count) && count > 0;
   const cityLabel = String(city || '').trim();
+  const displayTitle = titleWithoutRepeatedCity(title, cityLabel);
 
   return (
     <article
@@ -70,7 +87,7 @@ export default function HomeTicketStub({
       <div className="td" aria-hidden="true" />
       <div className="tb">
         <div>
-          <div className="nm">{title}</div>
+          <div className="nm">{displayTitle}</div>
           {cityLabel ? <div className="ct">{cityLabel}</div> : null}
         </div>
         <div className="bt">{children}</div>

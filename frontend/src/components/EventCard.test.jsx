@@ -49,4 +49,13 @@ describe('EventCard dual CTAs and FOMO', () => {
     expect(screen.getByText('מועדים קרובים')).toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();
   });
+
+  it('drops a repeated city from the visible title and keeps the city line', () => {
+    renderCard({
+      event: { ...event, name: 'היסטריה - ירושלים', city: 'ירושלים' },
+    });
+    expect(screen.getByText('היסטריה')).toBeInTheDocument();
+    expect(screen.getByText('ירושלים')).toBeInTheDocument();
+    expect(screen.queryByText('היסטריה - ירושלים')).not.toBeInTheDocument();
+  });
 });

@@ -1082,9 +1082,12 @@
 /* Viagogo-style horizontal rows (force horizontal strip; never collapse to CSS grid) */
 .viagogo-home-discover,
 .home-viagogo-rows {
-  max-width: 1400px;
+  width: 100%;
+  max-width: min(1400px, 100%);
+  min-width: 0;
   margin: 0 auto;
   padding: 0 0 3rem;
+  box-sizing: border-box;
   direction: rtl;
   display: block;
 }
