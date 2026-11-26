@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { eventHref } from '../utils/eventSeo';
 import { artistHrefFromGroup } from '../utils/artistSeo';
@@ -25,6 +25,28 @@ import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import './Home.css';
 
 /* eslint-disable react/prop-types */
+function sharedEventCity(events) {
+  let city = '';
+  for (const ev of events || []) {
+    const next = String(ev?.city || '').trim();
+    if (!next) continue;
+    if (!city) city = next;
+    else if (city !== next) return '';
+  }
+  return city;
+}
+
+const HOME_ROW_ACCENT_OFFSET = {
+  'last-minute': 0,
+  recommended: 2,
+  music: 4,
+  'sports-season': 1,
+  standup: 3,
+  sports: 5,
+};
+
+const RECOMMENDED_ROW_SUBTITLE = 'הצטרפו לרשימת ההמתנה וקבלו עדכון ראשונים';
+
 function formatEventDateHe(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -373,151 +395,126 @@ const Home = () => {
   const CarouselSection = ({ title, slug, kind, performers = [], events = [] }) => {
     const id = slug || String(title).replace(/\s+/g, '-');
     const scrollRef = useRef(null);
-    const [canPrev, setCanPrev] = useState(false);
-    const [canNext, setCanNext] = useState(false);
+    const dragRef = useRef(null);
+    const accentOffset = HOME_ROW_ACCENT_OFFSET[id] || 0;
+    const subtitle = id === 'recommended' ? RECOMMENDED_ROW_SUBTITLE : '';
 
     const items = useMemo(
       () => (kind === 'performer' ? performers : kind === 'lastMinute' || kind === 'event' ? events : []),
       [events, kind, performers]
     );
 
-    const updateArrows = useCallback(() => {
+    const scrollRail = (left) => {
+      scrollRef.current?.scrollBy({ left, behavior: 'smooth' });
+    };
+
+    const onRailPointerDown = (e) => {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      if (e.target.closest('a, button')) return;
       const el = scrollRef.current;
       if (!el) return;
-      const max = el.scrollWidth - el.clientWidth;
-      if (max <= 4) {
-        setCanPrev(false);
-        setCanNext(false);
-        return;
+      dragRef.current = { id: e.pointerId, x: e.clientX, left: el.scrollLeft, moved: false };
+      el.setPointerCapture?.(e.pointerId);
+      el.classList.add('is-dragging');
+    };
+
+    const onRailPointerMove = (e) => {
+      const drag = dragRef.current;
+      if (!drag || drag.id !== e.pointerId) return;
+      const dx = e.clientX - drag.x;
+      if (Math.abs(dx) > 5) drag.moved = true;
+      if (!drag.moved) return;
+      const el = scrollRef.current;
+      if (el) el.scrollLeft = drag.left - dx;
+    };
+
+    const endRailDrag = (e) => {
+      const drag = dragRef.current;
+      if (!drag || drag.id !== e.pointerId) return;
+      dragRef.current = null;
+      const el = scrollRef.current;
+      el?.classList.remove('is-dragging');
+      if (drag.moved && el) {
+        const blockClick = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          el.removeEventListener('click', blockClick, true);
+        };
+        el.addEventListener('click', blockClick, true);
       }
-      const sl = el.scrollLeft;
-      const eps = 8;
-      setCanPrev(sl < max - eps);
-      setCanNext(sl > eps);
-    }, []);
-
-    const snapCarouselToHead = useCallback(() => {
-      const el = scrollRef.current;
-      if (!el) return;
-      const max = el.scrollWidth - el.clientWidth;
-      if (max > 0) el.scrollLeft = max;
-    }, []);
-
-    useLayoutEffect(() => {
-      snapCarouselToHead();
-      updateArrows();
-    }, [items, snapCarouselToHead, updateArrows]);
-
-    useEffect(() => {
-      updateArrows();
-      const el = scrollRef.current;
-      if (!el) return;
-      const ro = new ResizeObserver(() => updateArrows());
-      ro.observe(el);
-      el.addEventListener('scroll', updateArrows, { passive: true });
-      return () => {
-        ro.disconnect();
-        el.removeEventListener('scroll', updateArrows);
-      };
-    }, [items, updateArrows, snapCarouselToHead]);
-
-    const scheduleArrowSync = (el) => {
-      if (!el) return;
-      let done = false;
-      const sync = () => {
-        if (done) return;
-        done = true;
-        updateArrows();
-      };
-      el.addEventListener('scrollend', sync, { once: true });
-      window.setTimeout(sync, 450);
-    };
-
-    const goNext = () => {
-      const el = scrollRef.current;
-      if (!el) return;
-      el.scrollBy({ left: -Math.round(el.clientWidth * 0.72), behavior: 'smooth' });
-      scheduleArrowSync(el);
-    };
-
-    const goPrev = () => {
-      const el = scrollRef.current;
-      if (!el) return;
-      el.scrollBy({ left: Math.round(el.clientWidth * 0.72), behavior: 'smooth' });
-      scheduleArrowSync(el);
     };
 
     if (!items?.length) return null;
 
     return (
-      <section className="home-carousel-section viagogo-row" aria-labelledby={`row-${id}`} data-home-row={id}>
-        <div className="home-carousel-head">
-          <h2 id={`row-${id}`} className="home-carousel-title">
-            {title}
-          </h2>
+      <section className="home-ticket-section" aria-labelledby={`row-${id}`} data-home-row={id}>
+        <div className="home-ticket-head">
+          <div className="home-ticket-heading">
+            <h2 id={`row-${id}`} className="h2">
+              {title}
+            </h2>
+            {subtitle ? <p className="home-ticket-sub">{subtitle}</p> : null}
+          </div>
+          <div className="home-ticket-arrows">
+            <button
+              type="button"
+              className="arw"
+              onClick={() => scrollRail(-480)}
+              aria-label="גלילה קדימה ברשימה"
+            >
+              <span aria-hidden="true">←</span>
+            </button>
+            <button
+              type="button"
+              className="arw"
+              onClick={() => scrollRail(480)}
+              aria-label="גלילה אחורה ברשימה"
+            >
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
         </div>
         <div
-          className={`home-carousel-wrap${canPrev ? ' home-carousel-wrap--can-prev' : ''}${canNext ? ' home-carousel-wrap--can-next' : ''}`}
+          ref={scrollRef}
+          className="rail"
+          role="list"
+          onPointerDown={onRailPointerDown}
+          onPointerMove={onRailPointerMove}
+          onPointerUp={endRailDrag}
+          onPointerCancel={endRailDrag}
         >
-          <button
-            type="button"
-            className="home-carousel-arrow home-carousel-arrow--prev"
-            onClick={goPrev}
-            disabled={!canPrev}
-            aria-label="גלילה אחורה ברשימה"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className="home-carousel-arrow home-carousel-arrow--next"
-            onClick={goNext}
-            disabled={!canNext}
-            aria-label="גלילה קדימה ברשימה"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-          <div ref={scrollRef} className="home-carousel-scroll viagogo-carousel-track" role="list">
-            {kind === 'performer'
-              ? performers.map((group) => {
-                  const target = performerNavigateTarget(group);
-                  const singleEv =
-                    group.eventCount === 1 && group.events?.length >= 1 ? group.events[0] : null;
-                  return (
-                    <div key={group.key} className="home-carousel-item home-carousel-item--performer" role="listitem">
-                      <PerformerCard
-                        performerName={group.performerName}
-                        eventCount={group.eventCount}
-                        totalTickets={group.totalTickets}
-                        href={target.href || ''}
-                        singleEvent={singleEv}
-                        waitlistOnly={Boolean(group.waitlistOnly)}
-                        onNavigate={() => handlePerformerNavigate(group)}
-                        onNotify={() => handlePerformerNavigate(group)}
-                      />
-                    </div>
-                  );
-                })
-              : events.map((ev) => (
-                  <div
-                    key={`ev-${ev.id}`}
-                    className={`home-carousel-item${kind === 'lastMinute' ? ' home-carousel-item--last-minute' : ''}`}
-                    role="listitem"
-                  >
-                    <EventCard
-                      event={ev}
-                      formatEventDateHe={formatEventDateHe}
-                      variant={kind === 'lastMinute' ? 'lastMinute' : 'default'}
-                      hasListings={(Number(ev.tickets_count) || 0) > 0}
-                      onNavigate={() => navigate(eventHref(ev))}
-                    />
-                  </div>
-                ))}
-          </div>
+          {kind === 'performer'
+            ? performers.map((group, index) => {
+                const target = performerNavigateTarget(group);
+                const singleEv =
+                  group.eventCount === 1 && group.events?.length >= 1 ? group.events[0] : null;
+                return (
+                  <PerformerCard
+                    key={group.key}
+                    performerName={group.performerName}
+                    eventCount={group.eventCount}
+                    totalTickets={group.totalTickets}
+                    href={target.href || ''}
+                    singleEvent={singleEv}
+                    city={sharedEventCity(group.events)}
+                    gradientIndex={index + accentOffset}
+                    waitlistOnly={Boolean(group.waitlistOnly)}
+                    onNavigate={() => handlePerformerNavigate(group)}
+                    onNotify={() => handlePerformerNavigate(group)}
+                  />
+                );
+              })
+            : events.map((ev, index) => (
+                <EventCard
+                  key={`ev-${ev.id}`}
+                  event={ev}
+                  formatEventDateHe={formatEventDateHe}
+                  variant={kind === 'lastMinute' ? 'lastMinute' : 'default'}
+                  hasListings={(Number(ev.tickets_count) || 0) > 0}
+                  gradientIndex={index + accentOffset}
+                  onNavigate={() => navigate(eventHref(ev))}
+                />
+              ))}
         </div>
       </section>
     );

@@ -42,13 +42,11 @@ describe('EventCard dual CTAs and FOMO', () => {
     expect(onNavigate).not.toHaveBeenCalled();
   });
 
-  it('shows stable FOMO waitlist line', () => {
-    renderCard({ variant: 'default' });
-    expect(screen.getByText(/ממתינים לכרטיס/)).toBeInTheDocument();
-  });
-
-  it('shows available listings badge when hasListings is true', () => {
+  it('shows the event title, city, and upcoming-date count from the event', () => {
     renderCard({ variant: 'default', hasListings: true });
-    expect(screen.getByText('כרטיסים זמינים')).toBeInTheDocument();
+    expect(screen.getByText('הופעה אחרונה')).toBeInTheDocument();
+    expect(screen.getByText('תל אביב')).toBeInTheDocument();
+    expect(screen.getByText('מועדים קרובים')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
   });
 });
